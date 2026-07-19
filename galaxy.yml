@@ -1,26 +1,40 @@
 ---
 # See https://docs.ansible.com/projects/ansible/latest/dev_guide/collections_galaxy_meta.html
 
-namespace: community
-name: FIXME
-version: 0.1.0
+namespace: oracle
+name: oci
+version: 1.0.0
 readme: README.md
 authors:
-  - YOUR NAME (github.com/YOURGITHUB)
-description: null
-license_file: LICENSE
+  - Ron Gershburg (github.com/ronger4)
+description: Oracle Cloud Infrastructure collection for Ansible
+license:
+  - GPL-3.0-or-later
 tags:
-  # tags so people can search for collections https://galaxy.ansible.com/search
-  # tags are all lower-case, no spaces, no dashes.
-  - example1
-  - example2
-  # You must have one of the tags in the following link
-  # to satisfy Ansible Lint https://docs.ansible.com/projects/lint/rules/galaxy
-repository: https://github.com/ansible-collections/community.REPO_NAME
-# documentation: https://github.com/ansible-collection-migration/community.REPO_NAME/tree/main/docs
-homepage: https://github.com/ansible-collections/community.REPO_NAME
-issues: https://github.com/ansible-collections/community.REPO_NAME/issues
+  - oracle
+  - oci
+  - cloud
+  - infrastructure
+  - networking
+  - database
+  - iam
+  - storage
+  - security
+repository: https://github.com/ansible-collections/oracle.oci
+documentation: https://github.com/ansible-collections/oracle.oci
+homepage: https://github.com/ansible-collections/oracle.oci
+issues: https://github.com/ansible-collections/oracle.oci/issues
 build_ignore:
   # https://docs.ansible.com/projects/ansible/devel/dev_guide/developing_collections_distributing.html#ignoring-files-and-folders
+  - .ansible-lint
+  - .github
   - .gitignore
+  - .vscode
+  - MAINTAINERS
+  - MAINTAINING.md
+  - REVIEW_CHECKLIST.md
+  - antsibull-nox.toml
   - changelogs/.plugin-cache.yaml
+  - codecov.yml
+  - noxfile.py
+  - tests
