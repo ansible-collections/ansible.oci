@@ -1,5 +1,8 @@
 # Oracle Cloud Infrastructure Collection for Ansible
 
+[![Ansible lint](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-lint.yml) [![Sanity](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-sanity.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-sanity.yml) [![Units](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-unit.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-unit.yml) [![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=ansible-collections_oracle.oci&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ansible-collections_oracle.oci)
+
+
 ## Description
 
 The `oracle.oci` collection provides Ansible automation content for Oracle Cloud
@@ -72,13 +75,17 @@ Common use cases for this collection include:
 
 ## Testing
 
-The collection CI is configured to run sanity, unit, and integration testing.
-The current workflow targets `ansible-core` `stable-2.18`, `stable-2.19`,
-`stable-2.20`, `stable-2.21`, and `devel`. The integration matrix currently
-tests supported combinations across Python `3.8` through `3.14`.
+The collection CI is split across dedicated `ansible-lint`, `Sanity`, and
+`Units` workflows. Integration testing is intentionally deferred for now and
+will return in its own workflow later. SonarCloud analysis runs separately
+after the `Units` workflow completes.
 
-The workflow definition is available at
-[`.github/workflows/ansible-test.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-test.yml).
+The workflow definitions are available at:
+
+* [`.github/workflows/ansible-lint.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-lint.yml)
+* [`.github/workflows/ansible-sanity.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-sanity.yml)
+* [`.github/workflows/ansible-unit.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-unit.yml)
+* [`.github/workflows/sonarcloud.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/sonarcloud.yml)
 
 ## Contributing
 

@@ -40,9 +40,10 @@ When changing collection metadata or runtime dependencies:
 
 ## Local validation
 
-This repository keeps local validation lightweight while CI is being deferred.
-When the required Python tooling is available in your environment, use `nox` to
-run the configured local checks:
+GitHub Actions runs the main repository checks, including `ansible-lint`,
+`Sanity`, `Units`, docsite linting, and SonarCloud analysis. Local validation
+still stays lightweight; when the required Python tooling is available in your
+environment, use `nox` to run the configured local checks:
 
 ```bash
 python noxfile.py -l
