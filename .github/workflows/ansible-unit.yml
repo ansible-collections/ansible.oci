@@ -1,0 +1,42 @@
+---
+name: Units
+on:
+  push:
+    branches:
+      - main
+      - stable-*
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      github.event.pull_request.number || github.sha
+    }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit-galaxy:
+    uses: ansible/ansible-content-actions/.github/workflows/unit.yaml@41201c8e472d212b283090605b5120d2374261b4 # main
+    with:
+      extra_matrix_entries: >-
+        [{"name":"unit-py3.11-2.16","python":"3.11"},
+         {"name":"unit-py3.12-2.16","python":"3.12"},
+         {"name":"unit-py3.11-2.18","python":"3.11"},
+         {"name":"unit-py3.12-2.18","python":"3.12"},
+         {"name":"unit-py3.13-2.18","python":"3.13"}]
+
+  unit-check:
+    if: always()
+    needs:
+      - unit-galaxy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

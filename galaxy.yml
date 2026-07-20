@@ -38,3 +38,4 @@ build_ignore:
   - codecov.yml
   - noxfile.py
   - tests
+  - sonar-project.properties
