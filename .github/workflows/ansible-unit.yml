@@ -22,6 +22,13 @@ permissions:
 jobs:
   unit-galaxy:
     uses: ansible/ansible-content-actions/.github/workflows/unit.yaml@main
+    with:
+      extra_matrix_entries: >-
+        [{"name":"unit-py3.11-2.16","python":"3.11"},
+         {"name":"unit-py3.12-2.16","python":"3.12"},
+         {"name":"unit-py3.11-2.18","python":"3.11"},
+         {"name":"unit-py3.12-2.18","python":"3.12"},
+         {"name":"unit-py3.13-2.18","python":"3.13"}]
 
   unit-check:
     if: always()
