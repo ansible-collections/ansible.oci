@@ -1,2 +1,8 @@
 ---
-requires_ansible: '>=2.16.0'  # Use '>=2.9.10' instead, if needed
+requires_ansible: '>=2.16.0'
+action_groups:
+  oci:
+    - oci_network_vcn
+    - oci_network_vcn_info
+    - oci_subnet
+    - oci_subnet_info

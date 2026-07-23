@@ -45,6 +45,243 @@ def make_fake_oci(config_from_file):
     )
 
 
+def make_module_params(**overrides):
+    params = {
+        "auth_type": None,
+        "config_file_location": None,
+        "config_profile_name": None,
+        "tenancy": None,
+        "region": None,
+        "api_user": None,
+        "api_user_fingerprint": None,
+        "api_user_key_file": None,
+        "api_user_key_pass_phrase": None,
+    }
+    params.update(overrides)
+    return params
+
+
+def test_get_oci_config_uses_config_env_vars_when_params_are_absent(
+    monkeypatch,
+    tmp_path,
+):
+    config_file = tmp_path / "env-config"
+    config_file.write_text("[ENV]\n", encoding="utf-8")
+    loaded_calls = []
+    fake_oci = make_fake_oci(
+        lambda **kwargs: loaded_calls.append(kwargs) or {"region": "us-ashburn-1"}
+    )
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_CONFIG_FILE", str(config_file))
+    monkeypatch.setenv("OCI_CONFIG_PROFILE", "ENV")
+
+    oci_auth = load_collection_module("oci_auth")
+    monkeypatch.setattr(
+        oci_auth.os.path,
+        "isfile",
+        lambda path: path == str(config_file),
+    )
+
+    config = oci_auth.get_oci_config(DummyModule(make_module_params()))
+
+    assert loaded_calls == [
+        {
+            "file_location": str(config_file),
+            "profile_name": "ENV",
+        }
+    ]
+    assert config["region"] == "us-ashburn-1"
+
+
+def test_get_oci_config_module_params_override_config_env_vars(
+    monkeypatch,
+    tmp_path,
+):
+    config_file = tmp_path / "explicit-config"
+    config_file.write_text("[EXPLICIT]\n", encoding="utf-8")
+    loaded_calls = []
+    fake_oci = make_fake_oci(
+        lambda **kwargs: loaded_calls.append(kwargs) or {"region": "us-phoenix-1"}
+    )
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_CONFIG_FILE", str(tmp_path / "ignored-config"))
+    monkeypatch.setenv("OCI_CONFIG_PROFILE", "IGNORED")
+
+    oci_auth = load_collection_module("oci_auth")
+    monkeypatch.setattr(
+        oci_auth.os.path,
+        "isfile",
+        lambda path: path == str(config_file),
+    )
+
+    config = oci_auth.get_oci_config(
+        DummyModule(
+            make_module_params(
+                config_file_location=str(config_file),
+                config_profile_name="EXPLICIT",
+            )
+        )
+    )
+
+    assert loaded_calls == [
+        {
+            "file_location": str(config_file),
+            "profile_name": "EXPLICIT",
+        }
+    ]
+    assert config["region"] == "us-phoenix-1"
+
+
+def test_get_oci_config_env_overrides_loaded_profile_fields(
+    monkeypatch,
+    tmp_path,
+):
+    config_file = tmp_path / "config"
+    config_file.write_text("[DEFAULT]\n", encoding="utf-8")
+    fake_oci = make_fake_oci(
+        lambda **kwargs: {
+            "region": "us-phoenix-1",
+            "fingerprint": "config-fingerprint",
+        }
+    )
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_REGION", "us-ashburn-1")
+    monkeypatch.setenv("OCI_USER_FINGERPRINT", "env-fingerprint")
+
+    oci_auth = load_collection_module("oci_auth")
+    monkeypatch.setattr(
+        oci_auth.os.path,
+        "isfile",
+        lambda path: path == str(config_file),
+    )
+
+    config = oci_auth.get_oci_config(
+        DummyModule(
+            make_module_params(
+                config_file_location=str(config_file),
+                config_profile_name="DEFAULT",
+            )
+        )
+    )
+
+    assert config["region"] == "us-ashburn-1"
+    assert config["fingerprint"] == "env-fingerprint"
+
+
+def test_get_oci_config_builds_api_key_config_from_env_only(monkeypatch):
+    fake_oci = make_fake_oci(lambda **kwargs: {})
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_TENANCY_ID", "ocid1.tenancy.oc1..env")
+    monkeypatch.setenv("OCI_USER_ID", "ocid1.user.oc1..env")
+    monkeypatch.setenv("OCI_REGION", "us-sanjose-1")
+    monkeypatch.setenv("OCI_USER_FINGERPRINT", "env-fingerprint")
+    monkeypatch.setenv("OCI_USER_KEY_FILE", "/tmp/env-key.pem")
+    monkeypatch.setenv("OCI_USER_KEY_PASS_PHRASE", "env-passphrase")
+
+    oci_auth = load_collection_module("oci_auth")
+    monkeypatch.setattr(oci_auth.os.path, "isfile", lambda path: False)
+
+    config = oci_auth.get_oci_config(DummyModule(make_module_params()))
+
+    assert config == {
+        "tenancy": "ocid1.tenancy.oc1..env",
+        "user": "ocid1.user.oc1..env",
+        "region": "us-sanjose-1",
+        "fingerprint": "env-fingerprint",
+        "key_file": "/tmp/env-key.pem",
+        "pass_phrase": "env-passphrase",
+    }
+
+
+def test_create_service_client_uses_oci_auth_type_env_when_param_missing(
+    monkeypatch,
+):
+    fake_oci = make_fake_oci(lambda **kwargs: {})
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_AUTH_TYPE", "instance_principal")
+
+    oci_auth = load_collection_module("oci_auth")
+    client = oci_auth.create_service_client(
+        DummyModule(make_module_params()),
+        DummyClient,
+    )
+
+    assert client.config == {}
+    assert client.signer == "instance-signer"
+
+
+def test_create_service_client_module_auth_type_overrides_oci_auth_type_env(
+    monkeypatch,
+):
+    fake_oci = make_fake_oci(lambda **kwargs: {})
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_AUTH_TYPE", "instance_principal")
+
+    oci_auth = load_collection_module("oci_auth")
+    client = oci_auth.create_service_client(
+        DummyModule(make_module_params(auth_type="resource_principal")),
+        DummyClient,
+    )
+
+    assert client.config == {}
+    assert client.signer == "resource-signer"
+
+
+def test_create_service_client_rejects_invalid_oci_auth_type_env(monkeypatch):
+    fake_oci = make_fake_oci(lambda **kwargs: {})
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_AUTH_TYPE", "instance-principal")
+
+    oci_auth = load_collection_module("oci_auth")
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        oci_auth.create_service_client(
+            DummyModule(make_module_params()),
+            DummyClient,
+        )
+
+    assert "Unsupported auth_type" in exc_info.value.payload["msg"]
+
+
+def test_session_token_auth_uses_env_selected_config_profile(
+    monkeypatch,
+    tmp_path,
+):
+    config_file = tmp_path / "session-config"
+    config_file.write_text("[SESSION]\n", encoding="utf-8")
+    key_file = tmp_path / "session.pem"
+    token_file = tmp_path / "token"
+    token_file.write_text("session-token\n", encoding="utf-8")
+    fake_oci = make_fake_oci(
+        lambda **kwargs: {
+            "key_file": str(key_file),
+            "security_token_file": str(token_file),
+        }
+    )
+    monkeypatch.setitem(sys.modules, "oci", fake_oci)
+    monkeypatch.setenv("OCI_CONFIG_FILE", str(config_file))
+    monkeypatch.setenv("OCI_CONFIG_PROFILE", "SESSION")
+
+    oci_auth = load_collection_module("oci_auth")
+    monkeypatch.setattr(
+        oci_auth.os.path,
+        "isfile",
+        lambda path: path == str(config_file),
+    )
+
+    client = oci_auth.create_service_client(
+        DummyModule(make_module_params(auth_type="session_token")),
+        DummyClient,
+    )
+
+    assert client.config["security_token_file"] == str(token_file)
+    assert client.signer == (
+        "session-signer",
+        "session-token",
+        f"private-key:{key_file}",
+    )
+
+
 def test_session_token_auth_requires_security_token_file_from_loaded_config(
     monkeypatch,
     tmp_path,
@@ -72,6 +309,21 @@ def test_session_token_auth_requires_security_token_file_from_loaded_config(
         oci_auth.create_service_client(module, DummyClient)
 
     assert "security_token_file" in exc_info.value.payload["msg"]
+
+
+def test_create_service_client_uses_shared_sdk_required_message(monkeypatch):
+    monkeypatch.delitem(sys.modules, "oci", raising=False)
+
+    oci_auth = load_collection_module("oci_auth")
+    oci_auth.OCI_SDK_REQUIRED_MSG = "Shared OCI SDK message"
+    module = DummyModule({"auth_type": "api_key"})
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        oci_auth.create_service_client(module, DummyClient)
+
+    assert exc_info.value.payload["msg"] == (
+        "Shared OCI SDK message Install with: pip install oci"
+    )
 
 
 def test_instance_principal_auth_creates_client_with_instance_signer(monkeypatch):

@@ -13,6 +13,9 @@ COLLECTION_PACKAGES = {
     "ansible_collections.oracle.oci.plugins.module_utils": COLLECTION_ROOT
     / "plugins"
     / "module_utils",
+    "ansible_collections.oracle.oci.plugins.modules": COLLECTION_ROOT
+    / "plugins"
+    / "modules",
 }
 
 
@@ -36,9 +39,9 @@ def _resolve_plugin_dir(module_name, preferred_dir):
     return preferred_dir
 
 
-def load_collection_module(module_name):
+def load_collection_module(module_name, plugin_dir="modules"):
     _ensure_collection_packages()
-    plugin_dir = _resolve_plugin_dir(module_name, "module_utils")
+    plugin_dir = _resolve_plugin_dir(module_name, plugin_dir)
 
     module_path = COLLECTION_ROOT / "plugins" / plugin_dir / f"{module_name}.py"
     qualified_name = (

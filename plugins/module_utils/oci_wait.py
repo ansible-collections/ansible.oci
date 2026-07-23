@@ -26,13 +26,14 @@ except ImportError:
 
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     DEAD_STATES,
+    OCI_SDK_REQUIRED_MSG,
 )
 
 
 def list_all_resources(list_fn, *args, **kwargs):
     """Return all records from an OCI list operation."""
     if not HAS_OCI_SDK:
-        raise ImportError("The 'oci' Python SDK is required.")
+        raise ImportError(OCI_SDK_REQUIRED_MSG)
 
     return oci.pagination.list_call_get_all_results(list_fn, *args, **kwargs).data
 
@@ -75,7 +76,7 @@ def wait_for_resource(
 ):
     """Poll a resource until it reaches a target lifecycle state."""
     if not HAS_OCI_SDK:
-        raise ImportError("The 'oci' Python SDK is required.")
+        raise ImportError(OCI_SDK_REQUIRED_MSG)
 
     wait = module.params.get("wait", True)
     if not wait:
@@ -122,7 +123,7 @@ def wait_for_work_request(
 ):
     """Wait for an OCI work request to complete."""
     if not HAS_OCI_SDK:
-        raise ImportError("The 'oci' Python SDK is required.")
+        raise ImportError(OCI_SDK_REQUIRED_MSG)
 
     timeout = module.params.get("wait_timeout", 1200)
     interval = module.params.get("wait_interval", 30)
@@ -155,7 +156,7 @@ def wait_for_work_request(
 def call_with_retry(fn, *args, max_retries=3, retry_on=(429, 500, 503), **kwargs):
     """Call an OCI API function with exponential backoff retry."""
     if not HAS_OCI_SDK:
-        raise ImportError("The 'oci' Python SDK is required.")
+        raise ImportError(OCI_SDK_REQUIRED_MSG)
 
     retry_strategy = oci.retry.RetryStrategyBuilder(
         max_attempts_check=True,

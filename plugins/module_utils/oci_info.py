@@ -1,4 +1,4 @@
-"""Base facts helper for OCI Ansible modules."""
+"""Base info helper for OCI Ansible modules."""
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
@@ -7,10 +7,10 @@ from abc import ABC, abstractmethod
 
 DOCUMENTATION = r"""
 ---
-module_utils: oci_facts
-short_description: Base class for OCI facts and list modules
+module_utils: oci_info
+short_description: Base class for OCI info and list modules
 description:
- - Provides OciFactsBase, a separate abstraction for facts and list modules.
+ - Provides OciInfoBase, a separate abstraction for info and list modules.
  - Centers list-oriented modules on OCI client calls, shared pagination, and
  serialized OCI-shaped result data without state-driven CRUD orchestration.
 author:
@@ -28,8 +28,8 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
 )
 
 
-class OciFactsBase(ABC):
-    """Base class for OCI facts and list modules."""
+class OciInfoBase(ABC):
+    """Base class for OCI info and list modules."""
 
     client_class = None
     results_key = "resources"
@@ -68,7 +68,7 @@ class OciFactsBase(ABC):
         )
 
     def run(self):
-        """List resources and exit with OCI-shaped facts data."""
+        """List resources and exit with OCI-shaped info data."""
         resources = self.list_resources()
         serialized_resources = [
             self.serialize_resource(resource) for resource in resources

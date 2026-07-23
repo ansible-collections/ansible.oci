@@ -40,6 +40,9 @@ class OciResourceBase(ABC):
     """
 
     client_class = None
+    resource_id_param = None
+    create_required_fields = ()
+    create_resource_name = "resource"
 
     def __init__(self, module):
         if self.client_class is None:
@@ -117,12 +120,63 @@ class OciResourceBase(ABC):
             return True
         return False
 
+    def _require_create_fields(self) -> None:
+        """Fail if a create request is missing required fields."""
+        if not self.create_required_fields:
+            return
+
+        missing = [
+            field
+            for field in self.create_required_fields
+            if self.module.params.get(field) is None
+        ]
+        if missing:
+            self.module.fail_json(
+                msg=(
+                    f"Creating a {self.create_resource_name} requires the "
+                    f"following parameters: {', '.join(missing)}"
+                )
+            )
+
+    def validate_create_request(self) -> None:
+        """Allow subclasses to validate create requests before creation."""
+        self._require_create_fields()
+
+    def get_resource_id(self):
+        """Return the explicit resource identifier supplied by the caller."""
+        if self.resource_id_param is None:
+            return None
+        return self.module.params.get(self.resource_id_param)
+
+    def validate_delete_request(self) -> None:
+        """Fail if a delete request omits the resource identifier."""
+        if self.resource_id_param and not self.get_resource_id():
+            self.module.fail_json(
+                msg=f"Deleting a {self.create_resource_name} requires {self.resource_id_param}"
+            )
+
+    def fail_missing_update_target(self) -> None:
+        """Fail when an explicit resource identifier does not resolve."""
+        resource_id = self.get_resource_id()
+        if not self.resource_id_param or not resource_id:
+            return
+
+        self.module.fail_json(
+            msg=(
+                f"No {self.create_resource_name} was found for "
+                f"{self.resource_id_param}={resource_id}. Create the "
+                f"{self.create_resource_name} without {self.resource_id_param}, "
+                f"then use the returned ID for future updates"
+            )
+        )
+
     def run(self) -> None:
         """Main entry point — determine action and execute."""
         state = self.module.params.get("state", "present")
-        resource = self.get_resource()
 
         if state == "absent":
+            self.validate_delete_request()
+            resource = self.get_resource()
             if resource is None or getattr(resource, "lifecycle_state", None) in DEAD_STATES:
                 self.module.exit_json(changed=False)
                 return
@@ -134,7 +188,11 @@ class OciResourceBase(ABC):
             return
 
         # state == present
+        resource = self.get_resource()
         if resource is None:
+            if self.get_resource_id():
+                self.fail_missing_update_target()
+            self.validate_create_request()
             if self.check_mode:
                 self.module.exit_json(changed=True)
                 return

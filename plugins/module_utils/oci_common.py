@@ -18,11 +18,10 @@ author:
 """
 
 OCI_COMMON_ARGS = dict(
-    config_file_location=dict(type="str", default="~/.oci/config"),
-    config_profile_name=dict(type="str", default="DEFAULT"),
+    config_file_location=dict(type="str"),
+    config_profile_name=dict(type="str"),
     auth_type=dict(
         type="str",
-        default="api_key",
         choices=["api_key", "instance_principal", "resource_principal", "session_token"],
     ),
     tenancy=dict(type="str"),
@@ -37,6 +36,8 @@ OCI_COMMON_ARGS = dict(
     freeform_tags=dict(type="dict"),
     defined_tags=dict(type="dict"),
 )
+
+OCI_SDK_REQUIRED_MSG = "The 'oci' Python SDK is required."
 
 LIFECYCLE_ACTIVE = "ACTIVE"
 LIFECYCLE_AVAILABLE = "AVAILABLE"
@@ -71,19 +72,41 @@ DEAD_STATES = frozenset({
 
 def to_dict(resource):
     """Convert an OCI resource object to a plain dictionary."""
+    def _serialize_value(value):
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return [_serialize_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                key: _serialize_value(item_value)
+                for key, item_value in value.items()
+            }
+        if hasattr(value, "__dict__") or getattr(value, "swagger_types", None):
+            return to_dict(value)
+        return value
+
     if resource is None:
         return {}
+    swagger_types = getattr(resource, "swagger_types", None)
+    if swagger_types:
+        return {
+            key: _serialize_value(getattr(resource, key, None))
+            for key in swagger_types
+        }
+    if isinstance(resource, dict):
+        return {
+            key: _serialize_value(value)
+            for key, value in resource.items()
+        }
+    if isinstance(resource, list):
+        return [_serialize_value(item) for item in resource]
     if hasattr(resource, "__dict__"):
         result = {}
         for key, value in resource.__dict__.items():
-            if key.startswith("_"):
+            if key.startswith("_") or key in ("swagger_types", "attribute_map"):
                 continue
-            if isinstance(value, list):
-                result[key] = [to_dict(i) if hasattr(i, "__dict__") else i for i in value]
-            elif hasattr(value, "__dict__") and not isinstance(value, (str, int, float, bool, dict)):
-                result[key] = to_dict(value)
-            else:
-                result[key] = value
+            result[key] = _serialize_value(value)
         return result
     return resource
 
@@ -97,3 +120,10 @@ def omit_user_known_fields(resource_dict, module_params, field_names):
             filtered_resource_dict.pop(field_name, None)
 
     return filtered_resource_dict
+
+
+def filter_none_values(data):
+    """Return a shallow copy without keys whose values are None."""
+    return {
+        key: value for key, value in data.items() if value is not None
+    }

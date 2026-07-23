@@ -40,6 +40,31 @@ def install_fake_oci(monkeypatch, *, pagination=None, retry=None, wait_until=Non
     return ServiceError
 
 
+@pytest.mark.parametrize(
+    ("helper_name", "args", "kwargs"),
+    [
+        ("list_all_resources", (object(),), {}),
+        ("wait_for_resource", (DummyModule({"wait": True}), object(), object(), "resource-id", ("ACTIVE",)), {}),
+        ("wait_for_work_request", (DummyModule({}), object(), "work-request-id"), {}),
+        ("call_with_retry", (lambda: None,), {}),
+    ],
+)
+def test_wait_helpers_use_shared_sdk_required_message(
+    monkeypatch,
+    helper_name,
+    args,
+    kwargs,
+):
+    monkeypatch.delitem(sys.modules, "oci", raising=False)
+    monkeypatch.delitem(sys.modules, "oci.exceptions", raising=False)
+
+    oci_wait = load_collection_module("oci_wait")
+    oci_wait.OCI_SDK_REQUIRED_MSG = "Shared OCI SDK message"
+
+    with pytest.raises(ImportError, match="Shared OCI SDK message"):
+        getattr(oci_wait, helper_name)(*args, **kwargs)
+
+
 def test_list_all_resources_uses_oci_pagination_helper(monkeypatch):
     recorded_call = {}
 

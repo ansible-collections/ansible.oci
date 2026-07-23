@@ -1,0 +1,356 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id is defined
+    fail_msg: >-
+      OCI VCN integration tests require oci_integration_compartment_id.
+
+- name: Exercise VCN module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_network_vcn_integration_config_file_location }}"
+      config_profile_name: "{{ oci_network_vcn_integration_config_profile_name }}"
+  block:
+    - name: Define VCN create and delete parameters
+      ansible.builtin.set_fact:
+        oci_network_vcn_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          display_name: "{{ oci_network_vcn_integration_vcn_display_name }}"
+          cidr_blocks:
+            - "{{ oci_network_vcn_integration_vcn_cidr_block }}"
+          dns_label: "{{ oci_network_vcn_integration_vcn_dns_label }}"
+          freeform_tags: "{{ oci_network_vcn_integration_create_tags }}"
+        oci_network_vcn_delete_params:
+          state: absent
+          vcn_id: ""
+
+    - name: Create VCN in check mode
+      oracle.oci.oci_network_vcn: &oci_network_vcn_create_module_options
+        state: "{{ oci_network_vcn_create_params.state }}"
+        compartment_id: "{{ oci_network_vcn_create_params.compartment_id }}"
+        display_name: "{{ oci_network_vcn_create_params.display_name }}"
+        cidr_blocks: "{{ oci_network_vcn_create_params.cidr_blocks }}"
+        dns_label: "{{ oci_network_vcn_create_params.dns_label }}"
+        freeform_tags: "{{ oci_network_vcn_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_network_vcn_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_create_check.changed | bool
+
+    - name: Read VCN after create check mode
+      oracle.oci.oci_network_vcn_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        display_name: "{{ oci_network_vcn_integration_vcn_display_name }}"
+      register: oci_network_vcn_create_check_probe
+
+    - name: Assert VCN is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_create_check_probe.vcns | length == 0
+
+    - name: Create VCN
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_create_module_options
+      register: oci_network_vcn_create
+
+    - name: Capture VCN id and define update parameters
+      ansible.builtin.set_fact:
+        oci_network_vcn_id: "{{ oci_network_vcn_create.resource.id }}"
+        oci_network_vcn_cidr_modify_params:
+          state: present
+          vcn_id: "{{ oci_network_vcn_create.resource.id }}"
+          cidr_blocks:
+            - "{{ oci_network_vcn_integration_modified_vcn_cidr_block }}"
+        oci_network_vcn_cidr_add_params:
+          state: present
+          vcn_id: "{{ oci_network_vcn_create.resource.id }}"
+          cidr_blocks:
+            - "{{ oci_network_vcn_integration_modified_vcn_cidr_block }}"
+            - "{{ oci_network_vcn_integration_additional_vcn_cidr_block }}"
+        oci_network_vcn_update_params:
+          state: present
+          vcn_id: "{{ oci_network_vcn_create.resource.id }}"
+          cidr_blocks:
+            - "{{ oci_network_vcn_integration_modified_vcn_cidr_block }}"
+          display_name: "{{ oci_network_vcn_integration_updated_vcn_display_name }}"
+          freeform_tags: "{{ oci_network_vcn_integration_update_tags }}"
+        oci_network_vcn_delete_params:
+          state: absent
+          vcn_id: "{{ oci_network_vcn_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_create.changed | bool
+
+    - name: Read VCN by id
+      oracle.oci.oci_network_vcn_info:
+        vcn_id: "{{ oci_network_vcn_id }}"
+      register: oci_network_vcn_info_by_id
+
+    - name: Assert VCN info by id returned the created VCN
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_info_by_id.vcns | length == 1
+          - oci_network_vcn_info_by_id.vcns[0].id == oci_network_vcn_id
+          - oci_network_vcn_info_by_id.vcns[0].lifecycle_state == "AVAILABLE"
+
+    - name: List VCN by display name
+      oracle.oci.oci_network_vcn_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        display_name: "{{ oci_network_vcn_integration_vcn_display_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_network_vcn_info_list
+
+    - name: Assert VCN info list returned the created VCN
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_info_list.vcns | selectattr('id', 'equalto', oci_network_vcn_id) | list | length == 1
+
+    - name: Assert created VCN is a no-op on rerun with returned id
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_create_module_options
+        vcn_id: "{{ oci_network_vcn_id }}"
+      register: oci_network_vcn_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_network_vcn_create_rerun.changed | bool
+
+    - name: Update VCN CIDR in check mode
+      oracle.oci.oci_network_vcn: &oci_network_vcn_cidr_modify_module_options
+        state: "{{ oci_network_vcn_cidr_modify_params.state }}"
+        vcn_id: "{{ oci_network_vcn_cidr_modify_params.vcn_id }}"
+        cidr_blocks: "{{ oci_network_vcn_cidr_modify_params.cidr_blocks }}"
+      check_mode: true
+      register: oci_network_vcn_cidr_modify_check
+
+    - name: Assert CIDR update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_cidr_modify_check.changed | bool
+
+    - name: Read VCN after CIDR update check mode
+      oracle.oci.oci_network_vcn_info:
+        vcn_id: "{{ oci_network_vcn_id }}"
+      register: oci_network_vcn_info_cidr_check
+
+    - name: Assert CIDR update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_info_cidr_check.vcns | length == 1
+          - oci_network_vcn_info_cidr_check.vcns[0].cidr_blocks == [oci_network_vcn_integration_vcn_cidr_block]
+
+    - name: Modify primary VCN CIDR block
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_cidr_modify_module_options
+      register: oci_network_vcn_cidr_modify
+
+    - name: Assert primary CIDR modify reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_cidr_modify.changed | bool
+
+    - name: Read VCN after primary CIDR modify
+      oracle.oci.oci_network_vcn_info:
+        vcn_id: "{{ oci_network_vcn_id }}"
+      register: oci_network_vcn_info_cidr_modified
+
+    - name: Assert VCN info reflects modified primary CIDR block
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_info_cidr_modified.vcns | length == 1
+          - oci_network_vcn_info_cidr_modified.vcns[0].cidr_blocks == [oci_network_vcn_integration_modified_vcn_cidr_block]
+
+    - name: Assert primary CIDR modify is idempotent on rerun
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_cidr_modify_module_options
+      register: oci_network_vcn_cidr_modify_rerun
+
+    - name: Verify primary CIDR modify rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_network_vcn_cidr_modify_rerun.changed | bool
+
+    - name: Add an additional VCN CIDR block
+      oracle.oci.oci_network_vcn: &oci_network_vcn_cidr_add_module_options
+        state: "{{ oci_network_vcn_cidr_add_params.state }}"
+        vcn_id: "{{ oci_network_vcn_cidr_add_params.vcn_id }}"
+        cidr_blocks: "{{ oci_network_vcn_cidr_add_params.cidr_blocks }}"
+      register: oci_network_vcn_cidr_add
+
+    - name: Assert additional CIDR add reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_cidr_add.changed | bool
+
+    - name: Read VCN after additional CIDR add
+      oracle.oci.oci_network_vcn_info:
+        vcn_id: "{{ oci_network_vcn_id }}"
+      register: oci_network_vcn_info_cidr_added
+
+    - name: Assert VCN info reflects both CIDR blocks
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_info_cidr_added.vcns | length == 1
+          - >-
+            (oci_network_vcn_info_cidr_added.vcns[0].cidr_blocks | sort)
+            == ([oci_network_vcn_integration_additional_vcn_cidr_block,
+            oci_network_vcn_integration_modified_vcn_cidr_block] | sort)
+
+    - name: Assert additional CIDR add is idempotent on rerun
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_cidr_add_module_options
+      register: oci_network_vcn_cidr_add_rerun
+
+    - name: Verify additional CIDR add rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_network_vcn_cidr_add_rerun.changed | bool
+
+    - name: Update VCN in check mode
+      oracle.oci.oci_network_vcn: &oci_network_vcn_update_module_options
+        state: "{{ oci_network_vcn_update_params.state }}"
+        vcn_id: "{{ oci_network_vcn_update_params.vcn_id }}"
+        cidr_blocks: "{{ oci_network_vcn_update_params.cidr_blocks }}"
+        display_name: "{{ oci_network_vcn_update_params.display_name }}"
+        freeform_tags: "{{ oci_network_vcn_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_network_vcn_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_update_check.changed | bool
+
+    - name: Read VCN after update check mode
+      oracle.oci.oci_network_vcn_info:
+        vcn_id: "{{ oci_network_vcn_id }}"
+      register: oci_network_vcn_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_update_check_probe.vcns | length == 1
+          - >-
+            (oci_network_vcn_update_check_probe.vcns[0].cidr_blocks | sort)
+            == ([oci_network_vcn_integration_additional_vcn_cidr_block,
+            oci_network_vcn_integration_modified_vcn_cidr_block] | sort)
+          - oci_network_vcn_update_check_probe.vcns[0].display_name == oci_network_vcn_integration_vcn_display_name
+          - oci_network_vcn_update_check_probe.vcns[0].freeform_tags.phase == "create"
+
+    - name: Update VCN
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_update_module_options
+      register: oci_network_vcn_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_update.changed | bool
+
+    - name: Read updated VCN by display name
+      oracle.oci.oci_network_vcn_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        display_name: "{{ oci_network_vcn_integration_updated_vcn_display_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_network_vcn_info_updated
+
+    - name: Assert VCN info reflects updated VCN
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_info_updated.vcns | selectattr('id', 'equalto', oci_network_vcn_id) | list | length == 1
+          - oci_network_vcn_info_updated.vcns[0].cidr_blocks == [oci_network_vcn_integration_modified_vcn_cidr_block]
+          - oci_network_vcn_info_updated.vcns[0].freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_update_module_options
+      register: oci_network_vcn_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_network_vcn_update_rerun.changed | bool
+
+    - name: Create dependent subnet for blocked delete test
+      oracle.oci.oci_subnet:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_network_vcn_id }}"
+        cidr_block: "{{ oci_network_vcn_integration_subnet_cidr_block }}"
+        display_name: "{{ oci_network_vcn_integration_subnet_display_name }}"
+      register: oci_network_vcn_subnet_create
+
+    - name: Capture created subnet id
+      ansible.builtin.set_fact:
+        oci_network_vcn_integration_subnet_id: "{{ oci_network_vcn_subnet_create.resource.id }}"
+
+    - name: Assert delete fails cleanly while dependent subnet exists
+      oracle.oci.oci_network_vcn: &oci_network_vcn_delete_module_options
+        state: "{{ oci_network_vcn_delete_params.state }}"
+        vcn_id: "{{ oci_network_vcn_delete_params.vcn_id }}"
+      register: oci_network_vcn_delete_blocked
+      ignore_errors: true
+
+    - name: Verify blocked delete message
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete_blocked is failed
+          - "'dependent resources' in (oci_network_vcn_delete_blocked.msg | default(''))"
+
+    - name: Delete dependent subnet after blocked delete test
+      oracle.oci.oci_subnet:
+        state: absent
+        subnet_id: "{{ oci_network_vcn_integration_subnet_id }}"
+
+    - name: Delete VCN in check mode
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_delete_module_options
+      check_mode: true
+      register: oci_network_vcn_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete_check.changed | bool
+
+    - name: Read VCN after delete check mode
+      oracle.oci.oci_network_vcn_info:
+        vcn_id: "{{ oci_network_vcn_id }}"
+      register: oci_network_vcn_delete_check_probe
+
+    - name: Assert VCN still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete_check_probe.vcns | length == 1
+
+    - name: Delete VCN
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_delete_module_options
+      register: oci_network_vcn_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_delete_module_options
+      register: oci_network_vcn_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_network_vcn_delete_rerun.changed | bool
+
+  always:
+    - name: Run VCN cleanup
+      ansible.builtin.include_tasks: cleanup.yml

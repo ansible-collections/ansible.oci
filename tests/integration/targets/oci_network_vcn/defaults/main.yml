@@ -1,0 +1,18 @@
+---
+oci_network_vcn_integration_vcn_display_name: "oci-vcn-integration-vcn"
+oci_network_vcn_integration_updated_vcn_display_name: "oci-vcn-integration-vcn-updated"
+oci_network_vcn_integration_subnet_display_name: "oci-vcn-integration-subnet"
+oci_network_vcn_integration_vcn_cidr_block: "10.241.0.0/16"
+oci_network_vcn_integration_modified_vcn_cidr_block: "10.241.0.0/17"
+oci_network_vcn_integration_additional_vcn_cidr_block: "10.242.0.0/16"
+oci_network_vcn_integration_subnet_cidr_block: "10.241.0.0/24"
+oci_network_vcn_integration_vcn_dns_label: "ocivcnit"
+oci_integration_compartment_id: "{{ lookup('env', 'OCI_TEST_COMPARTMENT_ID') }}"
+oci_network_vcn_integration_config_file_location: "{{ lookup('env', 'OCI_CONFIG_FILE') | default('~/.oci/config', true) }}"
+oci_network_vcn_integration_config_profile_name: "{{ lookup('env', 'OCI_CONFIG_PROFILE') | default('DEFAULT', true) }}"
+oci_network_vcn_integration_create_tags:
+  phase: create
+  role: integration
+oci_network_vcn_integration_update_tags:
+  phase: update
+  role: integration

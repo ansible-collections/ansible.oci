@@ -21,22 +21,66 @@ author:
 
 import os
 
+from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+    OCI_SDK_REQUIRED_MSG,
+)
+
 try:
     import oci
     HAS_OCI_SDK = True
 except ImportError:
     HAS_OCI_SDK = False
 
+VALID_AUTH_TYPES = (
+    "api_key",
+    "instance_principal",
+    "resource_principal",
+    "session_token",
+)
+
+
+def get_auth_type(module):
+    """Resolve the OCI auth type from module params or environment."""
+    auth_type = (
+        module.params.get("auth_type")
+        or os.environ.get("OCI_AUTH_TYPE")
+        or "api_key"
+    )
+    if auth_type not in VALID_AUTH_TYPES:
+        module.fail_json(
+            msg=(
+                f"Unsupported auth_type '{auth_type}'. Expected one of: "
+                f"{', '.join(VALID_AUTH_TYPES)}"
+            )
+        )
+        return None
+    return auth_type
+
+
+def _resolve_setting(module, param_key, env_var, default):
+    """Resolve a setting from module params, environment, or fallback."""
+    return module.params.get(param_key) or os.environ.get(env_var) or default
+
 
 def get_oci_config(module):
     """Build OCI config dict from module params or environment."""
-    auth_type = module.params.get("auth_type", "api_key")
+    auth_type = get_auth_type(module)
 
     if auth_type in ("instance_principal", "resource_principal"):
         return {"auth_type": auth_type}
 
-    config_file = module.params.get("config_file_location") or "~/.oci/config"
-    config_profile = module.params.get("config_profile_name") or "DEFAULT"
+    config_file = _resolve_setting(
+        module,
+        "config_file_location",
+        "OCI_CONFIG_FILE",
+        "~/.oci/config",
+    )
+    config_profile = _resolve_setting(
+        module,
+        "config_profile_name",
+        "OCI_CONFIG_PROFILE",
+        "DEFAULT",
+    )
 
     config_file = os.path.expanduser(config_file)
 
@@ -80,10 +124,12 @@ def get_oci_config(module):
 def create_service_client(module, client_class):
     """Create an OCI service client with the appropriate auth method."""
     if not HAS_OCI_SDK:
-        module.fail_json(msg="The 'oci' Python SDK is required. Install with: pip install oci")
+        module.fail_json(
+            msg=f"{OCI_SDK_REQUIRED_MSG} Install with: pip install oci"
+        )
         return None
 
-    auth_type = module.params.get("auth_type", "api_key")
+    auth_type = get_auth_type(module)
 
     if auth_type == "instance_principal":
         signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
