@@ -312,9 +312,8 @@ def test_session_token_auth_requires_security_token_file_from_loaded_config(
 
 
 def test_create_service_client_uses_shared_sdk_required_message(monkeypatch):
-    monkeypatch.delitem(sys.modules, "oci", raising=False)
-
     oci_auth = load_collection_module("oci_auth")
+    monkeypatch.setattr(oci_auth, "HAS_OCI_SDK", False)
     oci_auth.OCI_SDK_REQUIRED_MSG = "Shared OCI SDK message"
     module = DummyModule({"auth_type": "api_key"})
 

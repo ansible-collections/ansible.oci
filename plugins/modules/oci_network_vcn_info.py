@@ -1,19 +1,9 @@
-"""Retrieve OCI Virtual Cloud Network information."""
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026, Ansible Content Engineering Team
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
-
-from ansible.module_utils.basic import AnsibleModule
-
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
-    OCI_COMMON_ARGS,
-)
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
-    OciInfoBase,
-)
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-)
 
 DOCUMENTATION = r"""
 ---
@@ -26,6 +16,8 @@ description:
 version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
+extends_documentation_fragment:
+  - oracle.oci.oci_auth_options
 options:
   compartment_id:
     description:
@@ -67,14 +59,21 @@ vcns:
   elements: dict
 """
 
+from ansible.module_utils.basic import AnsibleModule
+
+from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+    OCI_AUTH_ARGS,
+)
+from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+    OciInfoBase,
+)
+
 try:
     import oci
-    from oci.exceptions import ServiceError
 
     HAS_OCI_SDK = True
 except ImportError:
     HAS_OCI_SDK = False
-    ServiceError = None
     oci = None
 
 
@@ -90,16 +89,11 @@ class OciNetworkVcnInfoModule(OciInfoBase):
     def list_resources(self):
         vcn_id = self.module.params.get("vcn_id")
         if vcn_id:
-            try:
-                response = call_with_retry(
-                    self.client.get_vcn,
-                    vcn_id=vcn_id,
-                )
-                return [response.data]
-            except ServiceError as exc:
-                if exc.status == 404:
-                    return []
-                raise
+            return self.get_resource_by_id(
+                vcn_id,
+                self.client.get_vcn,
+                vcn_id=vcn_id,
+            )
 
         list_kwargs = {
             "compartment_id": self.module.params.get("compartment_id"),
@@ -114,7 +108,7 @@ class OciNetworkVcnInfoModule(OciInfoBase):
 
 def main():
     argument_spec = dict(
-        OCI_COMMON_ARGS,
+        OCI_AUTH_ARGS,
         compartment_id=dict(type="str"),
         vcn_id=dict(type="str"),
         display_name=dict(type="str"),

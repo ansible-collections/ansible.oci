@@ -24,6 +24,7 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     to_dict as serialize_resource_dict,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
+    call_with_retry,
     list_all_resources as paginate_all_resources,
 )
 
@@ -54,6 +55,19 @@ class OciInfoBase(ABC):
     def paginate(self, list_fn, *args, **kwargs):
         """Return all records from a paginated OCI list operation."""
         return paginate_all_resources(list_fn, *args, **kwargs)
+
+    def get_resource_by_id(self, resource_id, get_fn, **kwargs):
+        """Return a single OCI resource as a one-item list or [] on 404."""
+        if not resource_id:
+            return None
+
+        try:
+            response = call_with_retry(get_fn, **kwargs)
+            return [response.data]
+        except Exception as exc:
+            if getattr(exc, "status", None) == 404:
+                return []
+            raise
 
     def serialize_resource(self, resource):
         """Convert a resource to an OCI-shaped result payload."""

@@ -1,28 +1,9 @@
-"""Manage OCI Virtual Cloud Networks."""
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026, Ansible Content Engineering Team
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
-
-from ansible.module_utils.basic import AnsibleModule
-
-from ansible_collections.oracle.oci.plugins.module_utils.oci_auth import (
-    create_service_client,
-)
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
-    DEAD_STATES,
-    LIFECYCLE_AVAILABLE,
-    OCI_COMMON_ARGS,
-    filter_none_values,
-    to_dict as serialize_resource_dict,
-)
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
-    OciResourceBase,
-)
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-    wait_for_resource,
-    wait_for_work_request,
-)
 
 DOCUMENTATION = r"""
 ---
@@ -37,6 +18,9 @@ description:
 version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
+extends_documentation_fragment:
+  - oracle.oci.oci_auth_options
+  - oracle.oci.oci_wait_options
 options:
   state:
     description:
@@ -76,11 +60,6 @@ options:
         asynchronous work requests.
     type: list
     elements: str
-  wait:
-    description:
-      - Whether to wait for VCN operations to complete before returning.
-      - Must remain C(true) when changing C(cidr_blocks).
-    type: bool
   freeform_tags:
     description:
       - Free-form tags to apply to the VCN.
@@ -138,6 +117,27 @@ resource:
   returned: when state != absent
   type: dict
 """
+
+from ansible.module_utils.basic import AnsibleModule
+
+from ansible_collections.oracle.oci.plugins.module_utils.oci_auth import (
+    create_service_client,
+)
+from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+    DEAD_STATES,
+    LIFECYCLE_AVAILABLE,
+    OCI_COMMON_ARGS,
+    filter_none_values,
+    to_dict as serialize_resource_dict,
+)
+from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+    OciResourceBase,
+)
+from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
+    call_with_retry,
+    wait_for_resource,
+    wait_for_work_request,
+)
 
 try:
     import oci

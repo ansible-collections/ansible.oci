@@ -121,7 +121,7 @@ def test_list_resources_prefers_vcn_id_lookup(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        info_module,
+        sys.modules[instance.get_resource_by_id.__module__],
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
@@ -146,7 +146,7 @@ def test_list_resources_returns_empty_list_on_404(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        info_module,
+        sys.modules[instance.get_resource_by_id.__module__],
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )

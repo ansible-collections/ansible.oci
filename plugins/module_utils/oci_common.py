@@ -8,16 +8,17 @@ DOCUMENTATION = r"""
 module_utils: oci_common
 short_description: Shared OCI argument specs and lifecycle constants
 description:
- - Defines OCI_COMMON_ARGS, the common argument spec shared by all OCI modules,
- covering authentication, region, wait behavior, and tagging parameters.
+ - Defines OCI_AUTH_ARGS for OCI authentication parameters used by all modules,
+   and OCI_COMMON_ARGS for the additional wait and tag parameters used by
+   managed resource modules.
  - Provides lifecycle state constants and frozen sets (WAIT_STATES, READY_STATES,
- DEAD_STATES) used for resource state management and polling.
+   DEAD_STATES) used for resource state management and polling.
 author:
  - Steve Fulmer (@stevefulme1)
  - Ron Gershburg (@ronger4)
 """
 
-OCI_COMMON_ARGS = dict(
+OCI_AUTH_ARGS = dict(
     config_file_location=dict(type="str"),
     config_profile_name=dict(type="str"),
     auth_type=dict(
@@ -30,11 +31,23 @@ OCI_COMMON_ARGS = dict(
     api_user_fingerprint=dict(type="str", no_log=True),
     api_user_key_file=dict(type="str"),
     api_user_key_pass_phrase=dict(type="str", no_log=True),
+)
+
+OCI_WAIT_ARGS = dict(
     wait=dict(type="bool", default=True),
     wait_timeout=dict(type="int", default=1200),
     wait_interval=dict(type="int", default=30),
+)
+
+OCI_TAG_ARGS = dict(
     freeform_tags=dict(type="dict"),
     defined_tags=dict(type="dict"),
+)
+
+OCI_COMMON_ARGS = dict(
+    OCI_AUTH_ARGS,
+    **OCI_WAIT_ARGS,
+    **OCI_TAG_ARGS,
 )
 
 OCI_SDK_REQUIRED_MSG = "The 'oci' Python SDK is required."

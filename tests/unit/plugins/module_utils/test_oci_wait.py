@@ -55,10 +55,8 @@ def test_wait_helpers_use_shared_sdk_required_message(
     args,
     kwargs,
 ):
-    monkeypatch.delitem(sys.modules, "oci", raising=False)
-    monkeypatch.delitem(sys.modules, "oci.exceptions", raising=False)
-
     oci_wait = load_collection_module("oci_wait")
+    monkeypatch.setattr(oci_wait, "HAS_OCI_SDK", False)
     oci_wait.OCI_SDK_REQUIRED_MSG = "Shared OCI SDK message"
 
     with pytest.raises(ImportError, match="Shared OCI SDK message"):

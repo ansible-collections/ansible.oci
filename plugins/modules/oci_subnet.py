@@ -1,24 +1,9 @@
-"""Manage OCI Subnets."""
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026, Ansible Content Engineering Team
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
-
-from ansible.module_utils.basic import AnsibleModule
-
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
-    DEAD_STATES,
-    LIFECYCLE_AVAILABLE,
-    OCI_COMMON_ARGS,
-    filter_none_values,
-    to_dict as serialize_resource_dict,
-)
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
-    OciResourceBase,
-)
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-    wait_for_resource,
-)
 
 DOCUMENTATION = r"""
 ---
@@ -33,6 +18,9 @@ description:
 version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
+extends_documentation_fragment:
+  - oracle.oci.oci_auth_options
+  - oracle.oci.oci_wait_options
 options:
   state:
     description:
@@ -94,6 +82,16 @@ options:
       - When updated, this replaces the subnet's current security list set.
     type: list
     elements: str
+  freeform_tags:
+    description:
+      - Free-form tags to apply to the subnet.
+      - Can be updated in place.
+    type: dict
+  defined_tags:
+    description:
+      - Defined tags to apply to the subnet.
+      - Can be updated in place.
+    type: dict
   prohibit_public_ip_on_vnic:
     description:
       - Whether VNICs created in this subnet must not have public IP addresses.
@@ -134,6 +132,23 @@ resource:
   returned: when state != absent
   type: dict
 """
+
+from ansible.module_utils.basic import AnsibleModule
+
+from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+    DEAD_STATES,
+    LIFECYCLE_AVAILABLE,
+    OCI_COMMON_ARGS,
+    filter_none_values,
+    to_dict as serialize_resource_dict,
+)
+from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+    OciResourceBase,
+)
+from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
+    call_with_retry,
+    wait_for_resource,
+)
 
 try:
     import oci
