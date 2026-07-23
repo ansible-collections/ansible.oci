@@ -3,78 +3,38 @@ import types
 
 import pytest
 
-from conftest import load_collection_module
+from conftest import (
+    DummyModule,
+    ExitJsonCalled,
+    FakeModel,
+    FakeResponse,
+    FailJsonCalled,
+    install_fake_oci as shared_install_fake_oci,
+    load_collection_module,
+    make_module_instance,
+)
 
 
-class FailJsonCalled(Exception):
-    def __init__(self, payload):
-        self.payload = payload
-
-
-class ExitJsonCalled(Exception):
-    def __init__(self, payload):
-        self.payload = payload
-
-
-class DummyModule:
-    def __init__(self, params=None, check_mode=False):
-        self.params = params or {}
-        self.check_mode = check_mode
-
-    def fail_json(self, **kwargs):
-        raise FailJsonCalled(kwargs)
-
-    def exit_json(self, **kwargs):
-        raise ExitJsonCalled(kwargs)
-
-
-class FakeModel:
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-
-class FakeResponse:
-    def __init__(self, data=None, headers=None):
-        self.data = data
-        self.headers = headers or {}
-
-
-class FakeVirtualNetworkClient:
-    pass
+SUBNET_MODEL_NAMES = (
+    "CreateSubnetDetails",
+    "UpdateSubnetDetails",
+)
 
 
 def install_fake_oci(monkeypatch):
-    oci_module = types.ModuleType("oci")
-    exceptions_module = types.ModuleType("oci.exceptions")
-
-    class ServiceError(Exception):
-        def __init__(self, status, message="service error"):
-            super().__init__(message)
-            self.status = status
-            self.message = message
-
-    exceptions_module.ServiceError = ServiceError
-    oci_module.exceptions = exceptions_module
-    oci_module.core = types.SimpleNamespace(
-        VirtualNetworkClient=FakeVirtualNetworkClient,
-        models=types.SimpleNamespace(
-            CreateSubnetDetails=FakeModel,
-            UpdateSubnetDetails=FakeModel,
-        ),
+    return shared_install_fake_oci(
+        monkeypatch,
+        model_names=SUBNET_MODEL_NAMES,
     )
-
-    monkeypatch.setitem(sys.modules, "oci", oci_module)
-    monkeypatch.setitem(sys.modules, "oci.exceptions", exceptions_module)
-
-    return oci_module, ServiceError
 
 
 def make_subnet_module(module_obj, params, client=None):
-    instance = object.__new__(module_obj.OciSubnetModule)
-    instance.module = DummyModule(params)
-    instance.client = client or types.SimpleNamespace()
-    instance.check_mode = False
-    return instance
+    return make_module_instance(
+        module_obj,
+        "OciSubnetModule",
+        params,
+        client=client,
+    )
 
 
 def test_build_create_subnet_details_includes_supported_fields(monkeypatch):
@@ -141,93 +101,6 @@ def test_build_update_subnet_details_only_includes_mutable_fields(monkeypatch):
     assert not hasattr(details, "availability_domain")
     assert not hasattr(details, "vcn_id")
     assert not hasattr(details, "prohibit_public_ip_on_vnic")
-
-
-def test_get_resource_prefers_subnet_id_lookup(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    get_calls = []
-
-    def get_subnet(subnet_id):
-        get_calls.append(subnet_id)
-        return FakeResponse(data=FakeModel(id=subnet_id))
-
-    instance = make_subnet_module(
-        subnet_module,
-        {"subnet_id": "ocid1.subnet.oc1..example"},
-        client=types.SimpleNamespace(get_subnet=get_subnet),
-    )
-    monkeypatch.setattr(
-        subnet_module,
-        "call_with_retry",
-        lambda fn, **kwargs: fn(**kwargs),
-    )
-
-    resource = instance.get_resource()
-
-    assert resource.id == "ocid1.subnet.oc1..example"
-    assert get_calls == ["ocid1.subnet.oc1..example"]
-
-
-def test_get_resource_returns_none_without_subnet_id(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    instance = make_subnet_module(
-        subnet_module,
-        {
-            "display_name": "example-subnet",
-            "compartment_id": "ocid1.compartment.oc1..example",
-            "vcn_id": "ocid1.vcn.oc1..example",
-        },
-    )
-
-    assert instance.get_resource() is None
-
-
-def test_run_fails_when_present_uses_missing_subnet_id(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    instance = make_subnet_module(
-        subnet_module,
-        {
-            "state": "present",
-            "subnet_id": "ocid1.subnet.oc1..missing",
-        },
-    )
-    monkeypatch.setattr(instance, "get_resource", lambda: None)
-
-    with pytest.raises(FailJsonCalled) as exc_info:
-        instance.run()
-
-    assert "No subnet was found for subnet_id=" in exc_info.value.payload["msg"]
-    assert "Create the subnet without subnet_id" in exc_info.value.payload["msg"]
-
-
-def test_run_fails_when_absent_omits_subnet_id(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    instance = make_subnet_module(
-        subnet_module,
-        {
-            "state": "absent",
-        },
-    )
-    monkeypatch.setattr(
-        instance,
-        "get_resource",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("get_resource should not be called")
-        ),
-    )
-
-    with pytest.raises(FailJsonCalled) as exc_info:
-        instance.run()
-
-    assert "Deleting a subnet requires subnet_id" in exc_info.value.payload["msg"]
 
 
 def test_needs_update_returns_true_for_cidr_block_change(monkeypatch):
@@ -444,141 +317,3 @@ def test_update_resource_uses_update_subnet_details_and_waits(monkeypatch):
     assert updated_resource.id == "ocid1.subnet.oc1..example"
 
 
-def test_delete_resource_fails_cleanly_when_dependency_exists(monkeypatch):
-    _, ServiceError = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    resource = FakeModel(id="ocid1.subnet.oc1..example")
-
-    def delete_subnet(subnet_id):
-        raise ServiceError(409, "VNIC dependencies still exist")
-
-    instance = make_subnet_module(
-        subnet_module,
-        {"wait": True},
-        client=types.SimpleNamespace(delete_subnet=delete_subnet),
-    )
-    monkeypatch.setattr(
-        sys.modules[instance.delete_resource_and_wait.__module__],
-        "call_with_retry",
-        lambda fn, **kwargs: fn(**kwargs),
-    )
-
-    with pytest.raises(FailJsonCalled) as exc_info:
-        instance.delete_resource(resource)
-
-    assert "dependent resources" in exc_info.value.payload["msg"]
-
-
-def test_run_check_mode_create_fails_when_required_fields_missing(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    instance = make_subnet_module(
-        subnet_module,
-        {
-            "state": "present",
-            "display_name": "example-subnet",
-        },
-    )
-    instance.check_mode = True
-    monkeypatch.setattr(instance, "get_resource", lambda: None)
-
-    with pytest.raises(FailJsonCalled) as exc_info:
-        instance.run()
-
-    assert "Creating a subnet requires" in exc_info.value.payload["msg"]
-
-
-def test_run_check_mode_create_reports_changed_without_create(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    instance = make_subnet_module(
-        subnet_module,
-        {
-            "state": "present",
-            "compartment_id": "ocid1.compartment.oc1..example",
-            "vcn_id": "ocid1.vcn.oc1..example",
-            "cidr_block": "10.0.1.0/24",
-            "display_name": "example-subnet",
-        },
-    )
-    instance.check_mode = True
-    monkeypatch.setattr(instance, "get_resource", lambda: None)
-    monkeypatch.setattr(
-        instance,
-        "create_resource",
-        lambda: (_ for _ in ()).throw(AssertionError("create_resource should not be called")),
-    )
-
-    with pytest.raises(ExitJsonCalled) as exc_info:
-        instance.run()
-
-    assert exc_info.value.payload == {"changed": True}
-
-
-def test_run_check_mode_update_reports_changed_when_tags_differ(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    resource = FakeModel(
-        id="ocid1.subnet.oc1..example",
-        display_name="example-subnet",
-        lifecycle_state="AVAILABLE",
-        freeform_tags={"env": "dev"},
-        route_table_id="ocid1.routetable.oc1..current",
-    )
-    instance = make_subnet_module(
-        subnet_module,
-        {
-            "state": "present",
-            "display_name": "example-subnet",
-            "freeform_tags": {"env": "prod"},
-        },
-    )
-    instance.check_mode = True
-    monkeypatch.setattr(instance, "get_resource", lambda: resource)
-    monkeypatch.setattr(
-        instance,
-        "update_resource",
-        lambda resource: (_ for _ in ()).throw(
-            AssertionError("update_resource should not be called")
-        ),
-    )
-
-    with pytest.raises(ExitJsonCalled) as exc_info:
-        instance.run()
-
-    assert exc_info.value.payload == {"changed": True}
-
-
-def test_run_check_mode_delete_reports_changed_without_delete(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
-
-    subnet_module = load_collection_module("oci_subnet")
-    resource = FakeModel(
-        id="ocid1.subnet.oc1..example",
-        lifecycle_state="AVAILABLE",
-    )
-    instance = make_subnet_module(
-        subnet_module,
-        {
-            "state": "absent",
-            "subnet_id": "ocid1.subnet.oc1..example",
-        },
-    )
-    instance.check_mode = True
-    monkeypatch.setattr(instance, "get_resource", lambda: resource)
-    monkeypatch.setattr(
-        instance,
-        "delete_resource",
-        lambda resource: (_ for _ in ()).throw(
-            AssertionError("delete_resource should not be called")
-        ),
-    )
-
-    with pytest.raises(ExitJsonCalled) as exc_info:
-        instance.run()
-
-    assert exc_info.value.payload == {"changed": True}

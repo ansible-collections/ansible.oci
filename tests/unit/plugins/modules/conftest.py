@@ -1,57 +1,100 @@
-import importlib.util
 import sys
 import types
 from pathlib import Path
 
+HELPER_DIR = Path(__file__).resolve().parents[1]
+if str(HELPER_DIR) not in sys.path:
+    sys.path.insert(0, str(HELPER_DIR))
 
-COLLECTION_ROOT = Path(__file__).resolve().parents[4]
-COLLECTION_PACKAGES = {
-    "ansible_collections": COLLECTION_ROOT.parent.parent,
-    "ansible_collections.oracle": COLLECTION_ROOT.parent,
-    "ansible_collections.oracle.oci": COLLECTION_ROOT,
-    "ansible_collections.oracle.oci.plugins": COLLECTION_ROOT / "plugins",
-    "ansible_collections.oracle.oci.plugins.module_utils": COLLECTION_ROOT
-    / "plugins"
-    / "module_utils",
-    "ansible_collections.oracle.oci.plugins.modules": COLLECTION_ROOT
-    / "plugins"
-    / "modules",
-}
-
-
-def _ensure_collection_packages():
-    for package_name, package_path in COLLECTION_PACKAGES.items():
-        package = sys.modules.get(package_name)
-        if package is None:
-            package = types.ModuleType(package_name)
-            sys.modules[package_name] = package
-        package.__path__ = [str(package_path)]
-        if package_name == "ansible_collections.oracle.oci":
-            package._collection_meta = getattr(package, "_collection_meta", {})
-
-
-def _resolve_plugin_dir(module_name, preferred_dir):
-    candidate_dirs = (preferred_dir, "module_utils", "modules")
-    for candidate_dir in candidate_dirs:
-        module_path = COLLECTION_ROOT / "plugins" / candidate_dir / f"{module_name}.py"
-        if module_path.is_file():
-            return candidate_dir
-    return preferred_dir
+from shared_loader import load_collection_module as _load_collection_module
 
 
 def load_collection_module(module_name, plugin_dir="modules"):
-    _ensure_collection_packages()
-    plugin_dir = _resolve_plugin_dir(module_name, plugin_dir)
+    return _load_collection_module(module_name, plugin_dir=plugin_dir)
 
-    module_path = COLLECTION_ROOT / "plugins" / plugin_dir / f"{module_name}.py"
-    qualified_name = (
-        f"ansible_collections.oracle.oci.plugins.{plugin_dir}.{module_name}"
+
+class FailJsonCalled(Exception):
+    def __init__(self, payload):
+        self.payload = payload
+
+
+class ExitJsonCalled(Exception):
+    def __init__(self, payload):
+        self.payload = payload
+
+
+class DummyModule:
+    def __init__(self, params=None, check_mode=False):
+        self.params = params or {}
+        self.check_mode = check_mode
+
+    def fail_json(self, **kwargs):
+        raise FailJsonCalled(kwargs)
+
+    def exit_json(self, **kwargs):
+        raise ExitJsonCalled(kwargs)
+
+
+class FakeModel:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+class FakeResponse:
+    def __init__(self, data=None, headers=None):
+        self.data = data
+        self.headers = headers or {}
+
+
+class FakeVirtualNetworkClient:
+    pass
+
+
+class FakeWorkRequestClient:
+    pass
+
+
+def install_fake_oci(monkeypatch, *, model_names=(), include_work_requests=False):
+    oci_module = types.ModuleType("oci")
+    exceptions_module = types.ModuleType("oci.exceptions")
+
+    class ServiceError(Exception):
+        def __init__(self, status, message="service error"):
+            super().__init__(message)
+            self.status = status
+            self.message = message
+
+    exceptions_module.ServiceError = ServiceError
+    oci_module.exceptions = exceptions_module
+    oci_module.core = types.SimpleNamespace(
+        VirtualNetworkClient=FakeVirtualNetworkClient,
+        models=types.SimpleNamespace(
+            **{model_name: FakeModel for model_name in model_names}
+        ),
     )
+    if include_work_requests:
+        oci_module.work_requests = types.SimpleNamespace(
+            WorkRequestClient=FakeWorkRequestClient,
+        )
 
-    sys.modules.pop(qualified_name, None)
+    monkeypatch.setitem(sys.modules, "oci", oci_module)
+    monkeypatch.setitem(sys.modules, "oci.exceptions", exceptions_module)
 
-    spec = importlib.util.spec_from_file_location(qualified_name, module_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[qualified_name] = module
-    spec.loader.exec_module(module)
-    return module
+    return oci_module, ServiceError
+
+
+def make_module_instance(
+    module_obj,
+    class_name,
+    params,
+    client=None,
+    check_mode=False,
+    **extra_attrs,
+):
+    instance = object.__new__(getattr(module_obj, class_name))
+    instance.module = DummyModule(params, check_mode=check_mode)
+    instance.client = client or types.SimpleNamespace()
+    instance.check_mode = check_mode
+    for attr_name, value in extra_attrs.items():
+        setattr(instance, attr_name, value)
+    return instance
