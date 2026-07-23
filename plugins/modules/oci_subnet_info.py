@@ -19,6 +19,7 @@ author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
+  - oracle.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -33,16 +34,6 @@ options:
   vcn_id:
     description:
       - Filter listed subnets by VCN.
-      - Only used when C(compartment_id) is provided.
-    type: str
-  display_name:
-    description:
-      - Filter listed subnets by display name.
-      - Only used when C(compartment_id) is provided.
-    type: str
-  lifecycle_state:
-    description:
-      - Filter listed subnets by lifecycle state.
       - Only used when C(compartment_id) is provided.
     type: str
 """
@@ -94,30 +85,16 @@ class OciSubnetInfoModule(OciInfoBase):
 
     client_class = oci.core.VirtualNetworkClient if HAS_OCI_SDK else object()
     results_key = "subnets"
-
-    def user_known_fields(self):
-        return ("display_name",)
-
-    def list_resources(self):
-        subnet_id = self.module.params.get("subnet_id")
-        if subnet_id:
-            return self.get_resource_by_id(
-                subnet_id,
-                self.client.get_subnet,
-                subnet_id=subnet_id,
-            )
-
-        list_kwargs = {
-            "compartment_id": self.module.params.get("compartment_id"),
-        }
-        if self.module.params.get("vcn_id"):
-            list_kwargs["vcn_id"] = self.module.params.get("vcn_id")
-        if self.module.params.get("display_name"):
-            list_kwargs["display_name"] = self.module.params.get("display_name")
-        if self.module.params.get("lifecycle_state"):
-            list_kwargs["lifecycle_state"] = self.module.params.get("lifecycle_state")
-
-        return self.paginate(self.client.list_subnets, **list_kwargs)
+    resource_id_param = "subnet_id"
+    resource_get_method = "get_subnet"
+    list_resource_method = "list_subnets"
+    list_filter_params = (
+        "compartment_id",
+        "vcn_id",
+        "display_name",
+        "lifecycle_state",
+    )
+    known_field_names = ("display_name",)
 
 
 def main():

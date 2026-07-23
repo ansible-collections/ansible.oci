@@ -3,7 +3,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 DOCUMENTATION = r"""
 ---
@@ -34,6 +34,12 @@ class OciInfoBase(ABC):
 
     client_class = None
     results_key = "resources"
+    resource_id_param = None
+    resource_id_kwarg = None
+    resource_get_method = None
+    list_resource_method = None
+    list_filter_params = ()
+    known_field_names = ()
 
     def __init__(self, module):
         if self.client_class is None:
@@ -43,18 +49,49 @@ class OciInfoBase(ABC):
         self.module = module
         self.client = create_service_client(module, self.client_class)
 
-    @abstractmethod
     def list_resources(self):
-        """Return a list of OCI SDK resource objects."""
-        pass
+        """Return resources via class-declared get/list metadata."""
+        resource_id = (
+            self.module.params.get(self.resource_id_param)
+            if self.resource_id_param
+            else None
+        )
+        if resource_id:
+            if self.resource_get_method is None:
+                raise NotImplementedError(
+                    f"{type(self).__name__} must define list_resources() or class metadata"
+                )
+            resource_id_kwarg = self.resource_id_kwarg or self.resource_id_param
+            return self.get_resource_by_id(
+                resource_id,
+                getattr(self.client, self.resource_get_method),
+                **{resource_id_kwarg: resource_id},
+            )
+
+        if self.list_resource_method is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} must define list_resources() or class metadata"
+            )
+        return self.paginate(
+            getattr(self.client, self.list_resource_method),
+            **self.build_list_kwargs(),
+        )
 
     def user_known_fields(self):
         """Return result fields that should be omitted when they match inputs."""
-        return ()
+        return self.known_field_names
 
     def paginate(self, list_fn, *args, **kwargs):
         """Return all records from a paginated OCI list operation."""
         return paginate_all_resources(list_fn, *args, **kwargs)
+
+    def build_list_kwargs(self):
+        """Return non-empty list filter parameters from module params."""
+        return {
+            param_name: self.module.params.get(param_name)
+            for param_name in self.list_filter_params
+            if self.module.params.get(param_name) is not None
+        }
 
     def get_resource_by_id(self, resource_id, get_fn, **kwargs):
         """Return a single OCI resource as a one-item list or [] on 404."""

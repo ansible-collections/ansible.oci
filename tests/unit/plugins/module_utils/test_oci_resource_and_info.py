@@ -155,8 +155,10 @@ def test_incomplete_oci_info_subclass_cannot_be_instantiated(monkeypatch):
     class IncompleteInfo(oci_info.OciInfoBase):
         client_class = object
 
-    with pytest.raises(TypeError):
-        IncompleteInfo(DummyModule())
+    info_module = IncompleteInfo(DummyModule())
+
+    with pytest.raises(NotImplementedError, match="class metadata"):
+        info_module.list_resources()
 
 
 def test_oci_info_base_requires_client_class_before_creating_client(monkeypatch):
@@ -364,3 +366,162 @@ def test_oci_resource_base_fails_absent_without_resource_id_before_lookup(monkey
     assert exc_info.value.payload == {
         "msg": "Deleting a example resource requires example_id"
     }
+
+
+def test_oci_info_base_lists_by_id_using_class_metadata(monkeypatch):
+    oci_info = load_collection_module("oci_info")
+    monkeypatch.setattr(
+        oci_info,
+        "create_service_client",
+        lambda module, client_class: types.SimpleNamespace(
+            get_example=lambda example_id: types.SimpleNamespace(
+                data=types.SimpleNamespace(id=example_id, name="example")
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        oci_info,
+        "call_with_retry",
+        lambda fn, **kwargs: fn(**kwargs),
+    )
+
+    class ExampleInfo(oci_info.OciInfoBase):
+        client_class = object
+        resource_id_param = "example_id"
+        resource_get_method = "get_example"
+        resource_id_kwarg = "example_id"
+
+    info_module = ExampleInfo(DummyModule({"example_id": "ocid1.example.oc1..123"}))
+
+    resources = info_module.list_resources()
+
+    assert len(resources) == 1
+    assert resources[0].id == "ocid1.example.oc1..123"
+
+
+def test_oci_info_base_lists_with_declared_filter_params(monkeypatch):
+    oci_info = load_collection_module("oci_info")
+    paginate_calls = []
+    monkeypatch.setattr(
+        oci_info,
+        "create_service_client",
+        lambda module, client_class: types.SimpleNamespace(
+            list_examples="list_examples_method",
+        ),
+    )
+
+    class ExampleInfo(oci_info.OciInfoBase):
+        client_class = object
+        list_resource_method = "list_examples"
+        list_filter_params = ("compartment_id", "display_name", "lifecycle_state")
+
+    info_module = ExampleInfo(
+        DummyModule(
+            {
+                "compartment_id": "ocid1.compartment.oc1..example",
+                "display_name": "example",
+                "lifecycle_state": "ACTIVE",
+            }
+        )
+    )
+    monkeypatch.setattr(
+        info_module,
+        "paginate",
+        lambda list_fn, **kwargs: paginate_calls.append((list_fn, kwargs)) or [],
+    )
+
+    resources = info_module.list_resources()
+
+    assert resources == []
+    assert paginate_calls == [
+        (
+            "list_examples_method",
+            {
+                "compartment_id": "ocid1.compartment.oc1..example",
+                "display_name": "example",
+                "lifecycle_state": "ACTIVE",
+            },
+        )
+    ]
+
+
+def test_oci_resource_base_uses_response_helper_for_id_lookup(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    monkeypatch.setattr(
+        oci_resource,
+        "create_service_client",
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        resource_id_param = "example_id"
+
+        def get_resource_response(self, resource_id):
+            return types.SimpleNamespace(data=types.SimpleNamespace(id=resource_id))
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(DummyModule({"example_id": "ocid1.example.oc1..123"}))
+
+    current = resource.get_resource()
+
+    assert current.id == "ocid1.example.oc1..123"
+
+
+def test_oci_resource_base_delete_helper_fails_on_dependency_conflict(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    monkeypatch.setattr(
+        oci_resource,
+        "create_service_client",
+        lambda module, client_class: "client",
+    )
+
+    class ConflictError(Exception):
+        def __init__(self, status, message):
+            super().__init__(message)
+            self.status = status
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        create_resource_name = "example resource"
+
+        def get_resource(self):
+            raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(DummyModule({"wait": True}))
+    monkeypatch.setattr(
+        oci_resource,
+        "call_with_retry",
+        lambda fn, **kwargs: (_ for _ in ()).throw(
+            ConflictError(409, "dependency exists")
+        ),
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        resource.delete_resource_and_wait(
+            types.SimpleNamespace(id="ocid1.example.oc1..123"),
+            object(),
+            example_id="ocid1.example.oc1..123",
+        )
+
+    assert "Cannot delete example resource" in exc_info.value.payload["msg"]

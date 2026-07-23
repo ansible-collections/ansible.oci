@@ -21,6 +21,7 @@ author:
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
   - oracle.oci.oci_wait_options
+  - oracle.oci.oci_tags_options
 options:
   state:
     description:
@@ -60,16 +61,6 @@ options:
         asynchronous work requests.
     type: list
     elements: str
-  freeform_tags:
-    description:
-      - Free-form tags to apply to the VCN.
-      - Can be updated in place.
-    type: dict
-  defined_tags:
-    description:
-      - Defined tags to apply to the VCN.
-      - Can be updated in place.
-    type: dict
   dns_label:
     description:
       - The DNS label for the VCN.
@@ -124,7 +115,6 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_auth import (
     create_service_client,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
-    DEAD_STATES,
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
@@ -135,18 +125,15 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
     call_with_retry,
-    wait_for_resource,
     wait_for_work_request,
 )
 
 try:
     import oci
-    from oci.exceptions import ServiceError
 
     HAS_OCI_SDK = True
 except ImportError:
     HAS_OCI_SDK = False
-    ServiceError = None
     oci = None
 
 CREATE_REQUIRED_FIELDS = (
@@ -227,6 +214,7 @@ class OciNetworkVcnModule(OciResourceBase):
     resource_id_param = "vcn_id"
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "VCN"
+    known_field_names = ("display_name",)
 
     def __init__(self, module):
         super().__init__(module)
@@ -236,33 +224,10 @@ class OciNetworkVcnModule(OciResourceBase):
                 module, oci.work_requests.WorkRequestClient
             )
 
-    def _get_vcn_response(self, vcn_id):
+    def get_resource_response(self, resource_id):
         return call_with_retry(
             self.client.get_vcn,
-            vcn_id=vcn_id,
-        )
-
-    def _get_vcn_by_id(self, vcn_id):
-        try:
-            return self._get_vcn_response(vcn_id).data
-        except ServiceError as exc:
-            if exc.status == 404:
-                return None
-            raise
-
-    def get_resource(self):
-        vcn_id = self.module.params.get("vcn_id")
-        if not vcn_id:
-            return None
-        return self._get_vcn_by_id(vcn_id)
-
-    def _wait_for_vcn(self, vcn_id):
-        return wait_for_resource(
-            self.module,
-            self.client,
-            self._get_vcn_response,
-            vcn_id,
-            WAIT_FOR_VCN_STATES,
+            vcn_id=resource_id,
         )
 
     def _current_cidr_blocks(self, resource_dict):
@@ -351,7 +316,7 @@ class OciNetworkVcnModule(OciResourceBase):
             raise ValueError(f"Unsupported VCN CIDR operation: {operation_name}")
 
         self._wait_for_vcn_work_request(response)
-        return self._wait_for_vcn(vcn_id)
+        return self.wait_for_resource_id(vcn_id, WAIT_FOR_VCN_STATES)
 
     def create_resource(self):
         create_vcn_details = build_create_vcn_details(self.module.params)
@@ -359,13 +324,11 @@ class OciNetworkVcnModule(OciResourceBase):
             self.client.create_vcn,
             create_vcn_details=create_vcn_details,
         )
-        if not self.module.params.get("wait", True):
-            return response.data
-
-        vcn_id = getattr(response.data, "id", None)
-        if not vcn_id:
-            return response.data
-        return self._wait_for_vcn(vcn_id)
+        return self.get_mutation_result(
+            response.data,
+            getattr(response.data, "id", None),
+            WAIT_FOR_VCN_STATES,
+        )
 
     def update_resource(self, resource):
         resource_dict = serialize_resource_dict(resource)
@@ -386,34 +349,17 @@ class OciNetworkVcnModule(OciResourceBase):
             vcn_id=resource.id,
             update_vcn_details=update_vcn_details,
         )
-        if not self.module.params.get("wait", True):
-            return response.data
-        return self._wait_for_vcn(resource.id)
+        return self.get_mutation_result(
+            response.data,
+            resource.id,
+            WAIT_FOR_VCN_STATES,
+        )
 
     def delete_resource(self, resource):
-        try:
-            response = call_with_retry(
-                self.client.delete_vcn,
-                vcn_id=resource.id,
-            )
-        except ServiceError as exc:
-            if exc.status == 409:
-                self.module.fail_json(
-                    msg=(
-                        f"Cannot delete VCN {resource.id} while dependent resources "
-                        f"exist: {exc}"
-                    )
-                )
-            raise
-
-        if not self.module.params.get("wait", True):
-            return response.data
-        return wait_for_resource(
-            self.module,
-            self.client,
-            self._get_vcn_response,
-            resource.id,
-            tuple(DEAD_STATES),
+        return self.delete_resource_and_wait(
+            resource,
+            self.client.delete_vcn,
+            vcn_id=resource.id,
         )
 
     def _desired_cidr_blocks(self):
@@ -443,9 +389,6 @@ class OciNetworkVcnModule(OciResourceBase):
             return True
 
         return False
-
-    def user_known_fields(self):
-        return ("display_name",)
 
 
 def main():

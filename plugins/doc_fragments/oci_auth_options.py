@@ -8,51 +8,47 @@ __metaclass__ = type
 
 class ModuleDocFragment(object):
     DOCUMENTATION = r"""
+notes:
+  - For API key authentication, explicit module parameters override matching values from the selected OCI config profile when provided.
+  - Resolution order for C(auth_type) is module parameter, then C(OCI_AUTH_TYPE), then C(api_key).
+  - Resolution order for C(config_file_location) is module parameter, then C(OCI_CONFIG_FILE), then C(~/.oci/config).
+  - Resolution order for C(config_profile_name) is module parameter, then C(OCI_CONFIG_PROFILE), then C(DEFAULT).
 options:
   auth_type:
     description:
       - The OCI authentication method to use.
-      - Resolution order is module parameter, then C(OCI_AUTH_TYPE), then C(api_key).
     type: str
     choices: [api_key, instance_principal, resource_principal, session_token]
   config_file_location:
     description:
       - Path to the OCI configuration file.
-      - Resolution order is module parameter, then C(OCI_CONFIG_FILE), then C(~/.oci/config).
     type: str
   config_profile_name:
     description:
       - Profile name to load from the OCI configuration file.
-      - Resolution order is module parameter, then C(OCI_CONFIG_PROFILE), then C(DEFAULT).
     type: str
   tenancy:
     description:
       - OCI tenancy OCID for API key authentication.
-      - Overrides the matching value from the selected OCI profile when provided.
     type: str
   region:
     description:
       - OCI region for API key authentication.
-      - Overrides the matching value from the selected OCI profile when provided.
     type: str
   api_user:
     description:
       - OCI user OCID for API key authentication.
-      - Overrides the matching value from the selected OCI profile when provided.
     type: str
   api_user_fingerprint:
     description:
       - Fingerprint for the API key used with API key authentication.
-      - Overrides the matching value from the selected OCI profile when provided.
     type: str
   api_user_key_file:
     description:
       - Path to the private key file used with API key authentication.
-      - Overrides the matching value from the selected OCI profile when provided.
     type: str
   api_user_key_pass_phrase:
     description:
       - Pass phrase for the private key used with API key authentication.
-      - Overrides the matching value from the selected OCI profile when provided.
     type: str
 """

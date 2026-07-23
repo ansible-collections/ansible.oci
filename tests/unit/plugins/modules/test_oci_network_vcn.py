@@ -404,7 +404,7 @@ def test_create_resource_uses_create_vcn_and_waits(monkeypatch):
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        vcn_module,
+        sys.modules[instance.get_mutation_result.__module__],
         "wait_for_resource",
         lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
@@ -449,7 +449,7 @@ def test_update_resource_uses_update_vcn_details_and_waits(monkeypatch):
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        vcn_module,
+        sys.modules[instance.get_mutation_result.__module__],
         "wait_for_resource",
         lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
@@ -506,8 +506,8 @@ def test_update_resource_adds_vcn_cidr_and_waits_for_work_request(monkeypatch):
     )
     monkeypatch.setattr(
         instance,
-        "_wait_for_vcn",
-        lambda vcn_id: waited_resources.append(vcn_id)
+        "wait_for_resource_id",
+        lambda vcn_id, target_states: waited_resources.append(vcn_id)
         or FakeModel(id=vcn_id, cidr_blocks=["10.0.0.0/16", "10.1.0.0/16"]),
     )
 
@@ -572,7 +572,7 @@ def test_update_resource_applies_cidr_changes_before_metadata_update(monkeypatch
         ) or FakeModel(status="SUCCEEDED"),
     )
 
-    def fake_wait_for_vcn(vcn_id):
+    def fake_wait_for_resource_id(vcn_id, target_states):
         waited_resources.append(vcn_id)
         if len(waited_resources) == 1:
             return FakeModel(
@@ -588,7 +588,7 @@ def test_update_resource_applies_cidr_changes_before_metadata_update(monkeypatch
             freeform_tags={"phase": "update"},
         )
 
-    monkeypatch.setattr(instance, "_wait_for_vcn", fake_wait_for_vcn)
+    monkeypatch.setattr(instance, "wait_for_resource_id", fake_wait_for_resource_id)
 
     updated_resource = instance.update_resource(resource)
 
@@ -620,7 +620,7 @@ def test_delete_resource_fails_cleanly_when_dependency_exists(monkeypatch):
         client=types.SimpleNamespace(delete_vcn=delete_vcn),
     )
     monkeypatch.setattr(
-        vcn_module,
+        sys.modules[instance.delete_resource_and_wait.__module__],
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )

@@ -18,6 +18,7 @@ author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
+  - oracle.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -28,16 +29,6 @@ options:
     description:
       - The OCID of a specific VCN to retrieve.
       - When specified, returns a single resource instead of a list.
-    type: str
-  display_name:
-    description:
-      - Filter listed VCNs by display name.
-      - Only used when C(compartment_id) is provided.
-    type: str
-  lifecycle_state:
-    description:
-      - Filter listed VCNs by lifecycle state.
-      - Only used when C(compartment_id) is provided.
     type: str
 """
 
@@ -82,28 +73,11 @@ class OciNetworkVcnInfoModule(OciInfoBase):
 
     client_class = oci.core.VirtualNetworkClient if HAS_OCI_SDK else object()
     results_key = "vcns"
-
-    def user_known_fields(self):
-        return ("display_name",)
-
-    def list_resources(self):
-        vcn_id = self.module.params.get("vcn_id")
-        if vcn_id:
-            return self.get_resource_by_id(
-                vcn_id,
-                self.client.get_vcn,
-                vcn_id=vcn_id,
-            )
-
-        list_kwargs = {
-            "compartment_id": self.module.params.get("compartment_id"),
-        }
-        if self.module.params.get("display_name"):
-            list_kwargs["display_name"] = self.module.params.get("display_name")
-        if self.module.params.get("lifecycle_state"):
-            list_kwargs["lifecycle_state"] = self.module.params.get("lifecycle_state")
-
-        return self.paginate(self.client.list_vcns, **list_kwargs)
+    resource_id_param = "vcn_id"
+    resource_get_method = "get_vcn"
+    list_resource_method = "list_vcns"
+    list_filter_params = ("compartment_id", "display_name", "lifecycle_state")
+    known_field_names = ("display_name",)
 
 
 def main():

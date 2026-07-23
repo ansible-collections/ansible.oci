@@ -378,7 +378,7 @@ def test_create_resource_uses_create_subnet_and_waits(monkeypatch):
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        subnet_module,
+        sys.modules[instance.get_mutation_result.__module__],
         "wait_for_resource",
         lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
@@ -427,7 +427,7 @@ def test_update_resource_uses_update_subnet_details_and_waits(monkeypatch):
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        subnet_module,
+        sys.modules[instance.get_mutation_result.__module__],
         "wait_for_resource",
         lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
@@ -459,7 +459,7 @@ def test_delete_resource_fails_cleanly_when_dependency_exists(monkeypatch):
         client=types.SimpleNamespace(delete_subnet=delete_subnet),
     )
     monkeypatch.setattr(
-        subnet_module,
+        sys.modules[instance.delete_resource_and_wait.__module__],
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )

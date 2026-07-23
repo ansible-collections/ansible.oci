@@ -26,6 +26,10 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     omit_user_known_fields,
     to_dict as serialize_resource_dict,
 )
+from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
+    call_with_retry,
+    wait_for_resource,
+)
 
 
 class OciResourceBase(ABC):
@@ -43,6 +47,7 @@ class OciResourceBase(ABC):
     resource_id_param = None
     create_required_fields = ()
     create_resource_name = "resource"
+    known_field_names = ()
 
     def __init__(self, module):
         if self.client_class is None:
@@ -53,10 +58,12 @@ class OciResourceBase(ABC):
         self.client = create_service_client(module, self.client_class)
         self.check_mode = module.check_mode
 
-    @abstractmethod
     def get_resource(self):
         """Return the current resource or None if not found."""
-        pass
+        resource_id = self.get_resource_id()
+        if not resource_id:
+            return None
+        return self.get_resource_by_id(resource_id)
 
     @abstractmethod
     def create_resource(self):
@@ -75,7 +82,7 @@ class OciResourceBase(ABC):
 
     def user_known_fields(self):
         """Return resource fields that should be omitted when they match inputs."""
-        return ()
+        return self.known_field_names
 
     def to_dict(self, resource) -> dict:
         """Convert an OCI SDK resource object to a serializable dict."""
@@ -147,6 +154,59 @@ class OciResourceBase(ABC):
         if self.resource_id_param is None:
             return None
         return self.module.params.get(self.resource_id_param)
+
+    def get_resource_response(self, resource_id):
+        """Return the raw OCI response for a resource ID."""
+        raise NotImplementedError(
+            f"{type(self).__name__} must define get_resource_response()"
+        )
+
+    def get_resource_by_id(self, resource_id):
+        """Return the current resource for a supplied ID or None on 404."""
+        try:
+            return self.get_resource_response(resource_id).data
+        except Exception as exc:
+            if getattr(exc, "status", None) == 404:
+                return None
+            raise
+
+    def wait_for_resource_id(self, resource_id, target_states):
+        """Wait for a resource ID to reach one of the target states."""
+        return wait_for_resource(
+            self.module,
+            self.client,
+            self.get_resource_response,
+            resource_id,
+            target_states,
+        )
+
+    def get_mutation_result(self, response_data, resource_id, target_states):
+        """Return immediate or waited mutation result based on wait settings."""
+        if not self.module.params.get("wait", True):
+            return response_data
+        if not resource_id:
+            return response_data
+        return self.wait_for_resource_id(resource_id, target_states)
+
+    def delete_resource_and_wait(self, resource, delete_fn, **delete_kwargs):
+        """Delete a resource and wait for it to reach a dead state."""
+        try:
+            response = call_with_retry(delete_fn, **delete_kwargs)
+        except Exception as exc:
+            if getattr(exc, "status", None) == 409:
+                self.module.fail_json(
+                    msg=(
+                        f"Cannot delete {self.create_resource_name} {resource.id} while "
+                        f"dependent resources exist: {exc}"
+                    )
+                )
+            raise
+
+        return self.get_mutation_result(
+            response.data,
+            resource.id,
+            tuple(DEAD_STATES),
+        )
 
     def validate_delete_request(self) -> None:
         """Fail if a delete request omits the resource identifier."""

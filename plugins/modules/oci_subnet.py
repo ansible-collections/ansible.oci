@@ -21,6 +21,7 @@ author:
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
   - oracle.oci.oci_wait_options
+  - oracle.oci.oci_tags_options
 options:
   state:
     description:
@@ -82,16 +83,6 @@ options:
       - When updated, this replaces the subnet's current security list set.
     type: list
     elements: str
-  freeform_tags:
-    description:
-      - Free-form tags to apply to the subnet.
-      - Can be updated in place.
-    type: dict
-  defined_tags:
-    description:
-      - Defined tags to apply to the subnet.
-      - Can be updated in place.
-    type: dict
   prohibit_public_ip_on_vnic:
     description:
       - Whether VNICs created in this subnet must not have public IP addresses.
@@ -136,7 +127,6 @@ resource:
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
-    DEAD_STATES,
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
@@ -147,17 +137,14 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
     call_with_retry,
-    wait_for_resource,
 )
 
 try:
     import oci
-    from oci.exceptions import ServiceError
 
     HAS_OCI_SDK = True
 except ImportError:
     HAS_OCI_SDK = False
-    ServiceError = None
     oci = None
 
 CREATE_REQUIRED_FIELDS = (
@@ -209,26 +196,13 @@ class OciSubnetModule(OciResourceBase):
     resource_id_param = "subnet_id"
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "subnet"
+    known_field_names = ("display_name",)
 
-    def _get_subnet_response(self, subnet_id):
+    def get_resource_response(self, resource_id):
         return call_with_retry(
             self.client.get_subnet,
-            subnet_id=subnet_id,
+            subnet_id=resource_id,
         )
-
-    def _get_subnet_by_id(self, subnet_id):
-        try:
-            return self._get_subnet_response(subnet_id).data
-        except ServiceError as exc:
-            if exc.status == 404:
-                return None
-            raise
-
-    def get_resource(self):
-        subnet_id = self.module.params.get("subnet_id")
-        if not subnet_id:
-            return None
-        return self._get_subnet_by_id(subnet_id)
 
     def create_resource(self):
         create_subnet_details = build_create_subnet_details(self.module.params)
@@ -236,17 +210,9 @@ class OciSubnetModule(OciResourceBase):
             self.client.create_subnet,
             create_subnet_details=create_subnet_details,
         )
-        if not self.module.params.get("wait", True):
-            return response.data
-
-        subnet_id = getattr(response.data, "id", None)
-        if not subnet_id:
-            return response.data
-        return wait_for_resource(
-            self.module,
-            self.client,
-            self._get_subnet_response,
-            subnet_id,
+        return self.get_mutation_result(
+            response.data,
+            getattr(response.data, "id", None),
             WAIT_FOR_SUBNET_STATES,
         )
 
@@ -257,40 +223,17 @@ class OciSubnetModule(OciResourceBase):
             subnet_id=resource.id,
             update_subnet_details=update_subnet_details,
         )
-        if not self.module.params.get("wait", True):
-            return response.data
-        return wait_for_resource(
-            self.module,
-            self.client,
-            self._get_subnet_response,
+        return self.get_mutation_result(
+            response.data,
             resource.id,
             WAIT_FOR_SUBNET_STATES,
         )
 
     def delete_resource(self, resource):
-        try:
-            response = call_with_retry(
-                self.client.delete_subnet,
-                subnet_id=resource.id,
-            )
-        except ServiceError as exc:
-            if exc.status == 409:
-                self.module.fail_json(
-                    msg=(
-                        f"Cannot delete subnet {resource.id} while dependent resources "
-                        f"exist: {exc}"
-                    )
-                )
-            raise
-
-        if not self.module.params.get("wait", True):
-            return response.data
-        return wait_for_resource(
-            self.module,
-            self.client,
-            self._get_subnet_response,
-            resource.id,
-            tuple(DEAD_STATES),
+        return self.delete_resource_and_wait(
+            resource,
+            self.client.delete_subnet,
+            subnet_id=resource.id,
         )
 
     def _fail_immutable_field_change(self, field_name, reason=None):
@@ -360,9 +303,6 @@ class OciSubnetModule(OciResourceBase):
                 return True
 
         return False
-
-    def user_known_fields(self):
-        return ("display_name",)
 
 
 def main():
