@@ -37,6 +37,44 @@ def make_subnet_module(module_obj, params, client=None):
     )
 
 
+def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
+    _, _ = install_fake_oci(monkeypatch)
+
+    module_obj = load_collection_module("oci_subnet")
+    captured = {}
+
+    def fake_ansible_module(**kwargs):
+        captured["argument_spec"] = kwargs["argument_spec"]
+        return DummyModule({})
+
+    class FakeSubnetModule:
+        def __init__(self, module):
+            self.module = module
+
+        def execute_resource_module(self):
+            captured["run_called"] = True
+
+    monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
+    monkeypatch.setattr(module_obj, "OciSubnetModule", FakeSubnetModule)
+
+    module_obj.main()
+
+    assert captured["run_called"] is True
+    assert module_obj.OCI_COMMON_ARGS["allow_duplicate_name"] == {
+        "type": "bool",
+        "default": False,
+    }
+    assert module_obj.OCI_COMMON_ARGS["name"] == {"type": "str"}
+    assert module_obj.OCI_COMMON_ARGS["compartment_id"] == {"type": "str"}
+    assert captured["argument_spec"]["allow_duplicate_name"] == {
+        "type": "bool",
+        "default": False,
+    }
+    assert captured["argument_spec"]["name"] == {"type": "str"}
+    assert captured["argument_spec"]["compartment_id"] == {"type": "str"}
+    assert "display_name" not in captured["argument_spec"]
+
+
 def test_build_create_subnet_details_includes_supported_fields(monkeypatch):
     _, _ = install_fake_oci(monkeypatch)
 
@@ -46,7 +84,7 @@ def test_build_create_subnet_details_includes_supported_fields(monkeypatch):
             "compartment_id": "ocid1.compartment.oc1..example",
             "vcn_id": "ocid1.vcn.oc1..example",
             "cidr_block": "10.0.1.0/24",
-            "display_name": "example-subnet",
+            "name": "example-subnet",
             "dns_label": "examplesubnet",
             "availability_domain": "Uocm:PHX-AD-1",
             "route_table_id": "ocid1.routetable.oc1..example",
@@ -71,36 +109,34 @@ def test_build_create_subnet_details_includes_supported_fields(monkeypatch):
     assert details.defined_tags == {"Operations": {"CostCenter": "42"}}
 
 
-def test_build_update_subnet_details_only_includes_mutable_fields(monkeypatch):
+def test_build_update_plan_maps_subnet_fields_to_update_model(monkeypatch):
     _, _ = install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
-    details = subnet_module.build_update_subnet_details(
+    instance = make_subnet_module(
+        subnet_module,
         {
-            "display_name": "updated-subnet",
+            "name": "updated-subnet",
             "route_table_id": "ocid1.routetable.oc1..updated",
             "security_list_ids": ["ocid1.securitylist.oc1..updated"],
-            "cidr_block": "10.0.2.0/24",
-            "dns_label": "immutablelabel",
-            "availability_domain": "Uocm:PHX-AD-2",
-            "vcn_id": "ocid1.vcn.oc1..other",
-            "prohibit_public_ip_on_vnic": False,
-            "freeform_tags": {"env": "prod"},
-            "defined_tags": {"Operations": {"CostCenter": "43"}},
-        }
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.subnet.oc1..example",
+        display_name="current-subnet",
+        route_table_id="ocid1.routetable.oc1..current",
+        security_list_ids=["ocid1.securitylist.oc1..current"],
     )
 
-    assert isinstance(details, FakeModel)
-    assert details.display_name == "updated-subnet"
-    assert details.cidr_block == "10.0.2.0/24"
-    assert details.route_table_id == "ocid1.routetable.oc1..updated"
-    assert details.security_list_ids == ["ocid1.securitylist.oc1..updated"]
-    assert details.freeform_tags == {"env": "prod"}
-    assert details.defined_tags == {"Operations": {"CostCenter": "43"}}
-    assert not hasattr(details, "dns_label")
-    assert not hasattr(details, "availability_domain")
-    assert not hasattr(details, "vcn_id")
-    assert not hasattr(details, "prohibit_public_ip_on_vnic")
+    update_plan = instance.build_update_plan(resource)
+
+    assert update_plan["update_needed"] is True
+    assert update_plan["update_model_fields"] == {
+        "display_name": "updated-subnet",
+        "route_table_id": "ocid1.routetable.oc1..updated",
+        "security_list_ids": ["ocid1.securitylist.oc1..updated"],
+    }
+    assert update_plan["strategy_operations"] == []
 
 
 def test_needs_update_returns_true_for_cidr_block_change(monkeypatch):
@@ -217,6 +253,46 @@ def test_needs_update_ignores_security_list_order(monkeypatch):
     assert instance.needs_update(resource) is False
 
 
+def test_needs_update_returns_true_for_security_list_content_change(monkeypatch):
+    _, _ = install_fake_oci(monkeypatch)
+
+    subnet_module = load_collection_module("oci_subnet")
+    instance = make_subnet_module(
+        subnet_module,
+        {
+            "security_list_ids": [
+                "ocid1.securitylist.oc1..one",
+                "ocid1.securitylist.oc1..three",
+            ],
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.subnet.oc1..example",
+        security_list_ids=[
+            "ocid1.securitylist.oc1..one",
+            "ocid1.securitylist.oc1..two",
+        ],
+    )
+
+    assert instance.needs_update(resource) is True
+
+
+def test_needs_update_returns_true_for_name_change(monkeypatch):
+    _, _ = install_fake_oci(monkeypatch)
+
+    subnet_module = load_collection_module("oci_subnet")
+    instance = make_subnet_module(
+        subnet_module,
+        {"name": "updated-subnet"},
+    )
+    resource = FakeModel(
+        id="ocid1.subnet.oc1..example",
+        display_name="current-subnet",
+    )
+
+    assert instance.needs_update(resource) is True
+
+
 def test_create_resource_uses_create_subnet_and_waits(monkeypatch):
     _, _ = install_fake_oci(monkeypatch)
 
@@ -236,7 +312,7 @@ def test_create_resource_uses_create_subnet_and_waits(monkeypatch):
             "compartment_id": "ocid1.compartment.oc1..example",
             "vcn_id": "ocid1.vcn.oc1..example",
             "cidr_block": "10.0.1.0/24",
-            "display_name": "example-subnet",
+            "name": "example-subnet",
             "dns_label": "examplesubnet",
             "route_table_id": "ocid1.routetable.oc1..example",
             "security_list_ids": ["ocid1.securitylist.oc1..example"],
@@ -286,7 +362,7 @@ def test_update_resource_uses_update_subnet_details_and_waits(monkeypatch):
     instance = make_subnet_module(
         subnet_module,
         {
-            "display_name": "updated-subnet",
+            "name": "updated-subnet",
             "route_table_id": "ocid1.routetable.oc1..updated",
             "security_list_ids": ["ocid1.securitylist.oc1..updated"],
             "freeform_tags": {"env": "prod"},
@@ -295,7 +371,7 @@ def test_update_resource_uses_update_subnet_details_and_waits(monkeypatch):
         client=types.SimpleNamespace(update_subnet=update_subnet),
     )
     monkeypatch.setattr(
-        subnet_module,
+        sys.modules[instance.update_resource.__module__],
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )

@@ -1,7 +1,7 @@
 ---
-oci_network_vcn_integration_vcn_display_name: "oci-vcn-integration-vcn"
-oci_network_vcn_integration_updated_vcn_display_name: "oci-vcn-integration-vcn-updated"
-oci_network_vcn_integration_subnet_display_name: "oci-vcn-integration-subnet"
+oci_network_vcn_integration_vcn_name: "oci-vcn-integration-vcn"
+oci_network_vcn_integration_updated_vcn_name: "oci-vcn-integration-vcn-updated"
+oci_network_vcn_integration_subnet_name: "oci-vcn-integration-subnet"
 oci_network_vcn_integration_vcn_cidr_block: "10.241.0.0/16"
 oci_network_vcn_integration_modified_vcn_cidr_block: "10.241.0.0/17"
 oci_network_vcn_integration_additional_vcn_cidr_block: "10.242.0.0/16"

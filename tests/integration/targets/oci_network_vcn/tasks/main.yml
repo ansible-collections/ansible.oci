@@ -2,9 +2,9 @@
 - name: Validate required OCI integration variables
   ansible.builtin.assert:
     that:
-      - oci_integration_compartment_id is defined
+      - oci_integration_compartment_id | default('', true) | length > 0
     fail_msg: >-
-      OCI VCN integration tests require oci_integration_compartment_id.
+      OCI VCN integration tests require OCI_TEST_COMPARTMENT_ID to be set.
 
 - name: Exercise VCN module lifecycle
   module_defaults:
@@ -17,7 +17,7 @@
         oci_network_vcn_create_params:
           state: present
           compartment_id: "{{ oci_integration_compartment_id }}"
-          display_name: "{{ oci_network_vcn_integration_vcn_display_name }}"
+          name: "{{ oci_network_vcn_integration_vcn_name }}"
           cidr_blocks:
             - "{{ oci_network_vcn_integration_vcn_cidr_block }}"
           dns_label: "{{ oci_network_vcn_integration_vcn_dns_label }}"
@@ -30,7 +30,7 @@
       oracle.oci.oci_network_vcn: &oci_network_vcn_create_module_options
         state: "{{ oci_network_vcn_create_params.state }}"
         compartment_id: "{{ oci_network_vcn_create_params.compartment_id }}"
-        display_name: "{{ oci_network_vcn_create_params.display_name }}"
+        name: "{{ oci_network_vcn_create_params.name }}"
         cidr_blocks: "{{ oci_network_vcn_create_params.cidr_blocks }}"
         dns_label: "{{ oci_network_vcn_create_params.dns_label }}"
         freeform_tags: "{{ oci_network_vcn_create_params.freeform_tags }}"
@@ -45,7 +45,7 @@
     - name: Read VCN after create check mode
       oracle.oci.oci_network_vcn_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
-        display_name: "{{ oci_network_vcn_integration_vcn_display_name }}"
+        name: "{{ oci_network_vcn_integration_vcn_name }}"
       register: oci_network_vcn_create_check_probe
 
     - name: Assert VCN is still absent after create check mode
@@ -77,7 +77,7 @@
           vcn_id: "{{ oci_network_vcn_create.resource.id }}"
           cidr_blocks:
             - "{{ oci_network_vcn_integration_modified_vcn_cidr_block }}"
-          display_name: "{{ oci_network_vcn_integration_updated_vcn_display_name }}"
+          name: "{{ oci_network_vcn_integration_updated_vcn_name }}"
           freeform_tags: "{{ oci_network_vcn_integration_update_tags }}"
         oci_network_vcn_delete_params:
           state: absent
@@ -100,10 +100,10 @@
           - oci_network_vcn_info_by_id.vcns[0].id == oci_network_vcn_id
           - oci_network_vcn_info_by_id.vcns[0].lifecycle_state == "AVAILABLE"
 
-    - name: List VCN by display name
+    - name: List VCN by name
       oracle.oci.oci_network_vcn_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
-        display_name: "{{ oci_network_vcn_integration_vcn_display_name }}"
+        name: "{{ oci_network_vcn_integration_vcn_name }}"
         lifecycle_state: AVAILABLE
       register: oci_network_vcn_info_list
 
@@ -111,6 +111,16 @@
       ansible.builtin.assert:
         that:
           - oci_network_vcn_info_list.vcns | selectattr('id', 'equalto', oci_network_vcn_id) | list | length == 1
+
+    - name: Assert created VCN is a no-op on rerun with unique name
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_create_module_options
+      register: oci_network_vcn_create_rerun_by_name
+
+    - name: Verify rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_network_vcn_create_rerun_by_name.changed | bool
 
     - name: Assert created VCN is a no-op on rerun with returned id
       oracle.oci.oci_network_vcn:
@@ -219,7 +229,7 @@
         state: "{{ oci_network_vcn_update_params.state }}"
         vcn_id: "{{ oci_network_vcn_update_params.vcn_id }}"
         cidr_blocks: "{{ oci_network_vcn_update_params.cidr_blocks }}"
-        display_name: "{{ oci_network_vcn_update_params.display_name }}"
+        name: "{{ oci_network_vcn_update_params.name }}"
         freeform_tags: "{{ oci_network_vcn_update_params.freeform_tags }}"
       check_mode: true
       register: oci_network_vcn_update_check
@@ -242,7 +252,7 @@
             (oci_network_vcn_update_check_probe.vcns[0].cidr_blocks | sort)
             == ([oci_network_vcn_integration_additional_vcn_cidr_block,
             oci_network_vcn_integration_modified_vcn_cidr_block] | sort)
-          - oci_network_vcn_update_check_probe.vcns[0].display_name == oci_network_vcn_integration_vcn_display_name
+          - oci_network_vcn_update_check_probe.vcns[0].display_name == oci_network_vcn_integration_vcn_name
           - oci_network_vcn_update_check_probe.vcns[0].freeform_tags.phase == "create"
 
     - name: Update VCN
@@ -255,10 +265,10 @@
         that:
           - oci_network_vcn_update.changed | bool
 
-    - name: Read updated VCN by display name
+    - name: Read updated VCN by name
       oracle.oci.oci_network_vcn_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
-        display_name: "{{ oci_network_vcn_integration_updated_vcn_display_name }}"
+        name: "{{ oci_network_vcn_integration_updated_vcn_name }}"
         lifecycle_state: AVAILABLE
       register: oci_network_vcn_info_updated
 
@@ -285,7 +295,7 @@
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_network_vcn_id }}"
         cidr_block: "{{ oci_network_vcn_integration_subnet_cidr_block }}"
-        display_name: "{{ oci_network_vcn_integration_subnet_display_name }}"
+        name: "{{ oci_network_vcn_integration_subnet_name }}"
       register: oci_network_vcn_subnet_create
 
     - name: Capture created subnet id

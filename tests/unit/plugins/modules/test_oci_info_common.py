@@ -13,6 +13,10 @@ from conftest import (
 )
 
 
+def method_module(bound_method):
+    return sys.modules[bound_method.__module__]
+
+
 INFO_CASES = (
     {
         "module_name": "oci_network_vcn_info",
@@ -25,12 +29,11 @@ INFO_CASES = (
         "list_method": "list_vcns",
         "list_params": {
             "compartment_id": "ocid1.compartment.oc1..example",
-            "display_name": "example-vcn",
+            "name": "example-vcn",
             "lifecycle_state": "AVAILABLE",
         },
         "expected_list_kwargs": {
             "compartment_id": "ocid1.compartment.oc1..example",
-            "display_name": "example-vcn",
             "lifecycle_state": "AVAILABLE",
         },
         "run_resource": FakeModel(
@@ -55,13 +58,12 @@ INFO_CASES = (
         "list_params": {
             "compartment_id": "ocid1.compartment.oc1..example",
             "vcn_id": "ocid1.vcn.oc1..example",
-            "display_name": "example-subnet",
+            "name": "example-subnet",
             "lifecycle_state": "AVAILABLE",
         },
         "expected_list_kwargs": {
             "compartment_id": "ocid1.compartment.oc1..example",
             "vcn_id": "ocid1.vcn.oc1..example",
-            "display_name": "example-subnet",
             "lifecycle_state": "AVAILABLE",
         },
         "run_resource": FakeModel(
@@ -92,12 +94,12 @@ def test_list_resources_uses_list_filters(monkeypatch, case):
         client=types.SimpleNamespace(**{case["list_method"]: "list_method"}),
     )
     monkeypatch.setattr(
-        instance,
-        "paginate",
+        method_module(instance.fetch_resources),
+        "paginate_all_resources",
         lambda list_fn, **kwargs: paginate_calls.append((list_fn, kwargs)) or [],
     )
 
-    resources = instance.list_resources()
+    resources = instance.fetch_resources()
 
     assert resources == []
     assert paginate_calls == [("list_method", case["expected_list_kwargs"])]
@@ -123,10 +125,10 @@ def test_list_resources_prefers_id_lookup(monkeypatch, case):
         ),
     )
     monkeypatch.setattr(
-        instance,
-        "paginate",
+        method_module(instance.fetch_resources),
+        "paginate_all_resources",
         lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("paginate should not be called")
+            AssertionError("paginate_all_resources should not be called")
         ),
     )
     monkeypatch.setattr(
@@ -135,7 +137,7 @@ def test_list_resources_prefers_id_lookup(monkeypatch, case):
         lambda fn, **kwargs: fn(**kwargs),
     )
 
-    resources = instance.list_resources()
+    resources = instance.fetch_resources()
 
     assert len(resources) == 1
     assert resources[0].id == case["id_value"]
@@ -164,7 +166,7 @@ def test_list_resources_returns_empty_list_on_404(monkeypatch, case):
         lambda fn, **kwargs: fn(**kwargs),
     )
 
-    assert instance.list_resources() == []
+    assert instance.fetch_resources() == []
 
 
 @pytest.mark.parametrize("case", INFO_CASES, ids=lambda case: case["module_name"])
@@ -177,13 +179,13 @@ def test_run_returns_results_key(monkeypatch, case):
         case["class_name"],
         {
             "compartment_id": "ocid1.compartment.oc1..example",
-            "display_name": case["run_resource"].display_name,
+            "name": case["run_resource"].display_name,
         },
     )
-    monkeypatch.setattr(instance, "list_resources", lambda: [case["run_resource"]])
+    monkeypatch.setattr(instance, "fetch_resources", lambda: [case["run_resource"]])
 
     with pytest.raises(ExitJsonCalled) as exc_info:
-        instance.run()
+        instance.execute_info_module()
 
     assert exc_info.value.payload == {
         "changed": False,

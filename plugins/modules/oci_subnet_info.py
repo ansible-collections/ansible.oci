@@ -43,11 +43,11 @@ EXAMPLES = r"""
   oracle.oci.oci_subnet_info:
     compartment_id: ocid1.compartment.oc1..example
 
-- name: List subnets in a VCN by display name
+- name: List subnets in a VCN by name
   oracle.oci.oci_subnet_info:
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
-    display_name: example-subnet
+    name: example-subnet
 
 - name: Get a specific subnet
   oracle.oci.oci_subnet_info:
@@ -91,10 +91,8 @@ class OciSubnetInfoModule(OciInfoBase):
     list_filter_params = (
         "compartment_id",
         "vcn_id",
-        "display_name",
         "lifecycle_state",
     )
-    known_field_names = ("display_name",)
 
 
 def main():
@@ -103,7 +101,7 @@ def main():
         compartment_id=dict(type="str"),
         subnet_id=dict(type="str"),
         vcn_id=dict(type="str"),
-        display_name=dict(type="str"),
+        name=dict(type="str"),
         lifecycle_state=dict(type="str"),
     )
 
@@ -113,7 +111,7 @@ def main():
         required_one_of=[("compartment_id", "subnet_id")],
     )
 
-    OciSubnetInfoModule(module).run()
+    OciSubnetInfoModule(module).execute_info_module()
 
 
 if __name__ == "__main__":

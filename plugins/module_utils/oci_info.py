@@ -1,36 +1,23 @@
-"""Base info helper for OCI Ansible modules."""
+"""Base helpers for OCI info modules and list-style lookups."""
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-from abc import ABC
-
-DOCUMENTATION = r"""
----
-module_utils: oci_info
-short_description: Base class for OCI info and list modules
-description:
- - Provides OciInfoBase, a separate abstraction for info and list modules.
- - Centers list-oriented modules on OCI client calls, shared pagination, and
- serialized OCI-shaped result data without state-driven CRUD orchestration.
-author:
- - Steve Fulmer (@stevefulme1)
- - Ron Gershburg (@ronger4)
-"""
-
-from ansible_collections.oracle.oci.plugins.module_utils.oci_auth import create_service_client
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
-    omit_user_known_fields,
-    to_dict as serialize_resource_dict,
-)
+from ansible_collections.oracle.oci.plugins.module_utils.oci_base import OciModuleBase
 from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
     call_with_retry,
     list_all_resources as paginate_all_resources,
 )
 
 
-class OciInfoBase(ABC):
-    """Base class for OCI info and list modules."""
+class OciInfoBase(OciModuleBase):
+    """Shared implementation for OCI ``*_info`` modules.
+
+    Subclasses declare the OCI client type and either resource-get metadata,
+    list metadata, or both. The base class handles client creation, pagination,
+    optional local name filtering, and serialization of OCI models into
+    Ansible-friendly result payloads.
+    """
 
     client_class = None
     results_key = "resources"
@@ -39,18 +26,16 @@ class OciInfoBase(ABC):
     resource_get_method = None
     list_resource_method = None
     list_filter_params = ()
-    known_field_names = ()
+    name_filter_param = "name"
 
-    def __init__(self, module):
-        if self.client_class is None:
-            raise TypeError(
-                f"{type(self).__name__} must define client_class"
-            )
-        self.module = module
-        self.client = create_service_client(module, self.client_class)
+    def fetch_resources(self):
+        """Return resources using the subclass-declared get/list metadata.
 
-    def list_resources(self):
-        """Return resources via class-declared get/list metadata."""
+        When the caller supplies ``resource_id_param``, this method fetches a
+        single resource and returns it as a one-item list. Otherwise it runs the
+        configured list operation, applies supported list filters, and performs
+        the optional local display-name filter before returning the resources.
+        """
         resource_id = (
             self.module.params.get(self.resource_id_param)
             if self.resource_id_param
@@ -59,7 +44,7 @@ class OciInfoBase(ABC):
         if resource_id:
             if self.resource_get_method is None:
                 raise NotImplementedError(
-                    f"{type(self).__name__} must define list_resources() or class metadata"
+                    f"{type(self).__name__} must define fetch_resources() or class metadata"
                 )
             resource_id_kwarg = self.resource_id_kwarg or self.resource_id_param
             return self.get_resource_by_id(
@@ -70,31 +55,24 @@ class OciInfoBase(ABC):
 
         if self.list_resource_method is None:
             raise NotImplementedError(
-                f"{type(self).__name__} must define list_resources() or class metadata"
+                f"{type(self).__name__} must define fetch_resources() or class metadata"
             )
-        return self.paginate(
+        resources = paginate_all_resources(
             getattr(self.client, self.list_resource_method),
-            **self.build_list_kwargs(),
+            **self.collect_list_filters(self.list_filter_params),
+        )
+        return self.filter_resources_by_display_name(
+            resources,
+            self.module.params.get(self.name_filter_param),
         )
 
-    def user_known_fields(self):
-        """Return result fields that should be omitted when they match inputs."""
-        return self.known_field_names
-
-    def paginate(self, list_fn, *args, **kwargs):
-        """Return all records from a paginated OCI list operation."""
-        return paginate_all_resources(list_fn, *args, **kwargs)
-
-    def build_list_kwargs(self):
-        """Return non-empty list filter parameters from module params."""
-        return {
-            param_name: self.module.params.get(param_name)
-            for param_name in self.list_filter_params
-            if self.module.params.get(param_name) is not None
-        }
-
     def get_resource_by_id(self, resource_id, get_fn, **kwargs):
-        """Return a single OCI resource as a one-item list or [] on 404."""
+        """Fetch one OCI resource and normalize the result to list form.
+
+        ``get_fn`` is the OCI SDK getter to call with ``kwargs``. A successful
+        lookup returns ``[response.data]`` so callers can treat get and list
+        flows uniformly, while a 404 returns ``[]`` instead of failing.
+        """
         if not resource_id:
             return None
 
@@ -106,23 +84,15 @@ class OciInfoBase(ABC):
                 return []
             raise
 
-    def serialize_resource(self, resource):
-        """Convert a resource to an OCI-shaped result payload."""
-        resource_dict = serialize_resource_dict(resource)
-        if not isinstance(resource_dict, dict):
-            return resource_dict
+    def execute_info_module(self):
+        """Execute the info module and exit with serialized resources.
 
-        return omit_user_known_fields(
-            resource_dict,
-            self.module.params,
-            self.user_known_fields(),
-        )
-
-    def run(self):
-        """List resources and exit with OCI-shaped info data."""
-        resources = self.list_resources()
+        The result payload is emitted under ``results_key`` and always reports
+        ``changed=False`` because info modules do not mutate OCI resources.
+        """
+        resources = self.fetch_resources()
         serialized_resources = [
-            self.serialize_resource(resource) for resource in resources
+            self.serialize_result_resource(resource) for resource in resources
         ]
         self.module.exit_json(
             changed=False,

@@ -20,6 +20,7 @@ author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
+  - oracle.oci.oci_name_lookup_options
   - oracle.oci.oci_wait_options
   - oracle.oci.oci_tags_options
 options:
@@ -32,21 +33,26 @@ options:
   vcn_id:
     description:
       - The OCID of the VCN.
-      - Required for update and delete operations.
-      - Must be omitted for create operations.
+      - When provided, the module manages this exact VCN.
+      - Required to distinguish between multiple VCNs that share the same
+        C(name).
     type: str
-  display_name:
+  name:
     description:
       - Human-readable name for the VCN.
       - Required when creating a VCN.
-      - Not used to identify existing VCNs for update or delete operations.
-      - Re-running create without C(vcn_id) can create additional VCNs because
-        OCI display names are not unique.
+      - When C(vcn_id) is omitted, the module uses
+        C(compartment_id + name) to find an existing VCN.
+      - If exactly one VCN matches, C(state=present) manages it as the update
+        target and C(state=absent) deletes it.
+      - If more than one VCN matches, the task fails and the caller must supply
+        C(vcn_id).
     type: str
   compartment_id:
     description:
       - The OCID of the compartment containing the VCN.
       - Required when creating a VCN.
+      - Also scopes name-based VCN lookups when C(vcn_id) is omitted.
     type: str
   cidr_blocks:
     description:
@@ -73,19 +79,31 @@ EXAMPLES = r"""
   oracle.oci.oci_network_vcn:
     state: present
     compartment_id: ocid1.compartment.oc1..example
-    display_name: example-vcn
+    name: example-vcn
     cidr_blocks:
       - 10.0.0.0/16
     dns_label: examplevcn
   register: created_vcn
 
-- name: Update the created VCN display name and tags
+- name: Reconcile a uniquely named VCN by name
   oracle.oci.oci_network_vcn:
     state: present
-    vcn_id: "{{ created_vcn.resource.id }}"
-    display_name: example-vcn-updated
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-vcn
+    cidr_blocks:
+      - 10.0.0.0/16
     freeform_tags:
       env: dev
+
+- name: Intentionally create a second VCN with the same display name
+  oracle.oci.oci_network_vcn:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-vcn
+    cidr_blocks:
+      - 10.1.0.0/16
+    dns_label: examplevcncopy
 
 - name: Add a CIDR block to the created VCN
   oracle.oci.oci_network_vcn:
@@ -100,6 +118,12 @@ EXAMPLES = r"""
   oracle.oci.oci_network_vcn:
     state: absent
     vcn_id: "{{ created_vcn.resource.id }}"
+
+- name: Delete a uniquely named VCN without providing vcn_id
+  oracle.oci.oci_network_vcn:
+    state: absent
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-vcn
 """
 
 RETURN = r"""
@@ -118,7 +142,6 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
-    to_dict as serialize_resource_dict,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -139,7 +162,7 @@ except ImportError:
 CREATE_REQUIRED_FIELDS = (
     "compartment_id",
     "cidr_blocks",
-    "display_name",
+    "name",
 )
 WAIT_FOR_VCN_STATES = (LIFECYCLE_AVAILABLE,)
 
@@ -149,7 +172,7 @@ def build_create_vcn_details(params):
         {
             "compartment_id": params.get("compartment_id"),
             "cidr_blocks": params.get("cidr_blocks"),
-            "display_name": params.get("display_name"),
+            "display_name": params.get("name"),
             "dns_label": params.get("dns_label"),
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
@@ -159,13 +182,7 @@ def build_create_vcn_details(params):
 
 
 def build_update_vcn_details(params):
-    details = filter_none_values(
-        {
-            "display_name": params.get("display_name"),
-            "freeform_tags": params.get("freeform_tags"),
-            "defined_tags": params.get("defined_tags"),
-        }
-    )
+    details = filter_none_values(dict(params))
     return oci.core.models.UpdateVcnDetails(**details)
 
 
@@ -212,9 +229,29 @@ class OciNetworkVcnModule(OciResourceBase):
 
     client_class = oci.core.VirtualNetworkClient if HAS_OCI_SDK else object()
     resource_id_param = "vcn_id"
+    list_resource_method = "list_vcns"
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "VCN"
-    known_field_names = ("display_name",)
+    update_field_specs = (
+        {
+            "param_name": "cidr_blocks",
+            "resource_field": "cidr_blocks",
+            "is_mutable": True,
+            "strategy": "plan_cidr_blocks_strategy",
+        },
+        {
+            "param_name": "name",
+            "resource_field": "display_name",
+            "update_field": "display_name",
+            "is_mutable": True,
+        },
+        {
+            "param_name": "dns_label",
+            "resource_field": "dns_label",
+            "is_mutable": False,
+            "immutable_reason": "OCI treats dns_label as immutable after create",
+        },
+    )
 
     def __init__(self, module):
         super().__init__(module)
@@ -259,20 +296,8 @@ class OciNetworkVcnModule(OciResourceBase):
             self.module.fail_json(msg=str(exc))
         return []
 
-    def _metadata_update_needed(self, resource_dict):
-        desired_display_name = self.module.params.get("display_name")
-        if desired_display_name is not None and resource_dict.get("display_name") != desired_display_name:
-            return True
-
-        desired_freeform_tags = self.module.params.get("freeform_tags")
-        if desired_freeform_tags is not None and resource_dict.get("freeform_tags") != desired_freeform_tags:
-            return True
-
-        desired_defined_tags = self.module.params.get("defined_tags")
-        if desired_defined_tags is not None and resource_dict.get("defined_tags") != desired_defined_tags:
-            return True
-
-        return False
+    def plan_cidr_blocks_strategy(self, resource, resource_dict, spec, desired_value):
+        return self._planned_cidr_operations(resource_dict)
 
     def _wait_for_vcn_work_request(self, response):
         if not self.module.params.get("wait", True):
@@ -331,19 +356,23 @@ class OciNetworkVcnModule(OciResourceBase):
         )
 
     def update_resource(self, resource):
-        resource_dict = serialize_resource_dict(resource)
-        cidr_operations = self._planned_cidr_operations(resource_dict)
+        update_plan = self.get_update_plan(resource)
+        cidr_operations = []
+        for strategy_operation in update_plan["strategy_operations"]:
+            if strategy_operation["param_name"] == "cidr_blocks":
+                cidr_operations = strategy_operation["operations"]
+                break
         current_resource = resource
 
         if cidr_operations:
             for cidr_operation in cidr_operations:
                 current_resource = self._apply_cidr_operation(resource.id, cidr_operation)
-            resource_dict = serialize_resource_dict(current_resource)
+            update_plan = self.get_update_plan(current_resource)
 
-        if not self._metadata_update_needed(resource_dict):
+        if not update_plan["update_model_fields"]:
             return current_resource if cidr_operations else resource
 
-        update_vcn_details = build_update_vcn_details(self.module.params)
+        update_vcn_details = build_update_vcn_details(update_plan["update_model_fields"])
         response = call_with_retry(
             self.client.update_vcn,
             vcn_id=resource.id,
@@ -368,36 +397,12 @@ class OciNetworkVcnModule(OciResourceBase):
             return None
         return list(desired_cidr_blocks)
 
-    def needs_update(self, resource) -> bool:
-        resource_dict = serialize_resource_dict(resource)
-
-        desired_dns_label = self.module.params.get("dns_label")
-        if desired_dns_label is not None and resource_dict.get("dns_label") != desired_dns_label:
-            self.module.fail_json(
-                msg=(
-                    "Updating dns_label for an existing VCN is not supported "
-                    "because OCI treats dns_label as immutable after create."
-                )
-            )
-
-        cidr_operations = self._planned_cidr_operations(resource_dict)
-        if cidr_operations:
-            return True
-
-        desired_display_name = self.module.params.get("display_name")
-        if desired_display_name is not None and resource_dict.get("display_name") != desired_display_name:
-            return True
-
-        return False
-
 
 def main():
     argument_spec = dict(
         OCI_COMMON_ARGS,
         state=dict(type="str", choices=["present", "absent"], default="present"),
         vcn_id=dict(type="str"),
-        display_name=dict(type="str"),
-        compartment_id=dict(type="str"),
         cidr_blocks=dict(type="list", elements="str"),
         dns_label=dict(type="str"),
     )
@@ -407,7 +412,7 @@ def main():
         supports_check_mode=True,
     )
 
-    OciNetworkVcnModule(module).run()
+    OciNetworkVcnModule(module).execute_resource_module()
 
 
 if __name__ == "__main__":

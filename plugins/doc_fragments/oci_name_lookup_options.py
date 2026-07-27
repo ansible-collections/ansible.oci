@@ -9,14 +9,12 @@ __metaclass__ = type
 class ModuleDocFragment(object):
     DOCUMENTATION = r"""
 options:
-  name:
+  allow_duplicate_name:
     description:
-      - Filter listed resources by name.
-      - Only used when C(compartment_id) is provided.
-    type: str
-  lifecycle_state:
-    description:
-      - Filter listed resources by lifecycle state.
-      - Only used when C(compartment_id) is provided.
-    type: str
+      - Allow C(state=present) to create an additional resource when exactly one
+        existing resource already matches the module's scoped name lookup.
+      - Has no effect when the explicit resource ID is provided.
+      - Has no effect for C(state=absent).
+    type: bool
+    default: false
 """

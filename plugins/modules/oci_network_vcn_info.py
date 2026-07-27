@@ -37,6 +37,11 @@ EXAMPLES = r"""
   oracle.oci.oci_network_vcn_info:
     compartment_id: ocid1.compartment.oc1..example
 
+- name: List VCNs in a compartment by name
+  oracle.oci.oci_network_vcn_info:
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-vcn
+
 - name: Get a specific VCN
   oracle.oci.oci_network_vcn_info:
     vcn_id: ocid1.vcn.oc1..example
@@ -76,8 +81,7 @@ class OciNetworkVcnInfoModule(OciInfoBase):
     resource_id_param = "vcn_id"
     resource_get_method = "get_vcn"
     list_resource_method = "list_vcns"
-    list_filter_params = ("compartment_id", "display_name", "lifecycle_state")
-    known_field_names = ("display_name",)
+    list_filter_params = ("compartment_id", "lifecycle_state")
 
 
 def main():
@@ -85,7 +89,7 @@ def main():
         OCI_AUTH_ARGS,
         compartment_id=dict(type="str"),
         vcn_id=dict(type="str"),
-        display_name=dict(type="str"),
+        name=dict(type="str"),
         lifecycle_state=dict(type="str"),
     )
 
@@ -95,7 +99,7 @@ def main():
         required_one_of=[("compartment_id", "vcn_id")],
     )
 
-    OciNetworkVcnInfoModule(module).run()
+    OciNetworkVcnInfoModule(module).execute_info_module()
 
 
 if __name__ == "__main__":

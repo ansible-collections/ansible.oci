@@ -1,29 +1,11 @@
-"""OCI authentication utilities supporting multiple auth methods."""
+"""OCI authentication helpers for internal collection code."""
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-DOCUMENTATION = r"""
----
-module_utils: oci_auth
-short_description: OCI authentication and service client creation
-description:
- - Provides helpers for authenticating to Oracle Cloud Infrastructure using
- multiple auth methods including API key, instance principal, resource
- principal, and session token.
- - Exports get_oci_config to build OCI config dicts from module params or
- environment variables, and create_service_client to instantiate any OCI
- SDK client with the appropriate signer.
-author:
- - Steve Fulmer (@stevefulme1)
- - Ron Gershburg (@ronger4)
-"""
-
 import os
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
-    OCI_SDK_REQUIRED_MSG,
-)
+from ansible.module_utils.basic import missing_required_lib
 
 try:
     import oci
@@ -31,56 +13,30 @@ try:
 except ImportError:
     HAS_OCI_SDK = False
 
-VALID_AUTH_TYPES = (
-    "api_key",
-    "instance_principal",
-    "resource_principal",
-    "session_token",
-)
-
-
 def get_auth_type(module):
-    """Resolve the OCI auth type from module params or environment."""
-    auth_type = (
-        module.params.get("auth_type")
-        or os.environ.get("OCI_AUTH_TYPE")
-        or "api_key"
-    )
-    if auth_type not in VALID_AUTH_TYPES:
-        module.fail_json(
-            msg=(
-                f"Unsupported auth_type '{auth_type}'. Expected one of: "
-                f"{', '.join(VALID_AUTH_TYPES)}"
-            )
-        )
-        return None
-    return auth_type
+    """Return the resolved OCI auth mode from module parameters.
 
-
-def _resolve_setting(module, param_key, env_var, default):
-    """Resolve a setting from module params, environment, or fallback."""
-    return module.params.get(param_key) or os.environ.get(env_var) or default
+    The module argument spec and environment fallbacks have already normalized
+    this value before helpers call into the OCI SDK.
+    """
+    return module.params.get("auth_type")
 
 
 def get_oci_config(module):
-    """Build OCI config dict from module params or environment."""
+    """Build the OCI SDK config dictionary for the selected auth mode.
+
+    For instance and resource principal auth, the SDK only needs the auth mode
+    marker and does not require a config file. For API key and session token
+    auth, this helper loads the selected OCI profile when it exists and then
+    overlays any explicit module parameters before returning the config dict.
+    """
     auth_type = get_auth_type(module)
 
     if auth_type in ("instance_principal", "resource_principal"):
         return {"auth_type": auth_type}
 
-    config_file = _resolve_setting(
-        module,
-        "config_file_location",
-        "OCI_CONFIG_FILE",
-        "~/.oci/config",
-    )
-    config_profile = _resolve_setting(
-        module,
-        "config_profile_name",
-        "OCI_CONFIG_PROFILE",
-        "DEFAULT",
-    )
+    config_file = module.params.get("config_file_location")
+    config_profile = module.params.get("config_profile_name")
 
     config_file = os.path.expanduser(config_file)
 
@@ -92,15 +48,8 @@ def get_oci_config(module):
     else:
         config = {}
 
-    # Override with explicit params or env vars
+    # Override with explicit module params after loading the selected profile.
     env_map = {
-        "tenancy": "OCI_TENANCY_ID",
-        "user": "OCI_USER_ID",
-        "region": "OCI_REGION",
-        "fingerprint": "OCI_USER_FINGERPRINT",
-        "key_file": "OCI_USER_KEY_FILE",
-    }
-    param_map = {
         "tenancy": "tenancy",
         "user": "api_user",
         "region": "region",
@@ -108,13 +57,12 @@ def get_oci_config(module):
         "key_file": "api_user_key_file",
     }
 
-    for config_key, env_var in env_map.items():
-        param_key = param_map[config_key]
-        value = module.params.get(param_key) or os.environ.get(env_var)
+    for config_key, param_key in env_map.items():
+        value = module.params.get(param_key)
         if value:
             config[config_key] = value
 
-    pass_phrase = module.params.get("api_user_key_pass_phrase") or os.environ.get("OCI_USER_KEY_PASS_PHRASE")
+    pass_phrase = module.params.get("api_user_key_pass_phrase")
     if pass_phrase:
         config["pass_phrase"] = pass_phrase
 
@@ -122,12 +70,14 @@ def get_oci_config(module):
 
 
 def create_service_client(module, client_class):
-    """Create an OCI service client with the appropriate auth method."""
+    """Instantiate an OCI service client with the correct signer or config.
+
+    The returned object is an instance of ``client_class`` configured for the
+    caller's auth mode. This helper can fail the module when the OCI SDK is not
+    installed or when session token auth is missing required profile data.
+    """
     if not HAS_OCI_SDK:
-        module.fail_json(
-            msg=f"{OCI_SDK_REQUIRED_MSG} Install with: pip install oci"
-        )
-        return None
+        module.fail_json(msg=missing_required_lib("oci"))
 
     auth_type = get_auth_type(module)
 

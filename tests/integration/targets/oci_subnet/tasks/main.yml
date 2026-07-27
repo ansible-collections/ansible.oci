@@ -2,9 +2,9 @@
 - name: Validate required OCI integration variables
   ansible.builtin.assert:
     that:
-      - oci_integration_compartment_id is defined
+      - oci_integration_compartment_id | default('', true) | length > 0
     fail_msg: >-
-      OCI subnet integration tests require oci_integration_compartment_id.
+      OCI subnet integration tests require OCI_TEST_COMPARTMENT_ID to be set.
 
 - name: Exercise subnet module lifecycle
   module_defaults:
@@ -16,7 +16,7 @@
       oracle.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
-        display_name: "{{ oci_subnet_integration_vcn_display_name }}"
+        name: "{{ oci_subnet_integration_vcn_name }}"
         cidr_blocks:
           - "{{ oci_subnet_integration_vcn_cidr_block }}"
         dns_label: "{{ oci_subnet_integration_vcn_dns_label }}"
@@ -36,7 +36,7 @@
           compartment_id: "{{ oci_integration_compartment_id }}"
           vcn_id: "{{ oci_subnet_integration_network.vcn_id }}"
           cidr_block: "{{ oci_subnet_integration_subnet_cidr_block }}"
-          display_name: "{{ oci_subnet_integration_subnet_display_name }}"
+          name: "{{ oci_subnet_integration_subnet_name }}"
           dns_label: "{{ oci_subnet_integration_subnet_dns_label }}"
           route_table_id: "{{ oci_subnet_integration_network.default_route_table_id }}"
           security_list_ids:
@@ -52,7 +52,7 @@
         compartment_id: "{{ oci_subnet_create_params.compartment_id }}"
         vcn_id: "{{ oci_subnet_create_params.vcn_id }}"
         cidr_block: "{{ oci_subnet_create_params.cidr_block }}"
-        display_name: "{{ oci_subnet_create_params.display_name }}"
+        name: "{{ oci_subnet_create_params.name }}"
         dns_label: "{{ oci_subnet_create_params.dns_label }}"
         route_table_id: "{{ oci_subnet_create_params.route_table_id }}"
         security_list_ids: "{{ oci_subnet_create_params.security_list_ids }}"
@@ -69,7 +69,7 @@
       oracle.oci.oci_subnet_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_subnet_integration_network.vcn_id }}"
-        display_name: "{{ oci_subnet_integration_subnet_display_name }}"
+        name: "{{ oci_subnet_integration_subnet_name }}"
       register: oci_subnet_create_check_probe
 
     - name: Assert subnet is still absent after create check mode
@@ -88,7 +88,7 @@
         oci_subnet_update_params:
           state: present
           subnet_id: "{{ oci_subnet_create.resource.id }}"
-          display_name: "{{ oci_subnet_integration_updated_subnet_display_name }}"
+          name: "{{ oci_subnet_integration_updated_subnet_name }}"
           cidr_block: "{{ oci_subnet_integration_updated_subnet_cidr_block }}"
           route_table_id: "{{ oci_subnet_integration_network.default_route_table_id }}"
           security_list_ids:
@@ -113,17 +113,17 @@
         that:
           - oci_subnet_info_by_id.subnets | length == 1
           - oci_subnet_info_by_id.subnets[0].id == oci_subnet_id
-          - oci_subnet_info_by_id.subnets[0].display_name == oci_subnet_integration_subnet_display_name
+          - oci_subnet_info_by_id.subnets[0].display_name == oci_subnet_integration_subnet_name
           - oci_subnet_info_by_id.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
           - oci_subnet_info_by_id.subnets[0].lifecycle_state == "AVAILABLE"
           - oci_subnet_info_by_id.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
           - oci_subnet_info_by_id.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
 
-    - name: List subnet by display name
+    - name: List subnet by name
       oracle.oci.oci_subnet_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_subnet_integration_network.vcn_id }}"
-        display_name: "{{ oci_subnet_integration_subnet_display_name }}"
+        name: "{{ oci_subnet_integration_subnet_name }}"
         lifecycle_state: AVAILABLE
       register: oci_subnet_info_list
 
@@ -131,6 +131,16 @@
       ansible.builtin.assert:
         that:
           - oci_subnet_info_list.subnets | selectattr('id', 'equalto', oci_subnet_id) | list | length == 1
+
+    - name: Assert created subnet is a no-op on rerun with unique name
+      oracle.oci.oci_subnet:
+        <<: *oci_subnet_create_module_options
+      register: oci_subnet_create_rerun_by_name
+
+    - name: Verify subnet rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_subnet_create_rerun_by_name.changed | bool
 
     - name: Assert created subnet is a no-op on rerun with returned id
       oracle.oci.oci_subnet:
@@ -147,7 +157,7 @@
       oracle.oci.oci_subnet: &oci_subnet_update_module_options
         state: "{{ oci_subnet_update_params.state }}"
         subnet_id: "{{ oci_subnet_update_params.subnet_id }}"
-        display_name: "{{ oci_subnet_update_params.display_name }}"
+        name: "{{ oci_subnet_update_params.name }}"
         cidr_block: "{{ oci_subnet_update_params.cidr_block }}"
         route_table_id: "{{ oci_subnet_update_params.route_table_id }}"
         security_list_ids: "{{ oci_subnet_update_params.security_list_ids }}"
@@ -170,7 +180,7 @@
         that:
           - oci_subnet_update_check_probe.subnets | length == 1
           - oci_subnet_update_check_probe.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
-          - oci_subnet_update_check_probe.subnets[0].display_name == oci_subnet_integration_subnet_display_name
+          - oci_subnet_update_check_probe.subnets[0].display_name == oci_subnet_integration_subnet_name
           - oci_subnet_update_check_probe.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
           - oci_subnet_update_check_probe.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
           - oci_subnet_update_check_probe.subnets[0].freeform_tags.phase == "create"
@@ -185,11 +195,11 @@
         that:
           - oci_subnet_update.changed | bool
 
-    - name: Read updated subnet by display name
+    - name: Read updated subnet by name
       oracle.oci.oci_subnet_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_subnet_integration_network.vcn_id }}"
-        display_name: "{{ oci_subnet_integration_updated_subnet_display_name }}"
+        name: "{{ oci_subnet_integration_updated_subnet_name }}"
         lifecycle_state: AVAILABLE
       register: oci_subnet_info_updated
 

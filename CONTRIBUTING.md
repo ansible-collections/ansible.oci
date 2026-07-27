@@ -52,6 +52,33 @@ python noxfile.py -l
 Also validate the files you touch directly, especially YAML and Markdown
 content.
 
+### Running live OCI integration targets locally
+
+Required runtime input:
+
+* `OCI_TEST_COMPARTMENT_ID`
+
+Optional overrides when you do not want the defaults:
+
+* `OCI_CONFIG_FILE`
+* `OCI_CONFIG_PROFILE`
+
+The integration target defaults already map `OCI_TEST_COMPARTMENT_ID` to the
+module `compartment_id` parameter, so if your OCI auth environment is already
+prepared, that is the only required run-time export.
+
+```bash
+
+ansible-test integration --docker --allow-destructive oci_network_vcn -vvv
+ansible-test integration --docker --allow-destructive oci_subnet -vvv
+```
+
+To run both current live OCI targets in one command:
+
+```bash
+ansible-test integration --docker --allow-destructive oci_network_vcn oci_subnet -vvv
+```
+
 ## Review references
 
 The following references are useful when preparing or reviewing changes:

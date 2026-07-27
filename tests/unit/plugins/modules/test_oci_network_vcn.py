@@ -43,6 +43,44 @@ def make_vcn_module(module_obj, params, client=None):
     )
 
 
+def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
+    _, _ = install_fake_oci(monkeypatch)
+
+    module_obj = load_collection_module("oci_network_vcn")
+    captured = {}
+
+    def fake_ansible_module(**kwargs):
+        captured["argument_spec"] = kwargs["argument_spec"]
+        return DummyModule({})
+
+    class FakeVcnModule:
+        def __init__(self, module):
+            self.module = module
+
+        def execute_resource_module(self):
+            captured["run_called"] = True
+
+    monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
+    monkeypatch.setattr(module_obj, "OciNetworkVcnModule", FakeVcnModule)
+
+    module_obj.main()
+
+    assert captured["run_called"] is True
+    assert module_obj.OCI_COMMON_ARGS["allow_duplicate_name"] == {
+        "type": "bool",
+        "default": False,
+    }
+    assert module_obj.OCI_COMMON_ARGS["name"] == {"type": "str"}
+    assert module_obj.OCI_COMMON_ARGS["compartment_id"] == {"type": "str"}
+    assert captured["argument_spec"]["allow_duplicate_name"] == {
+        "type": "bool",
+        "default": False,
+    }
+    assert captured["argument_spec"]["name"] == {"type": "str"}
+    assert captured["argument_spec"]["compartment_id"] == {"type": "str"}
+    assert "display_name" not in captured["argument_spec"]
+
+
 def test_build_create_vcn_details_includes_dns_label_and_tags(monkeypatch):
     _, _ = install_fake_oci(monkeypatch)
 
@@ -51,7 +89,7 @@ def test_build_create_vcn_details_includes_dns_label_and_tags(monkeypatch):
         {
             "compartment_id": "ocid1.compartment.oc1..example",
             "cidr_blocks": ["10.0.0.0/16"],
-            "display_name": "example-vcn",
+            "name": "example-vcn",
             "dns_label": "examplevcn",
             "freeform_tags": {"env": "dev"},
             "defined_tags": {"Operations": {"CostCenter": "42"}},
@@ -74,8 +112,6 @@ def test_build_update_vcn_details_only_includes_mutable_fields(monkeypatch):
     details = vcn_module.build_update_vcn_details(
         {
             "display_name": "updated-vcn",
-            "cidr_blocks": ["10.1.0.0/16"],
-            "dns_label": "immutablelabel",
             "freeform_tags": {"env": "prod"},
             "defined_tags": {"Operations": {"CostCenter": "43"}},
         }
@@ -85,8 +121,36 @@ def test_build_update_vcn_details_only_includes_mutable_fields(monkeypatch):
     assert details.display_name == "updated-vcn"
     assert details.freeform_tags == {"env": "prod"}
     assert details.defined_tags == {"Operations": {"CostCenter": "43"}}
-    assert not hasattr(details, "cidr_blocks")
-    assert not hasattr(details, "dns_label")
+
+
+def test_build_update_plan_maps_vcn_metadata_and_cidr_strategy(monkeypatch):
+    _, _ = install_fake_oci(monkeypatch)
+
+    vcn_module = load_collection_module("oci_network_vcn")
+    instance = make_vcn_module(
+        vcn_module,
+        {
+            "name": "updated-vcn",
+            "cidr_blocks": ["10.0.0.0/16", "10.1.0.0/16"],
+            "wait": True,
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.vcn.oc1..example",
+        display_name="current-vcn",
+        cidr_blocks=["10.0.0.0/16"],
+    )
+
+    update_plan = instance.build_update_plan(resource)
+
+    assert update_plan["update_needed"] is True
+    assert update_plan["update_model_fields"] == {"display_name": "updated-vcn"}
+    assert update_plan["strategy_operations"] == [
+        {
+            "param_name": "cidr_blocks",
+            "operations": [("add", "10.1.0.0/16")],
+        }
+    ]
 
 
 def test_build_add_vcn_cidr_details_uses_cidr_block(monkeypatch):
@@ -192,6 +256,22 @@ def test_needs_update_treats_cidr_block_order_as_noop(monkeypatch):
     assert instance.needs_update(resource) is False
 
 
+def test_needs_update_returns_true_for_simple_cidr_add(monkeypatch):
+    _, _ = install_fake_oci(monkeypatch)
+
+    vcn_module = load_collection_module("oci_network_vcn")
+    instance = make_vcn_module(
+        vcn_module,
+        {"cidr_blocks": ["10.0.0.0/16", "10.1.0.0/16"], "wait": True},
+    )
+    resource = FakeModel(
+        id="ocid1.vcn.oc1..example",
+        cidr_blocks=["10.0.0.0/16"],
+    )
+
+    assert instance.needs_update(resource) is True
+
+
 def test_needs_update_rejects_cidr_updates_without_wait(monkeypatch):
     _, _ = install_fake_oci(monkeypatch)
 
@@ -243,6 +323,22 @@ def test_needs_update_rejects_dns_label_drift(monkeypatch):
     assert "dns_label" in exc_info.value.payload["msg"]
 
 
+def test_needs_update_returns_true_for_name_change(monkeypatch):
+    _, _ = install_fake_oci(monkeypatch)
+
+    vcn_module = load_collection_module("oci_network_vcn")
+    instance = make_vcn_module(
+        vcn_module,
+        {"name": "updated-vcn"},
+    )
+    resource = FakeModel(
+        id="ocid1.vcn.oc1..example",
+        display_name="current-vcn",
+    )
+
+    assert instance.needs_update(resource) is True
+
+
 def test_create_resource_uses_create_vcn_and_waits(monkeypatch):
     _, _ = install_fake_oci(monkeypatch)
 
@@ -261,7 +357,7 @@ def test_create_resource_uses_create_vcn_and_waits(monkeypatch):
         {
             "compartment_id": "ocid1.compartment.oc1..example",
             "cidr_blocks": ["10.0.0.0/16"],
-            "display_name": "example-vcn",
+            "name": "example-vcn",
             "dns_label": "examplevcn",
             "wait": True,
         },
@@ -306,7 +402,7 @@ def test_update_resource_uses_update_vcn_details_and_waits(monkeypatch):
     instance = make_vcn_module(
         vcn_module,
         {
-            "display_name": "updated-vcn",
+            "name": "updated-vcn",
             "freeform_tags": {"env": "prod"},
             "wait": True,
         },
@@ -419,7 +515,7 @@ def test_update_resource_applies_cidr_changes_before_metadata_update(monkeypatch
         vcn_module,
         {
             "cidr_blocks": ["10.0.0.0/16"],
-            "display_name": "example-vcn-updated",
+            "name": "example-vcn-updated",
             "freeform_tags": {"phase": "update"},
             "wait": True,
         },

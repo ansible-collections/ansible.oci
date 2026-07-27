@@ -145,6 +145,9 @@ The workflow definitions are available at:
 Contribution guidelines are documented in
 [CONTRIBUTING.md](https://github.com/ansible-collections/oracle.oci/blob/main/CONTRIBUTING.md).
 
+Contributors adding new OCI modules should start with the
+[Module Authoring Guide](docs/module_development.md).
+
 Project code of conduct information is available in
 [CODE_OF_CONDUCT.md](https://github.com/ansible-collections/oracle.oci/blob/main/CODE_OF_CONDUCT.md).
 

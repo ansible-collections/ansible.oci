@@ -1,36 +1,41 @@
-"""Common OCI argument specs and constants used across all modules."""
+"""Shared argument specs, constants, and serializers for OCI helpers."""
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-DOCUMENTATION = r"""
----
-module_utils: oci_common
-short_description: Shared OCI argument specs and lifecycle constants
-description:
- - Defines OCI_AUTH_ARGS for OCI authentication parameters used by all modules,
-   and OCI_COMMON_ARGS for the additional wait and tag parameters used by
-   managed resource modules.
- - Provides lifecycle state constants and frozen sets (WAIT_STATES, READY_STATES,
-   DEAD_STATES) used for resource state management and polling.
-author:
- - Steve Fulmer (@stevefulme1)
- - Ron Gershburg (@ronger4)
-"""
+from ansible.module_utils.common.parameters import env_fallback
 
 OCI_AUTH_ARGS = dict(
-    config_file_location=dict(type="str"),
-    config_profile_name=dict(type="str"),
+    config_file_location=dict(
+        type="str",
+        default="~/.oci/config",
+        fallback=(env_fallback, ["OCI_CONFIG_FILE"]),
+    ),
+    config_profile_name=dict(
+        type="str",
+        default="DEFAULT",
+        fallback=(env_fallback, ["OCI_CONFIG_PROFILE"]),
+    ),
     auth_type=dict(
         type="str",
+        default="api_key",
         choices=["api_key", "instance_principal", "resource_principal", "session_token"],
+        fallback=(env_fallback, ["OCI_AUTH_TYPE"]),
     ),
-    tenancy=dict(type="str"),
-    region=dict(type="str"),
-    api_user=dict(type="str"),
-    api_user_fingerprint=dict(type="str", no_log=True),
-    api_user_key_file=dict(type="str"),
-    api_user_key_pass_phrase=dict(type="str", no_log=True),
+    tenancy=dict(type="str", fallback=(env_fallback, ["OCI_TENANCY_ID"])),
+    region=dict(type="str", fallback=(env_fallback, ["OCI_REGION"])),
+    api_user=dict(type="str", fallback=(env_fallback, ["OCI_USER_ID"])),
+    api_user_fingerprint=dict(
+        type="str",
+        no_log=True,
+        fallback=(env_fallback, ["OCI_USER_FINGERPRINT"]),
+    ),
+    api_user_key_file=dict(type="str", fallback=(env_fallback, ["OCI_USER_KEY_FILE"])),
+    api_user_key_pass_phrase=dict(
+        type="str",
+        no_log=True,
+        fallback=(env_fallback, ["OCI_USER_KEY_PASS_PHRASE"]),
+    ),
 )
 
 OCI_WAIT_ARGS = dict(
@@ -44,10 +49,21 @@ OCI_TAG_ARGS = dict(
     defined_tags=dict(type="dict"),
 )
 
+OCI_NAME_LOOKUP_ARGS = dict(
+    name=dict(type="str"),
+    compartment_id=dict(type="str"),
+    allow_duplicate_name=dict(type="bool", default=False),
+)
+
+COMMON_FIELD_PARAM_ALIASES = {
+    "display_name": "name",
+}
+
 OCI_COMMON_ARGS = dict(
     OCI_AUTH_ARGS,
     **OCI_WAIT_ARGS,
     **OCI_TAG_ARGS,
+    **OCI_NAME_LOOKUP_ARGS,
 )
 
 OCI_SDK_REQUIRED_MSG = "The 'oci' Python SDK is required."
@@ -83,8 +99,14 @@ DEAD_STATES = frozenset({
 })
 
 
-def to_dict(resource):
-    """Convert an OCI resource object to a plain dictionary."""
+def serialize_oci_model(resource):
+    """Recursively convert an OCI SDK model into Python container types.
+
+    ``resource`` may be an OCI model instance, a dict, a list, or a primitive
+    value. The return value mirrors the input structure but contains only plain
+    dictionaries, lists, and scalar values, with ``None`` normalized to ``{}``
+    at the top level for missing resources.
+    """
     def _serialize_value(value):
         if value is None:
             return None
@@ -96,7 +118,7 @@ def to_dict(resource):
                 for key, item_value in value.items()
             }
         if hasattr(value, "__dict__") or getattr(value, "swagger_types", None):
-            return to_dict(value)
+            return serialize_oci_model(value)
         return value
 
     if resource is None:
@@ -124,19 +146,75 @@ def to_dict(resource):
     return resource
 
 
+def build_result_field_aliases(
+    common_field_param_aliases,
+    field_param_aliases,
+    known_field_names,
+):
+    """Build the resource-field to module-param alias mapping."""
+    result_field_aliases = dict(common_field_param_aliases)
+    result_field_aliases.update(field_param_aliases)
+    for field_name in known_field_names:
+        if isinstance(field_name, tuple):
+            result_field_aliases[field_name[0]] = field_name[1]
+        else:
+            result_field_aliases[field_name] = field_name
+    return result_field_aliases
+
+
+def collect_list_filters(module_params, *param_groups):
+    """Collect non-None list filter parameters from module inputs."""
+    list_filters = {}
+    for param_group in param_groups:
+        for param_name in param_group:
+            param_value = module_params.get(param_name)
+            if param_value is not None:
+                list_filters[param_name] = param_value
+    return list_filters
+
+
+def filter_resources_by_response_field(resources, response_field, expected_value):
+    """Return only resources whose response field matches ``expected_value``."""
+    if expected_value is None:
+        return resources
+    return [
+        resource
+        for resource in resources
+        if getattr(resource, response_field, None) == expected_value
+    ]
+
+
 def omit_user_known_fields(resource_dict, module_params, field_names):
-    """Drop result fields whose values exactly match caller-supplied inputs."""
+    """Remove response fields that simply echo caller-supplied parameters.
+
+    ``field_names`` may be an iterable of OCI field names or a mapping of
+    ``resource_field -> module_param`` aliases. The returned dict is a shallow
+    copy of ``resource_dict`` with exact input echoes removed so module results
+    emphasize OCI-assigned values instead of repeated request data.
+    """
     filtered_resource_dict = dict(resource_dict)
 
+    if isinstance(field_names, dict):
+        field_names = field_names.items()
+
     for field_name in field_names:
-        if filtered_resource_dict.get(field_name) == module_params.get(field_name):
-            filtered_resource_dict.pop(field_name, None)
+        # Allow callers to map an OCI response field to a different module param name.
+        resource_field_name = field_name
+        module_param_name = field_name
+        if isinstance(field_name, tuple):
+            resource_field_name, module_param_name = field_name
+        if filtered_resource_dict.get(resource_field_name) == module_params.get(module_param_name):
+            filtered_resource_dict.pop(resource_field_name, None)
 
     return filtered_resource_dict
 
 
 def filter_none_values(data):
-    """Return a shallow copy without keys whose values are None."""
+    """Return a shallow copy without keys whose values are ``None``.
+
+    This helper keeps the original dictionary unchanged and only filters the
+    first level of keys.
+    """
     return {
         key: value for key, value in data.items() if value is not None
     }

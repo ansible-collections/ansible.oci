@@ -1,3 +1,6 @@
+/.AGENTS/
+/playbooks/
+
 /tests/output/
 /tests/integration/inventory
 /changelogs/.plugin-cache.yaml

@@ -1,21 +1,7 @@
-"""Waiter and retry utilities for OCI resources."""
+"""Shared waiter, pagination, and retry helpers for OCI SDK calls."""
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
-
-DOCUMENTATION = r"""
----
-module_utils: oci_wait
-short_description: Waiter and retry utilities for OCI API operations
-description:
- - Provides wait_for_resource to poll an OCI resource until it reaches a target
- lifecycle state, with configurable timeout and failure state detection.
- - Includes wait_for_work_request for tracking OCI async work requests, and
- call_with_retry for exponential backoff retries on transient API errors.
-author:
- - Steve Fulmer (@stevefulme1)
- - Ron Gershburg (@ronger4)
-"""
 
 try:
     import oci
@@ -31,7 +17,11 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
 
 
 def list_all_resources(list_fn, *args, **kwargs):
-    """Return all records from an OCI list operation."""
+    """Return every record from an OCI paginated list operation.
+
+    ``list_fn`` is an OCI SDK list method. The helper requires the OCI SDK to
+    be installed and returns the aggregated ``.data`` collection from all pages.
+    """
     if not HAS_OCI_SDK:
         raise ImportError(OCI_SDK_REQUIRED_MSG)
 
@@ -74,7 +64,14 @@ def wait_for_resource(
     target_states,
     failure_states=None,
 ):
-    """Poll a resource until it reaches a target lifecycle state."""
+    """Poll a resource until it reaches one of the requested lifecycle states.
+
+    ``module`` supplies the ``wait``, ``wait_timeout``, and ``wait_interval``
+    parameters. When waiting is disabled this helper performs one immediate
+    ``get_fn(resource_id)`` call and returns its data. Otherwise it keeps
+    polling until the resource reaches ``target_states`` or fails into
+    ``failure_states``.
+    """
     if not HAS_OCI_SDK:
         raise ImportError(OCI_SDK_REQUIRED_MSG)
 
@@ -121,7 +118,12 @@ def wait_for_work_request(
     target_states=None,
     failure_states=None,
 ):
-    """Wait for an OCI work request to complete."""
+    """Wait for an OCI asynchronous work request to finish.
+
+    The helper polls ``get_work_request_fn`` until the work request enters one
+    of ``target_states`` and returns the final OCI work request model. If the
+    request enters ``failure_states``, the module fails immediately.
+    """
     if not HAS_OCI_SDK:
         raise ImportError(OCI_SDK_REQUIRED_MSG)
 
@@ -154,7 +156,12 @@ def wait_for_work_request(
 
 
 def call_with_retry(fn, *args, max_retries=3, retry_on=(429, 500, 503), **kwargs):
-    """Call an OCI API function with exponential backoff retry."""
+    """Call an OCI SDK function with retry handling for transient failures.
+
+    ``fn`` receives the provided positional and keyword arguments through the
+    OCI retry strategy. The return value is whatever the wrapped OCI call
+    returns after succeeding or exhausting the configured retry attempts.
+    """
     if not HAS_OCI_SDK:
         raise ImportError(OCI_SDK_REQUIRED_MSG)
 

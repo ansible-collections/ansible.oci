@@ -9,7 +9,8 @@ __metaclass__ = type
 class ModuleDocFragment(object):
     DOCUMENTATION = r"""
 notes:
-  - For API key authentication, explicit module parameters override matching values from the selected OCI config profile when provided.
+  - Shared OCI auth options use ansible-core argument-spec fallbacks.
+  - For API key authentication, explicit module parameters override matching values from environment variables and from the selected OCI config profile when provided.
   - Resolution order for C(auth_type) is module parameter, then C(OCI_AUTH_TYPE), then C(api_key).
   - Resolution order for C(config_file_location) is module parameter, then C(OCI_CONFIG_FILE), then C(~/.oci/config).
   - Resolution order for C(config_profile_name) is module parameter, then C(OCI_CONFIG_PROFILE), then C(DEFAULT).
@@ -18,15 +19,18 @@ options:
     description:
       - The OCI authentication method to use.
     type: str
+    default: api_key
     choices: [api_key, instance_principal, resource_principal, session_token]
   config_file_location:
     description:
       - Path to the OCI configuration file.
     type: str
+    default: ~/.oci/config
   config_profile_name:
     description:
       - Profile name to load from the OCI configuration file.
     type: str
+    default: DEFAULT
   tenancy:
     description:
       - OCI tenancy OCID for API key authentication.
