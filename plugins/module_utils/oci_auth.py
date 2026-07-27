@@ -13,6 +13,7 @@ try:
 except ImportError:
     HAS_OCI_SDK = False
 
+
 def get_auth_type(module):
     """Return the resolved OCI auth mode from module parameters.
 

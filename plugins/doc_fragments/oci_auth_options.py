@@ -10,7 +10,10 @@ class ModuleDocFragment(object):
     DOCUMENTATION = r"""
 notes:
   - Shared OCI auth options use ansible-core argument-spec fallbacks.
-  - For API key authentication, explicit module parameters override matching values from environment variables and from the selected OCI config profile when provided.
+  - >-
+    For API key authentication, explicit module parameters override matching
+    values from environment variables and from the selected OCI config profile
+    when provided.
   - Resolution order for C(auth_type) is module parameter, then C(OCI_AUTH_TYPE), then C(api_key).
   - Resolution order for C(config_file_location) is module parameter, then C(OCI_CONFIG_FILE), then C(~/.oci/config).
   - Resolution order for C(config_profile_name) is module parameter, then C(OCI_CONFIG_PROFILE), then C(DEFAULT).
