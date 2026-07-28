@@ -150,12 +150,12 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
 
 oci, HAS_OCI_SDK = import_oci_sdk()
 
-CREATE_REQUIRED_FIELDS = (
+CREATE_REQUIRED_FIELDS = [
     "compartment_id",
     "cidr_blocks",
     "name",
-)
-WAIT_FOR_VCN_STATES = (LIFECYCLE_AVAILABLE,)
+]
+WAIT_FOR_VCN_STATES = [LIFECYCLE_AVAILABLE]
 
 
 def build_create_vcn_details(params):
@@ -205,14 +205,14 @@ def plan_vcn_cidr_operations(current_cidr_blocks, desired_cidr_blocks):
         return []
     if additions and removals:
         if len(additions) == 1 and len(removals) == 1:
-            return [("modify", removals[0], additions[0])]
+            return [tuple(["modify", removals[0], additions[0]])]
         raise ValueError(
             "Complex cidr_blocks changes are not supported by "
             "oci_network_vcn. Apply the CIDR updates in smaller steps."
         )
     if additions:
-        return [("add", cidr_block) for cidr_block in additions]
-    return [("remove", cidr_block) for cidr_block in removals]
+        return [tuple(["add", cidr_block]) for cidr_block in additions]
+    return [tuple(["remove", cidr_block]) for cidr_block in removals]
 
 
 class OciNetworkVcnModule(OciResourceBase):
@@ -226,7 +226,7 @@ class OciNetworkVcnModule(OciResourceBase):
     list_resource_method = "list_vcns"
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "VCN"
-    update_field_specs = (
+    update_field_specs = [
         {
             "param_name": "cidr_blocks",
             "resource_field": "cidr_blocks",
@@ -245,7 +245,7 @@ class OciNetworkVcnModule(OciResourceBase):
             "is_mutable": False,
             "immutable_reason": "OCI treats dns_label as immutable after create",
         },
-    )
+    ]
 
     def __init__(self, module):
         super().__init__(module)

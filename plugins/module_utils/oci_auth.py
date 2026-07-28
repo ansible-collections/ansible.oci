@@ -9,7 +9,7 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
 )
 
-oci, _ = import_oci_sdk()
+oci = import_oci_sdk()[0]
 
 
 def get_auth_type(module):
@@ -72,10 +72,8 @@ def create_service_client(module, client_class):
     """Instantiate an OCI service client with the correct signer or config.
 
     The returned object is an instance of ``client_class`` configured for the
-    caller's auth mode. Callers are expected to have already verified the OCI
-    SDK is installed (``OciModuleBase.__init__`` is the single place that
-    does this). This helper can still fail the module when session token auth
-    is missing required profile data.
+    caller's auth mode. This helper can fail the module when the OCI SDK is not
+    installed or when session token auth is missing required profile data.
     """
     auth_type = get_auth_type(module)
 

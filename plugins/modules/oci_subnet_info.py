@@ -72,7 +72,9 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 
-oci, HAS_OCI_SDK = import_oci_sdk()
+imported_oci_sdk = import_oci_sdk()
+oci = imported_oci_sdk[0]
+HAS_OCI_SDK = imported_oci_sdk[1]
 
 
 class OciSubnetInfoModule(OciInfoBase):
@@ -86,11 +88,11 @@ class OciSubnetInfoModule(OciInfoBase):
     resource_id_param = "subnet_id"
     resource_get_method = "get_subnet"
     list_resource_method = "list_subnets"
-    list_filter_params = (
+    list_filter_params = [
         "compartment_id",
         "vcn_id",
         "lifecycle_state",
-    )
+    ]
 
 
 def main():
@@ -106,7 +108,7 @@ def main():
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        required_one_of=[("compartment_id", "subnet_id")],
+        required_one_of=[["compartment_id", "subnet_id"]],
     )
 
     OciSubnetInfoModule(module).execute_info_module()

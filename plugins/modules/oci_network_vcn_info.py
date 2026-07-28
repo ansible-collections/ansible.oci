@@ -79,7 +79,7 @@ class OciNetworkVcnInfoModule(OciInfoBase):
     resource_id_param = "vcn_id"
     resource_get_method = "get_vcn"
     list_resource_method = "list_vcns"
-    list_filter_params = ("compartment_id", "lifecycle_state")
+    list_filter_params = ["compartment_id", "lifecycle_state"]
 
 
 def main():
@@ -94,7 +94,7 @@ def main():
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        required_one_of=[("compartment_id", "vcn_id")],
+        required_one_of=[["compartment_id", "vcn_id"]],
     )
 
     OciNetworkVcnInfoModule(module).execute_info_module()

@@ -162,15 +162,17 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 
-oci, HAS_OCI_SDK = import_oci_sdk()
+imported_oci_sdk = import_oci_sdk()
+oci = imported_oci_sdk[0]
+HAS_OCI_SDK = imported_oci_sdk[1]
 
-CREATE_REQUIRED_FIELDS = (
+CREATE_REQUIRED_FIELDS = [
     "compartment_id",
     "vcn_id",
     "cidr_block",
     "name",
-)
-WAIT_FOR_SUBNET_STATES = (LIFECYCLE_AVAILABLE,)
+]
+WAIT_FOR_SUBNET_STATES = [LIFECYCLE_AVAILABLE]
 
 
 def build_create_subnet_details(params):
@@ -201,13 +203,13 @@ class OciSubnetModule(OciResourceBase):
 
     resource_id_param = "subnet_id"
     list_resource_method = "list_subnets"
-    list_filter_params = ("vcn_id",)
+    list_filter_params = ["vcn_id"]
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "subnet"
     update_method_name = "update_subnet"
     update_details_name = "update_subnet_details"
     update_wait_states = WAIT_FOR_SUBNET_STATES
-    update_field_specs = (
+    update_field_specs = [
         {
             "param_name": "cidr_block",
             "resource_field": "cidr_block",
@@ -259,7 +261,7 @@ class OciSubnetModule(OciResourceBase):
             "resource_field": "prohibit_public_ip_on_vnic",
             "is_mutable": False,
         },
-    )
+    ]
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(

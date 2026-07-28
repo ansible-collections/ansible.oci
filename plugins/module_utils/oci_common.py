@@ -66,6 +66,7 @@ OCI_COMMON_ARGS = dict(
     **OCI_NAME_LOOKUP_ARGS,
 )
 
+
 def import_oci_sdk():
     """Import the OCI SDK fresh and report whether it is installed.
 
