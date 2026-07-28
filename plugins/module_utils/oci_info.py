@@ -4,10 +4,6 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 from ansible_collections.oracle.oci.plugins.module_utils.oci_base import OciModuleBase
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-    list_all_resources as paginate_all_resources,
-)
 
 
 class OciInfoBase(OciModuleBase):
@@ -57,7 +53,7 @@ class OciInfoBase(OciModuleBase):
             raise NotImplementedError(
                 f"{type(self).__name__} must define fetch_resources() or class metadata"
             )
-        resources = paginate_all_resources(
+        resources = self.list_all_resources(
             getattr(self.client, self.list_resource_method),
             **self.collect_list_filters(self.list_filter_params),
         )
@@ -77,7 +73,7 @@ class OciInfoBase(OciModuleBase):
             return None
 
         try:
-            response = call_with_retry(get_fn, **kwargs)
+            response = self.call_with_retry(get_fn, **kwargs)
             return [response.data]
         except Exception as exc:
             if getattr(exc, "status", None) == 404:

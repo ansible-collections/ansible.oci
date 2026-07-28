@@ -142,22 +142,13 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
+    import_oci_sdk,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-    wait_for_work_request,
-)
 
-try:
-    import oci
-
-    HAS_OCI_SDK = True
-except ImportError:
-    HAS_OCI_SDK = False
-    oci = None
+oci, HAS_OCI_SDK = import_oci_sdk()
 
 CREATE_REQUIRED_FIELDS = (
     "compartment_id",
@@ -227,7 +218,10 @@ def plan_vcn_cidr_operations(current_cidr_blocks, desired_cidr_blocks):
 class OciNetworkVcnModule(OciResourceBase):
     """Concrete resource adapter for OCI VCNs."""
 
-    client_class = oci.core.VirtualNetworkClient if HAS_OCI_SDK else object()
+    @property
+    def client_class(self):
+        return oci.core.VirtualNetworkClient
+
     resource_id_param = "vcn_id"
     list_resource_method = "list_vcns"
     create_required_fields = CREATE_REQUIRED_FIELDS
@@ -262,7 +256,7 @@ class OciNetworkVcnModule(OciResourceBase):
             )
 
     def get_resource_response(self, resource_id):
-        return call_with_retry(
+        return self.call_with_retry(
             self.client.get_vcn,
             vcn_id=resource_id,
         )
@@ -307,8 +301,7 @@ class OciNetworkVcnModule(OciResourceBase):
         if not work_request_id or self.work_request_client is None:
             return None
 
-        return wait_for_work_request(
-            self.module,
+        return self.wait_for_work_request(
             self.work_request_client,
             work_request_id,
         )
@@ -317,13 +310,13 @@ class OciNetworkVcnModule(OciResourceBase):
         operation_name = cidr_operation[0]
 
         if operation_name == "add":
-            response = call_with_retry(
+            response = self.call_with_retry(
                 self.client.add_vcn_cidr,
                 vcn_id=vcn_id,
                 add_vcn_cidr_details=build_add_vcn_cidr_details(cidr_operation[1]),
             )
         elif operation_name == "modify":
-            response = call_with_retry(
+            response = self.call_with_retry(
                 self.client.modify_vcn_cidr,
                 vcn_id=vcn_id,
                 modify_vcn_cidr_details=build_modify_vcn_cidr_details(
@@ -332,7 +325,7 @@ class OciNetworkVcnModule(OciResourceBase):
                 ),
             )
         elif operation_name == "remove":
-            response = call_with_retry(
+            response = self.call_with_retry(
                 self.client.remove_vcn_cidr,
                 vcn_id=vcn_id,
                 remove_vcn_cidr_details=build_remove_vcn_cidr_details(cidr_operation[1]),
@@ -345,7 +338,7 @@ class OciNetworkVcnModule(OciResourceBase):
 
     def create_resource(self):
         create_vcn_details = build_create_vcn_details(self.module.params)
-        response = call_with_retry(
+        response = self.call_with_retry(
             self.client.create_vcn,
             create_vcn_details=create_vcn_details,
         )
@@ -373,7 +366,7 @@ class OciNetworkVcnModule(OciResourceBase):
             return current_resource if cidr_operations else resource
 
         update_vcn_details = build_update_vcn_details(update_plan["update_model_fields"])
-        response = call_with_retry(
+        response = self.call_with_retry(
             self.client.update_vcn,
             vcn_id=resource.id,
             update_vcn_details=update_vcn_details,

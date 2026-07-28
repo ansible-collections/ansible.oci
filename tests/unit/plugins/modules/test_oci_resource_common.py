@@ -1,4 +1,3 @@
-import sys
 import types
 
 import pytest
@@ -14,10 +13,6 @@ from conftest import (
 )
 
 
-def method_module(bound_method):
-    return sys.modules[bound_method.__module__]
-
-
 RESOURCE_CASES = (
     {
         "module_name": "oci_network_vcn",
@@ -29,7 +24,7 @@ RESOURCE_CASES = (
         "list_method": "list_vcns",
         "delete_method": "delete_vcn",
         "not_found_label": "VCN",
-        "delete_required_msg": "Deleting a VCN requires vcn_id",
+        "delete_required_msg": "Deleting a VCN requires either vcn_id or name (with compartment_id)",
         "create_missing_msg": "Creating a VCN requires",
         "name_lookup_params": {
             "name": "example-vcn",
@@ -59,7 +54,7 @@ RESOURCE_CASES = (
         "list_method": "list_subnets",
         "delete_method": "delete_subnet",
         "not_found_label": "subnet",
-        "delete_required_msg": "Deleting a subnet requires subnet_id",
+        "delete_required_msg": "Deleting a subnet requires either subnet_id or name (with compartment_id, vcn_id)",
         "create_missing_msg": "Creating a subnet requires",
         "name_lookup_params": {
             "name": "example-subnet",
@@ -104,7 +99,7 @@ def test_get_resource_prefers_id_lookup(monkeypatch, case):
         client=types.SimpleNamespace(**{case["get_method"]: get_resource}),
     )
     monkeypatch.setattr(
-        module_obj,
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
@@ -128,8 +123,8 @@ def test_get_resource_uses_unique_name_lookup_without_id(monkeypatch, case):
         client=types.SimpleNamespace(**{case["list_method"]: "list_resources_method"}),
     )
     monkeypatch.setattr(
-        method_module(instance.resolve_target_resource),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda list_fn, **kwargs: paginate_calls.append((list_fn, kwargs))
         or [
             FakeModel(
@@ -199,8 +194,8 @@ def test_run_check_mode_reports_update_when_unique_name_match_has_tag_drift(monk
         client=types.SimpleNamespace(**{case["list_method"]: "list_resources_method"}),
     )
     monkeypatch.setattr(
-        method_module(instance.resolve_target_resource),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda list_fn, **kwargs: [resource],
     )
     monkeypatch.setattr(
@@ -266,9 +261,50 @@ def test_run_creates_duplicate_when_unique_name_match_and_flag_enabled(monkeypat
         client=types.SimpleNamespace(**{case["list_method"]: "list_resources_method"}),
     )
     monkeypatch.setattr(
-        method_module(instance.resolve_target_resource),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda list_fn, **kwargs: [FakeModel(id=case["id_value"])],
+    )
+    monkeypatch.setattr(
+        instance,
+        "create_resource",
+        lambda: FakeModel(id="created-resource"),
+    )
+    monkeypatch.setattr(
+        instance,
+        "update_resource",
+        lambda resource: (_ for _ in ()).throw(
+            AssertionError("update_resource should not be called")
+        ),
+    )
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert exc_info.value.payload["changed"] is True
+    assert exc_info.value.payload["resource"]["id"] == "created-resource"
+
+
+@pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
+def test_run_creates_duplicate_when_multiple_name_matches_and_flag_enabled(monkeypatch, case):
+    _, _ = install_fake_oci(monkeypatch)
+
+    module_obj = load_collection_module(case["module_name"])
+    params = dict(case["create_complete_params"])
+    params["allow_duplicate_name"] = True
+    instance = make_module_instance(
+        module_obj,
+        case["class_name"],
+        params,
+        client=types.SimpleNamespace(**{case["list_method"]: "list_resources_method"}),
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        lambda list_fn, **kwargs: [
+            FakeModel(id=f"{case['id_value']}.one", display_name=case["name_lookup_params"]["name"]),
+            FakeModel(id=f"{case['id_value']}.two", display_name=case["name_lookup_params"]["name"]),
+        ],
     )
     monkeypatch.setattr(
         instance,
@@ -303,8 +339,8 @@ def test_run_fails_when_name_lookup_matches_multiple_resources(monkeypatch, case
         client=types.SimpleNamespace(**{case["list_method"]: "list_resources_method"}),
     )
     monkeypatch.setattr(
-        method_module(instance.resolve_target_resource),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda list_fn, **kwargs: [
             FakeModel(id=f"{case['id_value']}.one", display_name=case["name_lookup_params"]["name"]),
             FakeModel(id=f"{case['id_value']}.two", display_name=case["name_lookup_params"]["name"]),
@@ -331,8 +367,8 @@ def test_run_absent_reports_no_change_when_name_lookup_finds_no_resources(monkey
         client=types.SimpleNamespace(**{case["list_method"]: "list_resources_method"}),
     )
     monkeypatch.setattr(
-        method_module(instance.resolve_target_resource),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda list_fn, **kwargs: [],
     )
 
@@ -362,8 +398,8 @@ def test_run_absent_deletes_unique_name_match_without_explicit_id(monkeypatch, c
     )
     delete_calls = []
     monkeypatch.setattr(
-        method_module(instance.resolve_target_resource),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda list_fn, **kwargs: [resource],
     )
     monkeypatch.setattr(
@@ -422,12 +458,7 @@ def test_delete_resource_fails_cleanly_when_dependency_exists(monkeypatch, case)
         client=types.SimpleNamespace(**{case["delete_method"]: delete_resource}),
     )
     monkeypatch.setattr(
-        module_obj,
-        "call_with_retry",
-        lambda fn, **kwargs: fn(**kwargs),
-    )
-    monkeypatch.setattr(
-        method_module(instance.delete_resource_and_wait),
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )

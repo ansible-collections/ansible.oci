@@ -252,7 +252,7 @@
             (oci_network_vcn_update_check_probe.vcns[0].cidr_blocks | sort)
             == ([oci_network_vcn_integration_additional_vcn_cidr_block,
             oci_network_vcn_integration_modified_vcn_cidr_block] | sort)
-          - oci_network_vcn_update_check_probe.vcns[0].display_name == oci_network_vcn_integration_vcn_name
+          - oci_network_vcn_update_check_probe.vcns[0].name == oci_network_vcn_integration_vcn_name
           - oci_network_vcn_update_check_probe.vcns[0].freeform_tags.phase == "create"
 
     - name: Update VCN

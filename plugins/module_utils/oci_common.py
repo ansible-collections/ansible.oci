@@ -66,7 +66,21 @@ OCI_COMMON_ARGS = dict(
     **OCI_NAME_LOOKUP_ARGS,
 )
 
-OCI_SDK_REQUIRED_MSG = "The 'oci' Python SDK is required."
+def import_oci_sdk():
+    """Import the OCI SDK fresh and report whether it is installed.
+
+    This is a function rather than a bare module-level import so that every
+    caller re-checks ``sys.modules`` at call time instead of reading a name
+    cached once at import time. Tests rely on this: they fake
+    ``sys.modules["oci"]`` and reload only the module under test, and that
+    module's own call to this helper still needs to observe the fake.
+    """
+    try:
+        import oci
+        return oci, True
+    except ImportError:
+        return None, False
+
 
 LIFECYCLE_ACTIVE = "ACTIVE"
 LIFECYCLE_AVAILABLE = "AVAILABLE"
@@ -146,22 +160,6 @@ def serialize_oci_model(resource):
     return resource
 
 
-def build_result_field_aliases(
-    common_field_param_aliases,
-    field_param_aliases,
-    known_field_names,
-):
-    """Build the resource-field to module-param alias mapping."""
-    result_field_aliases = dict(common_field_param_aliases)
-    result_field_aliases.update(field_param_aliases)
-    for field_name in known_field_names:
-        if isinstance(field_name, tuple):
-            result_field_aliases[field_name[0]] = field_name[1]
-        else:
-            result_field_aliases[field_name] = field_name
-    return result_field_aliases
-
-
 def collect_list_filters(module_params, *param_groups):
     """Collect non-None list filter parameters from module inputs."""
     list_filters = {}
@@ -184,29 +182,18 @@ def filter_resources_by_response_field(resources, response_field, expected_value
     ]
 
 
-def omit_user_known_fields(resource_dict, module_params, field_names):
-    """Remove response fields that simply echo caller-supplied parameters.
+def rename_aliased_fields(resource_dict, field_aliases):
+    """Rename response fields to their caller-facing parameter names.
 
-    ``field_names`` may be an iterable of OCI field names or a mapping of
-    ``resource_field -> module_param`` aliases. The returned dict is a shallow
-    copy of ``resource_dict`` with exact input echoes removed so module results
-    emphasize OCI-assigned values instead of repeated request data.
+    ``field_aliases`` maps ``resource_field_name -> module_param_name``. Keys
+    present in the mapping are renamed to the aliased name; every other key is
+    returned unchanged, so module output vocabulary stays loyal to the
+    parameter names callers actually used (e.g. ``display_name`` -> ``name``).
     """
-    filtered_resource_dict = dict(resource_dict)
-
-    if isinstance(field_names, dict):
-        field_names = field_names.items()
-
-    for field_name in field_names:
-        # Allow callers to map an OCI response field to a different module param name.
-        resource_field_name = field_name
-        module_param_name = field_name
-        if isinstance(field_name, tuple):
-            resource_field_name, module_param_name = field_name
-        if filtered_resource_dict.get(resource_field_name) == module_params.get(module_param_name):
-            filtered_resource_dict.pop(resource_field_name, None)
-
-    return filtered_resource_dict
+    return {
+        field_aliases.get(field_name, field_name): value
+        for field_name, value in resource_dict.items()
+    }
 
 
 def filter_none_values(data):

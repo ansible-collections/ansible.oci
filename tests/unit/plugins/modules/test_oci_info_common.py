@@ -1,4 +1,3 @@
-import sys
 import types
 
 import pytest
@@ -11,10 +10,6 @@ from conftest import (
     load_collection_module,
     make_module_instance,
 )
-
-
-def method_module(bound_method):
-    return sys.modules[bound_method.__module__]
 
 
 INFO_CASES = (
@@ -43,6 +38,7 @@ INFO_CASES = (
         ),
         "expected_run_payload": {
             "id": "ocid1.vcn.oc1..example",
+            "name": "example-vcn",
             "lifecycle_state": "AVAILABLE",
         },
     },
@@ -74,6 +70,7 @@ INFO_CASES = (
         ),
         "expected_run_payload": {
             "id": "ocid1.subnet.oc1..example",
+            "name": "example-subnet",
             "lifecycle_state": "AVAILABLE",
             "vcn_id": "ocid1.vcn.oc1..example",
         },
@@ -94,8 +91,8 @@ def test_list_resources_uses_list_filters(monkeypatch, case):
         client=types.SimpleNamespace(**{case["list_method"]: "list_method"}),
     )
     monkeypatch.setattr(
-        method_module(instance.fetch_resources),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda list_fn, **kwargs: paginate_calls.append((list_fn, kwargs)) or [],
     )
 
@@ -125,14 +122,14 @@ def test_list_resources_prefers_id_lookup(monkeypatch, case):
         ),
     )
     monkeypatch.setattr(
-        method_module(instance.fetch_resources),
-        "paginate_all_resources",
+        instance,
+        "list_all_resources",
         lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("paginate_all_resources should not be called")
+            AssertionError("list_all_resources should not be called")
         ),
     )
     monkeypatch.setattr(
-        sys.modules[instance.get_resource_by_id.__module__],
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
@@ -161,7 +158,7 @@ def test_list_resources_returns_empty_list_on_404(monkeypatch, case):
         ),
     )
     monkeypatch.setattr(
-        sys.modules[instance.get_resource_by_id.__module__],
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )

@@ -156,21 +156,13 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
+    import_oci_sdk,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-)
 
-try:
-    import oci
-
-    HAS_OCI_SDK = True
-except ImportError:
-    HAS_OCI_SDK = False
-    oci = None
+oci, HAS_OCI_SDK = import_oci_sdk()
 
 CREATE_REQUIRED_FIELDS = (
     "compartment_id",
@@ -203,7 +195,10 @@ def build_create_subnet_details(params):
 class OciSubnetModule(OciResourceBase):
     """Concrete resource adapter for OCI subnets."""
 
-    client_class = oci.core.VirtualNetworkClient if HAS_OCI_SDK else object()
+    @property
+    def client_class(self):
+        return oci.core.VirtualNetworkClient
+
     resource_id_param = "subnet_id"
     list_resource_method = "list_subnets"
     list_filter_params = ("vcn_id",)
@@ -267,14 +262,14 @@ class OciSubnetModule(OciResourceBase):
     )
 
     def get_resource_response(self, resource_id):
-        return call_with_retry(
+        return self.call_with_retry(
             self.client.get_subnet,
             subnet_id=resource_id,
         )
 
     def create_resource(self):
         create_subnet_details = build_create_subnet_details(self.module.params)
-        response = call_with_retry(
+        response = self.call_with_retry(
             self.client.create_subnet,
             create_subnet_details=create_subnet_details,
         )

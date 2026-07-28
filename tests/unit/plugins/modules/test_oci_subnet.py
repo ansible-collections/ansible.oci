@@ -1,4 +1,3 @@
-import sys
 import types
 
 import pytest
@@ -322,14 +321,14 @@ def test_create_resource_uses_create_subnet_and_waits(monkeypatch):
         client=types.SimpleNamespace(create_subnet=create_subnet),
     )
     monkeypatch.setattr(
-        subnet_module,
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        sys.modules[instance.get_mutation_result.__module__],
-        "wait_for_resource",
-        lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
             lifecycle_state="AVAILABLE",
         ),
@@ -371,14 +370,14 @@ def test_update_resource_uses_update_subnet_details_and_waits(monkeypatch):
         client=types.SimpleNamespace(update_subnet=update_subnet),
     )
     monkeypatch.setattr(
-        sys.modules[instance.update_resource.__module__],
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        sys.modules[instance.get_mutation_result.__module__],
-        "wait_for_resource",
-        lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
             lifecycle_state="AVAILABLE",
         ),

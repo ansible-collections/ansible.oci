@@ -10,7 +10,6 @@ def test_upstream_module_utils_file_set_is_present():
         "plugins/module_utils/oci_auth.py",
         "plugins/module_utils/oci_common.py",
         "plugins/module_utils/oci_resource.py",
-        "plugins/module_utils/oci_wait.py",
     ]
 
     missing_paths = [

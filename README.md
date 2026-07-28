@@ -109,7 +109,7 @@ role can set shared OCI auth options once with `module_defaults`:
     - oracle.oci.oci_network_vcn:
         state: present
         compartment_id: ocid1.compartment.oc1..example
-        display_name: example-vcn
+        name: example-vcn
         cidr_blocks:
           - 10.0.0.0/16
 ```

@@ -113,7 +113,7 @@
         that:
           - oci_subnet_info_by_id.subnets | length == 1
           - oci_subnet_info_by_id.subnets[0].id == oci_subnet_id
-          - oci_subnet_info_by_id.subnets[0].display_name == oci_subnet_integration_subnet_name
+          - oci_subnet_info_by_id.subnets[0].name == oci_subnet_integration_subnet_name
           - oci_subnet_info_by_id.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
           - oci_subnet_info_by_id.subnets[0].lifecycle_state == "AVAILABLE"
           - oci_subnet_info_by_id.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
@@ -180,7 +180,7 @@
         that:
           - oci_subnet_update_check_probe.subnets | length == 1
           - oci_subnet_update_check_probe.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
-          - oci_subnet_update_check_probe.subnets[0].display_name == oci_subnet_integration_subnet_name
+          - oci_subnet_update_check_probe.subnets[0].name == oci_subnet_integration_subnet_name
           - oci_subnet_update_check_probe.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
           - oci_subnet_update_check_probe.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
           - oci_subnet_update_check_probe.subnets[0].freeform_tags.phase == "create"

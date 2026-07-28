@@ -1,0 +1,5 @@
+oci_integration_compartment_id: "ocid1.compartment.oc1..aaaaaaaack5s24zht4ofhpqovqgw7ebon3dkmbowphfpssfgudhpz7psedma"
+oci_network_vcn_integration_config_file_location: "/home/rgershbu/.oci/config"
+oci_network_vcn_integration_config_profile_name: "DEFAULT"
+oci_subnet_integration_config_file_location: "/home/rgershbu/.oci/config"
+oci_subnet_integration_config_profile_name: "DEFAULT"

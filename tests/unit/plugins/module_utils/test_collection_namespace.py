@@ -6,7 +6,6 @@ def test_collection_namespace_smoke_imports():
         "oci_auth",
         "oci_common",
         "oci_info",
-        "oci_wait",
         "oci_resource",
     ]
 

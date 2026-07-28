@@ -1,4 +1,3 @@
-import sys
 import types
 
 import pytest
@@ -364,14 +363,14 @@ def test_create_resource_uses_create_vcn_and_waits(monkeypatch):
         client=types.SimpleNamespace(create_vcn=create_vcn),
     )
     monkeypatch.setattr(
-        vcn_module,
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        sys.modules[instance.get_mutation_result.__module__],
-        "wait_for_resource",
-        lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
             lifecycle_state="AVAILABLE",
         ),
@@ -409,14 +408,14 @@ def test_update_resource_uses_update_vcn_details_and_waits(monkeypatch):
         client=types.SimpleNamespace(update_vcn=update_vcn),
     )
     monkeypatch.setattr(
-        vcn_module,
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        sys.modules[instance.get_mutation_result.__module__],
-        "wait_for_resource",
-        lambda module, client, get_fn, resource_id, target_states, **kwargs: FakeModel(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
             id=resource_id,
             lifecycle_state="AVAILABLE",
         ),
@@ -458,14 +457,14 @@ def test_update_resource_adds_vcn_cidr_and_waits_for_work_request(monkeypatch):
         client=types.SimpleNamespace(add_vcn_cidr=add_vcn_cidr),
     )
     monkeypatch.setattr(
-        vcn_module,
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        vcn_module,
+        instance,
         "wait_for_work_request",
-        lambda module, client, work_request_id, **kwargs: waited_work_requests.append(
+        lambda work_request_client, work_request_id, **kwargs: waited_work_requests.append(
             work_request_id
         ) or FakeModel(status="SUCCEEDED"),
     )
@@ -525,14 +524,14 @@ def test_update_resource_applies_cidr_changes_before_metadata_update(monkeypatch
         ),
     )
     monkeypatch.setattr(
-        vcn_module,
+        instance,
         "call_with_retry",
         lambda fn, **kwargs: fn(**kwargs),
     )
     monkeypatch.setattr(
-        vcn_module,
+        instance,
         "wait_for_work_request",
-        lambda module, client, work_request_id, **kwargs: waited_work_requests.append(
+        lambda work_request_client, work_request_id, **kwargs: waited_work_requests.append(
             work_request_id
         ) or FakeModel(status="SUCCEEDED"),
     )

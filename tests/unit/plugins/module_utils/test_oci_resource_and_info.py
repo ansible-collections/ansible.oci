@@ -1,6 +1,8 @@
+import sys
 import types
 
 import pytest
+from ansible.module_utils.basic import missing_required_lib
 
 from conftest import load_collection_module
 
@@ -43,6 +45,28 @@ def patch_serialize_oci_model(monkeypatch, module_obj, serializer):
     )
 
 
+def install_fake_oci_sdk(monkeypatch, *, pagination=None, retry=None, wait_until=None):
+    """Register a fake ``oci`` module so freshly (re)loaded modules pick it up."""
+    oci_module = types.ModuleType("oci")
+    exceptions_module = types.ModuleType("oci.exceptions")
+
+    class ServiceError(Exception):
+        def __init__(self, status):
+            super().__init__(status)
+            self.status = status
+
+    exceptions_module.ServiceError = ServiceError
+    oci_module.exceptions = exceptions_module
+    oci_module.pagination = pagination or types.SimpleNamespace()
+    oci_module.retry = retry or types.SimpleNamespace()
+    oci_module.wait_until = wait_until
+
+    monkeypatch.setitem(sys.modules, "oci", oci_module)
+    monkeypatch.setitem(sys.modules, "oci.exceptions", exceptions_module)
+
+    return ServiceError
+
+
 def test_oci_resource_base_uses_shared_serializer(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(
@@ -56,6 +80,9 @@ def test_oci_resource_base_uses_shared_serializer(monkeypatch):
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -77,7 +104,7 @@ def test_oci_resource_base_uses_shared_serializer(monkeypatch):
     assert resource.serialize_result_resource(object()) == {"delegated": True}
 
 
-def test_oci_resource_base_omits_user_known_fields_from_results(monkeypatch):
+def test_oci_resource_base_renames_aliased_fields_in_results(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(
         monkeypatch,
@@ -91,6 +118,9 @@ def test_oci_resource_base_omits_user_known_fields_from_results(monkeypatch):
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -113,6 +143,8 @@ def test_oci_resource_base_omits_user_known_fields_from_results(monkeypatch):
     ) == {
         "id": "ocid1.example.oc1..123",
         "lifecycle_state": "ACTIVE",
+        "name": "example-resource",
+        "label": "blue",
     }
 
 
@@ -129,6 +161,9 @@ def test_oci_resource_base_does_not_expose_generic_attribute_update_hook(monkeyp
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -165,6 +200,9 @@ def test_oci_resource_base_build_update_plan_maps_aliased_mutable_fields(monkeyp
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -204,6 +242,9 @@ def test_oci_resource_base_build_update_plan_skips_matching_name_alias(monkeypat
                 "is_mutable": True,
             },
         )
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -247,6 +288,9 @@ def test_oci_resource_base_build_update_plan_rejects_immutable_field_drift(monke
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -294,6 +338,9 @@ def test_oci_resource_base_build_update_plan_supports_sorted_list_compare_and_sk
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -346,6 +393,9 @@ def test_oci_resource_base_needs_update_uses_shared_update_plan(monkeypatch):
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -373,6 +423,9 @@ def test_oci_resource_base_build_update_plan_includes_common_tag_fields(monkeypa
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -425,6 +478,9 @@ def test_oci_resource_base_caches_shared_update_plan_per_resource_instance(monke
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -460,11 +516,6 @@ def test_oci_resource_base_default_update_resource_uses_class_metadata(monkeypat
         oci_resource,
         lambda module, client_class: types.SimpleNamespace(update_example=update_example),
     )
-    monkeypatch.setattr(
-        oci_resource,
-        "call_with_retry",
-        lambda fn, **kwargs: fn(**kwargs),
-    )
 
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
@@ -484,6 +535,9 @@ def test_oci_resource_base_default_update_resource_uses_class_metadata(monkeypat
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -494,6 +548,11 @@ def test_oci_resource_base_default_update_resource_uses_class_metadata(monkeypat
             raise AssertionError("delete_resource should not be called")
 
     resource = ExampleResource(DummyModule({"name": "updated-name", "wait": False}))
+    monkeypatch.setattr(
+        resource,
+        "call_with_retry",
+        lambda fn, **kwargs: fn(**kwargs),
+    )
 
     updated_resource = resource.update_resource(
         types.SimpleNamespace(id="ocid1.example.oc1..123", display_name="current-name")
@@ -533,6 +592,9 @@ def test_oci_resource_base_requires_client_class_before_creating_client(monkeypa
         def resolve_target_resource(self):
             return None
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             return None
 
@@ -546,7 +608,7 @@ def test_oci_resource_base_requires_client_class_before_creating_client(monkeypa
         ExampleResource(DummyModule())
 
 
-def test_oci_info_base_omits_user_known_fields_from_results(monkeypatch):
+def test_oci_info_base_renames_common_and_explicitly_aliased_fields(monkeypatch):
     oci_info = load_collection_module("oci_info")
 
     patch_create_service_client(
@@ -575,10 +637,16 @@ def test_oci_info_base_omits_user_known_fields_from_results(monkeypatch):
     with pytest.raises(ExitJsonCalled) as exc_info:
         info_module.execute_info_module()
 
+    # display_name is renamed to "name" via the shared common alias, and
+    # resource_label is renamed to "label" via ExampleInfo's own
+    # field_param_aliases. Neither value is ever dropped, even though both
+    # happen to match the query filters used to find the resource.
     assert exc_info.value.payload == {
         "changed": False,
         "resources": [
             {
+                "name": "example-resource",
+                "label": "blue",
                 "id": "ocid1.example.oc1..123",
                 "lifecycle_state": "ACTIVE",
             }
@@ -643,6 +711,9 @@ def test_oci_resource_base_treats_dead_state_as_absent(monkeypatch):
         def resolve_target_resource(self):
             return types.SimpleNamespace(lifecycle_state="REMOVED")
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -674,6 +745,9 @@ def test_oci_resource_base_validates_create_request_in_check_mode(monkeypatch):
 
         def resolve_target_resource(self):
             return None
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -713,6 +787,9 @@ def test_oci_resource_base_default_create_field_validation_uses_class_metadata(m
         def resolve_target_resource(self):
             return None
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -749,6 +826,9 @@ def test_oci_resource_base_fails_present_when_explicit_resource_id_is_missing(mo
 
         def resolve_target_resource(self):
             return None
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -799,6 +879,9 @@ def test_oci_resource_base_uses_unique_name_match_as_update_target(monkeypatch):
         list_resource_method = "list_examples"
         list_filter_params = ()
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -830,8 +913,8 @@ def test_oci_resource_base_uses_unique_name_match_as_update_target(monkeypatch):
     )
     paginate_calls = []
     monkeypatch.setattr(
-        oci_resource,
-        "paginate_all_resources",
+        resource,
+        "list_all_resources",
         lambda list_fn, **kwargs: paginate_calls.append((list_fn, kwargs)) or [existing_resource],
     )
 
@@ -842,6 +925,7 @@ def test_oci_resource_base_uses_unique_name_match_as_update_target(monkeypatch):
         "changed": True,
         "resource": {
             "id": "ocid1.example.oc1..123",
+            "name": "example",
             "freeform_tags": {"env": "prod"},
         },
     }
@@ -874,6 +958,9 @@ def test_oci_resource_base_requires_scope_fields_for_name_lookup(monkeypatch):
         common_list_filter_params = ("compartment_id",)
         list_filter_params = ("parent_id",)
         create_resource_name = "example resource"
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -910,6 +997,9 @@ def test_oci_resource_base_deletes_unique_name_match_without_explicit_id(monkeyp
         list_resource_method = "list_examples"
         list_filter_params = ()
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -934,8 +1024,8 @@ def test_oci_resource_base_deletes_unique_name_match_without_explicit_id(monkeyp
         lifecycle_state="AVAILABLE",
     )
     monkeypatch.setattr(
-        oci_resource,
-        "paginate_all_resources",
+        resource,
+        "list_all_resources",
         lambda list_fn, **kwargs: [existing_resource],
     )
 
@@ -963,6 +1053,9 @@ def test_oci_resource_base_fails_when_name_lookup_is_ambiguous(monkeypatch):
         list_filter_params = ()
         create_resource_name = "example resource"
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
 
@@ -982,8 +1075,8 @@ def test_oci_resource_base_fails_when_name_lookup_is_ambiguous(monkeypatch):
         )
     )
     monkeypatch.setattr(
-        oci_resource,
-        "paginate_all_resources",
+        resource,
+        "list_all_resources",
         lambda list_fn, **kwargs: [
             types.SimpleNamespace(id="ocid1.example.oc1..one", display_name="example"),
             types.SimpleNamespace(id="ocid1.example.oc1..two", display_name="example"),
@@ -1018,6 +1111,9 @@ def test_oci_resource_base_creates_duplicate_when_unique_match_opted_in(monkeypa
         list_resource_method = "list_examples"
         list_filter_params = ()
 
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
         def create_resource(self):
             return types.SimpleNamespace(
                 id="ocid1.example.oc1..created",
@@ -1041,8 +1137,8 @@ def test_oci_resource_base_creates_duplicate_when_unique_match_opted_in(monkeypa
         )
     )
     monkeypatch.setattr(
-        oci_resource,
-        "paginate_all_resources",
+        resource,
+        "list_all_resources",
         lambda list_fn, **kwargs: [
             types.SimpleNamespace(id="ocid1.example.oc1..existing", display_name="example")
         ],
@@ -1055,6 +1151,7 @@ def test_oci_resource_base_creates_duplicate_when_unique_match_opted_in(monkeypa
         "changed": True,
         "resource": {
             "id": "ocid1.example.oc1..created",
+            "name": "example",
         },
     }
 
@@ -1074,6 +1171,9 @@ def test_oci_resource_base_fails_absent_without_resource_id_before_lookup(monkey
 
         def resolve_target_resource(self):
             raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
 
         def create_resource(self):
             raise AssertionError("create_resource should not be called")
@@ -1095,6 +1195,50 @@ def test_oci_resource_base_fails_absent_without_resource_id_before_lookup(monkey
     }
 
 
+def test_oci_resource_base_fails_absent_without_identifier_when_name_lookup_supported(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        resource_id_param = "example_id"
+        create_resource_name = "example resource"
+        list_resource_method = "list_examples"
+        list_filter_params = ()
+
+        def resolve_target_resource(self):
+            raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    module = DummyModule({"state": "absent"})
+    resource = ExampleResource(module)
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        resource.execute_resource_module()
+
+    assert exc_info.value.payload == {
+        "msg": (
+            "Deleting a example resource requires either example_id or name "
+            "(with compartment_id)"
+        )
+    }
+
+
 def test_oci_info_base_lists_by_id_using_class_metadata(monkeypatch):
     oci_info = load_collection_module("oci_info")
     patch_create_service_client(
@@ -1106,11 +1250,6 @@ def test_oci_info_base_lists_by_id_using_class_metadata(monkeypatch):
             )
         ),
     )
-    monkeypatch.setattr(
-        oci_info,
-        "call_with_retry",
-        lambda fn, **kwargs: fn(**kwargs),
-    )
 
     class ExampleInfo(oci_info.OciInfoBase):
         client_class = object
@@ -1119,6 +1258,11 @@ def test_oci_info_base_lists_by_id_using_class_metadata(monkeypatch):
         resource_id_kwarg = "example_id"
 
     info_module = ExampleInfo(DummyModule({"example_id": "ocid1.example.oc1..123"}))
+    monkeypatch.setattr(
+        info_module,
+        "call_with_retry",
+        lambda fn, **kwargs: fn(**kwargs),
+    )
 
     resources = info_module.fetch_resources()
 
@@ -1152,8 +1296,8 @@ def test_oci_info_base_lists_with_declared_filter_params(monkeypatch):
         )
     )
     monkeypatch.setattr(
-        oci_info,
-        "paginate_all_resources",
+        info_module,
+        "list_all_resources",
         lambda list_fn, **kwargs: paginate_calls.append((list_fn, kwargs)) or [],
     )
 
@@ -1236,7 +1380,7 @@ def test_oci_resource_base_delete_helper_fails_on_dependency_conflict(monkeypatc
 
     resource = ExampleResource(DummyModule({"wait": True}))
     monkeypatch.setattr(
-        oci_resource,
+        resource,
         "call_with_retry",
         lambda fn, **kwargs: (_ for _ in ()).throw(
             ConflictError(409, "dependency exists")
@@ -1251,3 +1395,278 @@ def test_oci_resource_base_delete_helper_fails_on_dependency_conflict(monkeypatc
         )
 
     assert "Cannot delete example resource" in exc_info.value.payload["msg"]
+
+
+def test_oci_module_base_missing_sdk_fails_before_touching_client_class(monkeypatch):
+    oci_base = load_collection_module("oci_base", plugin_dir="module_utils")
+    monkeypatch.setattr(oci_base, "HAS_OCI_SDK", False)
+
+    class ExampleModule(oci_base.OciModuleBase):
+        @property
+        def client_class(self):
+            raise AssertionError("client_class should not be evaluated")
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        ExampleModule(DummyModule())
+
+    assert exc_info.value.payload["msg"] == missing_required_lib("oci")
+
+
+def test_oci_module_base_list_all_resources_uses_oci_pagination_helper(monkeypatch):
+    recorded_call = {}
+
+    def fake_list_call_get_all_results(list_fn, *args, **kwargs):
+        recorded_call["list_fn"] = list_fn
+        recorded_call["args"] = args
+        recorded_call["kwargs"] = kwargs
+        return types.SimpleNamespace(data=["first", "second"])
+
+    install_fake_oci_sdk(
+        monkeypatch,
+        pagination=types.SimpleNamespace(
+            list_call_get_all_results=fake_list_call_get_all_results,
+        ),
+    )
+
+    oci_base = load_collection_module("oci_base", plugin_dir="module_utils")
+    patch_create_service_client(
+        monkeypatch,
+        oci_base,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleModule(oci_base.OciModuleBase):
+        client_class = object
+
+    instance = ExampleModule(DummyModule())
+    list_fn = object()
+
+    results = instance.list_all_resources(list_fn, "compartment-id", limit=25)
+
+    assert results == ["first", "second"]
+    assert recorded_call == {
+        "list_fn": list_fn,
+        "args": ("compartment-id",),
+        "kwargs": {"limit": 25},
+    }
+
+
+def test_oci_module_base_call_with_retry_uses_oci_retry_strategy_builder(monkeypatch):
+    recorded_call = {}
+
+    class FakeRetryStrategy:
+        def make_retrying_call(self, fn, *args, **kwargs):
+            recorded_call["fn"] = fn
+            recorded_call["args"] = args
+            recorded_call["kwargs"] = kwargs
+            return fn(*args, **kwargs)
+
+    class FakeRetryStrategyBuilder:
+        def __init__(self, **kwargs):
+            recorded_call["builder_kwargs"] = kwargs
+
+        def get_retry_strategy(self):
+            return FakeRetryStrategy()
+
+    install_fake_oci_sdk(
+        monkeypatch,
+        retry=types.SimpleNamespace(
+            RetryStrategyBuilder=FakeRetryStrategyBuilder,
+        ),
+    )
+
+    oci_base = load_collection_module("oci_base", plugin_dir="module_utils")
+    patch_create_service_client(
+        monkeypatch,
+        oci_base,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleModule(oci_base.OciModuleBase):
+        client_class = object
+
+    instance = ExampleModule(DummyModule())
+
+    result = instance.call_with_retry(
+        lambda value, *, suffix: f"{value}-{suffix}",
+        "retry",
+        suffix="ok",
+        max_retries=4,
+        retry_on=(429, 503),
+    )
+
+    assert result == "retry-ok"
+    assert recorded_call["args"] == ("retry",)
+    assert recorded_call["kwargs"] == {"suffix": "ok"}
+    assert recorded_call["builder_kwargs"]["max_attempts"] == 5
+    assert recorded_call["builder_kwargs"]["service_error_retry_config"] == {
+        429: [],
+        503: [],
+    }
+
+
+def test_oci_resource_base_wait_for_resource_id_uses_oci_wait_until(monkeypatch):
+    recorded_call = {}
+    final_response = types.SimpleNamespace(
+        data=types.SimpleNamespace(lifecycle_state="ACTIVE"),
+    )
+
+    def fake_wait_until(client, response, **kwargs):
+        recorded_call["client"] = client
+        recorded_call["response"] = response
+        recorded_call["kwargs"] = kwargs
+        return final_response
+
+    install_fake_oci_sdk(monkeypatch, wait_until=fake_wait_until)
+
+    load_collection_module("oci_base", plugin_dir="module_utils")
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: types.SimpleNamespace(),
+    )
+
+    initial_response = types.SimpleNamespace(
+        data=types.SimpleNamespace(lifecycle_state="CREATING"),
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+
+        def get_resource_response(self, resource_id):
+            return initial_response
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    instance = ExampleResource(
+        DummyModule({"wait": True, "wait_timeout": 900, "wait_interval": 15})
+    )
+
+    result = instance.wait_for_resource_id("resource-ocid", ("ACTIVE", "AVAILABLE"))
+
+    assert result is final_response.data
+    assert recorded_call["client"] is instance.client
+    assert recorded_call["response"] is initial_response
+    assert recorded_call["kwargs"]["max_wait_seconds"] == 900
+    assert recorded_call["kwargs"]["max_interval_seconds"] == 15
+    assert recorded_call["kwargs"]["evaluate_response"](final_response) is True
+
+
+def test_oci_resource_base_wait_for_work_request_accepts_getter_callback(monkeypatch):
+    recorded_call = {}
+    final_response = types.SimpleNamespace(
+        data=types.SimpleNamespace(status="SUCCEEDED"),
+    )
+
+    def fake_wait_until(client, response, **kwargs):
+        recorded_call["client"] = client
+        recorded_call["response"] = response
+        recorded_call["kwargs"] = kwargs
+        return final_response
+
+    install_fake_oci_sdk(monkeypatch, wait_until=fake_wait_until)
+
+    load_collection_module("oci_base", plugin_dir="module_utils")
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    instance = ExampleResource(
+        DummyModule({"wait_timeout": 1200, "wait_interval": 30})
+    )
+
+    initial_response = types.SimpleNamespace(
+        data=types.SimpleNamespace(status="IN_PROGRESS"),
+    )
+    requested_ids = []
+
+    def get_work_request(work_request_id):
+        requested_ids.append(work_request_id)
+        return initial_response
+
+    work_request_client = types.SimpleNamespace()
+
+    result = instance.wait_for_work_request(
+        work_request_client,
+        "work-request-ocid",
+        get_work_request_fn=get_work_request,
+    )
+
+    assert result is final_response.data
+    assert requested_ids == ["work-request-ocid"]
+    assert recorded_call["client"] is work_request_client
+    assert recorded_call["response"] is initial_response
+    assert recorded_call["kwargs"]["evaluate_response"](final_response) is True
+
+
+def test_oci_resource_base_wait_for_resource_id_uses_dead_states_for_not_found_handling(monkeypatch):
+    ServiceError = install_fake_oci_sdk(
+        monkeypatch,
+        wait_until=lambda client, response, **kwargs: response,
+    )
+
+    load_collection_module("oci_base", plugin_dir="module_utils")
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: types.SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        oci_resource,
+        "DEAD_STATES",
+        frozenset({"REMOVED"}),
+        raising=False,
+    )
+
+    def get_resource(resource_id):
+        raise ServiceError(404)
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+
+        def get_resource_response(self, resource_id):
+            return get_resource(resource_id)
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    instance = ExampleResource(
+        DummyModule({"wait": True, "wait_timeout": 1200, "wait_interval": 30})
+    )
+
+    result = instance.wait_for_resource_id("resource-ocid", ("REMOVED",))
+
+    assert result is None

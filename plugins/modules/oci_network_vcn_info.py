@@ -59,24 +59,22 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
+    import_oci_sdk,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 
-try:
-    import oci
-
-    HAS_OCI_SDK = True
-except ImportError:
-    HAS_OCI_SDK = False
-    oci = None
+oci, HAS_OCI_SDK = import_oci_sdk()
 
 
 class OciNetworkVcnInfoModule(OciInfoBase):
     """Concrete info adapter for OCI VCNs."""
 
-    client_class = oci.core.VirtualNetworkClient if HAS_OCI_SDK else object()
+    @property
+    def client_class(self):
+        return oci.core.VirtualNetworkClient
+
     results_key = "vcns"
     resource_id_param = "vcn_id"
     resource_get_method = "get_vcn"

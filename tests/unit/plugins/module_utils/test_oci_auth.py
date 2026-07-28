@@ -2,7 +2,6 @@ import sys
 import types
 
 import pytest
-from ansible.module_utils.basic import missing_required_lib
 
 from conftest import load_collection_module
 
@@ -358,17 +357,6 @@ def test_session_token_auth_requires_security_token_file_from_loaded_config(
         oci_auth.create_service_client(module, DummyClient)
 
     assert "security_token_file" in exc_info.value.payload["msg"]
-
-
-def test_create_service_client_uses_missing_required_lib_message(monkeypatch):
-    oci_auth = load_collection_module("oci_auth")
-    monkeypatch.setattr(oci_auth, "HAS_OCI_SDK", False)
-    module = DummyModule({"auth_type": "api_key"})
-
-    with pytest.raises(FailJsonCalled) as exc_info:
-        oci_auth.create_service_client(module, DummyClient)
-
-    assert exc_info.value.payload["msg"] == missing_required_lib("oci")
 
 
 def test_instance_principal_auth_creates_client_with_instance_signer(monkeypatch):

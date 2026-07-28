@@ -5,16 +5,42 @@ __metaclass__ = type
 
 from abc import ABC, abstractmethod
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_base import OciModuleBase
+from ansible_collections.oracle.oci.plugins.module_utils.oci_base import (
+    OciModuleBase,
+    oci,
+)
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     DEAD_STATES,
     serialize_oci_model,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-    list_all_resources as paginate_all_resources,
-    wait_for_resource,
-)
+
+
+def _resource_wait_complete(module, response, target_states, failure_states, resource_id):
+    state = getattr(response.data, "lifecycle_state", None)
+    if state in failure_states:
+        module.fail_json(
+            msg=f"Resource {resource_id} entered failure state: {state}",
+        )
+    return state in target_states
+
+
+def _work_request_wait_complete(
+    module,
+    response,
+    target_states,
+    failure_states,
+    work_request_id,
+):
+    state = getattr(response.data, "status", None)
+    if state in failure_states:
+        module.fail_json(
+            msg=f"Work request {work_request_id} {state}",
+        )
+    return state in target_states
+
+
+def _target_states_include_dead_states(target_states):
+    return any(state in DEAD_STATES for state in target_states)
 
 
 class OciResourceBase(OciModuleBase, ABC):
@@ -73,7 +99,7 @@ class OciResourceBase(OciModuleBase, ABC):
         Otherwise it falls back to the subclass-declared name lookup flow and
         returns ``None`` when no matching resource exists.
         """
-        resource_id = self.get_resource_id()
+        resource_id = self.resource_id
         if resource_id:
             return self.get_resource_by_id(resource_id)
         return self.resolve_resource_by_name()
@@ -96,15 +122,15 @@ class OciResourceBase(OciModuleBase, ABC):
         and optionally wait for the resource to settle before returning it.
         """
         if self.update_method_name is None:
-            raise NotImplementedError(
+            raise ValueError(
                 f"{type(self).__name__} must define update_method_name or override update_resource()"
             )
         if self.update_details_name is None:
-            raise NotImplementedError(
+            raise ValueError(
                 f"{type(self).__name__} must define update_details_name or override update_resource()"
             )
         if not self.update_wait_states:
-            raise NotImplementedError(
+            raise ValueError(
                 f"{type(self).__name__} must define update_wait_states or override update_resource()"
             )
 
@@ -113,7 +139,7 @@ class OciResourceBase(OciModuleBase, ABC):
             return resource
 
         update_details = self.build_update_details(update_plan["update_model_fields"])
-        response = call_with_retry(
+        response = self.call_with_retry(
             getattr(self.client, self.update_method_name),
             **{
                 self.resource_id_param: resource.id,
@@ -133,8 +159,8 @@ class OciResourceBase(OciModuleBase, ABC):
         planner determined need to change. Subclasses return the concrete OCI
         SDK details object expected by ``update_method_name``.
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} must define build_update_details() or override update_resource()"
+        raise ValueError(
+            f"{type(self).__name__} must define build_update_details()"
         )
 
     @abstractmethod
@@ -293,7 +319,8 @@ class OciResourceBase(OciModuleBase, ABC):
         """
         return self.get_update_plan(resource)["update_needed"]
 
-    def get_tags(self):
+    @property
+    def tags(self):
         """Return the desired freeform and defined tags from module inputs.
 
         The tuple order is ``(freeform_tags, defined_tags)``.
@@ -309,7 +336,7 @@ class OciResourceBase(OciModuleBase, ABC):
         ``None`` tag inputs are treated as unspecified and therefore do not
         trigger drift detection.
         """
-        freeform, defined = self.get_tags()
+        freeform, defined = self.tags
         if freeform is not None and getattr(resource, "freeform_tags", None) != freeform:
             return True
         if defined is not None and getattr(resource, "defined_tags", None) != defined:
@@ -342,7 +369,8 @@ class OciResourceBase(OciModuleBase, ABC):
         """
         self._require_create_fields()
 
-    def get_resource_id(self):
+    @property
+    def resource_id(self):
         """Return the explicit resource identifier supplied by the caller.
 
         When ``resource_id_param`` is unset for a subclass, this helper returns
@@ -352,15 +380,14 @@ class OciResourceBase(OciModuleBase, ABC):
             return None
         return self.module.params.get(self.resource_id_param)
 
+    @abstractmethod
     def get_resource_response(self, resource_id):
         """Return the raw OCI SDK response wrapper for ``resource_id``.
 
         Subclasses implement the concrete getter so wait helpers and ID-based
         lookups can reuse the same OCI response shape.
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} must define get_resource_response()"
-        )
+        pass
 
     def get_resource_by_id(self, resource_id):
         """Return the current resource for ``resource_id`` or ``None`` on 404.
@@ -375,6 +402,7 @@ class OciResourceBase(OciModuleBase, ABC):
                 return None
             raise
 
+    @property
     def supports_name_lookup(self) -> bool:
         """Return ``True`` when the subclass exposes scoped name lookup hooks.
 
@@ -386,7 +414,8 @@ class OciResourceBase(OciModuleBase, ABC):
             and self.name_lookup_param is not None
         )
 
-    def get_name_lookup_value(self):
+    @property
+    def name_lookup_value(self):
         """Return the caller-supplied name used for scoped lookup.
 
         If the subclass disables name lookup by clearing ``name_lookup_param``,
@@ -396,13 +425,14 @@ class OciResourceBase(OciModuleBase, ABC):
             return None
         return self.module.params.get(self.name_lookup_param)
 
+    @property
     def has_name_lookup_request(self) -> bool:
         """Return ``True`` when the caller supplied a scoped lookup name.
 
         This separates "lookup is supported" from "lookup was requested" so the
         present and absent flows can decide when name-based resolution applies.
         """
-        return self.get_name_lookup_value() is not None
+        return self.name_lookup_value is not None
 
     def find_resources_by_name(self):
         """List and locally filter resources for the caller-supplied name.
@@ -411,19 +441,19 @@ class OciResourceBase(OciModuleBase, ABC):
         be legal for some OCI resource types and must be resolved by the caller
         or by ``allow_duplicate_name`` handling.
         """
-        if not self.supports_name_lookup() or not self.has_name_lookup_request():
+        if not self.supports_name_lookup or not self.has_name_lookup_request:
             return []
         if self.list_resource_method is None:
             return []
         self.validate_name_lookup_scope()
-        resources = paginate_all_resources(
+        resources = self.list_all_resources(
             getattr(self.client, self.list_resource_method),
             **self.collect_list_filters(
                 self.common_list_filter_params,
                 self.list_filter_params,
             ),
         )
-        name_lookup_value = self.get_name_lookup_value()
+        name_lookup_value = self.name_lookup_value
         return self.filter_resources_by_display_name(resources, name_lookup_value)
 
     def validate_name_lookup_scope(self) -> None:
@@ -450,7 +480,7 @@ class OciResourceBase(OciModuleBase, ABC):
         ``resources`` is only used to report how many matches were found and to
         instruct the caller to disambiguate with the explicit resource ID.
         """
-        name_value = self.get_name_lookup_value()
+        name_value = self.name_lookup_value
         count = len(resources)
         self.module.fail_json(
             msg=(
@@ -481,25 +511,96 @@ class OciResourceBase(OciModuleBase, ABC):
         matches = self.find_resources_by_name()
         if not matches:
             return None
-        if len(matches) > 1:
-            self.fail_ambiguous_name_match(matches)
         if self.should_create_duplicate_name_resource():
             return None
+        if len(matches) > 1:
+            self.fail_ambiguous_name_match(matches)
         return matches[0]
 
-    def wait_for_resource_id(self, resource_id, target_states):
+    def wait_for_resource_id(self, resource_id, target_states, failure_states=None):
         """Wait for ``resource_id`` to reach one of ``target_states``.
 
-        The wait settings are read from the module parameters and delegated to
-        the shared OCI waiter helper.
+        The ``wait``, ``wait_timeout``, and ``wait_interval`` settings are read
+        from the module parameters. When waiting is disabled this performs one
+        immediate lookup and returns its data. Otherwise it polls until the
+        resource reaches ``target_states`` or fails into ``failure_states``.
         """
-        return wait_for_resource(
-            self.module,
+        wait = self.module.params.get("wait", True)
+        if not wait:
+            return self.get_resource_response(resource_id).data
+
+        timeout = self.module.params.get("wait_timeout", 1200)
+        interval = self.module.params.get("wait_interval", 30)
+
+        if failure_states is None:
+            failure_states = frozenset({"FAILED"})
+
+        try:
+            initial_response = self.get_resource_response(resource_id)
+        except Exception as exc:
+            if getattr(exc, "status", None) == 404 and _target_states_include_dead_states(target_states):
+                return None
+            raise
+
+        waiter_result = oci.wait_until(
             self.client,
-            self.get_resource_response,
-            resource_id,
-            target_states,
+            initial_response,
+            max_interval_seconds=interval,
+            max_wait_seconds=timeout,
+            succeed_on_not_found=_target_states_include_dead_states(target_states),
+            evaluate_response=lambda response: _resource_wait_complete(
+                self.module,
+                response,
+                target_states,
+                failure_states,
+                resource_id,
+            ),
+            fetch_func=lambda response=None: self.get_resource_response(resource_id),
         )
+        return getattr(waiter_result, "data", None)
+
+    def wait_for_work_request(
+        self,
+        work_request_client,
+        work_request_id,
+        get_work_request_fn=None,
+        target_states=None,
+        failure_states=None,
+    ):
+        """Wait for an OCI asynchronous work request to finish.
+
+        ``work_request_client`` is the OCI client used to poll the work
+        request. The helper polls ``get_work_request_fn`` until the work
+        request enters one of ``target_states`` and returns the final OCI work
+        request model. If the request enters ``failure_states``, the module
+        fails immediately.
+        """
+        timeout = self.module.params.get("wait_timeout", 1200)
+        interval = self.module.params.get("wait_interval", 30)
+
+        if get_work_request_fn is None:
+            get_work_request_fn = work_request_client.get_work_request
+        if target_states is None:
+            target_states = ("SUCCEEDED", "COMPLETED")
+        if failure_states is None:
+            failure_states = frozenset({"FAILED", "CANCELED"})
+
+        initial_response = get_work_request_fn(work_request_id)
+        waiter_result = oci.wait_until(
+            work_request_client,
+            initial_response,
+            max_interval_seconds=interval,
+            max_wait_seconds=timeout,
+            evaluate_response=lambda response: _work_request_wait_complete(
+                self.module,
+                response,
+                target_states,
+                failure_states,
+                work_request_id,
+            ),
+            fetch_func=lambda response=None: get_work_request_fn(work_request_id),
+        )
+        return getattr(waiter_result, "data", None)
 
     def get_mutation_result(self, response_data, resource_id, target_states):
         """Return the immediate or waited result for a create/update/delete call.
@@ -523,7 +624,7 @@ class OciResourceBase(OciModuleBase, ABC):
         deletion.
         """
         try:
-            response = call_with_retry(delete_fn, **delete_kwargs)
+            response = self.call_with_retry(delete_fn, **delete_kwargs)
         except Exception as exc:
             if getattr(exc, "status", None) == 409:
                 self.module.fail_json(
@@ -548,12 +649,19 @@ class OciResourceBase(OciModuleBase, ABC):
         """
         if (
             self.resource_id_param
-            and not self.get_resource_id()
-            and not self.has_name_lookup_request()
+            and not self.resource_id
+            and not self.has_name_lookup_request
         ):
-            self.module.fail_json(
-                msg=f"Deleting a {self.create_resource_name} requires {self.resource_id_param}"
-            )
+            if self.supports_name_lookup:
+                scope_params = self.common_list_filter_params + self.list_filter_params
+                msg = (
+                    f"Deleting a {self.create_resource_name} requires either "
+                    f"{self.resource_id_param} or {self.name_lookup_param} "
+                    f"(with {', '.join(scope_params)})"
+                )
+            else:
+                msg = f"Deleting a {self.create_resource_name} requires {self.resource_id_param}"
+            self.module.fail_json(msg=msg)
 
     def fail_missing_update_target(self) -> None:
         """Fail when an explicit update target ID does not resolve to a resource.
@@ -561,7 +669,7 @@ class OciResourceBase(OciModuleBase, ABC):
         This protects the present-state flow from silently creating a new
         resource when the caller clearly intended to update an existing one.
         """
-        resource_id = self.get_resource_id()
+        resource_id = self.resource_id
         if not self.resource_id_param or not resource_id:
             return
 
@@ -596,7 +704,7 @@ class OciResourceBase(OciModuleBase, ABC):
         # state == present
         resource = self.resolve_target_resource()
         if resource is None:
-            if self.get_resource_id():
+            if self.resource_id:
                 self.fail_missing_update_target()
             self.validate_create_request()
             if self.check_mode:
