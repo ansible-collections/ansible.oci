@@ -203,7 +203,7 @@ class OciSubnetModule(OciResourceBase):
 
     resource_id_param = "subnet_id"
     list_resource_method = "list_subnets"
-    list_filter_params = ["vcn_id"]
+    list_filter_params = ("vcn_id",)
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "subnet"
     update_method_name = "update_subnet"

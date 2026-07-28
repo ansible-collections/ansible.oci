@@ -458,7 +458,9 @@ class OciResourceBase(OciModuleBase, ABC):
 
     def validate_name_lookup_scope(self) -> None:
         """Fail when a scoped name lookup omits required list-filter fields."""
-        required_scope_params = self.common_list_filter_params + self.list_filter_params
+        required_scope_params = tuple(self.common_list_filter_params) + tuple(
+            self.list_filter_params
+        )
         missing_scope_params = [
             param_name
             for param_name in required_scope_params
@@ -653,7 +655,9 @@ class OciResourceBase(OciModuleBase, ABC):
             and not self.has_name_lookup_request
         ):
             if self.supports_name_lookup:
-                scope_params = self.common_list_filter_params + self.list_filter_params
+                scope_params = tuple(self.common_list_filter_params) + tuple(
+                    self.list_filter_params
+                )
                 msg = (
                     f"Deleting a {self.create_resource_name} requires either "
                     f"{self.resource_id_param} or {self.name_lookup_param} "

@@ -77,7 +77,7 @@ Set these on your `OciResourceBase` subclass:
 
 | Attribute | Why it is needed |
 | --- | --- |
-| `client_class` | Required by `OciModuleBase` so the OCI SDK client can be created. |
+| `client_class` | Required by `OciModuleBase` so the OCI SDK client can be created. Define it as a `@property` (not a plain class attribute), so `oci.<Client>` is only resolved once the class is instantiated, after `OciModuleBase.__init__()` has already confirmed the SDK is installed. |
 | `resource_id_param` | Tells the base class which module parameter is the explicit OCI ID. |
 | `create_resource_name` | Used in validation and error messages. |
 | `create_required_fields` | Fields that must exist before create is allowed. |
@@ -243,21 +243,13 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
+    import_oci_sdk,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_wait import (
-    call_with_retry,
-)
 
-try:
-    import oci
-
-    HAS_OCI_SDK = True
-except ImportError:
-    HAS_OCI_SDK = False
-    oci = None
+oci, HAS_OCI_SDK = import_oci_sdk()
 
 CREATE_REQUIRED_FIELDS = (
     "compartment_id",
@@ -279,7 +271,10 @@ def build_create_example_details(params):
 
 
 class OciExampleResourceModule(OciResourceBase):
-    client_class = oci.example.ExampleClient if HAS_OCI_SDK else object()
+    @property
+    def client_class(self):
+        return oci.example.ExampleClient
+
     resource_id_param = "example_resource_id"
     list_resource_method = "list_example_resources"
     list_filter_params = ("project_id",)
@@ -298,13 +293,13 @@ class OciExampleResourceModule(OciResourceBase):
     )
 
     def get_resource_response(self, resource_id):
-        return call_with_retry(
+        return self.call_with_retry(
             self.client.get_example_resource,
             example_resource_id=resource_id,
         )
 
     def create_resource(self):
-        response = call_with_retry(
+        response = self.call_with_retry(
             self.client.create_example_resource,
             create_example_resource_details=build_create_example_details(
                 self.module.params
@@ -361,6 +356,7 @@ Read the skeleton from top to bottom in this order:
    - add only resource-specific fields after that
 3. `client_class`
    - pick the OCI SDK client for the service
+   - define it as a `@property`, not a plain class attribute
 4. `resource_id_param`
    - define the explicit ID parameter used for update/delete targeting
 5. `list_resource_method`
@@ -404,7 +400,7 @@ the main read flow.
 
 | Attribute | Why it is needed |
 | --- | --- |
-| `client_class` | Required by `OciModuleBase`. |
+| `client_class` | Required by `OciModuleBase`. Define it as a `@property` (not a plain class attribute) for the same reason as resource modules — see the note above. |
 | `results_key` | Defines the key returned in `exit_json()`. |
 
 ### Fetch metadata
@@ -483,22 +479,20 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
+    import_oci_sdk,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 
-try:
-    import oci
-
-    HAS_OCI_SDK = True
-except ImportError:
-    HAS_OCI_SDK = False
-    oci = None
+oci, HAS_OCI_SDK = import_oci_sdk()
 
 
 class OciExampleResourceInfoModule(OciInfoBase):
-    client_class = oci.example.ExampleClient if HAS_OCI_SDK else object()
+    @property
+    def client_class(self):
+        return oci.example.ExampleClient
+
     results_key = "example_resources"
     resource_id_param = "example_resource_id"
     resource_get_method = "get_example_resource"
