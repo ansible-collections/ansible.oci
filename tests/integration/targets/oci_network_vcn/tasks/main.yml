@@ -6,6 +6,17 @@
     fail_msg: >-
       OCI VCN integration tests require OCI_TEST_COMPARTMENT_ID to be set.
 
+- name: Generate a unique resource-name suffix for this run
+  ansible.builtin.set_fact:
+    oci_integration_rpfx: "{{ 9999999999 | random }}"
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_network_vcn_integration_vcn_name: "{{ oci_network_vcn_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_network_vcn_integration_updated_vcn_name: "{{ oci_network_vcn_integration_updated_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_network_vcn_integration_subnet_name: "{{ oci_network_vcn_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_network_vcn_integration_vcn_dns_label: "vcn{{ oci_integration_rpfx }}"
+
 - name: Exercise VCN module lifecycle
   module_defaults:
     group/oracle.oci.oci:
