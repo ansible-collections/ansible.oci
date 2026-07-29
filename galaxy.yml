@@ -26,6 +26,7 @@ homepage: https://github.com/ansible-collections/oracle.oci
 issues: https://github.com/ansible-collections/oracle.oci/issues
 build_ignore:
   # https://docs.ansible.com/projects/ansible/devel/dev_guide/developing_collections_distributing.html#ignoring-files-and-folders
+  - .AGENTS
   - .ansible-lint
   - .github
   - .gitignore

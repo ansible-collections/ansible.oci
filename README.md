@@ -61,6 +61,59 @@ ansible-galaxy collection install oracle.oci:==1.0.0
 See [Using Ansible collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html)
 for more details.
 
+## Authentication Defaults
+
+OCI modules in this collection support shared authentication defaults so
+playbooks do not need to repeat the same auth arguments on every task.
+
+Authentication settings are resolved in this order:
+
+* `auth_type`: module parameter, then `OCI_AUTH_TYPE`, then `api_key`
+* `config_file_location`: module parameter, then `OCI_CONFIG_FILE`, then
+  `~/.oci/config`
+* `config_profile_name`: module parameter, then `OCI_CONFIG_PROFILE`, then
+  `DEFAULT`
+* API key fields such as tenancy, user, region, fingerprint, key file, and key
+  pass phrase: module parameter, then the matching `OCI_*` environment
+  variable, then the selected OCI config profile
+
+Supported environment variables include:
+
+* `OCI_AUTH_TYPE`
+* `OCI_CONFIG_FILE`
+* `OCI_CONFIG_PROFILE`
+* `OCI_TENANCY_ID`
+* `OCI_USER_ID`
+* `OCI_REGION`
+* `OCI_USER_FINGERPRINT`
+* `OCI_USER_KEY_FILE`
+* `OCI_USER_KEY_PASS_PHRASE`
+
+For `session_token` authentication, the selected OCI profile must still include
+`security_token_file`.
+
+### module_defaults
+
+The collection defines the action group `group/oracle.oci.oci` so a play or
+role can set shared OCI auth options once with `module_defaults`:
+
+```yaml
+- hosts: localhost
+  gather_facts: false
+  module_defaults:
+    group/oracle.oci.oci:
+      auth_type: api_key
+      config_file_location: ~/.oci/config
+      config_profile_name: PROD
+  tasks:
+    - oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: ocid1.compartment.oc1..example
+        name: example-vcn
+        cidr_blocks:
+          - 10.0.0.0/16
+```
+
 ## Use Cases
 
 Common use cases for this collection include:
@@ -91,6 +144,9 @@ The workflow definitions are available at:
 
 Contribution guidelines are documented in
 [CONTRIBUTING.md](https://github.com/ansible-collections/oracle.oci/blob/main/CONTRIBUTING.md).
+
+Contributors adding new OCI modules should start with the
+[Module Authoring Guide](docs/module_development.md).
 
 Project code of conduct information is available in
 [CODE_OF_CONDUCT.md](https://github.com/ansible-collections/oracle.oci/blob/main/CODE_OF_CONDUCT.md).
