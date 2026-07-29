@@ -6,10 +6,6 @@
     fail_msg: >-
       OCI subnet integration tests require OCI_TEST_COMPARTMENT_ID to be set.
 
-- name: Generate a unique resource-name suffix for this run
-  ansible.builtin.set_fact:
-    oci_integration_rpfx: "{{ 9999999999 | random }}"
-
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
     oci_subnet_integration_vcn_name: "{{ oci_subnet_integration_vcn_name }}-{{ oci_integration_rpfx }}"
