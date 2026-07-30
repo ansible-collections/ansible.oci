@@ -131,9 +131,9 @@ Common use cases for this collection include:
 The collection CI is split across dedicated `ansible-lint`, `Sanity`, and
 `Units` workflows, plus two live OCI integration workflows:
 
-* `Integration PR` runs on same-repository pull requests that change
-  `plugins/modules/` or `plugins/module_utils/`, with a protected GitHub
-  Environment, fixed Python `3.12`, and Ansible `stable-2.18`.
+* `Integration PR` runs on pull requests that change `plugins/modules/` or
+  `plugins/module_utils/`, with a protected GitHub Environment (approve before
+  secrets are available), fixed Python `3.12`, and Ansible `stable-2.18`.
 * `Integration Weekly` runs on a weekly schedule and by manual dispatch with a
   reduced Python/Ansible compatibility matrix.
 

@@ -28,8 +28,3 @@ runs:
     - name: Run OCI integration tests
       shell: bash
       run: make integration-ci ANSIBLE_REF=${{ inputs.ansible-ref }} PYTHON_BIN=python3
-
-    - name: Remove staged integration workspace
-      if: ${{ always() }}
-      shell: bash
-      run: rm -rf tests/output/ansible_collections
