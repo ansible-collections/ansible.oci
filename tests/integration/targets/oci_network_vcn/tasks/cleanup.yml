@@ -2,8 +2,8 @@
 - name: Run VCN cleanup with shared OCI auth defaults
   module_defaults:
     group/oracle.oci.oci:
-      config_file_location: "{{ oci_network_vcn_integration_config_file_location }}"
-      config_profile_name: "{{ oci_network_vcn_integration_config_profile_name }}"
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Delete leaked subnet during cleanup
       oracle.oci.oci_subnet:

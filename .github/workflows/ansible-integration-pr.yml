@@ -1,0 +1,56 @@
+---
+name: Integration PR
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - 'plugins/modules/**'
+      - 'plugins/module_utils/**'
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      github.event.pull_request.number || github.sha
+    }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration-pr:
+    name: Integration PR
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment:
+      name: oci-integration
+    env:
+      OCI_TEST_COMPARTMENT_ID: ${{ secrets.OCI_TEST_COMPARTMENT_ID }}
+      OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
+      OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
+      OCI_REGION: ${{ vars.OCI_REGION }}
+      OCI_USER_FINGERPRINT: ${{ secrets.OCI_USER_FINGERPRINT }}
+      OCI_USER_KEY_CONTENT: ${{ secrets.OCI_USER_KEY_CONTENT }}
+      OCI_CONFIG_PROFILE: ${{ vars.OCI_CONFIG_PROFILE }}
+    steps:
+      - name: Run OCI integration workflow
+        uses: ./.github/actions/run-oci-integration
+        with:
+          ansible-ref: stable-2.18
+          python-version: '3.12'
+
+  integration-pr-check:
+    if: always()
+    needs:
+      - integration-pr
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

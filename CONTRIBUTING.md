@@ -69,14 +69,14 @@ prepared, that is the only required run-time export.
 
 ```bash
 
-ansible-test integration --docker --allow-destructive oci_network_vcn -vvv
-ansible-test integration --docker --allow-destructive oci_subnet -vvv
+ansible-test integration --allow-destructive oci_network_vcn -vvv
+ansible-test integration --allow-destructive oci_subnet -vvv
 ```
 
 To run both current live OCI targets in one command:
 
 ```bash
-ansible-test integration --docker --allow-destructive oci_network_vcn oci_subnet -vvv
+ansible-test integration --allow-destructive oci_network_vcn oci_subnet -vvv
 ```
 
 ## Review references
