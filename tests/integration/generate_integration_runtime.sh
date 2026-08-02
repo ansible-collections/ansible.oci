@@ -30,8 +30,11 @@ for var_name in "${required_vars[@]}"; do
 done
 
 # Recreate the runtime directory so each run starts with fresh OCI auth files.
+# mkdir -p combined with -m only applies the mode to the deepest directory
+# (SC2174), so chmod the leaf directory explicitly afterwards.
 rm -rf "${RUNTIME_DIR}"
-mkdir -p -m 700 "${RUNTIME_DIR}"
+mkdir -p "${RUNTIME_DIR}"
+chmod 700 "${RUNTIME_DIR}"
 umask 077
 
 # Materialize the OCI private key consumed by the tests.
