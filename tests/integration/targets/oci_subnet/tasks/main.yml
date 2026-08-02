@@ -4,7 +4,7 @@
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
     fail_msg: >-
-      OCI subnet integration tests require OCI_TEST_COMPARTMENT_ID to be set.
+      OCI subnet integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
 
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
@@ -17,8 +17,8 @@
 - name: Exercise subnet module lifecycle
   module_defaults:
     group/oracle.oci.oci:
-      config_file_location: "{{ oci_subnet_integration_config_file_location }}"
-      config_profile_name: "{{ oci_subnet_integration_config_profile_name }}"
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for subnet integration
       oracle.oci.oci_network_vcn:

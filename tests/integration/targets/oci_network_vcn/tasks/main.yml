@@ -4,7 +4,7 @@
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
     fail_msg: >-
-      OCI VCN integration tests require OCI_TEST_COMPARTMENT_ID to be set.
+      OCI VCN integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
 
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
@@ -16,8 +16,8 @@
 - name: Exercise VCN module lifecycle
   module_defaults:
     group/oracle.oci.oci:
-      config_file_location: "{{ oci_network_vcn_integration_config_file_location }}"
-      config_profile_name: "{{ oci_network_vcn_integration_config_profile_name }}"
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Define VCN create and delete parameters
       ansible.builtin.set_fact:

@@ -129,8 +129,17 @@ Common use cases for this collection include:
 ## Testing
 
 The collection CI is split across dedicated `ansible-lint`, `Sanity`, and
-`Units` workflows. Integration testing is intentionally deferred for now and
-will return in its own workflow later. SonarCloud analysis runs separately
+`Units` workflows, plus two live OCI integration workflows:
+
+* `Integration PR` runs on pull requests that change `plugins/modules/` or
+  `plugins/module_utils/`, with a protected GitHub Environment (approve before
+  secrets are available), fixed Python `3.12`, and Ansible `stable-2.18`.
+* `Integration Weekly` runs on a weekly schedule and by manual dispatch with a
+  reduced Python/Ansible compatibility matrix.
+
+Both integration workflows render their OCI runtime configuration from GitHub
+secrets and variables at run time, then execute `ansible-test integration`
+against the collection's live OCI targets. SonarCloud analysis runs separately
 after the `Units` workflow completes.
 
 The workflow definitions are available at:
@@ -138,6 +147,8 @@ The workflow definitions are available at:
 * [`.github/workflows/ansible-lint.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-lint.yml)
 * [`.github/workflows/ansible-sanity.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-sanity.yml)
 * [`.github/workflows/ansible-unit.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-unit.yml)
+* [`.github/workflows/ansible-integration-pr.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-integration-pr.yml)
+* [`.github/workflows/ansible-integration-weekly.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-integration-weekly.yml)
 * [`.github/workflows/sonarcloud.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/sonarcloud.yml)
 
 ## Contributing

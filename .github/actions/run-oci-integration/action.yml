@@ -1,0 +1,34 @@
+name: Run OCI integration
+description: Set up Python and execute the OCI integration workflow
+
+inputs:
+  ansible-ref:
+    description: Ansible ref to install for ansible-test
+    required: true
+  python-version:
+    description: Controller Python version
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        fetch-depth: 1
+        show-progress: false
+        allow-unsafe-pr-checkout: true
+
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Ansible ${{ inputs.ansible-ref }}
+      shell: bash
+      run: python3 -m pip install "https://github.com/ansible/ansible/archive/${{ inputs.ansible-ref }}.tar.gz" --disable-pip-version-check
+
+    - name: Run OCI integration tests
+      shell: bash
+      run: make integration-ci PYTHON_BIN=python3

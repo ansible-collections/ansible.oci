@@ -3,6 +3,8 @@
 
 /tests/output/
 /tests/integration/inventory
+/tests/integration/integration_config.yml
+/tests/integration/.runtime/
 /changelogs/.plugin-cache.yaml
 /.ansible/
 .github/ee-tests-artifact*
