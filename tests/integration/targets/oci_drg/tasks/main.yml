@@ -1,0 +1,227 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI DRG integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_drg_integration_drg_name: "{{ oci_drg_integration_drg_name }}-{{ oci_integration_rpfx }}"
+    oci_drg_integration_updated_drg_name: "{{ oci_drg_integration_updated_drg_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise DRG module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Define DRG create and delete parameters
+      ansible.builtin.set_fact:
+        oci_drg_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_drg_integration_drg_name }}"
+          freeform_tags: "{{ oci_drg_integration_create_tags }}"
+        oci_drg_delete_params:
+          state: absent
+          drg_id: ""
+
+    - name: Create DRG in check mode
+      oracle.oci.oci_drg: &oci_drg_create_module_options
+        state: "{{ oci_drg_create_params.state }}"
+        compartment_id: "{{ oci_drg_create_params.compartment_id }}"
+        name: "{{ oci_drg_create_params.name }}"
+        freeform_tags: "{{ oci_drg_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_drg_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_create_check.changed | bool
+
+    - name: Read DRG after create check mode
+      oracle.oci.oci_drg_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_drg_integration_drg_name }}"
+      register: oci_drg_create_check_probe
+
+    - name: Assert DRG is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_drg_create_check_probe.drgs | length == 0
+
+    - name: Create DRG
+      oracle.oci.oci_drg:
+        <<: *oci_drg_create_module_options
+      register: oci_drg_create
+
+    - name: Capture DRG id and define update parameters
+      ansible.builtin.set_fact:
+        oci_drg_id: "{{ oci_drg_create.resource.id }}"
+        oci_drg_update_params:
+          state: present
+          drg_id: "{{ oci_drg_create.resource.id }}"
+          name: "{{ oci_drg_integration_updated_drg_name }}"
+          freeform_tags: "{{ oci_drg_integration_update_tags }}"
+        oci_drg_delete_params:
+          state: absent
+          drg_id: "{{ oci_drg_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_create.changed | bool
+
+    - name: Read DRG by id
+      oracle.oci.oci_drg_info:
+        drg_id: "{{ oci_drg_id }}"
+      register: oci_drg_info_by_id
+
+    - name: Assert DRG info by id returned the created DRG
+      ansible.builtin.assert:
+        that:
+          - oci_drg_info_by_id.drgs | length == 1
+          - oci_drg_info_by_id.drgs[0].id == oci_drg_id
+          - oci_drg_info_by_id.drgs[0].name == oci_drg_integration_drg_name
+          - oci_drg_info_by_id.drgs[0].lifecycle_state == "AVAILABLE"
+
+    - name: List DRG by name
+      oracle.oci.oci_drg_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_drg_integration_drg_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_drg_info_list
+
+    - name: Assert DRG info list returned the created DRG
+      ansible.builtin.assert:
+        that:
+          - oci_drg_info_list.drgs | selectattr('id', 'equalto', oci_drg_id) | list | length == 1
+
+    - name: Assert created DRG is a no-op on rerun with unique name
+      oracle.oci.oci_drg:
+        <<: *oci_drg_create_module_options
+      register: oci_drg_create_rerun_by_name
+
+    - name: Verify DRG rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_create_rerun_by_name.changed | bool
+
+    - name: Assert created DRG is a no-op on rerun with returned id
+      oracle.oci.oci_drg:
+        <<: *oci_drg_create_module_options
+        drg_id: "{{ oci_drg_id }}"
+      register: oci_drg_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_create_rerun.changed | bool
+
+    - name: Update DRG in check mode
+      oracle.oci.oci_drg: &oci_drg_update_module_options
+        state: "{{ oci_drg_update_params.state }}"
+        drg_id: "{{ oci_drg_update_params.drg_id }}"
+        name: "{{ oci_drg_update_params.name }}"
+        freeform_tags: "{{ oci_drg_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_drg_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_update_check.changed | bool
+
+    - name: Read DRG after update check mode
+      oracle.oci.oci_drg_info:
+        drg_id: "{{ oci_drg_id }}"
+      register: oci_drg_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_drg_update_check_probe.drgs | length == 1
+          - oci_drg_update_check_probe.drgs[0].name == oci_drg_integration_drg_name
+          - oci_drg_update_check_probe.drgs[0].freeform_tags.phase == "create"
+
+    - name: Update DRG
+      oracle.oci.oci_drg:
+        <<: *oci_drg_update_module_options
+      register: oci_drg_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_update.changed | bool
+
+    - name: Read updated DRG by name
+      oracle.oci.oci_drg_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_drg_integration_updated_drg_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_drg_info_updated
+
+    - name: Assert DRG info reflects updated DRG
+      ansible.builtin.assert:
+        that:
+          - oci_drg_info_updated.drgs | selectattr('id', 'equalto', oci_drg_id) | list | length == 1
+          - oci_drg_info_updated.drgs[0].freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_drg:
+        <<: *oci_drg_update_module_options
+      register: oci_drg_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_update_rerun.changed | bool
+
+    - name: Delete DRG in check mode
+      oracle.oci.oci_drg: &oci_drg_delete_module_options
+        state: "{{ oci_drg_delete_params.state }}"
+        drg_id: "{{ oci_drg_delete_params.drg_id }}"
+      check_mode: true
+      register: oci_drg_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_delete_check.changed | bool
+
+    - name: Read DRG after delete check mode
+      oracle.oci.oci_drg_info:
+        drg_id: "{{ oci_drg_id }}"
+      register: oci_drg_delete_check_probe
+
+    - name: Assert DRG still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_drg_delete_check_probe.drgs | length == 1
+
+    - name: Delete DRG
+      oracle.oci.oci_drg:
+        <<: *oci_drg_delete_module_options
+      register: oci_drg_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_drg:
+        <<: *oci_drg_delete_module_options
+      register: oci_drg_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_delete_rerun.changed | bool
+
+  always:
+    - name: Run DRG cleanup
+      ansible.builtin.include_tasks: cleanup.yml

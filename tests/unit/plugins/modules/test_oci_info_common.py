@@ -47,6 +47,35 @@ INFO_CASES = (
         },
     },
     {
+        "module_name": "oci_drg_info",
+        "class_name": "OciDrgInfoModule",
+        "results_key": "drgs",
+        "id_param": "drg_id",
+        "id_value": "ocid1.drg.oc1..example",
+        "missing_id": "ocid1.drg.oc1..missing",
+        "get_method": "get_drg",
+        "list_method": "list_drgs",
+        "list_params": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "name": "example-drg",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "expected_list_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "run_resource": FakeModel(
+            id="ocid1.drg.oc1..example",
+            display_name="example-drg",
+            lifecycle_state="AVAILABLE",
+        ),
+        "expected_run_payload": {
+            "id": "ocid1.drg.oc1..example",
+            "name": "example-drg",
+            "lifecycle_state": "AVAILABLE",
+        },
+    },
+    {
         "module_name": "oci_subnet_info",
         "class_name": "OciSubnetInfoModule",
         "results_key": "subnets",

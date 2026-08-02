@@ -1,0 +1,3 @@
+---
+minor_changes:
+  - Added oci_drg and oci_drg_info modules for managing OCI Dynamic Routing Gateways, and oci_drg_attachment for managing VCN attachments to a DRG (ACA-5219).

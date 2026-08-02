@@ -1,0 +1,12 @@
+---
+- name: Run DRG cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked DRG during cleanup
+      oracle.oci.oci_drg:
+        state: absent
+        drg_id: "{{ oci_drg_id }}"
+      when: oci_drg_id | default('') | length > 0
