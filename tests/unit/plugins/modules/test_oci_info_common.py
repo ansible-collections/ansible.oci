@@ -79,6 +79,39 @@ INFO_CASES = (
             "vcn_id": "ocid1.vcn.oc1..example",
         },
     },
+    {
+        "module_name": "oci_service_gateway_info",
+        "class_name": "OciServiceGatewayInfoModule",
+        "results_key": "service_gateways",
+        "id_param": "service_gateway_id",
+        "id_value": "ocid1.servicegateway.oc1..example",
+        "missing_id": "ocid1.servicegateway.oc1..missing",
+        "get_method": "get_service_gateway",
+        "list_method": "list_service_gateways",
+        "list_params": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-service-gateway",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "expected_list_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "run_resource": FakeModel(
+            id="ocid1.servicegateway.oc1..example",
+            display_name="example-service-gateway",
+            lifecycle_state="AVAILABLE",
+            vcn_id="ocid1.vcn.oc1..example",
+        ),
+        "expected_run_payload": {
+            "id": "ocid1.servicegateway.oc1..example",
+            "name": "example-service-gateway",
+            "lifecycle_state": "AVAILABLE",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+    },
 )
 
 

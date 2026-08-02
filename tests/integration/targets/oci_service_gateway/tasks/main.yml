@@ -1,0 +1,272 @@
+---
+# Scoping note: there is no OCI module to list/discover "Services" (the fixed,
+# tenancy/region-provided OCI service bundles like "All FRA Services In
+# Oracle Services Network") in this collection -- that is a different
+# resource type and is out of scope for oci_service_gateway (ACA-5219). This
+# test therefore exercises the full create/read/update/delete/idempotent
+# lifecycle using service_ids: [] (always valid, no external dependency) and
+# covers mutability of name, route_table_id, block_traffic, and tags instead.
+
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI service gateway integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_service_gateway_integration_vcn_name: "{{ oci_service_gateway_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_service_gateway_integration_gateway_name: "{{ oci_service_gateway_integration_gateway_name }}-{{ oci_integration_rpfx }}"
+    oci_service_gateway_integration_updated_gateway_name: "{{ oci_service_gateway_integration_updated_gateway_name }}-{{ oci_integration_rpfx }}"
+    oci_service_gateway_integration_vcn_dns_label: "sgwv{{ oci_integration_rpfx }}"
+
+- name: Exercise service gateway module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for service gateway integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_service_gateway_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_service_gateway_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_service_gateway_integration_vcn_dns_label }}"
+      register: oci_service_gateway_vcn_create
+
+    - name: Capture created network ids
+      ansible.builtin.set_fact:
+        oci_service_gateway_integration_network:
+          vcn_id: "{{ oci_service_gateway_vcn_create.resource.id }}"
+          default_route_table_id: "{{ oci_service_gateway_vcn_create.resource.default_route_table_id }}"
+
+    - name: Define service gateway create and delete parameters
+      ansible.builtin.set_fact:
+        oci_service_gateway_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          vcn_id: "{{ oci_service_gateway_integration_network.vcn_id }}"
+          name: "{{ oci_service_gateway_integration_gateway_name }}"
+          service_ids: []
+          freeform_tags: "{{ oci_service_gateway_integration_create_tags }}"
+        oci_service_gateway_delete_params:
+          state: absent
+          service_gateway_id: ""
+
+    - name: Create service gateway in check mode
+      oracle.oci.oci_service_gateway: &oci_service_gateway_create_module_options
+        state: "{{ oci_service_gateway_create_params.state }}"
+        compartment_id: "{{ oci_service_gateway_create_params.compartment_id }}"
+        vcn_id: "{{ oci_service_gateway_create_params.vcn_id }}"
+        name: "{{ oci_service_gateway_create_params.name }}"
+        service_ids: "{{ oci_service_gateway_create_params.service_ids }}"
+        freeform_tags: "{{ oci_service_gateway_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_service_gateway_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_create_check.changed | bool
+
+    - name: Read service gateway after create check mode
+      oracle.oci.oci_service_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_service_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_service_gateway_integration_gateway_name }}"
+      register: oci_service_gateway_create_check_probe
+
+    - name: Assert service gateway is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_create_check_probe.service_gateways | length == 0
+
+    - name: Create service gateway
+      oracle.oci.oci_service_gateway:
+        <<: *oci_service_gateway_create_module_options
+      register: oci_service_gateway_create
+
+    - name: Capture service gateway id and define update parameters
+      ansible.builtin.set_fact:
+        oci_service_gateway_id: "{{ oci_service_gateway_create.resource.id }}"
+        oci_service_gateway_update_params:
+          state: present
+          service_gateway_id: "{{ oci_service_gateway_create.resource.id }}"
+          name: "{{ oci_service_gateway_integration_updated_gateway_name }}"
+          route_table_id: "{{ oci_service_gateway_integration_network.default_route_table_id }}"
+          block_traffic: true
+          freeform_tags: "{{ oci_service_gateway_integration_update_tags }}"
+        oci_service_gateway_delete_params:
+          state: absent
+          service_gateway_id: "{{ oci_service_gateway_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_create.changed | bool
+
+    - name: Read service gateway by id
+      oracle.oci.oci_service_gateway_info:
+        service_gateway_id: "{{ oci_service_gateway_id }}"
+      register: oci_service_gateway_info_by_id
+
+    - name: Assert service gateway info by id returned the created service gateway
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_info_by_id.service_gateways | length == 1
+          - oci_service_gateway_info_by_id.service_gateways[0].id == oci_service_gateway_id
+          - oci_service_gateway_info_by_id.service_gateways[0].name == oci_service_gateway_integration_gateway_name
+          - oci_service_gateway_info_by_id.service_gateways[0].lifecycle_state == "AVAILABLE"
+          - oci_service_gateway_info_by_id.service_gateways[0].services == []
+
+    - name: List service gateway by name
+      oracle.oci.oci_service_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_service_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_service_gateway_integration_gateway_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_service_gateway_info_list
+
+    - name: Assert service gateway info list returned the created service gateway
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_info_list.service_gateways | selectattr('id', 'equalto', oci_service_gateway_id) | list | length == 1
+
+    - name: Assert created service gateway is a no-op on rerun with unique name
+      oracle.oci.oci_service_gateway:
+        <<: *oci_service_gateway_create_module_options
+      register: oci_service_gateway_create_rerun_by_name
+
+    - name: Verify service gateway rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_service_gateway_create_rerun_by_name.changed | bool
+
+    - name: Assert created service gateway is a no-op on rerun with returned id
+      oracle.oci.oci_service_gateway:
+        <<: *oci_service_gateway_create_module_options
+        service_gateway_id: "{{ oci_service_gateway_id }}"
+      register: oci_service_gateway_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_service_gateway_create_rerun.changed | bool
+
+    - name: Update service gateway in check mode
+      oracle.oci.oci_service_gateway: &oci_service_gateway_update_module_options
+        state: "{{ oci_service_gateway_update_params.state }}"
+        service_gateway_id: "{{ oci_service_gateway_update_params.service_gateway_id }}"
+        name: "{{ oci_service_gateway_update_params.name }}"
+        route_table_id: "{{ oci_service_gateway_update_params.route_table_id }}"
+        block_traffic: "{{ oci_service_gateway_update_params.block_traffic }}"
+        freeform_tags: "{{ oci_service_gateway_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_service_gateway_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_update_check.changed | bool
+
+    - name: Read service gateway after update check mode
+      oracle.oci.oci_service_gateway_info:
+        service_gateway_id: "{{ oci_service_gateway_id }}"
+      register: oci_service_gateway_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_update_check_probe.service_gateways | length == 1
+          - oci_service_gateway_update_check_probe.service_gateways[0].name == oci_service_gateway_integration_gateway_name
+          - oci_service_gateway_update_check_probe.service_gateways[0].block_traffic == false
+          - oci_service_gateway_update_check_probe.service_gateways[0].freeform_tags.phase == "create"
+
+    - name: Update service gateway
+      oracle.oci.oci_service_gateway:
+        <<: *oci_service_gateway_update_module_options
+      register: oci_service_gateway_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_update.changed | bool
+
+    - name: Read updated service gateway by name
+      oracle.oci.oci_service_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_service_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_service_gateway_integration_updated_gateway_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_service_gateway_info_updated
+
+    - name: Assert service gateway info reflects updated service gateway
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_info_updated.service_gateways | selectattr('id', 'equalto', oci_service_gateway_id) | list | length == 1
+          - >-
+            oci_service_gateway_info_updated.service_gateways
+            | selectattr('route_table_id', 'equalto',
+              oci_service_gateway_integration_network.default_route_table_id)
+            | list | length == 1
+          - oci_service_gateway_info_updated.service_gateways[0].block_traffic == true
+          - oci_service_gateway_info_updated.service_gateways[0].freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_service_gateway:
+        <<: *oci_service_gateway_update_module_options
+      register: oci_service_gateway_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_service_gateway_update_rerun.changed | bool
+
+    - name: Delete service gateway in check mode
+      oracle.oci.oci_service_gateway: &oci_service_gateway_delete_module_options
+        state: "{{ oci_service_gateway_delete_params.state }}"
+        service_gateway_id: "{{ oci_service_gateway_delete_params.service_gateway_id }}"
+      check_mode: true
+      register: oci_service_gateway_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_delete_check.changed | bool
+
+    - name: Read service gateway after delete check mode
+      oracle.oci.oci_service_gateway_info:
+        service_gateway_id: "{{ oci_service_gateway_id }}"
+      register: oci_service_gateway_delete_check_probe
+
+    - name: Assert service gateway still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_delete_check_probe.service_gateways | length == 1
+
+    - name: Delete service gateway
+      oracle.oci.oci_service_gateway:
+        <<: *oci_service_gateway_delete_module_options
+      register: oci_service_gateway_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_service_gateway_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_service_gateway:
+        <<: *oci_service_gateway_delete_module_options
+      register: oci_service_gateway_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_service_gateway_delete_rerun.changed | bool
+
+  always:
+    - name: Run service gateway cleanup
+      ansible.builtin.include_tasks: cleanup.yml
