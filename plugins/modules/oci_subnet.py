@@ -311,6 +311,7 @@ def main():
         supports_check_mode=True,
     )
 
+    # check_mode is honored by execute_resource_module via the shared helper layer
     OciSubnetModule(module).execute_resource_module()
 
 
