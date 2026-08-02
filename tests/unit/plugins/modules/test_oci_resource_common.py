@@ -10,6 +10,7 @@ from conftest import (
     install_fake_oci,
     load_collection_module,
     make_module_instance,
+    raising,
 )
 
 
@@ -82,7 +83,7 @@ RESOURCE_CASES = (
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_get_resource_prefers_id_lookup(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     get_calls = []
@@ -112,7 +113,7 @@ def test_get_resource_prefers_id_lookup(monkeypatch, case):
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_get_resource_uses_unique_name_lookup_without_id(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     paginate_calls = []
@@ -142,7 +143,7 @@ def test_get_resource_uses_unique_name_lookup_without_id(monkeypatch, case):
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_fails_when_present_uses_missing_id(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     instance = make_module_instance(
@@ -164,7 +165,7 @@ def test_run_fails_when_present_uses_missing_id(monkeypatch, case):
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_check_mode_reports_update_when_unique_name_match_has_tag_drift(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     resource = FakeModel(
@@ -201,9 +202,7 @@ def test_run_check_mode_reports_update_when_unique_name_match_has_tag_drift(monk
     monkeypatch.setattr(
         instance,
         "create_resource",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("create_resource should not be called")
-        ),
+        raising(AssertionError("create_resource should not be called")),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
@@ -214,7 +213,7 @@ def test_run_check_mode_reports_update_when_unique_name_match_has_tag_drift(monk
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_check_mode_reports_update_when_shared_planner_detects_field_drift(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     resource = FakeModel(
@@ -236,9 +235,7 @@ def test_run_check_mode_reports_update_when_shared_planner_detects_field_drift(m
     monkeypatch.setattr(
         instance,
         "update_resource",
-        lambda found_resource: (_ for _ in ()).throw(
-            AssertionError("update_resource should not be called in check mode")
-        ),
+        raising(AssertionError("update_resource should not be called in check mode")),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
@@ -249,7 +246,7 @@ def test_run_check_mode_reports_update_when_shared_planner_detects_field_drift(m
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_creates_duplicate_when_unique_name_match_and_flag_enabled(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     params = dict(case["create_complete_params"])
@@ -273,9 +270,7 @@ def test_run_creates_duplicate_when_unique_name_match_and_flag_enabled(monkeypat
     monkeypatch.setattr(
         instance,
         "update_resource",
-        lambda resource: (_ for _ in ()).throw(
-            AssertionError("update_resource should not be called")
-        ),
+        raising(AssertionError("update_resource should not be called")),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
@@ -287,7 +282,7 @@ def test_run_creates_duplicate_when_unique_name_match_and_flag_enabled(monkeypat
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_creates_duplicate_when_multiple_name_matches_and_flag_enabled(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     params = dict(case["create_complete_params"])
@@ -314,9 +309,7 @@ def test_run_creates_duplicate_when_multiple_name_matches_and_flag_enabled(monke
     monkeypatch.setattr(
         instance,
         "update_resource",
-        lambda resource: (_ for _ in ()).throw(
-            AssertionError("update_resource should not be called")
-        ),
+        raising(AssertionError("update_resource should not be called")),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
@@ -328,7 +321,7 @@ def test_run_creates_duplicate_when_multiple_name_matches_and_flag_enabled(monke
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_fails_when_name_lookup_matches_multiple_resources(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     params = dict(case["create_complete_params"])
@@ -355,7 +348,7 @@ def test_run_fails_when_name_lookup_matches_multiple_resources(monkeypatch, case
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_absent_reports_no_change_when_name_lookup_finds_no_resources(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     params = dict(case["name_lookup_params"])
@@ -380,7 +373,7 @@ def test_run_absent_reports_no_change_when_name_lookup_finds_no_resources(monkey
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_absent_deletes_unique_name_match_without_explicit_id(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     params = dict(case["name_lookup_params"])
@@ -405,7 +398,7 @@ def test_run_absent_deletes_unique_name_match_without_explicit_id(monkeypatch, c
     monkeypatch.setattr(
         instance,
         "delete_resource",
-        lambda found_resource: delete_calls.append(found_resource),
+        delete_calls.append,
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
@@ -417,7 +410,7 @@ def test_run_absent_deletes_unique_name_match_without_explicit_id(monkeypatch, c
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_fails_when_absent_omits_id(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     instance = make_module_instance(
@@ -430,9 +423,7 @@ def test_run_fails_when_absent_omits_id(monkeypatch, case):
     monkeypatch.setattr(
         instance,
         "resolve_target_resource",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("resolve_target_resource should not be called")
-        ),
+        raising(AssertionError("resolve_target_resource should not be called")),
     )
 
     with pytest.raises(FailJsonCalled) as exc_info:
@@ -443,7 +434,7 @@ def test_run_fails_when_absent_omits_id(monkeypatch, case):
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_delete_resource_fails_cleanly_when_dependency_exists(monkeypatch, case):
-    _, ServiceError = install_fake_oci(monkeypatch)
+    _oci_module, ServiceError = install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     resource = FakeModel(id=case["id_value"])
@@ -471,7 +462,7 @@ def test_delete_resource_fails_cleanly_when_dependency_exists(monkeypatch, case)
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_check_mode_create_fails_when_required_fields_missing(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     instance = make_module_instance(
@@ -490,7 +481,7 @@ def test_run_check_mode_create_fails_when_required_fields_missing(monkeypatch, c
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_check_mode_create_reports_changed_without_create(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     instance = make_module_instance(
@@ -503,9 +494,7 @@ def test_run_check_mode_create_reports_changed_without_create(monkeypatch, case)
     monkeypatch.setattr(
         instance,
         "create_resource",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("create_resource should not be called")
-        ),
+        raising(AssertionError("create_resource should not be called")),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
@@ -516,7 +505,7 @@ def test_run_check_mode_create_reports_changed_without_create(monkeypatch, case)
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_check_mode_update_reports_changed_when_tags_differ(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     resource = FakeModel(
@@ -539,9 +528,7 @@ def test_run_check_mode_update_reports_changed_when_tags_differ(monkeypatch, cas
     monkeypatch.setattr(
         instance,
         "update_resource",
-        lambda resource: (_ for _ in ()).throw(
-            AssertionError("update_resource should not be called")
-        ),
+        raising(AssertionError("update_resource should not be called")),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
@@ -552,7 +539,7 @@ def test_run_check_mode_update_reports_changed_when_tags_differ(monkeypatch, cas
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
 def test_run_check_mode_delete_reports_changed_without_delete(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module(case["module_name"])
     resource = FakeModel(
@@ -572,9 +559,7 @@ def test_run_check_mode_delete_reports_changed_without_delete(monkeypatch, case)
     monkeypatch.setattr(
         instance,
         "delete_resource",
-        lambda resource: (_ for _ in ()).throw(
-            AssertionError("delete_resource should not be called")
-        ),
+        raising(AssertionError("delete_resource should not be called")),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:

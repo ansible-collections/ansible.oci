@@ -79,6 +79,19 @@ def install_fake_oci(monkeypatch, *, model_names=(), include_work_requests=False
     return oci_module, ServiceError
 
 
+def raising(exception):
+    """Return a callable that raises ``exception`` when invoked, ignoring any arguments.
+
+    Handy as a ``monkeypatch.setattr`` replacement for methods that should
+    not be called during a given test path.
+    """
+
+    def implementation(*args, **kwargs):
+        raise exception
+
+    return implementation
+
+
 def make_module_instance(
     module_obj,
     class_name,

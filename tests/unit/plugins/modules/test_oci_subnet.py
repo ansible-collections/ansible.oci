@@ -4,7 +4,6 @@ import pytest
 
 from conftest import (
     DummyModule,
-    ExitJsonCalled,
     FakeModel,
     FakeResponse,
     FailJsonCalled,
@@ -37,7 +36,7 @@ def make_subnet_module(module_obj, params, client=None):
 
 
 def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module("oci_subnet")
     captured = {}
@@ -75,7 +74,7 @@ def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
 
 
 def test_build_create_subnet_details_includes_supported_fields(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     details = subnet_module.build_create_subnet_details(
@@ -109,7 +108,7 @@ def test_build_create_subnet_details_includes_supported_fields(monkeypatch):
 
 
 def test_build_update_plan_maps_subnet_fields_to_update_model(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -139,7 +138,7 @@ def test_build_update_plan_maps_subnet_fields_to_update_model(monkeypatch):
 
 
 def test_needs_update_returns_true_for_cidr_block_change(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -152,7 +151,7 @@ def test_needs_update_returns_true_for_cidr_block_change(monkeypatch):
 
 
 def test_needs_update_rejects_mixed_cidr_and_dns_label_change(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -175,7 +174,7 @@ def test_needs_update_rejects_mixed_cidr_and_dns_label_change(monkeypatch):
 
 
 def test_needs_update_rejects_prohibit_public_ip_drift(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -194,7 +193,7 @@ def test_needs_update_rejects_prohibit_public_ip_drift(monkeypatch):
 
 
 def test_needs_update_rejects_compartment_drift(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -213,7 +212,7 @@ def test_needs_update_rejects_compartment_drift(monkeypatch):
 
 
 def test_needs_update_returns_true_for_route_table_change(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -229,7 +228,7 @@ def test_needs_update_returns_true_for_route_table_change(monkeypatch):
 
 
 def test_needs_update_ignores_security_list_order(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -253,7 +252,7 @@ def test_needs_update_ignores_security_list_order(monkeypatch):
 
 
 def test_needs_update_returns_true_for_security_list_content_change(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -277,7 +276,7 @@ def test_needs_update_returns_true_for_security_list_content_change(monkeypatch)
 
 
 def test_needs_update_returns_true_for_name_change(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     instance = make_subnet_module(
@@ -293,7 +292,7 @@ def test_needs_update_returns_true_for_name_change(monkeypatch):
 
 
 def test_create_resource_uses_create_subnet_and_waits(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     create_calls = []
@@ -345,7 +344,7 @@ def test_create_resource_uses_create_subnet_and_waits(monkeypatch):
 
 
 def test_update_resource_uses_update_subnet_details_and_waits(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     subnet_module = load_collection_module("oci_subnet")
     update_calls = []
@@ -390,5 +389,3 @@ def test_update_resource_uses_update_subnet_details_and_waits(monkeypatch):
     assert update_calls[0][1].route_table_id == "ocid1.routetable.oc1..updated"
     assert update_calls[0][1].security_list_ids == ["ocid1.securitylist.oc1..updated"]
     assert updated_resource.id == "ocid1.subnet.oc1..example"
-
-

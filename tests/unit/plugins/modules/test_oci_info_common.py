@@ -9,6 +9,7 @@ from conftest import (
     install_fake_oci,
     load_collection_module,
     make_module_instance,
+    raising,
 )
 
 
@@ -80,7 +81,7 @@ INFO_CASES = (
 
 @pytest.mark.parametrize("case", INFO_CASES, ids=lambda case: case["module_name"])
 def test_list_resources_uses_list_filters(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     info_module = load_collection_module(case["module_name"])
     paginate_calls = []
@@ -104,7 +105,7 @@ def test_list_resources_uses_list_filters(monkeypatch, case):
 
 @pytest.mark.parametrize("case", INFO_CASES, ids=lambda case: case["module_name"])
 def test_list_resources_prefers_id_lookup(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     info_module = load_collection_module(case["module_name"])
 
@@ -124,9 +125,7 @@ def test_list_resources_prefers_id_lookup(monkeypatch, case):
     monkeypatch.setattr(
         instance,
         "list_all_resources",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("list_all_resources should not be called")
-        ),
+        raising(AssertionError("list_all_resources should not be called")),
     )
     monkeypatch.setattr(
         instance,
@@ -142,7 +141,7 @@ def test_list_resources_prefers_id_lookup(monkeypatch, case):
 
 @pytest.mark.parametrize("case", INFO_CASES, ids=lambda case: case["module_name"])
 def test_list_resources_returns_empty_list_on_404(monkeypatch, case):
-    _, ServiceError = install_fake_oci(monkeypatch)
+    _oci_module, ServiceError = install_fake_oci(monkeypatch)
 
     info_module = load_collection_module(case["module_name"])
 
@@ -168,7 +167,7 @@ def test_list_resources_returns_empty_list_on_404(monkeypatch, case):
 
 @pytest.mark.parametrize("case", INFO_CASES, ids=lambda case: case["module_name"])
 def test_run_returns_results_key(monkeypatch, case):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     info_module = load_collection_module(case["module_name"])
     instance = make_module_instance(
