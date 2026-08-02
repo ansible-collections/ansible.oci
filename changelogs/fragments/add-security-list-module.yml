@@ -1,0 +1,4 @@
+---
+minor_changes:
+  - Added oci_security_list and oci_security_list_info modules for managing
+    OCI VCN security lists and their ingress/egress rules (ACA-5219).

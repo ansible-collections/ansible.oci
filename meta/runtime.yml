@@ -6,3 +6,5 @@ action_groups:
     - oci_network_vcn_info
     - oci_subnet
     - oci_subnet_info
+    - oci_security_list
+    - oci_security_list_info

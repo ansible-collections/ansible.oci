@@ -79,6 +79,39 @@ INFO_CASES = (
             "vcn_id": "ocid1.vcn.oc1..example",
         },
     },
+    {
+        "module_name": "oci_security_list_info",
+        "class_name": "OciSecurityListInfoModule",
+        "results_key": "security_lists",
+        "id_param": "security_list_id",
+        "id_value": "ocid1.securitylist.oc1..example",
+        "missing_id": "ocid1.securitylist.oc1..missing",
+        "get_method": "get_security_list",
+        "list_method": "list_security_lists",
+        "list_params": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-security-list",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "expected_list_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "run_resource": FakeModel(
+            id="ocid1.securitylist.oc1..example",
+            display_name="example-security-list",
+            lifecycle_state="AVAILABLE",
+            vcn_id="ocid1.vcn.oc1..example",
+        ),
+        "expected_run_payload": {
+            "id": "ocid1.securitylist.oc1..example",
+            "name": "example-security-list",
+            "lifecycle_state": "AVAILABLE",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+    },
 )
 
 

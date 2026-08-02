@@ -81,6 +81,38 @@ RESOURCE_CASES = (
             "name": "example-subnet",
         },
     },
+    {
+        "module_name": "oci_security_list",
+        "class_name": "OciSecurityListModule",
+        "id_param": "security_list_id",
+        "id_value": "ocid1.securitylist.oc1..example",
+        "missing_id": "ocid1.securitylist.oc1..missing",
+        "get_method": "get_security_list",
+        "list_method": "list_security_lists",
+        "delete_method": "delete_security_list",
+        "not_found_label": "security list",
+        "delete_required_msg": "Deleting a security list requires either security_list_id or name (with compartment_id, vcn_id)",
+        "create_missing_msg": "Creating a security list requires",
+        "name_lookup_params": {
+            "name": "example-security-list",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-security-list",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-security-list",
+        },
+    },
 )
 
 
