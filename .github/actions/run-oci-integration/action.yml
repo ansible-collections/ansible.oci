@@ -25,6 +25,10 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
+    - name: Install Ansible ${{ inputs.ansible-ref }}
+      shell: bash
+      run: python3 -m pip install "https://github.com/ansible/ansible/archive/${{ inputs.ansible-ref }}.tar.gz" --disable-pip-version-check
+
     - name: Run OCI integration tests
       shell: bash
-      run: make integration-ci ANSIBLE_REF=${{ inputs.ansible-ref }} PYTHON_BIN=python3
+      run: make integration-ci PYTHON_BIN=python3

@@ -8,8 +8,8 @@ on:
       - synchronize
       - reopened
     paths:
-      - 'plugins/modules/**'
-      - 'plugins/module_utils/**'
+      - 'plugins/**'
+      - 'requirements.txt'
       - 'tests/integration/**'
       - 'Makefile'
 
@@ -20,14 +20,13 @@ concurrency:
     }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   integration-pr:
     name: Integration PR
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
     environment:
       name: oci-integration
     env:
@@ -50,6 +49,7 @@ jobs:
     needs:
       - integration-pr
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
