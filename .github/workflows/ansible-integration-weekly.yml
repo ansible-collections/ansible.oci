@@ -42,6 +42,11 @@ jobs:
       OCI_USER_KEY_CONTENT: ${{ secrets.OCI_USER_KEY_CONTENT }}
       OCI_CONFIG_PROFILE: ${{ vars.OCI_CONFIG_PROFILE }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
       - name: Run OCI integration workflow
         uses: ./.github/actions/run-oci-integration
         with:
