@@ -10,14 +10,17 @@ install-integration-reqs:
 	$(PYTHON_BIN) -m pip install --upgrade pip wheel --disable-pip-version-check
 	$(PYTHON_BIN) -m pip install -r requirements.txt --disable-pip-version-check
 
+.PHONY: install-collection
+install-collection:
+	ansible-galaxy collection install --upgrade -p ~/.ansible/collections .
+
 .PHONY: generate-integration-runtime
-generate-integration-runtime:
-	chmod +x ./tests/integration/generate_integration_runtime.sh
-	PYTHON_BIN="$(PYTHON_BIN)" ./tests/integration/generate_integration_runtime.sh
+generate-integration-runtime: install-collection
+	chmod +x "$(COLLECTION_ROOT)/tests/integration/generate_integration_runtime.sh"
+	PYTHON_BIN="$(PYTHON_BIN)" "$(COLLECTION_ROOT)/tests/integration/generate_integration_runtime.sh"
 
 .PHONY: upgrade-collections
-upgrade-collections: generate-integration-runtime install-integration-reqs
-	ansible-galaxy collection install --upgrade -p ~/.ansible/collections .
+upgrade-collections: install-integration-reqs generate-integration-runtime
 
 .PHONY: integration-ci
 integration-ci: upgrade-collections
