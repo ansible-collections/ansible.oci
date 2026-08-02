@@ -40,5 +40,4 @@ build_ignore:
   - noxfile.py
   - tests/integration/integration_config.yml
   - tests/integration/.runtime
-  - tests
   - sonar-project.properties
