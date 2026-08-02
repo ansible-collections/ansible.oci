@@ -81,6 +81,38 @@ RESOURCE_CASES = (
             "name": "example-subnet",
         },
     },
+    {
+        "module_name": "oci_nat_gateway",
+        "class_name": "OciNatGatewayModule",
+        "id_param": "nat_gateway_id",
+        "id_value": "ocid1.natgateway.oc1..example",
+        "missing_id": "ocid1.natgateway.oc1..missing",
+        "get_method": "get_nat_gateway",
+        "list_method": "list_nat_gateways",
+        "delete_method": "delete_nat_gateway",
+        "not_found_label": "NAT gateway",
+        "delete_required_msg": "Deleting a NAT gateway requires either nat_gateway_id or name (with compartment_id, vcn_id)",
+        "create_missing_msg": "Creating a NAT gateway requires",
+        "name_lookup_params": {
+            "name": "example-nat-gateway",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-nat-gateway",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-nat-gateway",
+        },
+    },
 )
 
 

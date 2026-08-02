@@ -79,6 +79,39 @@ INFO_CASES = (
             "vcn_id": "ocid1.vcn.oc1..example",
         },
     },
+    {
+        "module_name": "oci_nat_gateway_info",
+        "class_name": "OciNatGatewayInfoModule",
+        "results_key": "nat_gateways",
+        "id_param": "nat_gateway_id",
+        "id_value": "ocid1.natgateway.oc1..example",
+        "missing_id": "ocid1.natgateway.oc1..missing",
+        "get_method": "get_nat_gateway",
+        "list_method": "list_nat_gateways",
+        "list_params": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-nat-gateway",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "expected_list_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "run_resource": FakeModel(
+            id="ocid1.natgateway.oc1..example",
+            display_name="example-nat-gateway",
+            lifecycle_state="AVAILABLE",
+            vcn_id="ocid1.vcn.oc1..example",
+        ),
+        "expected_run_payload": {
+            "id": "ocid1.natgateway.oc1..example",
+            "name": "example-nat-gateway",
+            "lifecycle_state": "AVAILABLE",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+    },
 )
 
 
