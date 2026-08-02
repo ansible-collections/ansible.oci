@@ -1,14 +1,15 @@
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
 import types
 
 import pytest
 
 from conftest import (
     DummyModule,
-    ExitJsonCalled,
     FakeModel,
     FakeResponse,
     FailJsonCalled,
-    FakeWorkRequestClient,
     install_fake_oci as shared_install_fake_oci,
     load_collection_module,
     make_module_instance,
@@ -43,7 +44,7 @@ def make_vcn_module(module_obj, params, client=None):
 
 
 def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     module_obj = load_collection_module("oci_network_vcn")
     captured = {}
@@ -81,7 +82,7 @@ def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
 
 
 def test_build_create_vcn_details_includes_dns_label_and_tags(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     details = vcn_module.build_create_vcn_details(
@@ -105,7 +106,7 @@ def test_build_create_vcn_details_includes_dns_label_and_tags(monkeypatch):
 
 
 def test_build_update_vcn_details_only_includes_mutable_fields(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     details = vcn_module.build_update_vcn_details(
@@ -123,7 +124,7 @@ def test_build_update_vcn_details_only_includes_mutable_fields(monkeypatch):
 
 
 def test_build_update_plan_maps_vcn_metadata_and_cidr_strategy(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     instance = make_vcn_module(
@@ -153,7 +154,7 @@ def test_build_update_plan_maps_vcn_metadata_and_cidr_strategy(monkeypatch):
 
 
 def test_build_add_vcn_cidr_details_uses_cidr_block(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     details = vcn_module.build_add_vcn_cidr_details("10.1.0.0/16")
@@ -163,7 +164,7 @@ def test_build_add_vcn_cidr_details_uses_cidr_block(monkeypatch):
 
 
 def test_build_modify_vcn_cidr_details_uses_original_and_new_cidr(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     details = vcn_module.build_modify_vcn_cidr_details(
@@ -177,7 +178,7 @@ def test_build_modify_vcn_cidr_details_uses_original_and_new_cidr(monkeypatch):
 
 
 def test_build_remove_vcn_cidr_details_uses_cidr_block(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     details = vcn_module.build_remove_vcn_cidr_details("10.1.0.0/16")
@@ -187,7 +188,7 @@ def test_build_remove_vcn_cidr_details_uses_cidr_block(monkeypatch):
 
 
 def test_plan_vcn_cidr_operations_returns_adds_in_desired_order(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
 
@@ -201,7 +202,7 @@ def test_plan_vcn_cidr_operations_returns_adds_in_desired_order(monkeypatch):
 
 
 def test_plan_vcn_cidr_operations_returns_removes_in_current_order(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
 
@@ -215,7 +216,7 @@ def test_plan_vcn_cidr_operations_returns_removes_in_current_order(monkeypatch):
 
 
 def test_plan_vcn_cidr_operations_returns_single_modify(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
 
@@ -228,7 +229,7 @@ def test_plan_vcn_cidr_operations_returns_single_modify(monkeypatch):
 
 
 def test_plan_vcn_cidr_operations_rejects_complex_changes(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
 
@@ -240,7 +241,7 @@ def test_plan_vcn_cidr_operations_rejects_complex_changes(monkeypatch):
 
 
 def test_needs_update_treats_cidr_block_order_as_noop(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     instance = make_vcn_module(
@@ -256,7 +257,7 @@ def test_needs_update_treats_cidr_block_order_as_noop(monkeypatch):
 
 
 def test_needs_update_returns_true_for_simple_cidr_add(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     instance = make_vcn_module(
@@ -272,7 +273,7 @@ def test_needs_update_returns_true_for_simple_cidr_add(monkeypatch):
 
 
 def test_needs_update_rejects_cidr_updates_without_wait(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     instance = make_vcn_module(
@@ -288,7 +289,7 @@ def test_needs_update_rejects_cidr_updates_without_wait(monkeypatch):
 
 
 def test_needs_update_rejects_complex_cidr_changes(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     instance = make_vcn_module(
@@ -307,7 +308,7 @@ def test_needs_update_rejects_complex_cidr_changes(monkeypatch):
 
 
 def test_needs_update_rejects_dns_label_drift(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     instance = make_vcn_module(
@@ -323,7 +324,7 @@ def test_needs_update_rejects_dns_label_drift(monkeypatch):
 
 
 def test_needs_update_returns_true_for_name_change(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     instance = make_vcn_module(
@@ -339,7 +340,7 @@ def test_needs_update_returns_true_for_name_change(monkeypatch):
 
 
 def test_create_resource_uses_create_vcn_and_waits(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     create_calls = []
@@ -385,7 +386,7 @@ def test_create_resource_uses_create_vcn_and_waits(monkeypatch):
 
 
 def test_update_resource_uses_update_vcn_details_and_waits(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     update_calls = []
@@ -430,7 +431,7 @@ def test_update_resource_uses_update_vcn_details_and_waits(monkeypatch):
 
 
 def test_update_resource_adds_vcn_cidr_and_waits_for_work_request(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     add_calls = []
@@ -485,7 +486,7 @@ def test_update_resource_adds_vcn_cidr_and_waits_for_work_request(monkeypatch):
 
 
 def test_update_resource_applies_cidr_changes_before_metadata_update(monkeypatch):
-    _, _ = install_fake_oci(monkeypatch)
+    install_fake_oci(monkeypatch)
 
     vcn_module = load_collection_module("oci_network_vcn")
     remove_calls = []
@@ -567,5 +568,3 @@ def test_update_resource_applies_cidr_changes_before_metadata_update(monkeypatch
     assert update_calls[0][1].display_name == "example-vcn-updated"
     assert update_calls[0][1].freeform_tags == {"phase": "update"}
     assert updated_resource.display_name == "example-vcn-updated"
-
-

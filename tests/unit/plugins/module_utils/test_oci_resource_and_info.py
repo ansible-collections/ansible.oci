@@ -1,10 +1,13 @@
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
 import sys
 import types
 
 import pytest
 from ansible.module_utils.basic import missing_required_lib
 
-from conftest import load_collection_module
+from conftest import load_collection_module, raising
 
 
 class ExitJsonCalled(Exception):
@@ -583,9 +586,7 @@ def test_oci_resource_base_requires_client_class_before_creating_client(monkeypa
     patch_create_service_client(
         monkeypatch,
         oci_resource,
-        lambda module, client_class: (_ for _ in ()).throw(
-            AssertionError("create_service_client should not be called")
-        ),
+        raising(AssertionError("create_service_client should not be called")),
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
@@ -676,9 +677,7 @@ def test_oci_info_base_requires_client_class_before_creating_client(monkeypatch)
     patch_create_service_client(
         monkeypatch,
         oci_info,
-        lambda module, client_class: (_ for _ in ()).throw(
-            AssertionError("create_service_client should not be called")
-        ),
+        raising(AssertionError("create_service_client should not be called")),
     )
 
     class ExampleInfo(oci_info.OciInfoBase):
@@ -899,7 +898,7 @@ def test_oci_resource_base_uses_unique_name_match_as_update_target(monkeypatch):
         DummyModule(
             {
                 "state": "present",
-                    "name": "example",
+                "name": "example",
                 "compartment_id": "ocid1.compartment.oc1..example",
                 "freeform_tags": {"env": "prod"},
                 "allow_duplicate_name": False,
@@ -945,9 +944,7 @@ def test_oci_resource_base_requires_scope_fields_for_name_lookup(monkeypatch):
         monkeypatch,
         oci_resource,
         lambda module, client_class: types.SimpleNamespace(
-            list_examples=lambda **kwargs: (_ for _ in ()).throw(
-                AssertionError("list_examples should not be called")
-            )
+            list_examples=raising(AssertionError("list_examples should not be called"))
         ),
     )
 
@@ -1013,7 +1010,7 @@ def test_oci_resource_base_deletes_unique_name_match_without_explicit_id(monkeyp
         DummyModule(
             {
                 "state": "absent",
-                    "name": "example",
+                "name": "example",
                 "compartment_id": "ocid1.compartment.oc1..example",
             }
         )
@@ -1069,7 +1066,7 @@ def test_oci_resource_base_fails_when_name_lookup_is_ambiguous(monkeypatch):
         DummyModule(
             {
                 "state": "present",
-                    "name": "example",
+                "name": "example",
                 "compartment_id": "ocid1.compartment.oc1..example",
             }
         )
@@ -1130,7 +1127,7 @@ def test_oci_resource_base_creates_duplicate_when_unique_match_opted_in(monkeypa
         DummyModule(
             {
                 "state": "present",
-                    "name": "example",
+                "name": "example",
                 "compartment_id": "ocid1.compartment.oc1..example",
                 "allow_duplicate_name": True,
             }
@@ -1382,9 +1379,7 @@ def test_oci_resource_base_delete_helper_fails_on_dependency_conflict(monkeypatc
     monkeypatch.setattr(
         resource,
         "call_with_retry",
-        lambda fn, **kwargs: (_ for _ in ()).throw(
-            ConflictError(409, "dependency exists")
-        ),
+        raising(ConflictError(409, "dependency exists")),
     )
 
     with pytest.raises(FailJsonCalled) as exc_info:
