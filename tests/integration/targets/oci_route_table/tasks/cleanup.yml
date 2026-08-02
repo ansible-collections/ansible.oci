@@ -1,0 +1,24 @@
+---
+- name: Run route table cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked route table during cleanup
+      oracle.oci.oci_route_table:
+        state: absent
+        route_table_id: "{{ oci_route_table_id }}"
+      when: oci_route_table_id | default('') | length > 0
+
+    - name: Delete leaked internet gateway during cleanup
+      oracle.oci.oci_internet_gateway:
+        state: absent
+        internet_gateway_id: "{{ oci_route_table_ig_create.resource.id }}"
+      when: oci_route_table_ig_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_route_table_vcn_create.resource.id }}"
+      when: oci_route_table_vcn_create.resource.id | default('') | length > 0

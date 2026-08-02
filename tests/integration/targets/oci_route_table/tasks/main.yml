@@ -1,0 +1,243 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI route table integration tests require oci_integration_compartment_id
+      to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_route_table_integration_vcn_name: "{{ oci_route_table_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_route_table_integration_ig_name: "{{ oci_route_table_integration_ig_name }}-{{ oci_integration_rpfx }}"
+    oci_route_table_integration_route_table_name: "{{ oci_route_table_integration_route_table_name }}-{{ oci_integration_rpfx }}"
+    oci_route_table_integration_updated_route_table_name: "{{ oci_route_table_integration_updated_route_table_name }}-{{ oci_integration_rpfx }}"
+    oci_route_table_integration_vcn_dns_label: "rtvcn{{ oci_integration_rpfx }}"
+
+- name: Exercise route table module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for route table integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_route_table_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_route_table_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_route_table_integration_vcn_dns_label }}"
+      register: oci_route_table_vcn_create
+
+    - name: Create test internet gateway to use as a route rule target
+      oracle.oci.oci_internet_gateway:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_route_table_vcn_create.resource.id }}"
+        name: "{{ oci_route_table_integration_ig_name }}"
+        is_enabled: true
+      register: oci_route_table_ig_create
+
+    - name: Define route table create and delete parameters
+      ansible.builtin.set_fact:
+        oci_route_table_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          vcn_id: "{{ oci_route_table_vcn_create.resource.id }}"
+          name: "{{ oci_route_table_integration_route_table_name }}"
+          route_rules:
+            - destination: 0.0.0.0/0
+              destination_type: CIDR_BLOCK
+              network_entity_id: "{{ oci_route_table_ig_create.resource.id }}"
+          freeform_tags: "{{ oci_route_table_integration_create_tags }}"
+        oci_route_table_delete_params:
+          state: absent
+          route_table_id: ""
+
+    - name: Create route table in check mode
+      oracle.oci.oci_route_table: &oci_route_table_create_module_options
+        state: "{{ oci_route_table_create_params.state }}"
+        compartment_id: "{{ oci_route_table_create_params.compartment_id }}"
+        vcn_id: "{{ oci_route_table_create_params.vcn_id }}"
+        name: "{{ oci_route_table_create_params.name }}"
+        route_rules: "{{ oci_route_table_create_params.route_rules }}"
+        freeform_tags: "{{ oci_route_table_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_route_table_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_create_check.changed | bool
+
+    - name: Read route table after create check mode
+      oracle.oci.oci_route_table_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_route_table_create_params.vcn_id }}"
+        name: "{{ oci_route_table_integration_route_table_name }}"
+      register: oci_route_table_create_check_probe
+
+    - name: Assert route table is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_create_check_probe.route_tables | length == 0
+
+    - name: Create route table
+      oracle.oci.oci_route_table:
+        <<: *oci_route_table_create_module_options
+      register: oci_route_table_create
+
+    - name: Capture route table id and define update parameters
+      ansible.builtin.set_fact:
+        oci_route_table_id: "{{ oci_route_table_create.resource.id }}"
+        oci_route_table_update_params:
+          state: present
+          route_table_id: "{{ oci_route_table_create.resource.id }}"
+          name: "{{ oci_route_table_integration_updated_route_table_name }}"
+          route_rules:
+            - destination: 10.0.0.0/16
+              destination_type: CIDR_BLOCK
+              network_entity_id: "{{ oci_route_table_ig_create.resource.id }}"
+              description: updated rule
+          freeform_tags: "{{ oci_route_table_integration_update_tags }}"
+        oci_route_table_delete_params:
+          state: absent
+          route_table_id: "{{ oci_route_table_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_create.changed | bool
+
+    - name: Read route table by id
+      oracle.oci.oci_route_table_info:
+        route_table_id: "{{ oci_route_table_id }}"
+      register: oci_route_table_info_by_id
+
+    - name: Assert route table info by id returned the created route table
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_info_by_id.route_tables | length == 1
+          - oci_route_table_info_by_id.route_tables[0].id == oci_route_table_id
+          - oci_route_table_info_by_id.route_tables[0].name == oci_route_table_integration_route_table_name
+          - oci_route_table_info_by_id.route_tables[0].lifecycle_state == "AVAILABLE"
+          - oci_route_table_info_by_id.route_tables[0].route_rules | length == 1
+          - oci_route_table_info_by_id.route_tables[0].route_rules[0].network_entity_id == oci_route_table_ig_create.resource.id
+
+    - name: Assert created route table is a no-op on rerun
+      oracle.oci.oci_route_table:
+        <<: *oci_route_table_create_module_options
+      register: oci_route_table_create_rerun
+
+    - name: Verify rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_route_table_create_rerun.changed | bool
+
+    - name: Update route table in check mode
+      oracle.oci.oci_route_table: &oci_route_table_update_module_options
+        state: "{{ oci_route_table_update_params.state }}"
+        route_table_id: "{{ oci_route_table_update_params.route_table_id }}"
+        name: "{{ oci_route_table_update_params.name }}"
+        route_rules: "{{ oci_route_table_update_params.route_rules }}"
+        freeform_tags: "{{ oci_route_table_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_route_table_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_update_check.changed | bool
+
+    - name: Read route table after update check mode
+      oracle.oci.oci_route_table_info:
+        route_table_id: "{{ oci_route_table_id }}"
+      register: oci_route_table_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_update_check_probe.route_tables[0].name == oci_route_table_integration_route_table_name
+          - oci_route_table_update_check_probe.route_tables[0].route_rules | length == 1
+          - oci_route_table_update_check_probe.route_tables[0].route_rules[0].destination == "0.0.0.0/0"
+
+    - name: Update route table
+      oracle.oci.oci_route_table:
+        <<: *oci_route_table_update_module_options
+      register: oci_route_table_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_update.changed | bool
+
+    - name: Read updated route table by id
+      oracle.oci.oci_route_table_info:
+        route_table_id: "{{ oci_route_table_id }}"
+      register: oci_route_table_info_updated
+
+    - name: Assert route table info reflects the update
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_info_updated.route_tables[0].name == oci_route_table_integration_updated_route_table_name
+          - oci_route_table_info_updated.route_tables[0].route_rules | length == 1
+          - oci_route_table_info_updated.route_tables[0].route_rules[0].destination == "10.0.0.0/16"
+          - oci_route_table_info_updated.route_tables[0].freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_route_table:
+        <<: *oci_route_table_update_module_options
+      register: oci_route_table_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_route_table_update_rerun.changed | bool
+
+    - name: Delete route table in check mode
+      oracle.oci.oci_route_table: &oci_route_table_delete_module_options
+        state: "{{ oci_route_table_delete_params.state }}"
+        route_table_id: "{{ oci_route_table_delete_params.route_table_id }}"
+      check_mode: true
+      register: oci_route_table_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_delete_check.changed | bool
+
+    - name: Read route table after delete check mode
+      oracle.oci.oci_route_table_info:
+        route_table_id: "{{ oci_route_table_id }}"
+      register: oci_route_table_delete_check_probe
+
+    - name: Assert route table still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_delete_check_probe.route_tables | length == 1
+
+    - name: Delete route table
+      oracle.oci.oci_route_table:
+        <<: *oci_route_table_delete_module_options
+      register: oci_route_table_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_route_table:
+        <<: *oci_route_table_delete_module_options
+      register: oci_route_table_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_route_table_delete_rerun.changed | bool
+
+  always:
+    - name: Run route table cleanup
+      ansible.builtin.include_tasks: cleanup.yml

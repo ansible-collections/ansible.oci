@@ -1,0 +1,4 @@
+---
+minor_changes:
+  - Added oci_route_table and oci_route_table_info modules for managing OCI
+    VCN route tables and route rules (ACA-5219).
