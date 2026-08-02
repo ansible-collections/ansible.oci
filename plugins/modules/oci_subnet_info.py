@@ -84,6 +84,7 @@ class OciSubnetInfoModule(OciInfoBase):
     def client_class(self):
         return oci.core.VirtualNetworkClient
 
+    # Ordering of these class attributes mirrors OciInfoBase's contract
     results_key = "subnets"
     resource_id_param = "subnet_id"
     resource_get_method = "get_subnet"
