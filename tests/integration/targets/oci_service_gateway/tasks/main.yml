@@ -2,7 +2,7 @@
 # Scoping note: there is no OCI module to list/discover "Services" (the fixed,
 # tenancy/region-provided OCI service bundles like "All FRA Services In
 # Oracle Services Network") in this collection -- that is a different
-# resource type and is out of scope for oci_service_gateway (ACA-5219). This
+# resource type and is out of scope for oci_service_gateway. This
 # test therefore exercises the full create/read/update/delete/idempotent
 # lifecycle using service_ids: [] (always valid, no external dependency) and
 # covers mutability of name, route_table_id, block_traffic, and tags instead.
