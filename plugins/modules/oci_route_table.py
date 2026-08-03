@@ -88,7 +88,19 @@ options:
       network_entity_id:
         description:
           - The OCID of the target for matching traffic, such as an internet
-            gateway, NAT gateway, service gateway, DRG, or private IP.
+            gateway, NAT gateway, service gateway, DRG, local peering
+            gateway, or private IP. OCI infers which of these it is from the
+            OCID itself; there is no separate parameter to declare the
+            target type.
+          - This is not a fixed or well-known value. It is the OCID assigned
+            by OCI when the target resource is created, so it is different
+            in every compartment/VCN. The target resource must already
+            exist before it can be referenced here; OCI rejects route rules
+            that point at a nonexistent or incompatible resource.
+          - Typically the target is created earlier in the same playbook
+            (for example with M(oracle.oci.oci_internet_gateway)) and its
+            returned C(resource.id) is passed in here. See the examples
+            below.
         type: str
         required: true
       description:
@@ -98,7 +110,16 @@ options:
 """
 
 EXAMPLES = r"""
-- name: Create a route table with a route to an internet gateway
+- name: Create an internet gateway to use as a route rule target
+  oracle.oci.oci_internet_gateway:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-internet-gateway
+    is_enabled: true
+  register: created_internet_gateway
+
+- name: Create a route table with a route to that internet gateway
   oracle.oci.oci_route_table:
     state: present
     compartment_id: ocid1.compartment.oc1..example
@@ -107,8 +128,16 @@ EXAMPLES = r"""
     route_rules:
       - destination: 0.0.0.0/0
         destination_type: CIDR_BLOCK
-        network_entity_id: ocid1.internetgateway.oc1..example
+        network_entity_id: "{{ created_internet_gateway.resource.id }}"
   register: created_route_table
+
+- name: Create a NAT gateway to use as a different route rule target
+  oracle.oci.oci_nat_gateway:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-nat-gateway
+  register: created_nat_gateway
 
 - name: Replace the route rules on an existing route table
   oracle.oci.oci_route_table:
@@ -116,7 +145,7 @@ EXAMPLES = r"""
     route_table_id: "{{ created_route_table.resource.id }}"
     route_rules:
       - destination: 0.0.0.0/0
-        network_entity_id: ocid1.natgateway.oc1..example
+        network_entity_id: "{{ created_nat_gateway.resource.id }}"
 
 - name: Delete the created route table
   oracle.oci.oci_route_table:
