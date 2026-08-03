@@ -1,3 +1,0 @@
----
-minor_changes:
-  - Added oci_service_gateway and oci_service_gateway_info modules for managing OCI VCN service gateways (ACA-5219).
