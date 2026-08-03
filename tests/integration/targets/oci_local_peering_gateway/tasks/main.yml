@@ -15,8 +15,8 @@
     oci_lpg_integration_lpg_name: "{{ oci_lpg_integration_lpg_name }}-{{ oci_integration_rpfx }}"
     oci_lpg_integration_updated_lpg_name: "{{ oci_lpg_integration_updated_lpg_name }}-{{ oci_integration_rpfx }}"
     oci_lpg_integration_peer_lpg_name: "{{ oci_lpg_integration_peer_lpg_name }}-{{ oci_integration_rpfx }}"
-    oci_lpg_integration_vcn_dns_label: "lpgvcn{{ oci_integration_rpfx }}"
-    oci_lpg_integration_peer_vcn_dns_label: "lpgpeer{{ oci_integration_rpfx }}"
+    oci_lpg_integration_vcn_dns_label: "lpgv{{ oci_integration_rpfx }}"
+    oci_lpg_integration_peer_vcn_dns_label: "lpgp{{ oci_integration_rpfx }}"
 
 - name: Exercise local peering gateway module lifecycle
   module_defaults:
