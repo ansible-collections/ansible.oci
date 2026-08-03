@@ -42,9 +42,9 @@
           vcn_id: "{{ oci_dhcp_options_integration_network.vcn_id }}"
           name: "{{ oci_dhcp_options_integration_dhcp_options_name }}"
           options:
-            - option_type: DomainNameServer
-              server_type: VcnLocalPlusInternet
-            - option_type: SearchDomain
+            - option_type: domain_name_server
+              server_type: vcn_local_plus_internet
+            - option_type: search_domain
               search_domain_names:
                 - example.oraclevcn.com
           freeform_tags: "{{ oci_dhcp_options_integration_create_tags }}"
@@ -93,12 +93,12 @@
           dhcp_options_id: "{{ oci_dhcp_options_create.resource.id }}"
           name: "{{ oci_dhcp_options_integration_updated_dhcp_options_name }}"
           options:
-            - option_type: DomainNameServer
-              server_type: CustomDnsServer
+            - option_type: domain_name_server
+              server_type: custom_dns_server
               custom_dns_servers:
                 - 10.0.0.10
                 - 10.0.0.11
-            - option_type: SearchDomain
+            - option_type: search_domain
               search_domain_names:
                 - example.oraclevcn.com
           freeform_tags: "{{ oci_dhcp_options_integration_update_tags }}"

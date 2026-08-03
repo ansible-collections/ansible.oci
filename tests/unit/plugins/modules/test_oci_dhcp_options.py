@@ -92,11 +92,11 @@ def test_build_create_dhcp_options_details_builds_both_option_types(monkeypatch)
             "domain_name_type": "SUBNET_DOMAIN",
             "options": [
                 {
-                    "option_type": "DomainNameServer",
-                    "server_type": "VcnLocalPlusInternet",
+                    "option_type": "domain_name_server",
+                    "server_type": "vcn_local_plus_internet",
                 },
                 {
-                    "option_type": "SearchDomain",
+                    "option_type": "search_domain",
                     "search_domain_names": ["example.oraclevcn.com"],
                 },
             ],
@@ -115,6 +115,8 @@ def test_build_create_dhcp_options_details_builds_both_option_types(monkeypatch)
     assert len(details.options) == 2
 
     dns_option = details.options[0]
+    # build_option_models translates the ansible-facing snake_case server_type
+    # into the OCI SDK's native PascalCase enum value.
     assert dns_option.server_type == "VcnLocalPlusInternet"
     assert not hasattr(dns_option, "search_domain_names")
 
@@ -145,18 +147,20 @@ def test_build_option_models_builds_correct_model_types(monkeypatch):
     models = dhcp_options_module.build_option_models(
         [
             {
-                "option_type": "DomainNameServer",
-                "server_type": "CustomDnsServer",
+                "option_type": "domain_name_server",
+                "server_type": "custom_dns_server",
                 "custom_dns_servers": ["10.0.0.10", "10.0.0.11"],
             },
             {
-                "option_type": "SearchDomain",
+                "option_type": "search_domain",
                 "search_domain_names": ["example.oraclevcn.com"],
             },
         ]
     )
 
     assert len(models) == 2
+    # Output uses OCI's native enum casing, not the ansible-facing snake_case
+    # input, since this is what actually gets sent to the SDK/API.
     assert models[0].server_type == "CustomDnsServer"
     assert models[0].custom_dns_servers == ["10.0.0.10", "10.0.0.11"]
     assert models[1].search_domain_names == ["example.oraclevcn.com"]
@@ -171,19 +175,22 @@ def test_needs_update_returns_false_when_options_match_regardless_of_order(monke
         {
             "options": [
                 {
-                    "option_type": "SearchDomain",
+                    "option_type": "search_domain",
                     "search_domain_names": [
                         "b.example.com",
                         "a.example.com",
                     ],
                 },
                 {
-                    "option_type": "DomainNameServer",
-                    "server_type": "VcnLocalPlusInternet",
+                    "option_type": "domain_name_server",
+                    "server_type": "vcn_local_plus_internet",
                 },
             ],
         },
     )
+    # The resource dict mirrors a real serialized OCI API response, which
+    # uses OCI's native "type"/server_type casing, not the ansible-facing
+    # snake_case values above.
     resource = FakeModel(
         id="ocid1.dhcpoptions.oc1..example",
         options=[
@@ -214,8 +221,8 @@ def test_needs_update_returns_true_when_options_differ(monkeypatch):
         {
             "options": [
                 {
-                    "option_type": "DomainNameServer",
-                    "server_type": "CustomDnsServer",
+                    "option_type": "domain_name_server",
+                    "server_type": "custom_dns_server",
                     "custom_dns_servers": ["10.0.0.10"],
                 },
             ],
@@ -353,8 +360,8 @@ def test_create_resource_uses_create_dhcp_options_and_waits(monkeypatch):
             "name": "example-dhcp-options",
             "options": [
                 {
-                    "option_type": "DomainNameServer",
-                    "server_type": "VcnLocalPlusInternet",
+                    "option_type": "domain_name_server",
+                    "server_type": "vcn_local_plus_internet",
                 },
             ],
             "wait": True,
@@ -412,12 +419,12 @@ def test_update_resource_builds_option_models_and_calls_update_dhcp_options(monk
         {
             "options": [
                 {
-                    "option_type": "DomainNameServer",
-                    "server_type": "CustomDnsServer",
+                    "option_type": "domain_name_server",
+                    "server_type": "custom_dns_server",
                     "custom_dns_servers": ["10.0.0.10"],
                 },
                 {
-                    "option_type": "SearchDomain",
+                    "option_type": "search_domain",
                     "search_domain_names": ["example.oraclevcn.com"],
                 },
             ],

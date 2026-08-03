@@ -84,24 +84,24 @@ options:
           - The type of DHCP option.
         type: str
         required: true
-        choices: [DomainNameServer, SearchDomain]
+        choices: [domain_name_server, search_domain]
       server_type:
         description:
           - The source of the DNS servers for the subnets in the VCN.
-          - Used when C(option_type=DomainNameServer).
+          - Used when C(option_type=domain_name_server).
         type: str
-        choices: [VcnLocal, VcnLocalPlusInternet, CustomDnsServer]
+        choices: [vcn_local, vcn_local_plus_internet, custom_dns_server]
       custom_dns_servers:
         description:
           - Up to three custom DNS server IP addresses.
-          - Used when C(option_type=DomainNameServer) and
-            C(server_type=CustomDnsServer).
+          - Used when C(option_type=domain_name_server) and
+            C(server_type=custom_dns_server).
         type: list
         elements: str
       search_domain_names:
         description:
           - A single search domain name according to RFC 952 and RFC 1123.
-          - Used when C(option_type=SearchDomain).
+          - Used when C(option_type=search_domain).
         type: list
         elements: str
   domain_name_type:
@@ -121,9 +121,9 @@ EXAMPLES = r"""
     vcn_id: ocid1.vcn.oc1..example
     name: example-dhcp-options
     options:
-      - option_type: DomainNameServer
-        server_type: VcnLocalPlusInternet
-      - option_type: SearchDomain
+      - option_type: domain_name_server
+        server_type: vcn_local_plus_internet
+      - option_type: search_domain
         search_domain_names:
           - example.oraclevcn.com
   register: created_dhcp_options
@@ -135,11 +135,11 @@ EXAMPLES = r"""
     vcn_id: ocid1.vcn.oc1..example
     name: example-dhcp-options
     options:
-      - option_type: DomainNameServer
-        server_type: CustomDnsServer
+      - option_type: domain_name_server
+        server_type: custom_dns_server
         custom_dns_servers:
           - 10.0.0.10
-      - option_type: SearchDomain
+      - option_type: search_domain
         search_domain_names:
           - example.oraclevcn.com
 
@@ -188,8 +188,25 @@ CREATE_REQUIRED_FIELDS = [
 ]
 WAIT_FOR_DHCP_OPTIONS_STATES = [LIFECYCLE_AVAILABLE]
 
-OPTION_TYPE_DNS = "DomainNameServer"
-OPTION_TYPE_SEARCH_DOMAIN = "SearchDomain"
+# Ansible-facing option_type/server_type values are snake_case, matching this
+# collection's convention for choices. OCI's own API uses PascalCase-ish
+# enum strings for these same fields (DhcpDnsOption.type/server_type,
+# DhcpSearchDomainOption.type), so every value crossing the module/SDK
+# boundary is translated explicitly instead of exposing OCI's native casing
+# to callers.
+OPTION_TYPE_DNS = "domain_name_server"
+OPTION_TYPE_SEARCH_DOMAIN = "search_domain"
+
+OCI_OPTION_TYPE_DNS = "DomainNameServer"
+
+SERVER_TYPE_TO_OCI = {
+    "vcn_local": "VcnLocal",
+    "vcn_local_plus_internet": "VcnLocalPlusInternet",
+    "custom_dns_server": "CustomDnsServer",
+}
+OCI_SERVER_TYPE_TO_ANSIBLE = {
+    oci_value: ansible_value for ansible_value, oci_value in SERVER_TYPE_TO_OCI.items()
+}
 
 
 def _normalize_option(option):
@@ -205,10 +222,12 @@ def _normalize_option(option):
 
 def _normalize_current_option(option):
     """Normalize one serialized OCI DhcpOption dict (keyed by ``type``)."""
-    if option.get("type") == OPTION_TYPE_DNS:
+    if option.get("type") == OCI_OPTION_TYPE_DNS:
         return {
             "option_type": OPTION_TYPE_DNS,
-            "server_type": option.get("server_type"),
+            "server_type": OCI_SERVER_TYPE_TO_ANSIBLE.get(
+                option.get("server_type"), option.get("server_type")
+            ),
             "custom_dns_servers": sorted(option.get("custom_dns_servers") or []),
         }
     return {
@@ -234,9 +253,10 @@ def build_option_models(options):
     models = []
     for option in options or []:
         if option.get("option_type") == OPTION_TYPE_DNS:
+            server_type = option.get("server_type")
             models.append(
                 oci.core.models.DhcpDnsOption(
-                    server_type=option.get("server_type"),
+                    server_type=SERVER_TYPE_TO_OCI.get(server_type, server_type),
                     custom_dns_servers=option.get("custom_dns_servers"),
                 )
             )
@@ -388,7 +408,7 @@ def main():
                 ),
                 server_type=dict(
                     type="str",
-                    choices=["VcnLocal", "VcnLocalPlusInternet", "CustomDnsServer"],
+                    choices=list(SERVER_TYPE_TO_OCI),
                 ),
                 custom_dns_servers=dict(type="list", elements="str"),
                 search_domain_names=dict(type="list", elements="str"),
