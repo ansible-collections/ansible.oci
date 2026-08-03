@@ -1,3 +1,0 @@
----
-minor_changes:
-  - Added oci_internet_gateway and oci_internet_gateway_info modules for managing OCI VCN internet gateways (ACA-5219).
