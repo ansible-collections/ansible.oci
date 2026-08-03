@@ -76,20 +76,48 @@ options:
     default: true
   route_table_id:
     description:
-      - The OCID of a custom route table to associate with the internet
-        gateway instead of the VCN default route table.
+      - The OCID of a route table to associate directly with the internet
+        gateway, for OCI's transit routing feature. This controls how
+        traffic arriving through this gateway is routed once it enters the
+        VCN, separately from the route table assigned to any subnet.
+      - This is an optional, advanced setting. Most deployments do not need
+        it and can omit it; only set it if you are implementing transit
+        routing. Omitting it leaves traffic subject to each subnet's own
+        route table as usual.
+      - Because a route table's own rules may need to reference this
+        gateway's OCID (see C(network_entity_id) on
+        C(oracle.oci.oci_route_table)), create the gateway first without
+        C(route_table_id), create the route table referencing the gateway,
+        then update the gateway with C(route_table_id) if transit routing is
+        required. See the examples below.
     type: str
 """
 
 EXAMPLES = r"""
-- name: Create an internet gateway
+- name: Create an internet gateway with only the required parameters
   oracle.oci.oci_internet_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
     name: example-internet-gateway
-    is_enabled: true
   register: created_internet_gateway
+
+- name: Create a route table with a rule pointing at that internet gateway
+  oracle.oci.oci_route_table:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-route-table
+    route_rules:
+      - destination: 0.0.0.0/0
+        network_entity_id: "{{ created_internet_gateway.resource.id }}"
+  register: created_route_table
+
+- name: (Optional) enable transit routing by pointing the gateway back at that route table
+  oracle.oci.oci_internet_gateway:
+    state: present
+    internet_gateway_id: "{{ created_internet_gateway.resource.id }}"
+    route_table_id: "{{ created_route_table.resource.id }}"
 
 - name: Reconcile a uniquely named internet gateway by name
   oracle.oci.oci_internet_gateway:
@@ -97,7 +125,7 @@ EXAMPLES = r"""
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
     name: example-internet-gateway
-    route_table_id: ocid1.routetable.oc1..example
+    is_enabled: false
 
 - name: Delete the created internet gateway
   oracle.oci.oci_internet_gateway:
