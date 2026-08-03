@@ -1,3 +1,0 @@
----
-minor_changes:
-  - Added oci_dhcp_options and oci_dhcp_options_info modules for managing OCI VCN DHCP options (ACA-5219).
