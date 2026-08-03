@@ -41,6 +41,8 @@ notes:
     C(server_type) snake_case vocabulary accepted by
     C(oracle.oci.oci_dhcp_options), translated from OCI's native enum
     casing.
+  - The returned C(domain_name_type) uses this same snake_case vocabulary,
+    also translated from OCI's native enum casing.
 """
 
 EXAMPLES = r"""
@@ -101,6 +103,15 @@ OCI_SERVER_TYPE_TO_ANSIBLE = {
     oci_value: ansible_value for ansible_value, oci_value in SERVER_TYPE_TO_OCI.items()
 }
 
+DOMAIN_NAME_TYPE_TO_OCI = {
+    "subnet_domain": "SUBNET_DOMAIN",
+    "vcn_domain": "VCN_DOMAIN",
+    "custom_domain": "CUSTOM_DOMAIN",
+}
+OCI_DOMAIN_NAME_TYPE_TO_ANSIBLE = {
+    oci_value: ansible_value for ansible_value, oci_value in DOMAIN_NAME_TYPE_TO_OCI.items()
+}
+
 
 def normalize_result_option(option):
     """Translate one serialized DhcpOption dict to the ansible-facing shape.
@@ -146,8 +157,13 @@ class OciDhcpOptionsInfoModule(OciInfoBase):
 
     def serialize_result_resource(self, resource):
         result = super().serialize_result_resource(resource)
-        if isinstance(result, dict) and "options" in result:
-            result["options"] = normalize_result_options(result["options"])
+        if isinstance(result, dict):
+            if "options" in result:
+                result["options"] = normalize_result_options(result["options"])
+            if "domain_name_type" in result:
+                result["domain_name_type"] = OCI_DOMAIN_NAME_TYPE_TO_ANSIBLE.get(
+                    result["domain_name_type"], result["domain_name_type"]
+                )
         return result
 
 

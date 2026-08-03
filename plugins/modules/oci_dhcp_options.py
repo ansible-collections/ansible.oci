@@ -111,10 +111,11 @@ options:
   domain_name_type:
     description:
       - The domain name type used for the VCN.
-      - This is a free-form string field; refer to the OCI documentation for
-        the currently supported values (for example C(SUBNET_DOMAIN) or
-        C(VCN_DOMAIN)).
+      - The returned C(resource.domain_name_type) uses this same vocabulary,
+        translated from OCI's native enum casing, so a value read from one
+        task can be fed back into another unchanged.
     type: str
+    choices: [subnet_domain, vcn_domain, custom_domain]
 """
 
 EXAMPLES = r"""
@@ -138,6 +139,7 @@ EXAMPLES = r"""
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
     name: example-dhcp-options
+    domain_name_type: vcn_domain
     options:
       - option_type: domain_name_server
         server_type: custom_dns_server
@@ -216,6 +218,15 @@ SERVER_TYPE_TO_OCI = {
 }
 OCI_SERVER_TYPE_TO_ANSIBLE = {
     oci_value: ansible_value for ansible_value, oci_value in SERVER_TYPE_TO_OCI.items()
+}
+
+DOMAIN_NAME_TYPE_TO_OCI = {
+    "subnet_domain": "SUBNET_DOMAIN",
+    "vcn_domain": "VCN_DOMAIN",
+    "custom_domain": "CUSTOM_DOMAIN",
+}
+OCI_DOMAIN_NAME_TYPE_TO_ANSIBLE = {
+    oci_value: ansible_value for ansible_value, oci_value in DOMAIN_NAME_TYPE_TO_OCI.items()
 }
 
 
@@ -318,12 +329,15 @@ def build_option_models(options):
 
 
 def build_create_dhcp_options_details(params):
+    domain_name_type = params.get("domain_name_type")
     details = filter_none_values(
         {
             "compartment_id": params.get("compartment_id"),
             "vcn_id": params.get("vcn_id"),
             "display_name": params.get("name"),
-            "domain_name_type": params.get("domain_name_type"),
+            "domain_name_type": DOMAIN_NAME_TYPE_TO_OCI.get(
+                domain_name_type, domain_name_type
+            ),
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
         }
@@ -357,8 +371,8 @@ class OciDhcpOptionsModule(OciResourceBase):
         {
             "param_name": "domain_name_type",
             "resource_field": "domain_name_type",
-            "update_field": "domain_name_type",
             "is_mutable": True,
+            "strategy": "plan_domain_name_type_strategy",
         },
         {
             "param_name": "options",
@@ -410,6 +424,12 @@ class OciDhcpOptionsModule(OciResourceBase):
             return []
         return [("replace", desired_value or [])]
 
+    def plan_domain_name_type_strategy(self, resource, resource_dict, spec, desired_value):
+        desired_oci_value = DOMAIN_NAME_TYPE_TO_OCI.get(desired_value, desired_value)
+        if resource_dict.get("domain_name_type") == desired_oci_value:
+            return []
+        return [("replace", desired_oci_value)]
+
     def build_update_details(self, update_model_fields):
         return oci.core.models.UpdateDhcpDetails(**update_model_fields)
 
@@ -418,11 +438,14 @@ class OciDhcpOptionsModule(OciResourceBase):
         update_model_fields = dict(update_plan["update_model_fields"])
 
         for strategy_operation in update_plan["strategy_operations"]:
-            if strategy_operation["param_name"] != "options":
-                continue
+            param_name = strategy_operation["param_name"]
             for operation in strategy_operation["operations"]:
-                if operation[0] == "replace":
+                if operation[0] != "replace":
+                    continue
+                if param_name == "options":
                     update_model_fields["options"] = build_option_models(operation[1])
+                elif param_name == "domain_name_type":
+                    update_model_fields["domain_name_type"] = operation[1]
 
         if not update_model_fields:
             return resource
@@ -448,8 +471,13 @@ class OciDhcpOptionsModule(OciResourceBase):
 
     def serialize_result_resource(self, resource):
         result = super().serialize_result_resource(resource)
-        if isinstance(result, dict) and "options" in result:
-            result["options"] = normalize_result_options(result["options"])
+        if isinstance(result, dict):
+            if "options" in result:
+                result["options"] = normalize_result_options(result["options"])
+            if "domain_name_type" in result:
+                result["domain_name_type"] = OCI_DOMAIN_NAME_TYPE_TO_ANSIBLE.get(
+                    result["domain_name_type"], result["domain_name_type"]
+                )
         return result
 
 
@@ -476,7 +504,10 @@ def main():
                 search_domain_names=dict(type="list", elements="str"),
             ),
         ),
-        domain_name_type=dict(type="str"),
+        domain_name_type=dict(
+            type="str",
+            choices=list(DOMAIN_NAME_TYPE_TO_OCI),
+        ),
     )
 
     module = AnsibleModule(

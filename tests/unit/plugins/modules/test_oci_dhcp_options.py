@@ -77,6 +77,11 @@ def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
     assert captured["argument_spec"]["compartment_id"] == {"type": "str"}
     assert captured["argument_spec"]["options"]["type"] == "list"
     assert captured["argument_spec"]["options"]["elements"] == "dict"
+    assert captured["argument_spec"]["domain_name_type"]["choices"] == [
+        "subnet_domain",
+        "vcn_domain",
+        "custom_domain",
+    ]
     assert "display_name" not in captured["argument_spec"]
 
 
@@ -89,7 +94,7 @@ def test_build_create_dhcp_options_details_builds_both_option_types(monkeypatch)
             "compartment_id": "ocid1.compartment.oc1..example",
             "vcn_id": "ocid1.vcn.oc1..example",
             "name": "example-dhcp-options",
-            "domain_name_type": "SUBNET_DOMAIN",
+            "domain_name_type": "subnet_domain",
             "options": [
                 {
                     "option_type": "domain_name_server",
@@ -109,6 +114,8 @@ def test_build_create_dhcp_options_details_builds_both_option_types(monkeypatch)
     assert details.compartment_id == "ocid1.compartment.oc1..example"
     assert details.vcn_id == "ocid1.vcn.oc1..example"
     assert details.display_name == "example-dhcp-options"
+    # build_create_dhcp_options_details translates the ansible-facing
+    # snake_case domain_name_type into the OCI SDK's native casing.
     assert details.domain_name_type == "SUBNET_DOMAIN"
     assert details.freeform_tags == {"env": "dev"}
     assert details.defined_tags == {"Operations": {"CostCenter": "42"}}
@@ -280,14 +287,32 @@ def test_needs_update_returns_true_for_domain_name_type_change(monkeypatch):
     dhcp_options_module = load_collection_module("oci_dhcp_options")
     instance = make_dhcp_options_module(
         dhcp_options_module,
-        {"domain_name_type": "VCN_DOMAIN"},
+        {"domain_name_type": "vcn_domain"},
     )
+    # The resource dict mirrors a real serialized OCI API response, which
+    # uses OCI's native casing, not the ansible-facing snake_case value above.
     resource = FakeModel(
         id="ocid1.dhcpoptions.oc1..example",
         domain_name_type="SUBNET_DOMAIN",
     )
 
     assert instance.needs_update(resource) is True
+
+
+def test_needs_update_returns_false_when_domain_name_type_matches_across_casing(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    dhcp_options_module = load_collection_module("oci_dhcp_options")
+    instance = make_dhcp_options_module(
+        dhcp_options_module,
+        {"domain_name_type": "subnet_domain"},
+    )
+    resource = FakeModel(
+        id="ocid1.dhcpoptions.oc1..example",
+        domain_name_type="SUBNET_DOMAIN",
+    )
+
+    assert instance.needs_update(resource) is False
 
 
 def test_needs_update_returns_true_for_name_change(monkeypatch):
@@ -489,6 +514,49 @@ def test_update_resource_builds_option_models_and_calls_update_dhcp_options(monk
     assert updated_resource.id == "ocid1.dhcpoptions.oc1..example"
 
 
+def test_update_resource_translates_domain_name_type(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    dhcp_options_module = load_collection_module("oci_dhcp_options")
+    update_calls = []
+    response = FakeResponse(
+        data=FakeModel(id="ocid1.dhcpoptions.oc1..example"),
+    )
+
+    def update_dhcp_options(dhcp_id, update_dhcp_details):
+        update_calls.append((dhcp_id, update_dhcp_details))
+        return response
+
+    resource = FakeModel(
+        id="ocid1.dhcpoptions.oc1..example",
+        domain_name_type="SUBNET_DOMAIN",
+    )
+    instance = make_dhcp_options_module(
+        dhcp_options_module,
+        {"domain_name_type": "vcn_domain", "wait": True},
+        client=types.SimpleNamespace(update_dhcp_options=update_dhcp_options),
+    )
+    monkeypatch.setattr(
+        instance,
+        "call_with_retry",
+        lambda fn, **kwargs: fn(**kwargs),
+    )
+    monkeypatch.setattr(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
+            id=resource_id,
+            lifecycle_state="AVAILABLE",
+        ),
+    )
+
+    instance.update_resource(resource)
+
+    # update_resource sends OCI's native casing to the SDK, not the
+    # ansible-facing snake_case value the caller set.
+    assert update_calls[0][1].domain_name_type == "VCN_DOMAIN"
+
+
 def test_update_resource_is_noop_when_no_fields_changed(monkeypatch):
     install_fake_oci(monkeypatch)
 
@@ -568,3 +636,19 @@ def test_serialize_result_resource_normalizes_options_to_ansible_shape(monkeypat
     ]
     # The normalized options round-trip cleanly as input to the same module.
     assert dhcp_options_module.build_option_models(result["options"])[0].server_type == "CustomDnsServer"
+
+
+def test_serialize_result_resource_normalizes_domain_name_type_to_ansible_shape(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    dhcp_options_module = load_collection_module("oci_dhcp_options")
+    instance = make_dhcp_options_module(dhcp_options_module, {})
+    resource = FakeModel(
+        id="ocid1.dhcpoptions.oc1..example",
+        display_name="example-dhcp-options",
+        domain_name_type="VCN_DOMAIN",
+    )
+
+    result = instance.serialize_result_resource(resource)
+
+    assert result["domain_name_type"] == "vcn_domain"

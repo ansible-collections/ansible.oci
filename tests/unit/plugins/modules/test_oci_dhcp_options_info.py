@@ -202,6 +202,28 @@ def test_run_normalizes_options_to_ansible_shape(monkeypatch):
     ]
 
 
+def test_run_normalizes_domain_name_type_to_ansible_shape(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_dhcp_options_info")
+    instance = make_dhcp_options_info_module(
+        info_module,
+        {"compartment_id": "ocid1.compartment.oc1..example"},
+    )
+    run_resource = FakeModel(
+        id="ocid1.dhcpoptions.oc1..example",
+        display_name="example-dhcp-options",
+        lifecycle_state="AVAILABLE",
+        domain_name_type="CUSTOM_DOMAIN",
+    )
+    monkeypatch.setattr(instance, "fetch_resources", lambda: [run_resource])
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_info_module()
+
+    assert exc_info.value.payload["dhcp_options"][0]["domain_name_type"] == "custom_domain"
+
+
 def test_main_requires_compartment_id_or_dhcp_options_id(monkeypatch):
     install_fake_oci(monkeypatch)
 
