@@ -86,10 +86,6 @@ class OciDrgInfoModule(OciInfoBase):
     resource_id_param = "drg_id"
     resource_get_method = "get_drg"
     list_resource_method = "list_drgs"
-    # list_drgs only accepts compartment_id (plus limit/page for pagination),
-    # verified against the installed OCI SDK; it does not support a
-    # display_name or lifecycle_state server-side filter the way most other
-    # list_* methods in this collection do.
     list_filter_params = [
         "compartment_id",
     ]
