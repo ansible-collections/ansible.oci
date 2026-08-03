@@ -371,6 +371,76 @@ def test_resolve_target_resource_treats_detached_as_not_found(monkeypatch):
     assert instance.resolve_target_resource() is None
 
 
+def test_find_resources_by_name_excludes_detached_matches(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    drg_attachment_module = load_collection_module("oci_drg_attachment")
+    instance = make_drg_attachment_module(
+        drg_attachment_module,
+        {
+            "name": "example-drg-attachment",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "drg_id": "ocid1.drg.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        client=types.SimpleNamespace(list_drg_attachments="list_drg_attachments"),
+    )
+    live_resource = FakeModel(
+        id="ocid1.drgattachment.oc1..live",
+        display_name="example-drg-attachment",
+        lifecycle_state="ATTACHED",
+    )
+    stale_detached_resource = FakeModel(
+        id="ocid1.drgattachment.oc1..stale",
+        display_name="example-drg-attachment",
+        lifecycle_state="DETACHED",
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        lambda list_fn, **kwargs: [live_resource, stale_detached_resource],
+    )
+
+    matches = instance.find_resources_by_name()
+
+    assert matches == [live_resource]
+
+
+def test_resolve_resource_by_name_ignores_stale_detached_duplicate(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    drg_attachment_module = load_collection_module("oci_drg_attachment")
+    instance = make_drg_attachment_module(
+        drg_attachment_module,
+        {
+            "name": "example-drg-attachment",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "drg_id": "ocid1.drg.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        client=types.SimpleNamespace(list_drg_attachments="list_drg_attachments"),
+    )
+    live_resource = FakeModel(
+        id="ocid1.drgattachment.oc1..live",
+        display_name="example-drg-attachment",
+        lifecycle_state="ATTACHED",
+    )
+    stale_detached_resource = FakeModel(
+        id="ocid1.drgattachment.oc1..stale",
+        display_name="example-drg-attachment",
+        lifecycle_state="DETACHED",
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        lambda list_fn, **kwargs: [live_resource, stale_detached_resource],
+    )
+
+    # Without the DETACHED filter this would raise FailJsonCalled for an
+    # ambiguous name match instead of resolving the single live attachment.
+    assert instance.resolve_target_resource() is live_resource
+
+
 def test_create_required_fields_enforced(monkeypatch):
     install_fake_oci(monkeypatch)
 

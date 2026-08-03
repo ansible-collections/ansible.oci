@@ -240,6 +240,20 @@ class OciDrgAttachmentModule(OciResourceBase):
             return None
         return resource
 
+    def find_resources_by_name(self):
+        """Exclude DETACHED attachments from scoped name-lookup matches.
+
+        Without this, a stale DETACHED attachment sharing a display name with
+        a live (or freshly recreated) attachment would count toward the
+        ambiguous-match check in the shared ``resolve_resource_by_name()``
+        before ``resolve_target_resource()`` gets a chance to filter it out.
+        """
+        return [
+            resource
+            for resource in super().find_resources_by_name()
+            if getattr(resource, "lifecycle_state", None) != DETACHED_STATE
+        ]
+
     def create_resource(self):
         create_drg_attachment_details = build_create_drg_attachment_details(
             self.module.params
