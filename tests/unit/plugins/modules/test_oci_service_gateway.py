@@ -128,7 +128,7 @@ def test_build_create_service_gateway_details_includes_supported_fields(monkeypa
     assert not hasattr(details, "block_traffic")
 
 
-def test_build_create_service_gateway_details_defaults_services_to_empty_list(monkeypatch):
+def test_build_create_service_gateway_details_omits_services_when_unset(monkeypatch):
     install_fake_oci(monkeypatch)
 
     service_gateway_module = load_collection_module("oci_service_gateway")
@@ -137,6 +137,24 @@ def test_build_create_service_gateway_details_defaults_services_to_empty_list(mo
             "compartment_id": "ocid1.compartment.oc1..example",
             "vcn_id": "ocid1.vcn.oc1..example",
             "name": "example-service-gateway",
+        }
+    )
+
+    assert not hasattr(details, "services")
+
+
+def test_build_create_service_gateway_details_sends_empty_services_when_service_ids_is_empty_list(
+    monkeypatch,
+):
+    install_fake_oci(monkeypatch)
+
+    service_gateway_module = load_collection_module("oci_service_gateway")
+    details = service_gateway_module.build_create_service_gateway_details(
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-service-gateway",
+            "service_ids": [],
         }
     )
 

@@ -88,7 +88,7 @@ options:
         route table as usual.
       - Because a route table's own rules may need to reference this
         gateway's OCID (see C(network_entity_id) on
-        C(oracle.oci.oci_route_table)), create the gateway first without
+        M(oracle.oci.oci_route_table)), create the gateway first without
         C(route_table_id), create the route table referencing the gateway,
         then update the gateway with C(route_table_id) if transit routing is
         required. See the examples below.
@@ -204,13 +204,16 @@ def build_service_models(service_ids):
 
 
 def build_create_service_gateway_details(params):
+    service_ids = params.get("service_ids")
     details = filter_none_values(
         {
             "compartment_id": params.get("compartment_id"),
             "vcn_id": params.get("vcn_id"),
             "display_name": params.get("name"),
             "route_table_id": params.get("route_table_id"),
-            "services": build_service_models(params.get("service_ids")),
+            "services": (
+                build_service_models(service_ids) if service_ids is not None else None
+            ),
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
         }
