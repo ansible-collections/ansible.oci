@@ -498,3 +498,41 @@ def test_delete_resource_uses_dhcp_id_kwarg(monkeypatch):
     instance.delete_resource(resource)
 
     assert delete_calls == [{"dhcp_id": "ocid1.dhcpoptions.oc1..example"}]
+
+
+def test_serialize_result_resource_normalizes_options_to_ansible_shape(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    dhcp_options_module = load_collection_module("oci_dhcp_options")
+    instance = make_dhcp_options_module(dhcp_options_module, {})
+    resource = FakeModel(
+        id="ocid1.dhcpoptions.oc1..example",
+        display_name="example-dhcp-options",
+        options=[
+            {
+                "type": "DomainNameServer",
+                "server_type": "CustomDnsServer",
+                "custom_dns_servers": ["10.0.0.10"],
+            },
+            {
+                "type": "SearchDomain",
+                "search_domain_names": ["example.oraclevcn.com"],
+            },
+        ],
+    )
+
+    result = instance.serialize_result_resource(resource)
+
+    assert result["options"] == [
+        {
+            "option_type": "domain_name_server",
+            "server_type": "custom_dns_server",
+            "custom_dns_servers": ["10.0.0.10"],
+        },
+        {
+            "option_type": "search_domain",
+            "search_domain_names": ["example.oraclevcn.com"],
+        },
+    ]
+    # The normalized options round-trip cleanly as input to the same module.
+    assert dhcp_options_module.build_option_models(result["options"])[0].server_type == "CustomDnsServer"

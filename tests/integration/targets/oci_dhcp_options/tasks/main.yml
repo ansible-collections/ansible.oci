@@ -209,7 +209,7 @@
         that:
           - oci_dhcp_options_info_updated.dhcp_options | selectattr('id', 'equalto', oci_dhcp_options_id) | list | length == 1
           - oci_dhcp_options_info_updated.dhcp_options[0].freeform_tags.phase == "update"
-          - oci_dhcp_options_info_updated.dhcp_options[0].options | selectattr('type', 'equalto', 'DomainNameServer') | map(attribute='server_type') | list == ['CustomDnsServer']
+          - oci_dhcp_options_info_updated.dhcp_options[0].options | selectattr('option_type', 'equalto', 'domain_name_server') | map(attribute='server_type') | list == ['custom_dns_server']
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_dhcp_options:

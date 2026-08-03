@@ -162,6 +162,46 @@ def test_run_returns_dhcp_options_results_key(monkeypatch):
     }
 
 
+def test_run_normalizes_options_to_ansible_shape(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_dhcp_options_info")
+    instance = make_dhcp_options_info_module(
+        info_module,
+        {"compartment_id": "ocid1.compartment.oc1..example"},
+    )
+    run_resource = FakeModel(
+        id="ocid1.dhcpoptions.oc1..example",
+        display_name="example-dhcp-options",
+        lifecycle_state="AVAILABLE",
+        options=[
+            {
+                "type": "DomainNameServer",
+                "server_type": "VcnLocalPlusInternet",
+            },
+            {
+                "type": "SearchDomain",
+                "search_domain_names": ["example.oraclevcn.com"],
+            },
+        ],
+    )
+    monkeypatch.setattr(instance, "fetch_resources", lambda: [run_resource])
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_info_module()
+
+    assert exc_info.value.payload["dhcp_options"][0]["options"] == [
+        {
+            "option_type": "domain_name_server",
+            "server_type": "vcn_local_plus_internet",
+        },
+        {
+            "option_type": "search_domain",
+            "search_domain_names": ["example.oraclevcn.com"],
+        },
+    ]
+
+
 def test_main_requires_compartment_id_or_dhcp_options_id(monkeypatch):
     install_fake_oci(monkeypatch)
 

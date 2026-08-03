@@ -36,6 +36,11 @@ options:
       - Filter listed DHCP options by VCN.
       - Only used when C(compartment_id) is provided.
     type: str
+notes:
+  - Each returned C(options) entry uses the same C(option_type)/
+    C(server_type) snake_case vocabulary accepted by
+    C(oracle.oci.oci_dhcp_options), translated from OCI's native enum
+    casing.
 """
 
 EXAMPLES = r"""
@@ -76,6 +81,50 @@ imported_oci_sdk = import_oci_sdk()
 oci = imported_oci_sdk[0]
 HAS_OCI_SDK = imported_oci_sdk[1]
 
+# Mirrors the translation tables in oci_dhcp_options.py. Kept local rather
+# than imported, matching this collection's convention of self-contained
+# module files (each plugins/modules/*.py stands alone).
+OPTION_TYPE_TO_OCI = {
+    "domain_name_server": "DomainNameServer",
+    "search_domain": "SearchDomain",
+}
+OCI_OPTION_TYPE_TO_ANSIBLE = {
+    oci_value: ansible_value for ansible_value, oci_value in OPTION_TYPE_TO_OCI.items()
+}
+
+SERVER_TYPE_TO_OCI = {
+    "vcn_local": "VcnLocal",
+    "vcn_local_plus_internet": "VcnLocalPlusInternet",
+    "custom_dns_server": "CustomDnsServer",
+}
+OCI_SERVER_TYPE_TO_ANSIBLE = {
+    oci_value: ansible_value for ansible_value, oci_value in SERVER_TYPE_TO_OCI.items()
+}
+
+
+def normalize_result_option(option):
+    """Translate one serialized DhcpOption dict to the ansible-facing shape.
+
+    See the matching helper in oci_dhcp_options.py for the full rationale:
+    this renames ``type`` to ``option_type`` and translates both
+    ``option_type`` and ``server_type`` out of OCI's native enum casing.
+    """
+    if not isinstance(option, dict):
+        return option
+
+    normalized = dict(option)
+    oci_type = normalized.pop("type", None)
+    normalized["option_type"] = OCI_OPTION_TYPE_TO_ANSIBLE.get(oci_type, oci_type)
+    if "server_type" in normalized:
+        normalized["server_type"] = OCI_SERVER_TYPE_TO_ANSIBLE.get(
+            normalized["server_type"], normalized["server_type"]
+        )
+    return normalized
+
+
+def normalize_result_options(options):
+    return [normalize_result_option(option) for option in (options or [])]
+
 
 class OciDhcpOptionsInfoModule(OciInfoBase):
     """Concrete info adapter for OCI VCN DHCP options."""
@@ -94,6 +143,12 @@ class OciDhcpOptionsInfoModule(OciInfoBase):
         "vcn_id",
         "lifecycle_state",
     ]
+
+    def serialize_result_resource(self, resource):
+        result = super().serialize_result_resource(resource)
+        if isinstance(result, dict) and "options" in result:
+            result["options"] = normalize_result_options(result["options"])
+        return result
 
 
 def main():

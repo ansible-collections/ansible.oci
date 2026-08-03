@@ -76,6 +76,10 @@ options:
         should exist after the change, not only the ones being added.
       - Order does not affect idempotency; only the content of the list is
         compared.
+      - The returned C(resource.options) uses this same C(option_type)/
+        C(server_type) vocabulary, translated from OCI's native enum casing,
+        so a value read from one task can be fed back into another
+        unchanged.
     type: list
     elements: dict
     suboptions:
@@ -197,7 +201,13 @@ WAIT_FOR_DHCP_OPTIONS_STATES = [LIFECYCLE_AVAILABLE]
 OPTION_TYPE_DNS = "domain_name_server"
 OPTION_TYPE_SEARCH_DOMAIN = "search_domain"
 
-OCI_OPTION_TYPE_DNS = "DomainNameServer"
+OPTION_TYPE_TO_OCI = {
+    OPTION_TYPE_DNS: "DomainNameServer",
+    OPTION_TYPE_SEARCH_DOMAIN: "SearchDomain",
+}
+OCI_OPTION_TYPE_TO_ANSIBLE = {
+    oci_value: ansible_value for ansible_value, oci_value in OPTION_TYPE_TO_OCI.items()
+}
 
 SERVER_TYPE_TO_OCI = {
     "vcn_local": "VcnLocal",
@@ -222,7 +232,8 @@ def _normalize_option(option):
 
 def _normalize_current_option(option):
     """Normalize one serialized OCI DhcpOption dict (keyed by ``type``)."""
-    if option.get("type") == OCI_OPTION_TYPE_DNS:
+    option_type = OCI_OPTION_TYPE_TO_ANSIBLE.get(option.get("type"), OPTION_TYPE_SEARCH_DOMAIN)
+    if option_type == OPTION_TYPE_DNS:
         return {
             "option_type": OPTION_TYPE_DNS,
             "server_type": OCI_SERVER_TYPE_TO_ANSIBLE.get(
@@ -246,6 +257,33 @@ def _normalized_current_options(options):
 
 def _options_sort_key(normalized_options):
     return sorted(json.dumps(option, sort_keys=True) for option in normalized_options)
+
+
+def normalize_result_option(option):
+    """Translate one serialized DhcpOption dict to the ansible-facing shape.
+
+    OCI's raw API response uses a ``type`` key with PascalCase-ish enum
+    values (``DomainNameServer``/``SearchDomain``/``VcnLocal``/etc). This
+    renames ``type`` to ``option_type`` and translates both ``option_type``
+    and ``server_type`` to the same snake_case vocabulary accepted as module
+    input, so a returned resource reads the same way it was written -
+    round-tripping the value straight back into the module works unchanged.
+    """
+    if not isinstance(option, dict):
+        return option
+
+    normalized = dict(option)
+    oci_type = normalized.pop("type", None)
+    normalized["option_type"] = OCI_OPTION_TYPE_TO_ANSIBLE.get(oci_type, oci_type)
+    if "server_type" in normalized:
+        normalized["server_type"] = OCI_SERVER_TYPE_TO_ANSIBLE.get(
+            normalized["server_type"], normalized["server_type"]
+        )
+    return normalized
+
+
+def normalize_result_options(options):
+    return [normalize_result_option(option) for option in (options or [])]
 
 
 def build_option_models(options):
@@ -389,6 +427,12 @@ class OciDhcpOptionsModule(OciResourceBase):
             self.client.delete_dhcp_options,
             dhcp_id=resource.id,
         )
+
+    def serialize_result_resource(self, resource):
+        result = super().serialize_result_resource(resource)
+        if isinstance(result, dict) and "options" in result:
+            result["options"] = normalize_result_options(result["options"])
+        return result
 
 
 def main():
