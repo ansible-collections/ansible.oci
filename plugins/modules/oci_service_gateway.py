@@ -78,7 +78,20 @@ options:
     elements: str
   route_table_id:
     description:
-      - The OCID of the route table the service gateway should use.
+      - The OCID of a route table to associate directly with the service
+        gateway, for OCI's transit routing feature. This controls how
+        traffic arriving through this gateway is routed once it enters the
+        VCN, separately from the route table assigned to any subnet.
+      - This is an optional, advanced setting. Most deployments do not need
+        it and can omit it; only set it if you are implementing transit
+        routing. Omitting it leaves traffic subject to each subnet's own
+        route table as usual.
+      - Because a route table's own rules may need to reference this
+        gateway's OCID (see C(network_entity_id) on
+        C(oracle.oci.oci_route_table)), create the gateway first without
+        C(route_table_id), create the route table referencing the gateway,
+        then update the gateway with C(route_table_id) if transit routing is
+        required. See the examples below.
     type: str
   block_traffic:
     description:
@@ -89,26 +102,41 @@ options:
 """
 
 EXAMPLES = r"""
-- name: Create a service gateway
+- name: Create a service gateway with only the required parameters
   oracle.oci.oci_service_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
     name: example-service-gateway
-    service_ids:
-      - ocid1.service.oc1..example
-    route_table_id: ocid1.routetable.oc1..example
   register: created_service_gateway
 
-- name: Reconcile a uniquely named service gateway by name
+- name: Attach one or more OCI services to the service gateway
   oracle.oci.oci_service_gateway:
     state: present
-    compartment_id: ocid1.compartment.oc1..example
-    vcn_id: ocid1.vcn.oc1..example
-    name: example-service-gateway
+    service_gateway_id: "{{ created_service_gateway.resource.id }}"
     service_ids:
       - ocid1.service.oc1..example
       - ocid1.service.oc1..another-example
+
+- name: Create a route table with a rule pointing at that service gateway
+  oracle.oci.oci_route_table:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-route-table
+    route_rules:
+      # destination is the service's cidr_block label (from the OCI Service
+      # object), not its OCID; service_ids above uses the OCID instead.
+      - destination: all-iad-services-in-oracle-services-network
+        destination_type: SERVICE_CIDR_BLOCK
+        network_entity_id: "{{ created_service_gateway.resource.id }}"
+  register: created_route_table
+
+- name: (Optional) enable transit routing by pointing the gateway back at that route table
+  oracle.oci.oci_service_gateway:
+    state: present
+    service_gateway_id: "{{ created_service_gateway.resource.id }}"
+    route_table_id: "{{ created_route_table.resource.id }}"
 
 - name: Intentionally create a second service gateway with the same display name
   oracle.oci.oci_service_gateway:
