@@ -231,8 +231,18 @@ def _normalize_option(option):
 
 
 def _normalize_current_option(option):
-    """Normalize one serialized OCI DhcpOption dict (keyed by ``type``)."""
-    option_type = OCI_OPTION_TYPE_TO_ANSIBLE.get(option.get("type"), OPTION_TYPE_SEARCH_DOMAIN)
+    """Normalize one serialized OCI DhcpOption dict (keyed by ``type``).
+
+    Raises ``ValueError`` for a ``type`` this module does not recognize,
+    instead of silently guessing a subtype, so an OCI API addition surfaces
+    as a clear failure rather than a misclassified comparison.
+    """
+    oci_type = option.get("type")
+    if oci_type not in OCI_OPTION_TYPE_TO_ANSIBLE:
+        raise ValueError(
+            f"Unsupported DHCP option type returned by OCI: {oci_type!r}"
+        )
+    option_type = OCI_OPTION_TYPE_TO_ANSIBLE[oci_type]
     if option_type == OPTION_TYPE_DNS:
         return {
             "option_type": OPTION_TYPE_DNS,
@@ -386,7 +396,15 @@ class OciDhcpOptionsModule(OciResourceBase):
         )
 
     def plan_options_strategy(self, resource, resource_dict, spec, desired_value):
-        current_options = _normalized_current_options(resource_dict.get("options"))
+        try:
+            current_options = _normalized_current_options(resource_dict.get("options"))
+        except ValueError as exc:
+            self.module.fail_json(
+                msg=(
+                    f"Cannot compare options for DHCP options {getattr(resource, 'id', None)}: "
+                    f"{exc}"
+                )
+            )
         desired_options = _normalized_options(desired_value)
         if _options_sort_key(current_options) == _options_sort_key(desired_options):
             return []

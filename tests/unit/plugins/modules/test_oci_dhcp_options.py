@@ -242,6 +242,38 @@ def test_needs_update_returns_true_when_options_differ(monkeypatch):
     assert instance.needs_update(resource) is True
 
 
+def test_needs_update_fails_on_unrecognized_option_type(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    dhcp_options_module = load_collection_module("oci_dhcp_options")
+    instance = make_dhcp_options_module(
+        dhcp_options_module,
+        {
+            "options": [
+                {
+                    "option_type": "domain_name_server",
+                    "server_type": "vcn_local",
+                },
+            ],
+        },
+    )
+    # Simulate a future OCI API adding a DhcpOption subtype this module does
+    # not yet know how to translate.
+    resource = FakeModel(
+        id="ocid1.dhcpoptions.oc1..example",
+        options=[
+            {
+                "type": "SomeFutureOptionType",
+            },
+        ],
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.needs_update(resource)
+
+    assert "SomeFutureOptionType" in exc_info.value.payload["msg"]
+
+
 def test_needs_update_returns_true_for_domain_name_type_change(monkeypatch):
     install_fake_oci(monkeypatch)
 
