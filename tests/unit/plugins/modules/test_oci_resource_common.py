@@ -81,6 +81,38 @@ RESOURCE_CASES = (
             "name": "example-subnet",
         },
     },
+    {
+        "module_name": "oci_local_peering_gateway",
+        "class_name": "OciLocalPeeringGatewayModule",
+        "id_param": "local_peering_gateway_id",
+        "id_value": "ocid1.localpeeringgateway.oc1..example",
+        "missing_id": "ocid1.localpeeringgateway.oc1..missing",
+        "get_method": "get_local_peering_gateway",
+        "list_method": "list_local_peering_gateways",
+        "delete_method": "delete_local_peering_gateway",
+        "not_found_label": "local peering gateway",
+        "delete_required_msg": "Deleting a local peering gateway requires either local_peering_gateway_id or name (with compartment_id, vcn_id)",
+        "create_missing_msg": "Creating a local peering gateway requires",
+        "name_lookup_params": {
+            "name": "example-lpg",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-lpg",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-lpg",
+        },
+    },
 )
 
 
