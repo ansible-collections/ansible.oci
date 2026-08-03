@@ -374,7 +374,7 @@ def _icmp_options_from_resource(opts):
 
 def _normalize_rule_from_user(rule, scalar_fields):
     normalized = {field: rule.get(field) for field in scalar_fields}
-    normalized["is_stateless"] = bool(rule.get("is_stateless") or False)
+    normalized["is_stateless"] = bool(rule.get("is_stateless"))
     normalized["tcp_options"] = _protocol_options_from_user(rule.get("tcp_options"))
     normalized["udp_options"] = _protocol_options_from_user(rule.get("udp_options"))
     normalized["icmp_options"] = _icmp_options_from_user(rule.get("icmp_options"))
@@ -383,7 +383,7 @@ def _normalize_rule_from_user(rule, scalar_fields):
 
 def _normalize_rule_from_resource(rule, scalar_fields):
     normalized = {field: rule.get(field) for field in scalar_fields}
-    normalized["is_stateless"] = bool(rule.get("is_stateless") or False)
+    normalized["is_stateless"] = bool(rule.get("is_stateless"))
     normalized["tcp_options"] = _protocol_options_from_resource(rule.get("tcp_options"))
     normalized["udp_options"] = _protocol_options_from_resource(rule.get("udp_options"))
     normalized["icmp_options"] = _icmp_options_from_resource(rule.get("icmp_options"))
@@ -579,14 +579,14 @@ class OciSecurityListModule(OciResourceBase):
             if strategy_operation["param_name"] == "ingress_security_rules":
                 operations = strategy_operation["operations"]
                 if operations:
-                    _, desired_rules = operations[0]
+                    desired_rules = operations[0][1]
                     update_model_fields["ingress_security_rules"] = [
                         build_ingress_rule_model(rule) for rule in desired_rules
                     ]
             elif strategy_operation["param_name"] == "egress_security_rules":
                 operations = strategy_operation["operations"]
                 if operations:
-                    _, desired_rules = operations[0]
+                    desired_rules = operations[0][1]
                     update_model_fields["egress_security_rules"] = [
                         build_egress_rule_model(rule) for rule in desired_rules
                     ]
