@@ -1,3 +1,0 @@
----
-minor_changes:
-  - Added oci_nat_gateway and oci_nat_gateway_info modules for managing OCI VCN NAT gateways (ACA-5219).
