@@ -44,7 +44,7 @@
         dns_label: "{{ oci_lpg_integration_peer_vcn_dns_label }}"
       register: oci_lpg_peer_vcn_create
 
-    - name: Define local peering gateway create and delete parameters
+    - name: Define local peering gateway create parameters
       ansible.builtin.set_fact:
         oci_lpg_create_params:
           state: present
@@ -52,9 +52,6 @@
           vcn_id: "{{ oci_lpg_vcn_create.resource.id }}"
           name: "{{ oci_lpg_integration_lpg_name }}"
           freeform_tags: "{{ oci_lpg_integration_create_tags }}"
-        oci_lpg_delete_params:
-          state: absent
-          local_peering_gateway_id: ""
 
     - name: Create local peering gateway in check mode
       oracle.oci.oci_local_peering_gateway: &oci_lpg_create_module_options
