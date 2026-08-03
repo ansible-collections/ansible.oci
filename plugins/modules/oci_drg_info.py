@@ -19,7 +19,6 @@ author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -30,6 +29,11 @@ options:
     description:
       - The OCID of a specific DRG to retrieve.
       - When specified, returns a single resource instead of a list.
+    type: str
+  name:
+    description:
+      - Filter listed DRGs by name.
+      - Only used when C(compartment_id) is provided.
     type: str
 """
 
@@ -82,9 +86,12 @@ class OciDrgInfoModule(OciInfoBase):
     resource_id_param = "drg_id"
     resource_get_method = "get_drg"
     list_resource_method = "list_drgs"
+    # list_drgs only accepts compartment_id (plus limit/page for pagination),
+    # verified against the installed OCI SDK; it does not support a
+    # display_name or lifecycle_state server-side filter the way most other
+    # list_* methods in this collection do.
     list_filter_params = [
         "compartment_id",
-        "lifecycle_state",
     ]
 
 
@@ -94,7 +101,6 @@ def main():
         compartment_id=dict(type="str"),
         drg_id=dict(type="str"),
         name=dict(type="str"),
-        lifecycle_state=dict(type="str"),
     )
 
     module = AnsibleModule(

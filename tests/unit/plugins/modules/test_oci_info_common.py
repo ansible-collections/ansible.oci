@@ -58,11 +58,9 @@ INFO_CASES = (
         "list_params": {
             "compartment_id": "ocid1.compartment.oc1..example",
             "name": "example-drg",
-            "lifecycle_state": "AVAILABLE",
         },
         "expected_list_kwargs": {
             "compartment_id": "ocid1.compartment.oc1..example",
-            "lifecycle_state": "AVAILABLE",
         },
         "run_resource": FakeModel(
             id="ocid1.drg.oc1..example",

@@ -92,7 +92,6 @@
       oracle.oci.oci_drg_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_drg_integration_drg_name }}"
-        lifecycle_state: AVAILABLE
       register: oci_drg_info_list
 
     - name: Assert DRG info list returned the created DRG
@@ -161,7 +160,6 @@
       oracle.oci.oci_drg_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_drg_integration_updated_drg_name }}"
-        lifecycle_state: AVAILABLE
       register: oci_drg_info_updated
 
     - name: Assert DRG info reflects updated DRG
