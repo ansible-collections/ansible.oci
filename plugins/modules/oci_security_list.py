@@ -411,8 +411,7 @@ def _build_protocol_options(model_cls, normalized_options):
     )
 
 
-def build_ingress_rule_model(rule):
-    normalized = _normalize_rule_from_user(rule, INGRESS_SCALAR_FIELDS)
+def _ingress_rule_model_from_normalized(normalized):
     icmp_options = normalized["icmp_options"]
     return oci.core.models.IngressSecurityRule(
         source=normalized["source"],
@@ -432,8 +431,13 @@ def build_ingress_rule_model(rule):
     )
 
 
-def build_egress_rule_model(rule):
-    normalized = _normalize_rule_from_user(rule, EGRESS_SCALAR_FIELDS)
+def build_ingress_rule_model(rule):
+    return _ingress_rule_model_from_normalized(
+        _normalize_rule_from_user(rule, INGRESS_SCALAR_FIELDS)
+    )
+
+
+def _egress_rule_model_from_normalized(normalized):
     icmp_options = normalized["icmp_options"]
     return oci.core.models.EgressSecurityRule(
         destination=normalized["destination"],
@@ -450,6 +454,12 @@ def build_egress_rule_model(rule):
         icmp_options=(
             oci.core.models.IcmpOptions(**icmp_options) if icmp_options else None
         ),
+    )
+
+
+def build_egress_rule_model(rule):
+    return _egress_rule_model_from_normalized(
+        _normalize_rule_from_user(rule, EGRESS_SCALAR_FIELDS)
     )
 
 
@@ -552,7 +562,7 @@ class OciSecurityListModule(OciResourceBase):
         ]
         if _rules_sort_key(normalized_current) == _rules_sort_key(normalized_desired):
             return []
-        return [("replace", desired_rules or [])]
+        return [("replace", normalized_desired)]
 
     def create_resource(self):
         create_security_list_details = build_create_security_list_details(
@@ -579,16 +589,18 @@ class OciSecurityListModule(OciResourceBase):
             if strategy_operation["param_name"] == "ingress_security_rules":
                 operations = strategy_operation["operations"]
                 if operations:
-                    desired_rules = operations[0][1]
+                    normalized_rules = operations[0][1]
                     update_model_fields["ingress_security_rules"] = [
-                        build_ingress_rule_model(rule) for rule in desired_rules
+                        _ingress_rule_model_from_normalized(rule)
+                        for rule in normalized_rules
                     ]
             elif strategy_operation["param_name"] == "egress_security_rules":
                 operations = strategy_operation["operations"]
                 if operations:
-                    desired_rules = operations[0][1]
+                    normalized_rules = operations[0][1]
                     update_model_fields["egress_security_rules"] = [
-                        build_egress_rule_model(rule) for rule in desired_rules
+                        _egress_rule_model_from_normalized(rule)
+                        for rule in normalized_rules
                     ]
 
         if not update_model_fields:
