@@ -98,9 +98,9 @@ options:
             exist before it can be referenced here; OCI rejects route rules
             that point at a nonexistent or incompatible resource.
           - Typically the target is created earlier in the same playbook
-            (for example with M(oracle.oci.oci_internet_gateway)) and its
-            returned C(resource.id) is passed in here. See the examples
-            below.
+            (for example with an internet gateway or NAT gateway resource
+            module) and its returned C(resource.id) is passed in here. See
+            the examples below.
         type: str
         required: true
       description:
@@ -307,7 +307,7 @@ class OciRouteTableModule(OciResourceBase):
                 continue
             operations = strategy_operation["operations"]
             if operations:
-                _, desired_rules = operations[0]
+                desired_rules = operations[0][1]
                 update_model_fields["route_rules"] = build_route_rule_models(desired_rules)
 
         if not update_model_fields:
