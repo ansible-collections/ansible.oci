@@ -67,6 +67,10 @@ def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
     assert captured["argument_spec"]["route_table_id"] == {"type": "str"}
     assert captured["argument_spec"]["name"] == {"type": "str"}
     assert captured["argument_spec"]["compartment_id"] == {"type": "str"}
+    assert captured["argument_spec"]["allow_duplicate_name"] == {
+        "type": "bool",
+        "default": False,
+    }
 
 
 def test_build_create_internet_gateway_details_includes_supported_fields(monkeypatch):

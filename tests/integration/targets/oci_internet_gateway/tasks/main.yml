@@ -35,7 +35,7 @@
           vcn_id: "{{ oci_internet_gateway_vcn_create.resource.id }}"
           default_route_table_id: "{{ oci_internet_gateway_vcn_create.resource.default_route_table_id }}"
 
-    - name: Define internet gateway create and delete parameters
+    - name: Define internet gateway create parameters
       ansible.builtin.set_fact:
         oci_internet_gateway_create_params:
           state: present
@@ -44,9 +44,6 @@
           name: "{{ oci_internet_gateway_integration_ig_name }}"
           is_enabled: true
           freeform_tags: "{{ oci_internet_gateway_integration_create_tags }}"
-        oci_internet_gateway_delete_params:
-          state: absent
-          internet_gateway_id: ""
 
     - name: Create internet gateway in check mode
       oracle.oci.oci_internet_gateway: &oci_internet_gateway_create_module_options
