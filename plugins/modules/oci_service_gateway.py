@@ -170,6 +170,79 @@ resource:
   description: The service gateway resource.
   returned: when state != absent
   type: dict
+  contains:
+    id:
+      description: The OCID of the service gateway.
+      type: str
+      returned: always
+      sample: ocid1.servicegateway.oc1..example
+    name:
+      description: The display name of the service gateway.
+      type: str
+      returned: always
+      sample: example-service-gateway
+    compartment_id:
+      description: The OCID of the compartment containing the service gateway.
+      type: str
+      returned: always
+      sample: ocid1.compartment.oc1..example
+    vcn_id:
+      description: The OCID of the VCN containing the service gateway.
+      type: str
+      returned: always
+      sample: ocid1.vcn.oc1..example
+    lifecycle_state:
+      description: The current lifecycle state of the service gateway.
+      type: str
+      returned: always
+      sample: AVAILABLE
+    block_traffic:
+      description: Whether the service gateway blocks all traffic through it.
+      type: bool
+      returned: always
+      sample: false
+    services:
+      description: The OCI services attached to the service gateway.
+      type: list
+      elements: dict
+      returned: always
+      sample:
+        - service_id: ocid1.service.oc1..example
+          service_name: all-iad-services-in-oracle-services-network
+    route_table_id:
+      description: The OCID of the route table directly associated with the service gateway, if any.
+      type: str
+      returned: always
+      sample: null
+    freeform_tags:
+      description: Free-form tags applied to the service gateway.
+      type: dict
+      returned: always
+      sample: {"environment": "production"}
+    defined_tags:
+      description: Defined tags applied to the service gateway.
+      type: dict
+      returned: always
+      sample: {"Operations": {"CostCenter": "42"}}
+    time_created:
+      description: The date and time the service gateway was created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+  sample:
+    id: ocid1.servicegateway.oc1..example
+    name: example-service-gateway
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    lifecycle_state: AVAILABLE
+    block_traffic: false
+    services:
+      - service_id: ocid1.service.oc1..example
+        service_name: all-iad-services-in-oracle-services-network
+    route_table_id: null
+    freeform_tags: {"environment": "production"}
+    defined_tags: {"Operations": {"CostCenter": "42"}}
+    time_created: "2026-01-01T00:00:00.000Z"
 """
 
 from ansible.module_utils.basic import AnsibleModule
