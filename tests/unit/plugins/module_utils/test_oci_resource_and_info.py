@@ -70,6 +70,28 @@ def install_fake_oci_sdk(monkeypatch, *, pagination=None, retry=None, wait_until
     return ServiceError
 
 
+class _PassthroughRetryStrategy:
+    """Fake OCI retry strategy that just invokes the wrapped call once."""
+
+    def make_retrying_call(self, fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+
+class _PassthroughRetryStrategyBuilder:
+    """Fake ``oci.retry.RetryStrategyBuilder`` for tests that don't exercise retries."""
+
+    def __init__(self, **kwargs):
+        pass
+
+    def get_retry_strategy(self):
+        return _PassthroughRetryStrategy()
+
+
+def passthrough_retry_module():
+    """Return a fake ``oci.retry`` module usable with ``call_with_retry``."""
+    return types.SimpleNamespace(RetryStrategyBuilder=_PassthroughRetryStrategyBuilder)
+
+
 def test_oci_resource_base_uses_shared_serializer(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(
@@ -1567,7 +1589,11 @@ def test_oci_resource_base_wait_for_work_request_accepts_getter_callback(monkeyp
         recorded_call["kwargs"] = kwargs
         return final_response
 
-    install_fake_oci_sdk(monkeypatch, wait_until=fake_wait_until)
+    install_fake_oci_sdk(
+        monkeypatch,
+        wait_until=fake_wait_until,
+        retry=passthrough_retry_module(),
+    )
 
     load_collection_module("oci_base", plugin_dir="module_utils")
     oci_resource = load_collection_module("oci_resource")
@@ -1618,6 +1644,79 @@ def test_oci_resource_base_wait_for_work_request_accepts_getter_callback(monkeyp
     assert recorded_call["client"] is work_request_client
     assert recorded_call["response"] is initial_response
     assert recorded_call["kwargs"]["evaluate_response"](final_response) is True
+
+
+def test_oci_resource_base_wait_for_work_request_retries_transient_connection_errors(monkeypatch):
+    """A dropped connection while polling a work request must be retried, not fatal.
+
+    This guards against a regression of the CI failure where a
+    ``RemoteDisconnected`` mid-poll on ``GET .../workRequests/{id}`` failed
+    the whole task instead of being absorbed by call_with_retry.
+    """
+    final_response = types.SimpleNamespace(
+        data=types.SimpleNamespace(status="SUCCEEDED"),
+    )
+
+    install_fake_oci_sdk(
+        monkeypatch,
+        wait_until=lambda client, response, **kwargs: final_response,
+    )
+
+    load_collection_module("oci_base", plugin_dir="module_utils")
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    instance = ExampleResource(
+        DummyModule({"wait_timeout": 1200, "wait_interval": 30})
+    )
+
+    attempts = {"count": 0}
+
+    def get_work_request(work_request_id):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise ConnectionError("('Connection aborted.', RemoteDisconnected(...))")
+        return types.SimpleNamespace(data=types.SimpleNamespace(status="IN_PROGRESS"))
+
+    recorded_call_with_retry = []
+
+    def fake_call_with_retry(fn, *args, **kwargs):
+        recorded_call_with_retry.append((fn, args, kwargs))
+        try:
+            return fn(*args, **kwargs)
+        except ConnectionError:
+            return fn(*args, **kwargs)
+
+    monkeypatch.setattr(instance, "call_with_retry", fake_call_with_retry)
+
+    result = instance.wait_for_work_request(
+        types.SimpleNamespace(),
+        "work-request-ocid",
+        get_work_request_fn=get_work_request,
+    )
+
+    assert result is final_response.data
+    assert attempts["count"] == 2
+    assert recorded_call_with_retry[0] == (get_work_request, ("work-request-ocid",), {})
 
 
 def test_oci_resource_base_wait_for_resource_id_uses_dead_states_for_not_found_handling(monkeypatch):

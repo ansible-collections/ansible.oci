@@ -1,0 +1,24 @@
+---
+- name: Run DRG attachment cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked DRG attachment during cleanup
+      oracle.oci.oci_drg_attachment:
+        state: absent
+        drg_attachment_id: "{{ oci_drg_attachment_id }}"
+      when: oci_drg_attachment_id | default('') | length > 0
+
+    - name: Delete leaked DRG during cleanup
+      oracle.oci.oci_drg:
+        state: absent
+        drg_id: "{{ oci_drg_attachment_integration_drg_id }}"
+      when: oci_drg_attachment_integration_drg_id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_drg_attachment_integration_vcn_id }}"
+      when: oci_drg_attachment_integration_vcn_id | default('') | length > 0

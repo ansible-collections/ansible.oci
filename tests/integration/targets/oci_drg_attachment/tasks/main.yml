@@ -1,0 +1,228 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI DRG attachment integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_drg_attachment_integration_vcn_name: "{{ oci_drg_attachment_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_drg_attachment_integration_drg_name: "{{ oci_drg_attachment_integration_drg_name }}-{{ oci_integration_rpfx }}"
+    oci_drg_attachment_integration_attachment_name: "{{ oci_drg_attachment_integration_attachment_name }}-{{ oci_integration_rpfx }}"
+    oci_drg_attachment_integration_updated_attachment_name: "{{ oci_drg_attachment_integration_updated_attachment_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise DRG attachment module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for DRG attachment integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_drg_attachment_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_drg_attachment_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_drg_attachment_integration_vcn_dns_label }}"
+      register: oci_drg_attachment_vcn_create
+
+    - name: Capture created VCN id
+      ansible.builtin.set_fact:
+        oci_drg_attachment_integration_vcn_id: "{{ oci_drg_attachment_vcn_create.resource.id }}"
+
+    - name: Create test DRG for DRG attachment integration
+      oracle.oci.oci_drg:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_drg_attachment_integration_drg_name }}"
+      register: oci_drg_attachment_drg_create
+
+    - name: Capture created DRG id
+      ansible.builtin.set_fact:
+        oci_drg_attachment_integration_drg_id: "{{ oci_drg_attachment_drg_create.resource.id }}"
+
+    - name: Define DRG attachment create and delete parameters
+      ansible.builtin.set_fact:
+        oci_drg_attachment_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          drg_id: "{{ oci_drg_attachment_integration_drg_id }}"
+          vcn_id: "{{ oci_drg_attachment_integration_vcn_id }}"
+          name: "{{ oci_drg_attachment_integration_attachment_name }}"
+          freeform_tags: "{{ oci_drg_attachment_integration_create_tags }}"
+        oci_drg_attachment_delete_params:
+          state: absent
+          drg_attachment_id: ""
+
+    - name: Create DRG attachment in check mode
+      oracle.oci.oci_drg_attachment: &oci_drg_attachment_create_module_options
+        state: "{{ oci_drg_attachment_create_params.state }}"
+        compartment_id: "{{ oci_drg_attachment_create_params.compartment_id }}"
+        drg_id: "{{ oci_drg_attachment_create_params.drg_id }}"
+        vcn_id: "{{ oci_drg_attachment_create_params.vcn_id }}"
+        name: "{{ oci_drg_attachment_create_params.name }}"
+        freeform_tags: "{{ oci_drg_attachment_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_drg_attachment_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_attachment_create_check.changed | bool
+
+    - name: Create DRG attachment
+      oracle.oci.oci_drg_attachment:
+        <<: *oci_drg_attachment_create_module_options
+      register: oci_drg_attachment_create
+
+    - name: Capture DRG attachment id and define update parameters
+      ansible.builtin.set_fact:
+        oci_drg_attachment_id: "{{ oci_drg_attachment_create.resource.id }}"
+        oci_drg_attachment_update_params:
+          state: present
+          drg_attachment_id: "{{ oci_drg_attachment_create.resource.id }}"
+          name: "{{ oci_drg_attachment_integration_updated_attachment_name }}"
+          freeform_tags: "{{ oci_drg_attachment_integration_update_tags }}"
+        oci_drg_attachment_delete_params:
+          state: absent
+          drg_attachment_id: "{{ oci_drg_attachment_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_attachment_create.changed | bool
+
+    - name: Read created DRG attachment by rerunning the module with only the id
+      oracle.oci.oci_drg_attachment:
+        drg_attachment_id: "{{ oci_drg_attachment_id }}"
+      register: oci_drg_attachment_probe_after_create
+
+    - name: Assert DRG attachment probe reflects the created attachment
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_probe_after_create.changed | bool
+          - oci_drg_attachment_probe_after_create.resource.id == oci_drg_attachment_id
+          - oci_drg_attachment_probe_after_create.resource.name == oci_drg_attachment_integration_attachment_name
+          - oci_drg_attachment_probe_after_create.resource.drg_id == oci_drg_attachment_integration_drg_id
+          - oci_drg_attachment_probe_after_create.resource.vcn_id == oci_drg_attachment_integration_vcn_id
+          - oci_drg_attachment_probe_after_create.resource.lifecycle_state == "ATTACHED"
+          - oci_drg_attachment_probe_after_create.resource.freeform_tags.phase == "create"
+
+    - name: Assert created DRG attachment is a no-op on rerun with returned id
+      oracle.oci.oci_drg_attachment:
+        <<: *oci_drg_attachment_create_module_options
+        drg_attachment_id: "{{ oci_drg_attachment_id }}"
+      register: oci_drg_attachment_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_create_rerun.changed | bool
+
+    - name: Update DRG attachment in check mode
+      oracle.oci.oci_drg_attachment: &oci_drg_attachment_update_module_options
+        state: "{{ oci_drg_attachment_update_params.state }}"
+        drg_attachment_id: "{{ oci_drg_attachment_update_params.drg_attachment_id }}"
+        name: "{{ oci_drg_attachment_update_params.name }}"
+        freeform_tags: "{{ oci_drg_attachment_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_drg_attachment_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_attachment_update_check.changed | bool
+
+    - name: Read DRG attachment after update check mode
+      oracle.oci.oci_drg_attachment:
+        drg_attachment_id: "{{ oci_drg_attachment_id }}"
+      register: oci_drg_attachment_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_update_check_probe.changed | bool
+          - oci_drg_attachment_update_check_probe.resource.name == oci_drg_attachment_integration_attachment_name
+          - oci_drg_attachment_update_check_probe.resource.freeform_tags.phase == "create"
+
+    - name: Update DRG attachment
+      oracle.oci.oci_drg_attachment:
+        <<: *oci_drg_attachment_update_module_options
+      register: oci_drg_attachment_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_attachment_update.changed | bool
+
+    - name: Read DRG attachment after update
+      oracle.oci.oci_drg_attachment:
+        drg_attachment_id: "{{ oci_drg_attachment_id }}"
+      register: oci_drg_attachment_probe_after_update
+
+    - name: Assert DRG attachment probe reflects the updated attachment
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_probe_after_update.changed | bool
+          - oci_drg_attachment_probe_after_update.resource.name == oci_drg_attachment_integration_updated_attachment_name
+          - oci_drg_attachment_probe_after_update.resource.freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_drg_attachment:
+        <<: *oci_drg_attachment_update_module_options
+      register: oci_drg_attachment_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_update_rerun.changed | bool
+
+    - name: Delete DRG attachment in check mode
+      oracle.oci.oci_drg_attachment: &oci_drg_attachment_delete_module_options
+        state: "{{ oci_drg_attachment_delete_params.state }}"
+        drg_attachment_id: "{{ oci_drg_attachment_delete_params.drg_attachment_id }}"
+      check_mode: true
+      register: oci_drg_attachment_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_attachment_delete_check.changed | bool
+
+    - name: Read DRG attachment after delete check mode
+      oracle.oci.oci_drg_attachment:
+        drg_attachment_id: "{{ oci_drg_attachment_id }}"
+      register: oci_drg_attachment_delete_check_probe
+
+    - name: Assert DRG attachment still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_delete_check_probe.changed | bool
+          - oci_drg_attachment_delete_check_probe.resource.id == oci_drg_attachment_id
+
+    - name: Delete DRG attachment
+      oracle.oci.oci_drg_attachment:
+        <<: *oci_drg_attachment_delete_module_options
+      register: oci_drg_attachment_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_drg_attachment_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_drg_attachment:
+        <<: *oci_drg_attachment_delete_module_options
+      register: oci_drg_attachment_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_delete_rerun.changed | bool
+
+  always:
+    - name: Run DRG attachment cleanup
+      ansible.builtin.include_tasks: cleanup.yml
