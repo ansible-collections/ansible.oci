@@ -97,6 +97,27 @@ def test_build_create_security_list_details_builds_nested_rule_models(monkeypatc
     assert egress_rule.tcp_options is None
 
 
+def test_build_create_security_list_details_sends_empty_rules_when_absent(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    security_list_module = load_collection_module("oci_security_list")
+    details = security_list_module.build_create_security_list_details(
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-security-list",
+        }
+    )
+
+    # The real OCI SDK model always initializes ingress/egress rules to
+    # None and the SDK serializes that as null, which the OCI API rejects
+    # with `InvalidParameter: ingressSecurityRules must not be null`. The
+    # create details must therefore always include explicit (possibly
+    # empty) lists.
+    assert details.ingress_security_rules == []
+    assert details.egress_security_rules == []
+
+
 def test_needs_update_returns_false_when_ingress_rules_match_regardless_of_order(monkeypatch):
     install_fake_oci(monkeypatch)
 

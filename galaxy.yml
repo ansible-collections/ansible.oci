@@ -41,3 +41,4 @@ build_ignore:
   - tests/integration/integration_config.yml
   - tests/integration/.runtime
   - sonar-project.properties
+  - playbooks

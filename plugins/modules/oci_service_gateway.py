@@ -277,16 +277,13 @@ def build_service_models(service_ids):
 
 
 def build_create_service_gateway_details(params):
-    service_ids = params.get("service_ids")
     details = filter_none_values(
         {
             "compartment_id": params.get("compartment_id"),
             "vcn_id": params.get("vcn_id"),
             "display_name": params.get("name"),
             "route_table_id": params.get("route_table_id"),
-            "services": (
-                build_service_models(service_ids) if service_ids is not None else None
-            ),
+            "services": build_service_models(params.get("service_ids")),
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
         }

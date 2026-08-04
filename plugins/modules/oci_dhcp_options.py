@@ -413,13 +413,11 @@ def build_create_dhcp_options_details(params):
             "domain_name_type": DOMAIN_NAME_TYPE_TO_OCI.get(
                 domain_name_type, domain_name_type
             ),
+            "options": build_option_models(params.get("options")),
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
         }
     )
-    options = params.get("options")
-    if options:
-        details["options"] = build_option_models(options)
     return oci.core.models.CreateDhcpDetails(**details)
 
 
