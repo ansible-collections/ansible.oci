@@ -1,0 +1,243 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI security list integration tests require
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_security_list_integration_vcn_name: "{{ oci_security_list_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_security_list_integration_security_list_name: "{{ oci_security_list_integration_security_list_name }}-{{ oci_integration_rpfx }}"
+    oci_security_list_integration_updated_security_list_name: "{{ oci_security_list_integration_updated_security_list_name }}-{{ oci_integration_rpfx }}"
+    oci_security_list_integration_vcn_dns_label: "slvcn{{ oci_integration_rpfx }}"
+
+- name: Exercise security list module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for security list integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_security_list_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_security_list_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_security_list_integration_vcn_dns_label }}"
+      register: oci_security_list_vcn_create
+
+    - name: Define security list create and delete parameters
+      ansible.builtin.set_fact:
+        oci_security_list_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          vcn_id: "{{ oci_security_list_vcn_create.resource.id }}"
+          name: "{{ oci_security_list_integration_security_list_name }}"
+          ingress_security_rules:
+            - source: 0.0.0.0/0
+              protocol: "6"
+              tcp_options:
+                destination_port_min: 22
+                destination_port_max: 22
+          egress_security_rules:
+            - destination: 0.0.0.0/0
+              protocol: all
+          freeform_tags: "{{ oci_security_list_integration_create_tags }}"
+        oci_security_list_delete_params:
+          state: absent
+          security_list_id: ""
+
+    - name: Create security list in check mode
+      oracle.oci.oci_security_list: &oci_security_list_create_module_options
+        state: "{{ oci_security_list_create_params.state }}"
+        compartment_id: "{{ oci_security_list_create_params.compartment_id }}"
+        vcn_id: "{{ oci_security_list_create_params.vcn_id }}"
+        name: "{{ oci_security_list_create_params.name }}"
+        ingress_security_rules: "{{ oci_security_list_create_params.ingress_security_rules }}"
+        egress_security_rules: "{{ oci_security_list_create_params.egress_security_rules }}"
+        freeform_tags: "{{ oci_security_list_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_security_list_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_create_check.changed | bool
+
+    - name: Read security list after create check mode
+      oracle.oci.oci_security_list_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_security_list_create_params.vcn_id }}"
+        name: "{{ oci_security_list_integration_security_list_name }}"
+      register: oci_security_list_create_check_probe
+
+    - name: Assert security list is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_create_check_probe.security_lists | length == 0
+
+    - name: Create security list
+      oracle.oci.oci_security_list:
+        <<: *oci_security_list_create_module_options
+      register: oci_security_list_create
+
+    - name: Capture security list id and define update parameters
+      ansible.builtin.set_fact:
+        oci_security_list_id: "{{ oci_security_list_create.resource.id }}"
+        oci_security_list_update_params:
+          state: present
+          security_list_id: "{{ oci_security_list_create.resource.id }}"
+          name: "{{ oci_security_list_integration_updated_security_list_name }}"
+          ingress_security_rules:
+            - source: 10.0.0.0/16
+              protocol: "6"
+              tcp_options:
+                destination_port_min: 443
+                destination_port_max: 443
+          egress_security_rules:
+            - destination: 0.0.0.0/0
+              protocol: all
+          freeform_tags: "{{ oci_security_list_integration_update_tags }}"
+        oci_security_list_delete_params:
+          state: absent
+          security_list_id: "{{ oci_security_list_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_create.changed | bool
+
+    - name: Read security list by id
+      oracle.oci.oci_security_list_info:
+        security_list_id: "{{ oci_security_list_id }}"
+      register: oci_security_list_info_by_id
+
+    - name: Assert security list info by id returned the created security list
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_info_by_id.security_lists | length == 1
+          - oci_security_list_info_by_id.security_lists[0].id == oci_security_list_id
+          - oci_security_list_info_by_id.security_lists[0].name == oci_security_list_integration_security_list_name
+          - oci_security_list_info_by_id.security_lists[0].lifecycle_state == "AVAILABLE"
+          - oci_security_list_info_by_id.security_lists[0].ingress_security_rules | length == 1
+          - oci_security_list_info_by_id.security_lists[0].egress_security_rules | length == 1
+
+    - name: Assert created security list is a no-op on rerun
+      oracle.oci.oci_security_list:
+        <<: *oci_security_list_create_module_options
+      register: oci_security_list_create_rerun
+
+    - name: Verify rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_security_list_create_rerun.changed | bool
+
+    - name: Update security list in check mode
+      oracle.oci.oci_security_list: &oci_security_list_update_module_options
+        state: "{{ oci_security_list_update_params.state }}"
+        security_list_id: "{{ oci_security_list_update_params.security_list_id }}"
+        name: "{{ oci_security_list_update_params.name }}"
+        ingress_security_rules: "{{ oci_security_list_update_params.ingress_security_rules }}"
+        egress_security_rules: "{{ oci_security_list_update_params.egress_security_rules }}"
+        freeform_tags: "{{ oci_security_list_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_security_list_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_update_check.changed | bool
+
+    - name: Read security list after update check mode
+      oracle.oci.oci_security_list_info:
+        security_list_id: "{{ oci_security_list_id }}"
+      register: oci_security_list_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_update_check_probe.security_lists[0].name == oci_security_list_integration_security_list_name
+          - oci_security_list_update_check_probe.security_lists[0].ingress_security_rules[0].source == "0.0.0.0/0"
+
+    - name: Update security list
+      oracle.oci.oci_security_list:
+        <<: *oci_security_list_update_module_options
+      register: oci_security_list_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_update.changed | bool
+
+    - name: Read updated security list by id
+      oracle.oci.oci_security_list_info:
+        security_list_id: "{{ oci_security_list_id }}"
+      register: oci_security_list_info_updated
+
+    - name: Assert security list info reflects the update
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_info_updated.security_lists[0].name == oci_security_list_integration_updated_security_list_name
+          - oci_security_list_info_updated.security_lists[0].ingress_security_rules[0].source == "10.0.0.0/16"
+          - oci_security_list_info_updated.security_lists[0].freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_security_list:
+        <<: *oci_security_list_update_module_options
+      register: oci_security_list_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_security_list_update_rerun.changed | bool
+
+    - name: Delete security list in check mode
+      oracle.oci.oci_security_list: &oci_security_list_delete_module_options
+        state: "{{ oci_security_list_delete_params.state }}"
+        security_list_id: "{{ oci_security_list_delete_params.security_list_id }}"
+      check_mode: true
+      register: oci_security_list_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_delete_check.changed | bool
+
+    - name: Read security list after delete check mode
+      oracle.oci.oci_security_list_info:
+        security_list_id: "{{ oci_security_list_id }}"
+      register: oci_security_list_delete_check_probe
+
+    - name: Assert security list still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_delete_check_probe.security_lists | length == 1
+
+    - name: Delete security list
+      oracle.oci.oci_security_list:
+        <<: *oci_security_list_delete_module_options
+      register: oci_security_list_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_security_list:
+        <<: *oci_security_list_delete_module_options
+      register: oci_security_list_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_security_list_delete_rerun.changed | bool
+
+  always:
+    - name: Run security list cleanup
+      ansible.builtin.include_tasks: cleanup.yml

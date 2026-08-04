@@ -1,0 +1,18 @@
+---
+- name: Run NAT gateway cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked NAT gateway during cleanup
+      oracle.oci.oci_nat_gateway:
+        state: absent
+        nat_gateway_id: "{{ oci_nat_gateway_id }}"
+      when: oci_nat_gateway_id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_nat_gateway_integration_network.vcn_id }}"
+      when: oci_nat_gateway_integration_network.vcn_id | default('') | length > 0
