@@ -13,3 +13,5 @@ action_groups:
     - oci_drg_attachment
     - oci_nat_gateway
     - oci_nat_gateway_info
+    - oci_security_list
+    - oci_security_list_info
