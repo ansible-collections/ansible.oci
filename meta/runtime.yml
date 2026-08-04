@@ -8,3 +8,6 @@ action_groups:
     - oci_subnet_info
     - oci_dhcp_options
     - oci_dhcp_options_info
+    - oci_drg
+    - oci_drg_info
+    - oci_drg_attachment
