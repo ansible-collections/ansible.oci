@@ -11,3 +11,5 @@ action_groups:
     - oci_drg
     - oci_drg_info
     - oci_drg_attachment
+    - oci_nat_gateway
+    - oci_nat_gateway_info
