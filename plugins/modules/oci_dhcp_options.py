@@ -167,6 +167,81 @@ resource:
   description: The DHCP options resource.
   returned: when state != absent
   type: dict
+  contains:
+    id:
+      description: The OCID of the DHCP options.
+      type: str
+      returned: always
+      sample: ocid1.dhcpoptions.oc1..example
+    name:
+      description: The display name of the DHCP options.
+      type: str
+      returned: always
+      sample: example-dhcp-options
+    compartment_id:
+      description: The OCID of the compartment containing the DHCP options.
+      type: str
+      returned: always
+      sample: ocid1.compartment.oc1..example
+    vcn_id:
+      description: The OCID of the VCN containing the DHCP options.
+      type: str
+      returned: always
+      sample: ocid1.vcn.oc1..example
+    lifecycle_state:
+      description: The current lifecycle state of the DHCP options.
+      type: str
+      returned: always
+      sample: AVAILABLE
+    options:
+      description: >-
+        The DHCP options, using the same C(option_type)/C(server_type)
+        snake_case vocabulary accepted as input.
+      type: list
+      elements: dict
+      returned: always
+      sample:
+        - option_type: domain_name_server
+          server_type: vcn_local_plus_internet
+        - option_type: search_domain
+          search_domain_names:
+            - example.oraclevcn.com
+    domain_name_type:
+      description: The domain name type used for the VCN.
+      type: str
+      returned: always
+      sample: SUBNET_DOMAIN
+    freeform_tags:
+      description: Free-form tags applied to the DHCP options.
+      type: dict
+      returned: always
+      sample: {"environment": "production"}
+    defined_tags:
+      description: Defined tags applied to the DHCP options.
+      type: dict
+      returned: always
+      sample: {"Operations": {"CostCenter": "42"}}
+    time_created:
+      description: The date and time the DHCP options were created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+  sample:
+    id: ocid1.dhcpoptions.oc1..example
+    name: example-dhcp-options
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    lifecycle_state: AVAILABLE
+    options:
+      - option_type: domain_name_server
+        server_type: vcn_local_plus_internet
+      - option_type: search_domain
+        search_domain_names:
+          - example.oraclevcn.com
+    domain_name_type: SUBNET_DOMAIN
+    freeform_tags: {"environment": "production"}
+    defined_tags: {"Operations": {"CostCenter": "42"}}
+    time_created: "2026-01-01T00:00:00.000Z"
 """
 
 import json
