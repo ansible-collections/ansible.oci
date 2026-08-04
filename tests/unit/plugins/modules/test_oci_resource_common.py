@@ -49,6 +49,35 @@ RESOURCE_CASES = (
         },
     },
     {
+        "module_name": "oci_drg",
+        "class_name": "OciDrgModule",
+        "id_param": "drg_id",
+        "id_value": "ocid1.drg.oc1..example",
+        "missing_id": "ocid1.drg.oc1..missing",
+        "get_method": "get_drg",
+        "list_method": "list_drgs",
+        "delete_method": "delete_drg",
+        "not_found_label": "DRG",
+        "delete_required_msg": "Deleting a DRG requires either drg_id or name (with compartment_id)",
+        "create_missing_msg": "Creating a DRG requires",
+        "name_lookup_params": {
+            "name": "example-drg",
+            "compartment_id": "ocid1.compartment.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-drg",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "name": "example-drg",
+        },
+    },
+    {
         "module_name": "oci_subnet",
         "class_name": "OciSubnetModule",
         "id_param": "subnet_id",
