@@ -17,3 +17,5 @@ action_groups:
     - oci_security_list_info
     - oci_internet_gateway
     - oci_internet_gateway_info
+    - oci_service_gateway
+    - oci_service_gateway_info
