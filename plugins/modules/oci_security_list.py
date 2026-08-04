@@ -279,6 +279,106 @@ resource:
   description: The security list resource.
   returned: when state != absent
   type: dict
+  contains:
+    id:
+      description: The OCID of the security list.
+      type: str
+      returned: always
+      sample: ocid1.securitylist.oc1..example
+    name:
+      description: The display name of the security list.
+      type: str
+      returned: always
+      sample: example-security-list
+    compartment_id:
+      description: The OCID of the compartment containing the security list.
+      type: str
+      returned: always
+      sample: ocid1.compartment.oc1..example
+    vcn_id:
+      description: The OCID of the VCN containing the security list.
+      type: str
+      returned: always
+      sample: ocid1.vcn.oc1..example
+    lifecycle_state:
+      description: The current lifecycle state of the security list.
+      type: str
+      returned: always
+      sample: AVAILABLE
+    ingress_security_rules:
+      description: The ingress rules applied to the security list.
+      type: list
+      elements: dict
+      returned: always
+      sample:
+        - source: 0.0.0.0/0
+          source_type: CIDR_BLOCK
+          protocol: "6"
+          is_stateless: false
+          description: null
+          tcp_options:
+            source_port_range: null
+            destination_port_range: {"min": 22, "max": 22}
+          udp_options: null
+          icmp_options: null
+    egress_security_rules:
+      description: The egress rules applied to the security list.
+      type: list
+      elements: dict
+      returned: always
+      sample:
+        - destination: 0.0.0.0/0
+          destination_type: CIDR_BLOCK
+          protocol: all
+          is_stateless: false
+          description: null
+          tcp_options: null
+          udp_options: null
+          icmp_options: null
+    freeform_tags:
+      description: Free-form tags applied to the security list.
+      type: dict
+      returned: always
+      sample: {"environment": "production"}
+    defined_tags:
+      description: Defined tags applied to the security list.
+      type: dict
+      returned: always
+      sample: {"Operations": {"CostCenter": "42"}}
+    time_created:
+      description: The date and time the security list was created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+  sample:
+    id: ocid1.securitylist.oc1..example
+    name: example-security-list
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    lifecycle_state: AVAILABLE
+    ingress_security_rules:
+      - source: 0.0.0.0/0
+        source_type: CIDR_BLOCK
+        protocol: "6"
+        is_stateless: false
+        description: null
+        tcp_options:
+          source_port_range: null
+          destination_port_range: {"min": 22, "max": 22}
+        udp_options: null
+        icmp_options: null
+    egress_security_rules:
+      - destination: 0.0.0.0/0
+        destination_type: CIDR_BLOCK
+        protocol: all
+        is_stateless: false
+        description: null
+        tcp_options: null
+        udp_options: null
+        icmp_options: null
+    freeform_tags: {"environment": "production"}
+    defined_tags: {"Operations": {"CostCenter": "42"}}
+    time_created: "2026-01-01T00:00:00.000Z"
 """
 
 import json
