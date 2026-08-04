@@ -100,6 +100,32 @@ local_peering_gateways:
       type: str
       returned: always
       sample: PEERED
+    peering_status_details:
+      description: A human-readable message describing the current peering status, if any.
+      type: str
+      returned: always
+      sample: null
+    peer_advertised_cidr:
+      description: The CIDR block the peered VCN advertises, once peering is established.
+      type: str
+      returned: always
+      sample: 10.255.0.0/16
+    peer_advertised_cidr_details:
+      description: The individual CIDR blocks that make up peer_advertised_cidr.
+      type: list
+      elements: str
+      returned: always
+      sample: ["10.255.0.0/16"]
+    is_cross_tenancy_peering:
+      description: Whether the peered local peering gateway is in a different tenancy.
+      type: bool
+      returned: always
+      sample: false
+    security_attributes:
+      description: Zero Trust Packet Routing security attributes applied to the local peering gateway, if any.
+      type: dict
+      returned: always
+      sample: {}
     route_table_id:
       description: The OCID of the route table directly associated with the local peering gateway, if any.
       type: str
@@ -128,6 +154,11 @@ local_peering_gateways:
       lifecycle_state: AVAILABLE
       peer_id: ocid1.localpeeringgateway.oc1..peer-example
       peering_status: PEERED
+      peering_status_details: null
+      peer_advertised_cidr: 10.255.0.0/16
+      peer_advertised_cidr_details: ["10.255.0.0/16"]
+      is_cross_tenancy_peering: false
+      security_attributes: {}
       route_table_id: null
       freeform_tags: {"environment": "production"}
       defined_tags: {"Operations": {"CostCenter": "42"}}
