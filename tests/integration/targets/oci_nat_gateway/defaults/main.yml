@@ -1,0 +1,12 @@
+---
+oci_nat_gateway_integration_vcn_name: "oci-nat-gateway-integration-vcn"
+oci_nat_gateway_integration_nat_gateway_name: "oci-nat-gateway-integration-nat-gateway"
+oci_nat_gateway_integration_updated_nat_gateway_name: "oci-nat-gateway-integration-nat-gateway-updated"
+oci_nat_gateway_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_nat_gateway_integration_vcn_dns_label: "ocinatgwv"
+oci_nat_gateway_integration_create_tags:
+  phase: create
+  role: integration
+oci_nat_gateway_integration_update_tags:
+  phase: update
+  role: integration

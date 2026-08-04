@@ -1,0 +1,13 @@
+---
+oci_drg_attachment_integration_vcn_name: "oci-drg-attachment-integration-vcn"
+oci_drg_attachment_integration_drg_name: "oci-drg-attachment-integration-drg"
+oci_drg_attachment_integration_attachment_name: "oci-drg-attachment-integration-attachment"
+oci_drg_attachment_integration_updated_attachment_name: "oci-drg-attachment-integration-attachment-updated"
+oci_drg_attachment_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_drg_attachment_integration_vcn_dns_label: "ocidrgattv"
+oci_drg_attachment_integration_create_tags:
+  phase: create
+  role: integration
+oci_drg_attachment_integration_update_tags:
+  phase: update
+  role: integration

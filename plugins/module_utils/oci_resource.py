@@ -587,7 +587,12 @@ class OciResourceBase(OciModuleBase, ABC):
         if failure_states is None:
             failure_states = frozenset({"FAILED", "CANCELED"})
 
-        initial_response = get_work_request_fn(work_request_id)
+        # Work request polling is a long-running GET loop, so it is prone to
+        # transient connection drops (e.g. RemoteDisconnected) from the OCI
+        # API. Route it through call_with_retry rather than calling
+        # get_work_request_fn directly so those drops are retried instead of
+        # failing the whole task.
+        initial_response = self.call_with_retry(get_work_request_fn, work_request_id)
         waiter_result = oci.wait_until(
             work_request_client,
             initial_response,
@@ -600,7 +605,9 @@ class OciResourceBase(OciModuleBase, ABC):
                 failure_states,
                 work_request_id,
             ),
-            fetch_func=lambda response=None: get_work_request_fn(work_request_id),
+            fetch_func=lambda response=None: self.call_with_retry(
+                get_work_request_fn, work_request_id
+            ),
         )
         return getattr(waiter_result, "data", None)
 
