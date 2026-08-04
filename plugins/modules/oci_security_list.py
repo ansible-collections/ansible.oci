@@ -564,23 +564,19 @@ def build_egress_rule_model(rule):
 
 
 def build_create_security_list_details(params):
-    ingress_security_rules = params.get("ingress_security_rules")
-    egress_security_rules = params.get("egress_security_rules")
     details = filter_none_values(
         {
             "compartment_id": params.get("compartment_id"),
             "vcn_id": params.get("vcn_id"),
             "display_name": params.get("name"),
-            "ingress_security_rules": (
-                [build_ingress_rule_model(rule) for rule in ingress_security_rules]
-                if ingress_security_rules is not None
-                else None
-            ),
-            "egress_security_rules": (
-                [build_egress_rule_model(rule) for rule in egress_security_rules]
-                if egress_security_rules is not None
-                else None
-            ),
+            "ingress_security_rules": [
+                build_ingress_rule_model(rule)
+                for rule in (params.get("ingress_security_rules") or [])
+            ],
+            "egress_security_rules": [
+                build_egress_rule_model(rule)
+                for rule in (params.get("egress_security_rules") or [])
+            ],
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
         }

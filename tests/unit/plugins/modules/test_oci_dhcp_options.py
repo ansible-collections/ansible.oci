@@ -132,7 +132,9 @@ def test_build_create_dhcp_options_details_builds_both_option_types(monkeypatch)
     assert not hasattr(search_domain_option, "server_type")
 
 
-def test_build_create_dhcp_options_details_omits_options_when_absent(monkeypatch):
+def test_build_create_dhcp_options_details_sends_empty_options_when_absent(
+    monkeypatch,
+):
     install_fake_oci(monkeypatch)
 
     dhcp_options_module = load_collection_module("oci_dhcp_options")
@@ -144,7 +146,11 @@ def test_build_create_dhcp_options_details_omits_options_when_absent(monkeypatch
         }
     )
 
-    assert not hasattr(details, "options")
+    # The real OCI SDK model always initializes `options` to None and the
+    # SDK serializes that as `"options": null`, which the OCI API rejects
+    # with `InvalidParameter: options must not be null`. The create details
+    # must therefore always include an explicit (possibly empty) list.
+    assert details.options == []
 
 
 def test_build_option_models_builds_correct_model_types(monkeypatch):
