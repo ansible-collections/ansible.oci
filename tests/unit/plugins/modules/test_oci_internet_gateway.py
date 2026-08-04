@@ -63,7 +63,7 @@ def test_main_exposes_allow_duplicate_name_argument(monkeypatch):
     assert captured["run_called"] is True
     assert captured["argument_spec"]["internet_gateway_id"] == {"type": "str"}
     assert captured["argument_spec"]["vcn_id"] == {"type": "str"}
-    assert captured["argument_spec"]["is_enabled"] == {"type": "bool", "default": True}
+    assert captured["argument_spec"]["is_enabled"] == {"type": "bool"}
     assert captured["argument_spec"]["route_table_id"] == {"type": "str"}
     assert captured["argument_spec"]["name"] == {"type": "str"}
     assert captured["argument_spec"]["compartment_id"] == {"type": "str"}
@@ -115,8 +115,28 @@ def test_build_create_internet_gateway_details_omits_none_values(monkeypatch):
         }
     )
 
-    assert "is_enabled" not in details.__dict__
     assert "route_table_id" not in details.__dict__
+    assert "freeform_tags" not in details.__dict__
+    assert "defined_tags" not in details.__dict__
+
+
+def test_build_create_internet_gateway_details_defaults_is_enabled_true(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    ig_module = load_collection_module("oci_internet_gateway")
+    details = ig_module.build_create_internet_gateway_details(
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-ig",
+            "is_enabled": None,
+        }
+    )
+
+    # is_enabled has no argspec default (so omitting it on update leaves the
+    # current state untouched), so the create path must supply its own
+    # default explicitly instead of relying on the argspec.
+    assert details.is_enabled is True
 
 
 def test_needs_update_returns_true_for_name_change(monkeypatch):
@@ -149,6 +169,27 @@ def test_needs_update_returns_true_for_is_enabled_change(monkeypatch):
     )
 
     assert instance.needs_update(resource) is True
+
+
+def test_needs_update_ignores_is_enabled_when_omitted(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    ig_module = load_collection_module("oci_internet_gateway")
+    instance = make_internet_gateway_module(
+        ig_module,
+        # is_enabled intentionally omitted, simulating a task that only
+        # touches name/route_table_id and never mentions is_enabled.
+        {"name": "current-ig"},
+    )
+    resource = FakeModel(
+        id="ocid1.internetgateway.oc1..example",
+        display_name="current-ig",
+        is_enabled=False,
+    )
+
+    # A previously disabled gateway must not be silently re-enabled just
+    # because is_enabled was left out of this task.
+    assert instance.needs_update(resource) is False
 
 
 def test_needs_update_returns_true_for_route_table_change(monkeypatch):

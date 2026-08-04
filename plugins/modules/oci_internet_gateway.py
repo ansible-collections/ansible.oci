@@ -71,9 +71,11 @@ options:
   is_enabled:
     description:
       - Whether the internet gateway is enabled.
-      - Defaults to C(true) at create time.
+      - Defaults to C(true) when creating a new internet gateway.
+      - When omitted while updating an existing internet gateway, the
+        current enabled/disabled state is left unchanged rather than being
+        reset to C(true).
     type: bool
-    default: true
   route_table_id:
     description:
       - The OCID of a route table to associate directly with the internet
@@ -234,12 +236,13 @@ WAIT_FOR_IG_STATES = [LIFECYCLE_AVAILABLE]
 
 
 def build_create_internet_gateway_details(params):
+    is_enabled = params.get("is_enabled")
     details = filter_none_values(
         {
             "compartment_id": params.get("compartment_id"),
             "vcn_id": params.get("vcn_id"),
             "display_name": params.get("name"),
-            "is_enabled": params.get("is_enabled"),
+            "is_enabled": True if is_enabled is None else is_enabled,
             "route_table_id": params.get("route_table_id"),
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
@@ -362,7 +365,7 @@ def main():
         state=dict(type="str", choices=["present", "absent"], default="present"),
         internet_gateway_id=dict(type="str"),
         vcn_id=dict(type="str"),
-        is_enabled=dict(type="bool", default=True),
+        is_enabled=dict(type="bool"),
         route_table_id=dict(type="str"),
     )
 
