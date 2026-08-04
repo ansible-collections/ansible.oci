@@ -117,7 +117,7 @@ EXAMPLES = r"""
         network_entity_id: "{{ created_nat_gateway.resource.id }}"
   register: created_route_table
 
-- name: (Optional) enable transit routing by pointing the gateway back at that route table
+- name: Enable transit routing by pointing the gateway back at that route table
   oracle.oci.oci_nat_gateway:
     state: present
     nat_gateway_id: "{{ created_nat_gateway.resource.id }}"
