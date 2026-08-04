@@ -167,6 +167,16 @@ resource:
       type: dict
       returned: always
       sample: {"type": "VCN", "id": "ocid1.vcn.oc1..example"}
+    export_drg_route_distribution_id:
+      description: The OCID of the route distribution assigned to this attachment for exporting routes, if any.
+      type: str
+      returned: always
+      sample: null
+    is_cross_tenancy:
+      description: Whether the attached network lives in a different tenancy than the DRG.
+      type: bool
+      returned: always
+      sample: false
     freeform_tags:
       description: Free-form tags applied to the DRG attachment.
       type: dict
@@ -192,6 +202,8 @@ resource:
     route_table_id: null
     drg_route_table_id: null
     network_details: {"type": "VCN", "id": "ocid1.vcn.oc1..example"}
+    export_drg_route_distribution_id: null
+    is_cross_tenancy: false
     freeform_tags: {"environment": "production"}
     defined_tags: {"Operations": {"CostCenter": "42"}}
     time_created: "2026-01-01T00:00:00.000Z"

@@ -114,6 +114,38 @@ resource:
       type: str
       returned: always
       sample: AVAILABLE
+    default_drg_route_tables:
+      description: >-
+        The OCIDs of the default DRG route tables OCI creates automatically
+        for each attachment type, keyed by attachment type.
+      type: dict
+      returned: always
+      contains:
+        vcn:
+          description: The OCID of the default DRG route table for VCN attachments.
+          type: str
+          returned: always
+          sample: ocid1.drgroutetable.oc1..vcn-example
+        ipsec_tunnel:
+          description: The OCID of the default DRG route table for IPSec tunnel attachments.
+          type: str
+          returned: always
+          sample: ocid1.drgroutetable.oc1..ipsec-example
+        virtual_circuit:
+          description: The OCID of the default DRG route table for virtual circuit attachments.
+          type: str
+          returned: always
+          sample: ocid1.drgroutetable.oc1..vc-example
+        remote_peering_connection:
+          description: The OCID of the default DRG route table for remote peering connection attachments.
+          type: str
+          returned: always
+          sample: ocid1.drgroutetable.oc1..rpc-example
+    default_export_drg_route_distribution_id:
+      description: The OCID of the default export route distribution OCI creates automatically for the DRG.
+      type: str
+      returned: always
+      sample: ocid1.drgroutedistribution.oc1..example
     freeform_tags:
       description: Free-form tags applied to the DRG.
       type: dict
@@ -134,6 +166,12 @@ resource:
     name: example-drg
     compartment_id: ocid1.compartment.oc1..example
     lifecycle_state: AVAILABLE
+    default_drg_route_tables:
+      vcn: ocid1.drgroutetable.oc1..vcn-example
+      ipsec_tunnel: ocid1.drgroutetable.oc1..ipsec-example
+      virtual_circuit: ocid1.drgroutetable.oc1..vc-example
+      remote_peering_connection: ocid1.drgroutetable.oc1..rpc-example
+    default_export_drg_route_distribution_id: ocid1.drgroutedistribution.oc1..example
     freeform_tags: {"environment": "production"}
     defined_tags: {"Operations": {"CostCenter": "42"}}
     time_created: "2026-01-01T00:00:00.000Z"
