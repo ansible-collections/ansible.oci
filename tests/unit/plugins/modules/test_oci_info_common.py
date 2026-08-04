@@ -205,6 +205,37 @@ INFO_CASES = (
             "vcn_id": "ocid1.vcn.oc1..example",
         },
     },
+    {
+        "module_name": "oci_local_peering_gateway_info",
+        "class_name": "OciLocalPeeringGatewayInfoModule",
+        "results_key": "local_peering_gateways",
+        "id_param": "local_peering_gateway_id",
+        "id_value": "ocid1.localpeeringgateway.oc1..example",
+        "missing_id": "ocid1.localpeeringgateway.oc1..missing",
+        "get_method": "get_local_peering_gateway",
+        "list_method": "list_local_peering_gateways",
+        "list_params": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-lpg",
+        },
+        "expected_list_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "run_resource": FakeModel(
+            id="ocid1.localpeeringgateway.oc1..example",
+            display_name="example-lpg",
+            lifecycle_state="AVAILABLE",
+            vcn_id="ocid1.vcn.oc1..example",
+        ),
+        "expected_run_payload": {
+            "id": "ocid1.localpeeringgateway.oc1..example",
+            "name": "example-lpg",
+            "lifecycle_state": "AVAILABLE",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+    },
 )
 
 
