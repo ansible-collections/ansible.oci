@@ -1,0 +1,18 @@
+---
+- name: Run security list cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked security list during cleanup
+      oracle.oci.oci_security_list:
+        state: absent
+        security_list_id: "{{ oci_security_list_id }}"
+      when: oci_security_list_id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_security_list_vcn_create.resource.id }}"
+      when: oci_security_list_vcn_create.resource.id | default('') | length > 0

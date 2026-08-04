@@ -1,0 +1,9 @@
+---
+oci_drg_integration_drg_name: "oci-drg-integration-drg"
+oci_drg_integration_updated_drg_name: "oci-drg-integration-drg-updated"
+oci_drg_integration_create_tags:
+  phase: create
+  role: integration
+oci_drg_integration_update_tags:
+  phase: update
+  role: integration

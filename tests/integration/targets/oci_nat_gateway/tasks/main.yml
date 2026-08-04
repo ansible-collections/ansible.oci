@@ -1,0 +1,265 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI NAT gateway integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_nat_gateway_integration_vcn_name: "{{ oci_nat_gateway_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_nat_gateway_integration_nat_gateway_name: "{{ oci_nat_gateway_integration_nat_gateway_name }}-{{ oci_integration_rpfx }}"
+    oci_nat_gateway_integration_updated_nat_gateway_name: "{{ oci_nat_gateway_integration_updated_nat_gateway_name }}-{{ oci_integration_rpfx }}"
+    oci_nat_gateway_integration_vcn_dns_label: "vcn{{ oci_integration_rpfx }}"
+
+- name: Exercise NAT gateway module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for NAT gateway integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_nat_gateway_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_nat_gateway_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_nat_gateway_integration_vcn_dns_label }}"
+      register: oci_nat_gateway_vcn_create
+
+    - name: Capture created network ids
+      ansible.builtin.set_fact:
+        oci_nat_gateway_integration_network:
+          vcn_id: "{{ oci_nat_gateway_vcn_create.resource.id }}"
+          default_route_table_id: "{{ oci_nat_gateway_vcn_create.resource.default_route_table_id }}"
+
+    - name: Define NAT gateway create and delete parameters
+      ansible.builtin.set_fact:
+        oci_nat_gateway_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          vcn_id: "{{ oci_nat_gateway_integration_network.vcn_id }}"
+          name: "{{ oci_nat_gateway_integration_nat_gateway_name }}"
+          block_traffic: false
+          route_table_id: "{{ oci_nat_gateway_integration_network.default_route_table_id }}"
+          freeform_tags: "{{ oci_nat_gateway_integration_create_tags }}"
+        oci_nat_gateway_delete_params:
+          state: absent
+          nat_gateway_id: ""
+
+    - name: Create NAT gateway in check mode
+      oracle.oci.oci_nat_gateway: &oci_nat_gateway_create_module_options
+        state: "{{ oci_nat_gateway_create_params.state }}"
+        compartment_id: "{{ oci_nat_gateway_create_params.compartment_id }}"
+        vcn_id: "{{ oci_nat_gateway_create_params.vcn_id }}"
+        name: "{{ oci_nat_gateway_create_params.name }}"
+        block_traffic: "{{ oci_nat_gateway_create_params.block_traffic }}"
+        route_table_id: "{{ oci_nat_gateway_create_params.route_table_id }}"
+        freeform_tags: "{{ oci_nat_gateway_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_nat_gateway_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_create_check.changed | bool
+
+    - name: Read NAT gateway after create check mode
+      oracle.oci.oci_nat_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_nat_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_nat_gateway_integration_nat_gateway_name }}"
+      register: oci_nat_gateway_create_check_probe
+
+    - name: Assert NAT gateway is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_create_check_probe.nat_gateways | length == 0
+
+    - name: Create NAT gateway
+      oracle.oci.oci_nat_gateway:
+        <<: *oci_nat_gateway_create_module_options
+      register: oci_nat_gateway_create
+
+    - name: Capture NAT gateway id and define update parameters
+      ansible.builtin.set_fact:
+        oci_nat_gateway_id: "{{ oci_nat_gateway_create.resource.id }}"
+        oci_nat_gateway_update_params:
+          state: present
+          nat_gateway_id: "{{ oci_nat_gateway_create.resource.id }}"
+          name: "{{ oci_nat_gateway_integration_updated_nat_gateway_name }}"
+          block_traffic: true
+          route_table_id: "{{ oci_nat_gateway_integration_network.default_route_table_id }}"
+          freeform_tags: "{{ oci_nat_gateway_integration_update_tags }}"
+        oci_nat_gateway_delete_params:
+          state: absent
+          nat_gateway_id: "{{ oci_nat_gateway_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_create.changed | bool
+
+    - name: Read NAT gateway by id
+      oracle.oci.oci_nat_gateway_info:
+        nat_gateway_id: "{{ oci_nat_gateway_id }}"
+      register: oci_nat_gateway_info_by_id
+
+    - name: Assert NAT gateway info by id returned the created NAT gateway
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_info_by_id.nat_gateways | length == 1
+          - oci_nat_gateway_info_by_id.nat_gateways[0].id == oci_nat_gateway_id
+          - oci_nat_gateway_info_by_id.nat_gateways[0].name == oci_nat_gateway_integration_nat_gateway_name
+          - oci_nat_gateway_info_by_id.nat_gateways[0].lifecycle_state == "AVAILABLE"
+          - not oci_nat_gateway_info_by_id.nat_gateways[0].block_traffic | bool
+          - oci_nat_gateway_info_by_id.nat_gateways[0].route_table_id == oci_nat_gateway_integration_network.default_route_table_id
+
+    - name: List NAT gateway by name
+      oracle.oci.oci_nat_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_nat_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_nat_gateway_integration_nat_gateway_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_nat_gateway_info_list
+
+    - name: Assert NAT gateway info list returned the created NAT gateway
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_info_list.nat_gateways | selectattr('id', 'equalto', oci_nat_gateway_id) | list | length == 1
+
+    - name: Assert created NAT gateway is a no-op on rerun with unique name
+      oracle.oci.oci_nat_gateway:
+        <<: *oci_nat_gateway_create_module_options
+      register: oci_nat_gateway_create_rerun_by_name
+
+    - name: Verify NAT gateway rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_nat_gateway_create_rerun_by_name.changed | bool
+
+    - name: Assert created NAT gateway is a no-op on rerun with returned id
+      oracle.oci.oci_nat_gateway:
+        <<: *oci_nat_gateway_create_module_options
+        nat_gateway_id: "{{ oci_nat_gateway_id }}"
+      register: oci_nat_gateway_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_nat_gateway_create_rerun.changed | bool
+
+    - name: Update NAT gateway in check mode
+      oracle.oci.oci_nat_gateway: &oci_nat_gateway_update_module_options
+        state: "{{ oci_nat_gateway_update_params.state }}"
+        nat_gateway_id: "{{ oci_nat_gateway_update_params.nat_gateway_id }}"
+        name: "{{ oci_nat_gateway_update_params.name }}"
+        block_traffic: "{{ oci_nat_gateway_update_params.block_traffic }}"
+        route_table_id: "{{ oci_nat_gateway_update_params.route_table_id }}"
+        freeform_tags: "{{ oci_nat_gateway_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_nat_gateway_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_update_check.changed | bool
+
+    - name: Read NAT gateway after update check mode
+      oracle.oci.oci_nat_gateway_info:
+        nat_gateway_id: "{{ oci_nat_gateway_id }}"
+      register: oci_nat_gateway_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_update_check_probe.nat_gateways | length == 1
+          - oci_nat_gateway_update_check_probe.nat_gateways[0].name == oci_nat_gateway_integration_nat_gateway_name
+          - not oci_nat_gateway_update_check_probe.nat_gateways[0].block_traffic | bool
+          - oci_nat_gateway_update_check_probe.nat_gateways[0].freeform_tags.phase == "create"
+
+    - name: Update NAT gateway
+      oracle.oci.oci_nat_gateway:
+        <<: *oci_nat_gateway_update_module_options
+      register: oci_nat_gateway_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_update.changed | bool
+
+    - name: Read updated NAT gateway by name
+      oracle.oci.oci_nat_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_nat_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_nat_gateway_integration_updated_nat_gateway_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_nat_gateway_info_updated
+
+    - name: Assert NAT gateway info reflects updated NAT gateway
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_info_updated.nat_gateways | selectattr('id', 'equalto', oci_nat_gateway_id) | list | length == 1
+          - >-
+            oci_nat_gateway_info_updated.nat_gateways
+            | selectattr('block_traffic', 'equalto', true)
+            | list | length == 1
+          - oci_nat_gateway_info_updated.nat_gateways[0].freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_nat_gateway:
+        <<: *oci_nat_gateway_update_module_options
+      register: oci_nat_gateway_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_nat_gateway_update_rerun.changed | bool
+
+    - name: Delete NAT gateway in check mode
+      oracle.oci.oci_nat_gateway: &oci_nat_gateway_delete_module_options
+        state: "{{ oci_nat_gateway_delete_params.state }}"
+        nat_gateway_id: "{{ oci_nat_gateway_delete_params.nat_gateway_id }}"
+      check_mode: true
+      register: oci_nat_gateway_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_delete_check.changed | bool
+
+    - name: Read NAT gateway after delete check mode
+      oracle.oci.oci_nat_gateway_info:
+        nat_gateway_id: "{{ oci_nat_gateway_id }}"
+      register: oci_nat_gateway_delete_check_probe
+
+    - name: Assert NAT gateway still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_delete_check_probe.nat_gateways | length == 1
+
+    - name: Delete NAT gateway
+      oracle.oci.oci_nat_gateway:
+        <<: *oci_nat_gateway_delete_module_options
+      register: oci_nat_gateway_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_nat_gateway_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_nat_gateway:
+        <<: *oci_nat_gateway_delete_module_options
+      register: oci_nat_gateway_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_nat_gateway_delete_rerun.changed | bool
+
+  always:
+    - name: Run NAT gateway cleanup
+      ansible.builtin.include_tasks: cleanup.yml
