@@ -93,6 +93,50 @@ resource:
   description: The DRG resource.
   returned: when state != absent
   type: dict
+  contains:
+    id:
+      description: The OCID of the DRG.
+      type: str
+      returned: always
+      sample: ocid1.drg.oc1..example
+    name:
+      description: The display name of the DRG.
+      type: str
+      returned: always
+      sample: example-drg
+    compartment_id:
+      description: The OCID of the compartment containing the DRG.
+      type: str
+      returned: always
+      sample: ocid1.compartment.oc1..example
+    lifecycle_state:
+      description: The current lifecycle state of the DRG.
+      type: str
+      returned: always
+      sample: AVAILABLE
+    freeform_tags:
+      description: Free-form tags applied to the DRG.
+      type: dict
+      returned: always
+      sample: {"environment": "production"}
+    defined_tags:
+      description: Defined tags applied to the DRG.
+      type: dict
+      returned: always
+      sample: {"Operations": {"CostCenter": "42"}}
+    time_created:
+      description: The date and time the DRG was created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+  sample:
+    id: ocid1.drg.oc1..example
+    name: example-drg
+    compartment_id: ocid1.compartment.oc1..example
+    lifecycle_state: AVAILABLE
+    freeform_tags: {"environment": "production"}
+    defined_tags: {"Operations": {"CostCenter": "42"}}
+    time_created: "2026-01-01T00:00:00.000Z"
 """
 
 from ansible.module_utils.basic import AnsibleModule

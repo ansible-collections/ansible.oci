@@ -121,6 +121,80 @@ resource:
   description: The DRG attachment resource.
   returned: when state != absent
   type: dict
+  contains:
+    id:
+      description: The OCID of the DRG attachment.
+      type: str
+      returned: always
+      sample: ocid1.drgattachment.oc1..example
+    name:
+      description: The display name of the DRG attachment.
+      type: str
+      returned: always
+      sample: example-drg-attachment
+    compartment_id:
+      description: The OCID of the compartment containing the DRG attachment.
+      type: str
+      returned: always
+      sample: ocid1.compartment.oc1..example
+    drg_id:
+      description: The OCID of the attached DRG.
+      type: str
+      returned: always
+      sample: ocid1.drg.oc1..example
+    vcn_id:
+      description: The OCID of the attached VCN.
+      type: str
+      returned: always
+      sample: ocid1.vcn.oc1..example
+    lifecycle_state:
+      description: The current lifecycle state of the DRG attachment.
+      type: str
+      returned: always
+      sample: ATTACHED
+    route_table_id:
+      description: The OCID of the VCN-side route table associated with the attachment, if any.
+      type: str
+      returned: always
+      sample: null
+    drg_route_table_id:
+      description: The OCID of the DRG-side route table associated with the attachment, if any.
+      type: str
+      returned: always
+      sample: null
+    network_details:
+      description: The attached network's details, as returned by OCI.
+      type: dict
+      returned: always
+      sample: {"type": "VCN", "id": "ocid1.vcn.oc1..example"}
+    freeform_tags:
+      description: Free-form tags applied to the DRG attachment.
+      type: dict
+      returned: always
+      sample: {"environment": "production"}
+    defined_tags:
+      description: Defined tags applied to the DRG attachment.
+      type: dict
+      returned: always
+      sample: {"Operations": {"CostCenter": "42"}}
+    time_created:
+      description: The date and time the DRG attachment was created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+  sample:
+    id: ocid1.drgattachment.oc1..example
+    name: example-drg-attachment
+    compartment_id: ocid1.compartment.oc1..example
+    drg_id: ocid1.drg.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    lifecycle_state: ATTACHED
+    route_table_id: null
+    drg_route_table_id: null
+    network_details: {"type": "VCN", "id": "ocid1.vcn.oc1..example"}
+    freeform_tags: {"environment": "production"}
+    defined_tags: {"Operations": {"CostCenter": "42"}}
+    time_created: "2026-01-01T00:00:00.000Z"
 """
 
 from ansible.module_utils.basic import AnsibleModule
