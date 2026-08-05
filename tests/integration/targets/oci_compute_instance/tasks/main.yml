@@ -129,7 +129,7 @@
         that:
           - not oci_compute_instance_stop_rerun.changed | bool
 
-    - name: Update instance name and shape_config while stopped
+    - name: Update instance name, shape_config, and tags while stopped
       oracle.oci.oci_compute_instance: &oci_compute_instance_update_module_options
         instance_id: "{{ oci_compute_instance_id }}"
         name: "{{ oci_compute_instance_integration_updated_instance_name }}"
@@ -137,15 +137,32 @@
         freeform_tags: "{{ oci_compute_instance_integration_update_tags }}"
       register: oci_compute_instance_update
 
-    - name: Assert update reported a change and reflects new values
+    - name: Assert update reported a change and applied immediately-visible fields
       ansible.builtin.assert:
         that:
           - oci_compute_instance_update.changed | bool
           - oci_compute_instance_update.resource.name == oci_compute_instance_integration_updated_instance_name
-          - oci_compute_instance_update.resource.shape_config.ocpus == oci_compute_instance_integration_updated_shape_config.ocpus
           - oci_compute_instance_update.resource.freeform_tags.phase == "update"
 
-    - name: Assert update is idempotent on rerun
+    # OCI stages a flexible-shape resize while an instance is stopped and only
+    # applies it once the instance starts again, so shape_config is not yet
+    # reflected here. See the "Start the instance again" assertion below.
+
+    - name: Start the instance again
+      oracle.oci.oci_compute_instance:
+        instance_id: "{{ oci_compute_instance_id }}"
+        power_state: RUNNING
+      register: oci_compute_instance_start
+
+    - name: Assert start reported a change, settled to RUNNING, and applied the staged resize
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_start.changed | bool
+          - oci_compute_instance_start.resource.lifecycle_state == "RUNNING"
+          - oci_compute_instance_start.resource.shape_config.ocpus == oci_compute_instance_integration_updated_shape_config.ocpus
+          - oci_compute_instance_start.resource.shape_config.memory_in_gbs == oci_compute_instance_integration_updated_shape_config.memory_in_gbs
+
+    - name: Assert update is idempotent on rerun now that the resize is applied
       oracle.oci.oci_compute_instance:
         <<: *oci_compute_instance_update_module_options
       register: oci_compute_instance_update_rerun
@@ -154,18 +171,6 @@
       ansible.builtin.assert:
         that:
           - not oci_compute_instance_update_rerun.changed | bool
-
-    - name: Start the instance again
-      oracle.oci.oci_compute_instance:
-        instance_id: "{{ oci_compute_instance_id }}"
-        power_state: RUNNING
-      register: oci_compute_instance_start
-
-    - name: Assert start reported a change and settled to RUNNING
-      ansible.builtin.assert:
-        that:
-          - oci_compute_instance_start.changed | bool
-          - oci_compute_instance_start.resource.lifecycle_state == "RUNNING"
 
     - name: Terminate instance in check mode
       oracle.oci.oci_compute_instance: &oci_compute_instance_delete_module_options

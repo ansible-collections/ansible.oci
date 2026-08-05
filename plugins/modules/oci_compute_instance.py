@@ -74,12 +74,20 @@ options:
       - Required when creating an instance.
       - Supports updates. OCI requires the instance to be stopped before
         changing its shape.
+      - OCI stages shape changes made while the instance is stopped and only
+        applies them the next time the instance starts. C(resource) reflects
+        the previous value until then; rerunning this module with C(wait=true)
+        after C(power_state=RUNNING) confirms the change applied.
     type: str
   shape_config:
     description:
       - Flexible shape configuration for shapes that support it.
       - Supports updates. OCI requires the instance to be stopped before
         changing shape configuration.
+      - OCI stages shape_config changes made while the instance is stopped and
+        only applies them the next time the instance starts. C(resource)
+        reflects the previous values until then; rerunning this module with
+        C(wait=true) after C(power_state=RUNNING) confirms the resize applied.
     type: dict
     suboptions:
       ocpus:
