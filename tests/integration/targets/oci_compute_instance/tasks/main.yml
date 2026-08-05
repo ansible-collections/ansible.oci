@@ -1,0 +1,204 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_integration_availability_domain | default('', true) | length > 0
+      - oci_integration_image_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI compute instance integration tests require
+      oci_integration_compartment_id, oci_integration_availability_domain, and
+      oci_integration_image_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_compute_instance_integration_vcn_name: "{{ oci_compute_instance_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_compute_instance_integration_subnet_name: "{{ oci_compute_instance_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_compute_instance_integration_instance_name: "{{ oci_compute_instance_integration_instance_name }}-{{ oci_integration_rpfx }}"
+    oci_compute_instance_integration_updated_instance_name: "{{ oci_compute_instance_integration_updated_instance_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise compute instance module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for instance integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_compute_instance_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_compute_instance_integration_vcn_cidr_block }}"
+      register: oci_compute_instance_vcn_create
+
+    - name: Create test subnet for instance integration
+      oracle.oci.oci_subnet:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_compute_instance_vcn_create.resource.id }}"
+        cidr_block: "{{ oci_compute_instance_integration_subnet_cidr_block }}"
+        name: "{{ oci_compute_instance_integration_subnet_name }}"
+      register: oci_compute_instance_subnet_create
+
+    - name: Define instance create and delete parameters
+      ansible.builtin.set_fact:
+        oci_compute_instance_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          availability_domain: "{{ oci_integration_availability_domain }}"
+          name: "{{ oci_compute_instance_integration_instance_name }}"
+          shape: "{{ oci_compute_instance_integration_shape }}"
+          shape_config: "{{ oci_compute_instance_integration_shape_config }}"
+          image_id: "{{ oci_integration_image_id }}"
+          subnet_id: "{{ oci_compute_instance_subnet_create.resource.id }}"
+          freeform_tags: "{{ oci_compute_instance_integration_create_tags }}"
+
+    - name: Create instance in check mode
+      oracle.oci.oci_compute_instance: &oci_compute_instance_create_module_options
+        state: "{{ oci_compute_instance_create_params.state }}"
+        compartment_id: "{{ oci_compute_instance_create_params.compartment_id }}"
+        availability_domain: "{{ oci_compute_instance_create_params.availability_domain }}"
+        name: "{{ oci_compute_instance_create_params.name }}"
+        shape: "{{ oci_compute_instance_create_params.shape }}"
+        shape_config: "{{ oci_compute_instance_create_params.shape_config }}"
+        image_id: "{{ oci_compute_instance_create_params.image_id }}"
+        subnet_id: "{{ oci_compute_instance_create_params.subnet_id }}"
+        freeform_tags: "{{ oci_compute_instance_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_compute_instance_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_create_check.changed | bool
+
+    - name: Create instance
+      oracle.oci.oci_compute_instance:
+        <<: *oci_compute_instance_create_module_options
+      register: oci_compute_instance_create
+
+    - name: Capture instance id and define update/delete parameters
+      ansible.builtin.set_fact:
+        oci_compute_instance_id: "{{ oci_compute_instance_create.resource.id }}"
+        oci_compute_instance_delete_params:
+          state: absent
+          instance_id: "{{ oci_compute_instance_create.resource.id }}"
+
+    - name: Assert create reported a change and returned expected fields
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_create.changed | bool
+          - oci_compute_instance_create.resource.name == oci_compute_instance_integration_instance_name
+          - oci_compute_instance_create.resource.shape == oci_compute_instance_integration_shape
+          - oci_compute_instance_create.resource.lifecycle_state == "RUNNING"
+          - oci_compute_instance_create.resource.freeform_tags.phase == "create"
+
+    - name: Assert created instance is a no-op on rerun with returned id
+      oracle.oci.oci_compute_instance:
+        <<: *oci_compute_instance_create_module_options
+        instance_id: "{{ oci_compute_instance_id }}"
+      register: oci_compute_instance_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_compute_instance_create_rerun.changed | bool
+
+    - name: Stop the instance
+      oracle.oci.oci_compute_instance:
+        instance_id: "{{ oci_compute_instance_id }}"
+        power_state: STOPPED
+      register: oci_compute_instance_stop
+
+    - name: Assert stop reported a change and settled to STOPPED
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_stop.changed | bool
+          - oci_compute_instance_stop.resource.lifecycle_state == "STOPPED"
+
+    - name: Assert stop is idempotent on rerun
+      oracle.oci.oci_compute_instance:
+        instance_id: "{{ oci_compute_instance_id }}"
+        power_state: STOPPED
+      register: oci_compute_instance_stop_rerun
+
+    - name: Verify stop rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_compute_instance_stop_rerun.changed | bool
+
+    - name: Update instance name and shape_config while stopped
+      oracle.oci.oci_compute_instance: &oci_compute_instance_update_module_options
+        instance_id: "{{ oci_compute_instance_id }}"
+        name: "{{ oci_compute_instance_integration_updated_instance_name }}"
+        shape_config: "{{ oci_compute_instance_integration_updated_shape_config }}"
+        freeform_tags: "{{ oci_compute_instance_integration_update_tags }}"
+      register: oci_compute_instance_update
+
+    - name: Assert update reported a change and reflects new values
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_update.changed | bool
+          - oci_compute_instance_update.resource.name == oci_compute_instance_integration_updated_instance_name
+          - oci_compute_instance_update.resource.shape_config.ocpus == oci_compute_instance_integration_updated_shape_config.ocpus
+          - oci_compute_instance_update.resource.freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_compute_instance:
+        <<: *oci_compute_instance_update_module_options
+      register: oci_compute_instance_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_compute_instance_update_rerun.changed | bool
+
+    - name: Start the instance again
+      oracle.oci.oci_compute_instance:
+        instance_id: "{{ oci_compute_instance_id }}"
+        power_state: RUNNING
+      register: oci_compute_instance_start
+
+    - name: Assert start reported a change and settled to RUNNING
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_start.changed | bool
+          - oci_compute_instance_start.resource.lifecycle_state == "RUNNING"
+
+    - name: Terminate instance in check mode
+      oracle.oci.oci_compute_instance: &oci_compute_instance_delete_module_options
+        state: "{{ oci_compute_instance_delete_params.state }}"
+        instance_id: "{{ oci_compute_instance_delete_params.instance_id }}"
+      check_mode: true
+      register: oci_compute_instance_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_delete_check.changed | bool
+
+    - name: Terminate instance
+      oracle.oci.oci_compute_instance:
+        <<: *oci_compute_instance_delete_module_options
+      register: oci_compute_instance_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_compute_instance:
+        <<: *oci_compute_instance_delete_module_options
+      register: oci_compute_instance_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_compute_instance_delete_rerun.changed | bool
+
+  always:
+    - name: Run compute instance cleanup
+      ansible.builtin.include_tasks: cleanup.yml
