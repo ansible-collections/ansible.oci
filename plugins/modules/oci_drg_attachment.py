@@ -18,9 +18,6 @@ description:
     polymorphic C(network_details) field. Instead it uses the direct
     C(vcn_id) field that OCI also supports on the create and response
     models for VCN attachments.
-  - There is intentionally no paired C(oci_drg_attachment_info) module.
-    Read access to attachments is out of scope for this module; verify
-    attachment state by rerunning this module and checking C(changed).
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
   - Create requests must omit C(drg_attachment_id). After create, capture the
