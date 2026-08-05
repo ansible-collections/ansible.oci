@@ -29,4 +29,4 @@ action_groups:
     - oci_image_info
     - oci_shape_info
     - oci_availability_domain_info
-    - oci_compute_instance_console_connection
+    - oci_instance_console_connection

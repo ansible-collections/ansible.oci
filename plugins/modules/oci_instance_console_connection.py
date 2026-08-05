@@ -7,7 +7,7 @@ __metaclass__ = type
 
 DOCUMENTATION = r"""
 ---
-module: oci_compute_instance_console_connection
+module: oci_instance_console_connection
 short_description: Manage a Compute instance console connection resource in Oracle Cloud Infrastructure
 description:
   - Create and delete OCI Compute instance console connections for serial
@@ -17,7 +17,7 @@ description:
     C(instance_console_connection_id) omitted, C(state=present) manages the
     instance's existing non-deleted console connection (if any), and
     C(state=absent) deletes it. There is intentionally no paired
-    C(oci_compute_instance_console_connection_info) module; use the
+    C(oci_instance_console_connection_info) module; use the
     C(resource) return value to obtain connection details.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
@@ -71,7 +71,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create a console connection to an instance
-  oracle.oci.oci_compute_instance_console_connection:
+  oracle.oci.oci_instance_console_connection:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -79,7 +79,7 @@ EXAMPLES = r"""
   register: created_console_connection
 
 - name: Reconcile the existing console connection for an instance
-  oracle.oci.oci_compute_instance_console_connection:
+  oracle.oci.oci_instance_console_connection:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -88,12 +88,12 @@ EXAMPLES = r"""
       role: sre-runbook
 
 - name: Delete the console connection by id
-  oracle.oci.oci_compute_instance_console_connection:
+  oracle.oci.oci_instance_console_connection:
     state: absent
     instance_console_connection_id: "{{ created_console_connection.resource.id }}"
 
 - name: Delete an instance's console connection without tracking its id
-  oracle.oci.oci_compute_instance_console_connection:
+  oracle.oci.oci_instance_console_connection:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -201,7 +201,7 @@ def build_create_console_connection_details(params):
     return oci.core.models.CreateInstanceConsoleConnectionDetails(**details)
 
 
-class OciComputeInstanceConsoleConnectionModule(OciResourceBase):
+class OciInstanceConsoleConnectionModule(OciResourceBase):
     """Concrete resource adapter for OCI Compute instance console connections.
 
     Console connections have no display name in the OCI API, so this module
@@ -326,7 +326,7 @@ def main():
         supports_check_mode=True,
     )
 
-    OciComputeInstanceConsoleConnectionModule(module).execute_resource_module()
+    OciInstanceConsoleConnectionModule(module).execute_resource_module()
 
 
 if __name__ == "__main__":

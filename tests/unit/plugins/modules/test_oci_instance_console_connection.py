@@ -33,7 +33,7 @@ def install_fake_oci(monkeypatch):
 def make_console_connection_module(module_obj, params, client=None):
     return make_module_instance(
         module_obj,
-        "OciComputeInstanceConsoleConnectionModule",
+        "OciInstanceConsoleConnectionModule",
         params,
         client=client,
     )
@@ -42,7 +42,7 @@ def make_console_connection_module(module_obj, params, client=None):
 def test_main_exposes_expected_arguments(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    module_obj = load_collection_module("oci_compute_instance_console_connection")
+    module_obj = load_collection_module("oci_instance_console_connection")
     captured = {}
 
     def fake_ansible_module(**kwargs):
@@ -59,7 +59,7 @@ def test_main_exposes_expected_arguments(monkeypatch):
     monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
     monkeypatch.setattr(
         module_obj,
-        "OciComputeInstanceConsoleConnectionModule",
+        "OciInstanceConsoleConnectionModule",
         FakeConsoleConnectionModule,
     )
 
@@ -80,7 +80,7 @@ def test_build_create_console_connection_details_includes_supported_fields(monke
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     details = console_connection_module.build_create_console_connection_details(
         {
@@ -103,7 +103,7 @@ def test_needs_update_rejects_instance_id_drift(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,
@@ -124,7 +124,7 @@ def test_needs_update_returns_true_for_freeform_tags_change(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,
@@ -142,7 +142,7 @@ def test_create_resource_uses_create_console_connection_and_waits(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     create_calls = []
     response = FakeResponse(
@@ -186,7 +186,7 @@ def test_delete_resource_deletes_console_connection(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     delete_calls = []
     response = FakeResponse(data=None)
@@ -219,7 +219,7 @@ def test_resolve_target_resource_prefers_explicit_id(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,
@@ -245,7 +245,7 @@ def test_resolve_target_resource_finds_active_connection_by_instance(monkeypatch
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,
@@ -278,7 +278,7 @@ def test_resolve_target_resource_returns_none_without_instance_or_compartment(mo
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(console_connection_module, {})
 
@@ -289,7 +289,7 @@ def test_resolve_target_resource_fails_on_multiple_active_connections(monkeypatc
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,
@@ -318,7 +318,7 @@ def test_validate_delete_request_allows_explicit_id(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,
@@ -332,7 +332,7 @@ def test_validate_delete_request_allows_instance_and_compartment(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,
@@ -349,7 +349,7 @@ def test_validate_delete_request_fails_without_enough_scope(monkeypatch):
     install_fake_oci(monkeypatch)
 
     console_connection_module = load_collection_module(
-        "oci_compute_instance_console_connection"
+        "oci_instance_console_connection"
     )
     instance = make_console_connection_module(
         console_connection_module,

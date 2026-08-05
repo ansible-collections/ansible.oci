@@ -1,6 +1,6 @@
 ---
 # This target intentionally does not launch a real compute instance: the
-# module's own resource module (oci_compute_instance) ships in a separate
+# module's own resource module (oci_instance) ships in a separate
 # pull request per this epic's one-PR-per-module convention and cannot be
 # depended on here. It still exercises real, non-destructive OCI API calls.
 
@@ -20,7 +20,7 @@
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Fail to create without required arguments
-      oracle.oci.oci_compute_instance_console_connection:
+      oracle.oci.oci_instance_console_connection:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
       register: oci_console_connection_missing_args
@@ -33,11 +33,11 @@
           - "'public_key' in oci_console_connection_missing_args.msg"
 
     - name: Fail to create against a non-existent instance
-      oracle.oci.oci_compute_instance_console_connection:
+      oracle.oci.oci_instance_console_connection:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        public_key: "{{ oci_compute_instance_console_connection_integration_public_key }}"
+        public_key: "{{ oci_instance_console_connection_integration_public_key }}"
       register: oci_console_connection_create_missing_instance
       ignore_errors: true
 
@@ -47,7 +47,7 @@
           - oci_console_connection_create_missing_instance is failed
 
     - name: Reconcile absent state for an instance with no console connection
-      oracle.oci.oci_compute_instance_console_connection:
+      oracle.oci.oci_instance_console_connection:
         state: absent
         compartment_id: "{{ oci_integration_compartment_id }}"
         instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -59,7 +59,7 @@
           - not oci_console_connection_absent_noop.changed | bool
 
     - name: Fail to delete without enough scope
-      oracle.oci.oci_compute_instance_console_connection:
+      oracle.oci.oci_instance_console_connection:
         state: absent
         instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       register: oci_console_connection_delete_missing_scope
