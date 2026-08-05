@@ -54,6 +54,12 @@
           image_id: "{{ oci_integration_image_id }}"
           subnet_id: "{{ oci_instance_subnet_create.resource.id }}"
           freeform_tags: "{{ oci_instance_integration_create_tags }}"
+          instance_options:
+            are_legacy_imds_endpoints_disabled: true
+          availability_config:
+            recovery_action: restore_instance
+          agent_config:
+            are_all_plugins_disabled: false
 
     - name: Create instance in check mode
       oracle.oci.oci_instance: &oci_instance_create_module_options
@@ -66,6 +72,9 @@
         image_id: "{{ oci_instance_create_params.image_id }}"
         subnet_id: "{{ oci_instance_create_params.subnet_id }}"
         freeform_tags: "{{ oci_instance_create_params.freeform_tags }}"
+        instance_options: "{{ oci_instance_create_params.instance_options }}"
+        availability_config: "{{ oci_instance_create_params.availability_config }}"
+        agent_config: "{{ oci_instance_create_params.agent_config }}"
       check_mode: true
       register: oci_instance_create_check
 
@@ -94,6 +103,9 @@
           - oci_instance_create.resource.shape == oci_instance_integration_shape
           - oci_instance_create.resource.lifecycle_state == "RUNNING"
           - oci_instance_create.resource.freeform_tags.phase == "create"
+          - oci_instance_create.resource.instance_options.are_legacy_imds_endpoints_disabled | bool
+          - oci_instance_create.resource.availability_config.recovery_action == "RESTORE_INSTANCE"
+          - not oci_instance_create.resource.agent_config.are_all_plugins_disabled | bool
 
     - name: Assert created instance is a no-op on rerun with returned id
       oracle.oci.oci_instance:
@@ -109,7 +121,7 @@
     - name: Stop the instance
       oracle.oci.oci_instance:
         instance_id: "{{ oci_instance_id }}"
-        power_state: STOPPED
+        power_state: stopped
       register: oci_instance_stop
 
     - name: Assert stop reported a change and settled to STOPPED
@@ -121,7 +133,7 @@
     - name: Assert stop is idempotent on rerun
       oracle.oci.oci_instance:
         instance_id: "{{ oci_instance_id }}"
-        power_state: STOPPED
+        power_state: stopped
       register: oci_instance_stop_rerun
 
     - name: Verify stop rerun is a no-op
@@ -147,11 +159,15 @@
     # OCI stages a flexible-shape resize while an instance is stopped and only
     # applies it once the instance starts again, so shape_config is not yet
     # reflected here. See the "Start the instance again" assertion below.
+    # OCI also rejects combining a shape change with an availability_config
+    # change in the same update_instance call ("cannot be changed at the same
+    # time"), so availability_config is updated in its own separate task
+    # below instead of alongside shape_config.
 
     - name: Start the instance again
       oracle.oci.oci_instance:
         instance_id: "{{ oci_instance_id }}"
-        power_state: RUNNING
+        power_state: running
       register: oci_instance_start
 
     - name: Assert start reported a change, settled to RUNNING, and applied the staged resize
@@ -161,6 +177,29 @@
           - oci_instance_start.resource.lifecycle_state == "RUNNING"
           - oci_instance_start.resource.shape_config.ocpus == oci_instance_integration_updated_shape_config.ocpus
           - oci_instance_start.resource.shape_config.memory_in_gbs == oci_instance_integration_updated_shape_config.memory_in_gbs
+
+    - name: Update availability_config independently of the shape change
+      oracle.oci.oci_instance: &oci_instance_availability_config_module_options
+        instance_id: "{{ oci_instance_id }}"
+        availability_config:
+          recovery_action: stop_instance
+      register: oci_instance_update_availability_config
+
+    - name: Assert availability_config update reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_availability_config.changed | bool
+          - oci_instance_update_availability_config.resource.availability_config.recovery_action == "STOP_INSTANCE"
+
+    - name: Assert availability_config update is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_availability_config_module_options
+      register: oci_instance_update_availability_config_rerun
+
+    - name: Verify availability_config update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_availability_config_rerun.changed | bool
 
     - name: Assert update is idempotent on rerun now that the resize is applied
       oracle.oci.oci_instance:

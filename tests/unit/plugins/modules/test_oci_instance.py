@@ -21,9 +21,20 @@ INSTANCE_MODEL_NAMES = (
     "UpdateInstanceDetails",
     "CreateVnicDetails",
     "InstanceSourceViaImageDetails",
+    "InstanceSourceViaBootVolumeDetails",
     "LaunchInstanceShapeConfigDetails",
     "UpdateInstanceShapeConfigDetails",
     "LaunchOptions",
+    "InstanceOptions",
+    "LaunchInstanceAvailabilityConfigDetails",
+    "UpdateInstanceAvailabilityConfigDetails",
+    "PreemptibleInstanceConfigDetails",
+    "TerminatePreemptionAction",
+    "LaunchInstanceAgentConfigDetails",
+    "UpdateInstanceAgentConfigDetails",
+    "InstanceAgentPluginConfigDetails",
+    "AmdVmLaunchInstancePlatformConfig",
+    "AmdMilanBmLaunchInstancePlatformConfig",
 )
 
 
@@ -68,10 +79,17 @@ def test_main_exposes_power_state_argument(monkeypatch):
     assert captured["run_called"] is True
     assert captured["argument_spec"]["power_state"] == {
         "type": "str",
-        "choices": ["RUNNING", "STOPPED"],
+        "choices": ["running", "stopped"],
     }
     assert captured["argument_spec"]["shape_config"]["type"] == "dict"
     assert "display_name" not in captured["argument_spec"]
+    assert captured["argument_spec"]["boot_volume_id"] == {"type": "str"}
+    assert (
+        captured["argument_spec"]["availability_config"]["options"]["recovery_action"][
+            "choices"
+        ]
+        == ["restore_instance", "stop_instance"]
+    )
 
 
 def test_build_create_instance_details_includes_supported_fields(monkeypatch):
@@ -224,7 +242,7 @@ def test_plan_power_state_strategy_returns_start_action(monkeypatch):
     instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
-        {"power_state": "RUNNING"},
+        {"power_state": "running"},
     )
     resource = FakeModel(id="ocid1.instance.oc1..example", lifecycle_state="STOPPED")
 
@@ -242,7 +260,7 @@ def test_plan_power_state_strategy_noop_when_already_matching(monkeypatch):
     instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
-        {"power_state": "RUNNING"},
+        {"power_state": "running"},
     )
     resource = FakeModel(id="ocid1.instance.oc1..example", lifecycle_state="RUNNING")
 
@@ -311,7 +329,7 @@ def test_create_resource_stops_instance_when_power_state_stopped(monkeypatch):
             "shape": "VM.Standard.E4.Flex",
             "image_id": "ocid1.image.oc1..example",
             "subnet_id": "ocid1.subnet.oc1..example",
-            "power_state": "STOPPED",
+            "power_state": "stopped",
             "wait": True,
         },
         client=types.SimpleNamespace(
@@ -360,7 +378,7 @@ def test_update_resource_applies_power_action_then_field_update(monkeypatch):
         instance_module,
         {
             "name": "updated-instance",
-            "power_state": "STOPPED",
+            "power_state": "stopped",
             "wait": True,
         },
         client=types.SimpleNamespace(
@@ -413,3 +431,189 @@ def test_delete_resource_terminates_instance(monkeypatch):
     instance.delete_resource(resource)
 
     assert terminate_calls == ["ocid1.instance.oc1..example"]
+
+
+def test_normalize_enum_values_upper_cases_known_keys_recursively(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+
+    normalized = instance_module.normalize_enum_values(
+        {
+            "recovery_action": "stop_instance",
+            "nested": {"type": "amd_vm"},
+            "items": [{"desired_state": "enabled"}],
+            "unrelated": "left_alone",
+        }
+    )
+
+    assert normalized == {
+        "recovery_action": "STOP_INSTANCE",
+        "nested": {"type": "AMD_VM"},
+        "items": [{"desired_state": "ENABLED"}],
+        "unrelated": "left_alone",
+    }
+
+
+def test_build_source_details_uses_boot_volume_when_image_id_absent(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    details = instance_module.build_source_details(
+        {"boot_volume_id": "ocid1.bootvolume.oc1..example"}
+    )
+
+    assert isinstance(details, FakeModel)
+    assert details.boot_volume_id == "ocid1.bootvolume.oc1..example"
+    assert not hasattr(details, "image_id")
+
+
+def test_build_agent_config_normalizes_plugin_desired_state(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    agent_config = instance_module.build_agent_config(
+        {
+            "agent_config": {
+                "are_all_plugins_disabled": False,
+                "plugins_config": [{"name": "Bastion", "desired_state": "enabled"}],
+            }
+        },
+        instance_module.oci.core.models.LaunchInstanceAgentConfigDetails,
+    )
+
+    assert isinstance(agent_config, FakeModel)
+    assert agent_config.are_all_plugins_disabled is False
+    assert len(agent_config.plugins_config) == 1
+    assert agent_config.plugins_config[0].name == "Bastion"
+    assert agent_config.plugins_config[0].desired_state == "ENABLED"
+
+
+def test_build_platform_config_resolves_type_specific_class(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    platform_config = instance_module.build_platform_config(
+        {
+            "platform_config": {
+                "type": "amd_vm",
+                "is_secure_boot_enabled": True,
+            }
+        },
+        "LaunchInstancePlatformConfig",
+    )
+
+    assert isinstance(platform_config, FakeModel)
+    assert platform_config.type == "AMD_VM"
+    assert platform_config.is_secure_boot_enabled is True
+
+
+def test_build_platform_config_rejects_unknown_type(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+
+    with pytest.raises(ValueError):
+        instance_module.build_platform_config(
+            {"platform_config": {"type": "not_a_type"}}, "LaunchInstancePlatformConfig"
+        )
+
+
+def test_build_platform_config_rejects_unsupported_operation_for_type(monkeypatch):
+    """Bare metal platform_config types have no UpdateInstancePlatformConfig
+    class at all (OCI does not support updating them after launch)."""
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+
+    with pytest.raises(ValueError):
+        instance_module.build_platform_config(
+            {"platform_config": {"type": "generic_bm"}}, "UpdateInstancePlatformConfig"
+        )
+
+
+def test_needs_update_ignores_unset_availability_config_suboptions(monkeypatch):
+    """Regression test: Ansible fills every declared suboption with ``None``
+    when the caller only sets one of them. Comparing those ``None``
+    placeholders against the resource's real values would otherwise report
+    spurious drift on every run.
+    """
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    instance = make_instance_module(
+        instance_module,
+        {
+            "availability_config": {
+                "is_live_migration_preferred": None,
+                "recovery_action": "restore_instance",
+            }
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.instance.oc1..example",
+        availability_config={
+            "is_live_migration_preferred": False,
+            "recovery_action": "RESTORE_INSTANCE",
+        },
+        lifecycle_state="RUNNING",
+    )
+
+    assert instance.needs_update(resource) is False
+
+
+def test_needs_update_returns_true_for_availability_config_drift(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    instance = make_instance_module(
+        instance_module,
+        {"availability_config": {"recovery_action": "stop_instance"}},
+    )
+    resource = FakeModel(
+        id="ocid1.instance.oc1..example",
+        availability_config={"recovery_action": "RESTORE_INSTANCE"},
+        lifecycle_state="RUNNING",
+    )
+
+    assert instance.needs_update(resource) is True
+
+
+def test_validate_create_request_requires_image_id_or_boot_volume_id(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    instance = make_instance_module(
+        instance_module,
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
+            "shape": "VM.Standard.E4.Flex",
+            "subnet_id": "ocid1.subnet.oc1..example",
+            "name": "example-instance",
+        },
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.validate_create_request()
+
+    assert "image_id or boot_volume_id" in exc_info.value.payload["msg"]
+
+
+def test_validate_create_request_passes_with_boot_volume_id(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    instance = make_instance_module(
+        instance_module,
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
+            "shape": "VM.Standard.E4.Flex",
+            "subnet_id": "ocid1.subnet.oc1..example",
+            "name": "example-instance",
+            "boot_volume_id": "ocid1.bootvolume.oc1..example",
+        },
+    )
+
+    instance.validate_create_request()
