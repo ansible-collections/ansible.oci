@@ -1,0 +1,28 @@
+name: Determine OCI integration targets
+description: Resolve whether a PR should run all, selected, or no integration targets
+
+inputs:
+  pr-number:
+    description: Pull request number to inspect
+    required: true
+
+outputs:
+  run-integration:
+    description: Whether integration should run for this PR
+    value: ${{ steps.determine.outputs.run-integration }}
+  targets:
+    description: Space-separated ansible-test integration targets
+    value: ${{ steps.determine.outputs.targets }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine integration targets
+      id: determine
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: >-
+        bash "${{ github.action_path }}/determine-targets.sh"
+        "${{ inputs.pr-number }}"
+        "${{ github.repository }}"
