@@ -299,7 +299,7 @@ def test_create_resource_stops_instance_when_power_state_stopped(monkeypatch):
     response = FakeResponse(data=FakeModel(id="ocid1.instance.oc1..example"))
     action_calls = []
 
-    def instance_action(instance_id, action):
+    def instance_action(instance_id, action, **kwargs):
         action_calls.append((instance_id, action))
 
     instance = make_instance_module(
@@ -344,7 +344,7 @@ def test_update_resource_applies_power_action_then_field_update(monkeypatch):
     update_calls = []
     update_response = FakeResponse(data=FakeModel(id="ocid1.instance.oc1..example"))
 
-    def instance_action(instance_id, action):
+    def instance_action(instance_id, action, **kwargs):
         action_calls.append((instance_id, action))
 
     def update_instance(instance_id, update_instance_details):

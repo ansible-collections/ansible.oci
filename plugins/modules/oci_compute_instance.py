@@ -501,10 +501,16 @@ class OciComputeInstanceModule(OciResourceBase):
         return [action]
 
     def _apply_power_action(self, instance_id, action):
+        # OCI briefly rejects a power action with 409 Conflict while the
+        # instance is still settling from a preceding mutation (for example,
+        # right after an update_instance call). That is a transient
+        # "try again later" condition, not a real conflict, so retry it here
+        # alongside the default 429/500/503 handling.
         self.call_with_retry(
             self.client.instance_action,
             instance_id=instance_id,
             action=action,
+            retry_on=(409, 429, 500, 503),
         )
         target_state = LIFECYCLE_RUNNING if action == "START" else LIFECYCLE_STOPPED
         return self.wait_for_resource_id(instance_id, [target_state])
