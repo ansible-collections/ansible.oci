@@ -37,7 +37,7 @@ def install_fake_oci(monkeypatch):
 def make_instance_module(module_obj, params, client=None):
     return make_module_instance(
         module_obj,
-        "OciComputeInstanceModule",
+        "OciInstanceModule",
         params,
         client=client,
     )
@@ -46,14 +46,14 @@ def make_instance_module(module_obj, params, client=None):
 def test_main_exposes_power_state_argument(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    module_obj = load_collection_module("oci_compute_instance")
+    module_obj = load_collection_module("oci_instance")
     captured = {}
 
     def fake_ansible_module(**kwargs):
         captured["argument_spec"] = kwargs["argument_spec"]
         return DummyModule({})
 
-    class FakeComputeInstanceModule:
+    class FakeInstanceModule:
         def __init__(self, module):
             self.module = module
 
@@ -61,7 +61,7 @@ def test_main_exposes_power_state_argument(monkeypatch):
             captured["run_called"] = True
 
     monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
-    monkeypatch.setattr(module_obj, "OciComputeInstanceModule", FakeComputeInstanceModule)
+    monkeypatch.setattr(module_obj, "OciInstanceModule", FakeInstanceModule)
 
     module_obj.main()
 
@@ -77,7 +77,7 @@ def test_main_exposes_power_state_argument(monkeypatch):
 def test_build_create_instance_details_includes_supported_fields(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     details = instance_module.build_create_instance_details(
         {
             "compartment_id": "ocid1.compartment.oc1..example",
@@ -115,7 +115,7 @@ def test_build_create_instance_details_includes_supported_fields(monkeypatch):
 def test_build_update_plan_maps_name_and_shape_fields(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
         {
@@ -142,7 +142,7 @@ def test_build_update_plan_maps_name_and_shape_fields(monkeypatch):
 def test_needs_update_ignores_shape_config_extra_fields(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
         {"shape_config": {"ocpus": 1.0, "memory_in_gbs": 16.0}},
@@ -164,7 +164,7 @@ def test_needs_update_ignores_shape_config_extra_fields(monkeypatch):
 def test_needs_update_returns_true_for_shape_config_drift(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
         {"shape_config": {"ocpus": 2.0, "memory_in_gbs": 32.0}},
@@ -181,7 +181,7 @@ def test_needs_update_returns_true_for_shape_config_drift(monkeypatch):
 def test_needs_update_rejects_availability_domain_drift(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
         {"availability_domain": "Uocm:PHX-AD-2"},
@@ -201,7 +201,7 @@ def test_needs_update_rejects_availability_domain_drift(monkeypatch):
 def test_needs_update_rejects_image_id_drift(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
         {"image_id": "ocid1.image.oc1..desired"},
@@ -221,7 +221,7 @@ def test_needs_update_rejects_image_id_drift(monkeypatch):
 def test_plan_power_state_strategy_returns_start_action(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
         {"power_state": "RUNNING"},
@@ -239,7 +239,7 @@ def test_plan_power_state_strategy_returns_start_action(monkeypatch):
 def test_plan_power_state_strategy_noop_when_already_matching(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     instance = make_instance_module(
         instance_module,
         {"power_state": "RUNNING"},
@@ -254,7 +254,7 @@ def test_plan_power_state_strategy_noop_when_already_matching(monkeypatch):
 def test_create_resource_launches_and_waits(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     launch_calls = []
     response = FakeResponse(data=FakeModel(id="ocid1.instance.oc1..example"))
 
@@ -295,7 +295,7 @@ def test_create_resource_launches_and_waits(monkeypatch):
 def test_create_resource_stops_instance_when_power_state_stopped(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     response = FakeResponse(data=FakeModel(id="ocid1.instance.oc1..example"))
     action_calls = []
 
@@ -339,7 +339,7 @@ def test_create_resource_stops_instance_when_power_state_stopped(monkeypatch):
 def test_update_resource_applies_power_action_then_field_update(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     action_calls = []
     update_calls = []
     update_response = FakeResponse(data=FakeModel(id="ocid1.instance.oc1..example"))
@@ -389,7 +389,7 @@ def test_update_resource_applies_power_action_then_field_update(monkeypatch):
 def test_delete_resource_terminates_instance(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    instance_module = load_collection_module("oci_compute_instance")
+    instance_module = load_collection_module("oci_instance")
     terminate_calls = []
     response = FakeResponse(data=FakeModel(id="ocid1.instance.oc1..example"))
 

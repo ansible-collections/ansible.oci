@@ -7,7 +7,7 @@ __metaclass__ = type
 
 DOCUMENTATION = r"""
 ---
-module: oci_compute_instance
+module: oci_instance
 short_description: Manage a Compute instance resource in Oracle Cloud Infrastructure
 description:
   - Launch, update, and terminate OCI Compute instances.
@@ -165,7 +165,7 @@ options:
 
 EXAMPLES = r"""
 - name: Launch an instance
-  oracle.oci.oci_compute_instance:
+  oracle.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -182,7 +182,7 @@ EXAMPLES = r"""
   register: created_instance
 
 - name: Reconcile a uniquely named instance by name
-  oracle.oci.oci_compute_instance:
+  oracle.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -195,29 +195,29 @@ EXAMPLES = r"""
       memory_in_gbs: 32
 
 - name: Stop the instance
-  oracle.oci.oci_compute_instance:
+  oracle.oci.oci_instance:
     instance_id: "{{ created_instance.resource.id }}"
     power_state: STOPPED
 
 - name: Resize the stopped instance's flexible shape
-  oracle.oci.oci_compute_instance:
+  oracle.oci.oci_instance:
     instance_id: "{{ created_instance.resource.id }}"
     shape_config:
       ocpus: 4
       memory_in_gbs: 64
 
 - name: Start the instance again
-  oracle.oci.oci_compute_instance:
+  oracle.oci.oci_instance:
     instance_id: "{{ created_instance.resource.id }}"
     power_state: RUNNING
 
 - name: Terminate the instance
-  oracle.oci.oci_compute_instance:
+  oracle.oci.oci_instance:
     state: absent
     instance_id: "{{ created_instance.resource.id }}"
 
 - name: Terminate a uniquely named instance without providing instance_id
-  oracle.oci.oci_compute_instance:
+  oracle.oci.oci_instance:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     name: example-instance
@@ -400,7 +400,7 @@ def build_create_instance_details(params):
     return oci.core.models.LaunchInstanceDetails(**details)
 
 
-class OciComputeInstanceModule(OciResourceBase):
+class OciInstanceModule(OciResourceBase):
     """Concrete resource adapter for OCI Compute instances."""
 
     @property
@@ -619,7 +619,7 @@ def main():
         supports_check_mode=True,
     )
 
-    OciComputeInstanceModule(module).execute_resource_module()
+    OciInstanceModule(module).execute_resource_module()
 
 
 if __name__ == "__main__":
