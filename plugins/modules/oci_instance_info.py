@@ -7,7 +7,7 @@ __metaclass__ = type
 
 DOCUMENTATION = r"""
 ---
-module: oci_compute_instance_info
+module: oci_instance_info
 short_description: Retrieve Compute instance information from Oracle Cloud Infrastructure
 description:
   - Retrieve details about one or more OCI Compute instances.
@@ -40,22 +40,22 @@ options:
 
 EXAMPLES = r"""
 - name: List all instances in a compartment
-  oracle.oci.oci_compute_instance_info:
+  oracle.oci.oci_instance_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List running instances in a compartment filtered by name
-  oracle.oci.oci_compute_instance_info:
+  oracle.oci.oci_instance_info:
     compartment_id: ocid1.compartment.oc1..example
     name: example-instance
     lifecycle_state: RUNNING
 
 - name: List instances in a specific availability domain
-  oracle.oci.oci_compute_instance_info:
+  oracle.oci.oci_instance_info:
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
 
 - name: Get a specific instance
-  oracle.oci.oci_compute_instance_info:
+  oracle.oci.oci_instance_info:
     instance_id: ocid1.instance.oc1..example
 """
 
@@ -82,7 +82,7 @@ oci = imported_oci_sdk[0]
 HAS_OCI_SDK = imported_oci_sdk[1]
 
 
-class OciComputeInstanceInfoModule(OciInfoBase):
+class OciInstanceInfoModule(OciInfoBase):
     """Concrete info adapter for OCI Compute instances."""
 
     @property
@@ -116,7 +116,7 @@ def main():
         required_one_of=[["compartment_id", "instance_id"]],
     )
 
-    OciComputeInstanceInfoModule(module).execute_info_module()
+    OciInstanceInfoModule(module).execute_info_module()
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ from conftest import (
 def make_instance_info_module(module_obj, params, client=None):
     return make_module_instance(
         module_obj,
-        "OciComputeInstanceInfoModule",
+        "OciInstanceInfoModule",
         params,
         client=client,
     )
@@ -27,7 +27,7 @@ def make_instance_info_module(module_obj, params, client=None):
 def test_main_requires_compartment_id_or_instance_id(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    module_obj = load_collection_module("oci_compute_instance_info")
+    module_obj = load_collection_module("oci_instance_info")
     captured = {}
 
     def fake_ansible_module(**kwargs):
@@ -44,7 +44,7 @@ def test_main_requires_compartment_id_or_instance_id(monkeypatch):
 
     monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
     monkeypatch.setattr(
-        module_obj, "OciComputeInstanceInfoModule", FakeComputeInstanceInfoModule
+        module_obj, "OciInstanceInfoModule", FakeComputeInstanceInfoModule
     )
 
     module_obj.main()
@@ -57,7 +57,7 @@ def test_main_requires_compartment_id_or_instance_id(monkeypatch):
 def test_fetch_resources_prefers_id_lookup(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    info_module = load_collection_module("oci_compute_instance_info")
+    info_module = load_collection_module("oci_instance_info")
     get_calls = []
 
     def get_instance(**kwargs):
@@ -88,7 +88,7 @@ def test_fetch_resources_prefers_id_lookup(monkeypatch):
 def test_fetch_resources_lists_by_compartment_and_availability_domain(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    info_module = load_collection_module("oci_compute_instance_info")
+    info_module = load_collection_module("oci_instance_info")
     paginate_calls = []
     instance = make_instance_info_module(
         info_module,
@@ -123,7 +123,7 @@ def test_fetch_resources_lists_by_compartment_and_availability_domain(monkeypatc
 def test_run_returns_instances_key(monkeypatch):
     install_fake_oci(monkeypatch)
 
-    info_module = load_collection_module("oci_compute_instance_info")
+    info_module = load_collection_module("oci_instance_info")
     resource = FakeModel(
         id="ocid1.instance.oc1..example",
         display_name="example-instance",
