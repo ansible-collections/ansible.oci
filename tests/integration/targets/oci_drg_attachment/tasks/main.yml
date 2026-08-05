@@ -95,21 +95,34 @@
         that:
           - oci_drg_attachment_create.changed | bool
 
-    - name: Read created DRG attachment by rerunning the module with only the id
-      oracle.oci.oci_drg_attachment:
+    - name: Read created DRG attachment by id
+      oracle.oci.oci_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_probe_after_create
 
-    - name: Assert DRG attachment probe reflects the created attachment
+    - name: Assert DRG attachment info by id returned the created attachment
       ansible.builtin.assert:
         that:
-          - not oci_drg_attachment_probe_after_create.changed | bool
-          - oci_drg_attachment_probe_after_create.resource.id == oci_drg_attachment_id
-          - oci_drg_attachment_probe_after_create.resource.name == oci_drg_attachment_integration_attachment_name
-          - oci_drg_attachment_probe_after_create.resource.drg_id == oci_drg_attachment_integration_drg_id
-          - oci_drg_attachment_probe_after_create.resource.vcn_id == oci_drg_attachment_integration_vcn_id
-          - oci_drg_attachment_probe_after_create.resource.lifecycle_state == "ATTACHED"
-          - oci_drg_attachment_probe_after_create.resource.freeform_tags.phase == "create"
+          - oci_drg_attachment_probe_after_create.drg_attachments | length == 1
+          - oci_drg_attachment_probe_after_create.drg_attachments[0].id == oci_drg_attachment_id
+          - oci_drg_attachment_probe_after_create.drg_attachments[0].name == oci_drg_attachment_integration_attachment_name
+          - oci_drg_attachment_probe_after_create.drg_attachments[0].drg_id == oci_drg_attachment_integration_drg_id
+          - oci_drg_attachment_probe_after_create.drg_attachments[0].vcn_id == oci_drg_attachment_integration_vcn_id
+          - oci_drg_attachment_probe_after_create.drg_attachments[0].lifecycle_state == "ATTACHED"
+          - oci_drg_attachment_probe_after_create.drg_attachments[0].freeform_tags.phase == "create"
+
+    - name: List created DRG attachment by scoped name
+      oracle.oci.oci_drg_attachment_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        drg_id: "{{ oci_drg_attachment_integration_drg_id }}"
+        vcn_id: "{{ oci_drg_attachment_integration_vcn_id }}"
+        name: "{{ oci_drg_attachment_integration_attachment_name }}"
+      register: oci_drg_attachment_info_list
+
+    - name: Assert DRG attachment info list returned the created attachment
+      ansible.builtin.assert:
+        that:
+          - oci_drg_attachment_info_list.drg_attachments | selectattr('id', 'equalto', oci_drg_attachment_id) | list | length == 1
 
     - name: Assert created DRG attachment is a no-op on rerun with returned id
       oracle.oci.oci_drg_attachment:
@@ -137,16 +150,16 @@
           - oci_drg_attachment_update_check.changed | bool
 
     - name: Read DRG attachment after update check mode
-      oracle.oci.oci_drg_attachment:
+      oracle.oci.oci_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_update_check_probe
 
     - name: Assert update check mode did not mutate cloud state
       ansible.builtin.assert:
         that:
-          - not oci_drg_attachment_update_check_probe.changed | bool
-          - oci_drg_attachment_update_check_probe.resource.name == oci_drg_attachment_integration_attachment_name
-          - oci_drg_attachment_update_check_probe.resource.freeform_tags.phase == "create"
+          - oci_drg_attachment_update_check_probe.drg_attachments | length == 1
+          - oci_drg_attachment_update_check_probe.drg_attachments[0].name == oci_drg_attachment_integration_attachment_name
+          - oci_drg_attachment_update_check_probe.drg_attachments[0].freeform_tags.phase == "create"
 
     - name: Update DRG attachment
       oracle.oci.oci_drg_attachment:
@@ -159,16 +172,16 @@
           - oci_drg_attachment_update.changed | bool
 
     - name: Read DRG attachment after update
-      oracle.oci.oci_drg_attachment:
+      oracle.oci.oci_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_probe_after_update
 
-    - name: Assert DRG attachment probe reflects the updated attachment
+    - name: Assert DRG attachment info reflects the updated attachment
       ansible.builtin.assert:
         that:
-          - not oci_drg_attachment_probe_after_update.changed | bool
-          - oci_drg_attachment_probe_after_update.resource.name == oci_drg_attachment_integration_updated_attachment_name
-          - oci_drg_attachment_probe_after_update.resource.freeform_tags.phase == "update"
+          - oci_drg_attachment_probe_after_update.drg_attachments | length == 1
+          - oci_drg_attachment_probe_after_update.drg_attachments[0].name == oci_drg_attachment_integration_updated_attachment_name
+          - oci_drg_attachment_probe_after_update.drg_attachments[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_drg_attachment:
@@ -193,15 +206,15 @@
           - oci_drg_attachment_delete_check.changed | bool
 
     - name: Read DRG attachment after delete check mode
-      oracle.oci.oci_drg_attachment:
+      oracle.oci.oci_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_delete_check_probe
 
     - name: Assert DRG attachment still exists after delete check mode
       ansible.builtin.assert:
         that:
-          - not oci_drg_attachment_delete_check_probe.changed | bool
-          - oci_drg_attachment_delete_check_probe.resource.id == oci_drg_attachment_id
+          - oci_drg_attachment_delete_check_probe.drg_attachments | length == 1
+          - oci_drg_attachment_delete_check_probe.drg_attachments[0].id == oci_drg_attachment_id
 
     - name: Delete DRG attachment
       oracle.oci.oci_drg_attachment:
