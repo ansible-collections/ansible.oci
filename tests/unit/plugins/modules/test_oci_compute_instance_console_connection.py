@@ -13,6 +13,7 @@ from conftest import (
     install_fake_oci as shared_install_fake_oci,
     load_collection_module,
     make_module_instance,
+    raising,
 )
 
 
@@ -232,9 +233,7 @@ def test_resolve_target_resource_prefers_explicit_id(monkeypatch):
     monkeypatch.setattr(
         instance,
         "list_all_resources",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("list_all_resources should not be called")
-        ),
+        raising(AssertionError("list_all_resources should not be called")),
     )
 
     resource = instance.resolve_target_resource()

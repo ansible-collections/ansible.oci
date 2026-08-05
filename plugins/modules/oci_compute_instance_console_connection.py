@@ -12,8 +12,8 @@ short_description: Manage a Compute instance console connection resource in Orac
 description:
   - Create and delete OCI Compute instance console connections for serial
     console access to an instance.
-  - Console connections have no display name in the OCI API. Idempotency is
-    based on C(instance_id) instead of a scoped name lookup: with
+  - Console connections have no display name in the OCI API, so idempotency
+    is based on C(instance_id) instead of a scoped name lookup. With
     C(instance_console_connection_id) omitted, C(state=present) manages the
     instance's existing non-deleted console connection (if any), and
     C(state=absent) deletes it. There is intentionally no paired
@@ -129,7 +129,7 @@ resource:
       description: The SSH connection string for the console connection.
       type: str
       returned: always
-      sample: ssh -o ProxyCommand='ssh -W %h:%p -p 443 ocid1.instanceconsoleconnection.oc1..example@instance-console.us-phoenix-1.oci.oraclecloud.com' -p 22 ocid1.instance.oc1..example
+      sample: "ssh -o ProxyCommand='ssh -W %h:%p -p 443 ocid1...@instance-console.us-phoenix-1.oci.oraclecloud.com' -p 22 ocid1.instance.oc1..example"
     vnc_connection_string:
       description: The VNC connection string for the console connection.
       type: str
@@ -155,7 +155,7 @@ resource:
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
     lifecycle_state: ACTIVE
-    connection_string: ssh -o ProxyCommand='ssh -W %h:%p -p 443 ocid1.instanceconsoleconnection.oc1..example@instance-console.us-phoenix-1.oci.oraclecloud.com' -p 22 ocid1.instance.oc1..example
+    connection_string: "ssh -o ProxyCommand='ssh -W %h:%p -p 443 ocid1...@instance-console.us-phoenix-1.oci.oraclecloud.com' -p 22 ocid1.instance.oc1..example"
     vnc_connection_string: null
     fingerprint: "12:34:56:78:9a:bc:de:f0:12:34:56:78:9a:bc:de:f0"
     freeform_tags: {"environment": "production"}
