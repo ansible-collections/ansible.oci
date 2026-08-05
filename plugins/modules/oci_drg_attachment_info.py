@@ -19,6 +19,7 @@ author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
+  - oracle.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -38,16 +39,6 @@ options:
   vcn_id:
     description:
       - Filter listed DRG attachments by VCN.
-      - Only used when C(compartment_id) is provided.
-    type: str
-  name:
-    description:
-      - Filter listed DRG attachments by name.
-      - Only used when C(compartment_id) is provided.
-    type: str
-  lifecycle_state:
-    description:
-      - Filter listed DRG attachments by lifecycle state.
       - Only used when C(compartment_id) is provided.
     type: str
 notes:
