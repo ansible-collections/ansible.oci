@@ -21,8 +21,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  determine-integration-targets:
+    name: Determine integration targets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run-integration: ${{ steps.determine.outputs.run-integration }}
+      targets: ${{ steps.determine.outputs.targets }}
+    steps:
+      - name: Checkout base ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Determine integration targets
+        id: determine
+        uses: ./.github/actions/determine-integration-targets
+        with:
+          pr-number: ${{ github.event.pull_request.number }}
+
   integration-pr:
     name: Integration PR
+    if: ${{ needs.determine-integration-targets.outputs.run-integration == 'true' }}
+    needs:
+      - determine-integration-targets
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -47,11 +71,13 @@ jobs:
         uses: ./.github/actions/run-oci-integration
         with:
           ansible-ref: stable-2.18
+          integration-targets: ${{ needs.determine-integration-targets.outputs.targets }}
           python-version: '3.12'
 
   integration-pr-check:
     if: always()
     needs:
+      - determine-integration-targets
       - integration-pr
     runs-on: ubuntu-latest
     permissions: {}
@@ -59,4 +85,5 @@ jobs:
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
+          allowed-skips: integration-pr
           jobs: ${{ toJSON(needs) }}
