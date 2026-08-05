@@ -32,14 +32,22 @@ classify_file() {
       file_name="$(basename "${file_path}" .py)"
       add_target "${file_name}"
       ;;
+    plugins/doc_fragments/*)
+      ;;
+    plugins/*)
+      run_all=true
+      ;;
     tests/integration/targets/oci_*/*)
       target_name="${file_path#tests/integration/targets/}"
       add_target "${target_name%%/*}"
       ;;
-    plugins/doc_fragments/*)
+    tests/integration/*)
+      run_all=true
+      ;;
+    requirements.txt|Makefile)
+      run_all=true
       ;;
     *)
-      run_all=true
       ;;
   esac
 }
