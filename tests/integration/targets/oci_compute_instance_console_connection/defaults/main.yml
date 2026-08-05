@@ -1,0 +1,6 @@
+---
+# A throwaway public key used only to exercise the create-request validation
+# path in this target. No corresponding private key is committed or needed:
+# these tests never launch a real instance to actually connect to.
+oci_compute_instance_console_connection_integration_public_key: >-
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH4edIQ/n4R8WVuNuv7DBhHITMELCpHWT7we2VwYtwW5 integration-test

@@ -1,0 +1,72 @@
+---
+# This target intentionally does not launch a real compute instance: the
+# module's own resource module (oci_compute_instance) ships in a separate
+# pull request per this epic's one-PR-per-module convention and cannot be
+# depended on here. It still exercises real, non-destructive OCI API calls.
+
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI compute instance console connection integration tests require
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Exercise console connection module read/error paths
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Fail to create without required arguments
+      oracle.oci.oci_compute_instance_console_connection:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_console_connection_missing_args
+      ignore_errors: true
+
+    - name: Assert missing required create arguments fails
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_missing_args is failed
+          - "'public_key' in oci_console_connection_missing_args.msg"
+
+    - name: Fail to create against a non-existent instance
+      oracle.oci.oci_compute_instance_console_connection:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        public_key: "{{ oci_compute_instance_console_connection_integration_public_key }}"
+      register: oci_console_connection_create_missing_instance
+      ignore_errors: true
+
+    - name: Assert creating against a non-existent instance fails
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_create_missing_instance is failed
+
+    - name: Reconcile absent state for an instance with no console connection
+      oracle.oci.oci_compute_instance_console_connection:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      register: oci_console_connection_absent_noop
+
+    - name: Assert absent state is a no-op when no connection exists
+      ansible.builtin.assert:
+        that:
+          - not oci_console_connection_absent_noop.changed | bool
+
+    - name: Fail to delete without enough scope
+      oracle.oci.oci_compute_instance_console_connection:
+        state: absent
+        instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      register: oci_console_connection_delete_missing_scope
+      ignore_errors: true
+
+    - name: Assert deleting without compartment_id or explicit id fails
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_delete_missing_scope is failed
+          - "'instance_console_connection_id' in oci_console_connection_delete_missing_scope.msg"
