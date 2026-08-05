@@ -49,6 +49,10 @@ class FakeVirtualNetworkClient:
     pass
 
 
+class FakeComputeClient:
+    pass
+
+
 class FakeWorkRequestClient:
     pass
 
@@ -67,6 +71,7 @@ def install_fake_oci(monkeypatch, *, model_names=(), include_work_requests=False
     oci_module.exceptions = exceptions_module
     oci_module.core = types.SimpleNamespace(
         VirtualNetworkClient=FakeVirtualNetworkClient,
+        ComputeClient=FakeComputeClient,
         models=types.SimpleNamespace(
             **{model_name: FakeModel for model_name in model_names}
         ),

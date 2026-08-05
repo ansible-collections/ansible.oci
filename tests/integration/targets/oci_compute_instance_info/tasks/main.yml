@@ -1,0 +1,58 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI compute instance info integration tests require
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Exercise compute instance info module read paths
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Fail without compartment_id or instance_id
+      oracle.oci.oci_compute_instance_info: {}
+      register: oci_compute_instance_info_missing_args
+      ignore_errors: true
+
+    - name: Assert missing required arguments fails
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_info_missing_args is failed
+
+    - name: List instances in the compartment
+      oracle.oci.oci_compute_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_compute_instance_info_list
+
+    - name: Assert listing instances is a read-only no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_compute_instance_info_list.changed | bool
+          - oci_compute_instance_info_list.instances is iterable
+
+    - name: List instances filtered by a name that will not match
+      oracle.oci.oci_compute_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "oci-instance-info-integration-{{ oci_integration_rpfx | default(9999999999 | random) }}"
+      register: oci_compute_instance_info_list_by_name
+
+    - name: Assert name filter with no matches returns an empty list
+      ansible.builtin.assert:
+        that:
+          - oci_compute_instance_info_list_by_name.instances | length == 0
+
+    - name: Get a non-existent instance by id
+      oracle.oci.oci_compute_instance_info:
+        instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      register: oci_compute_instance_info_get_missing
+
+    - name: Assert getting a non-existent instance returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not oci_compute_instance_info_get_missing.changed | bool
+          - oci_compute_instance_info_get_missing.instances | length == 0

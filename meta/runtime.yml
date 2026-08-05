@@ -23,3 +23,4 @@ action_groups:
     - oci_local_peering_gateway_info
     - oci_route_table
     - oci_route_table_info
+    - oci_compute_instance_info
