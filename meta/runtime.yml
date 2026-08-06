@@ -25,4 +25,3 @@ action_groups:
     - oci_route_table_info
     - oci_instance
     - oci_instance_info
-    - oci_instance_console_connection

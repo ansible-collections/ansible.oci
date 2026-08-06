@@ -11,6 +11,45 @@
       oci_integration_image_id to be defined in
       tests/integration/integration_config.yml.
 
+- name: Exercise compute instance info module argument validation and empty-result paths
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Fail without compartment_id or instance_id
+      oracle.oci.oci_instance_info: {}
+      register: oci_instance_info_missing_args
+      ignore_errors: true
+
+    - name: Assert missing required arguments fails
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_missing_args is failed
+
+    - name: List instances filtered by a name that will not match
+      oracle.oci.oci_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "oci-instance-info-integration-{{ oci_integration_rpfx }}"
+      register: oci_instance_info_list_by_name
+
+    - name: Assert name filter with no matches returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_info_list_by_name.changed | bool
+          - oci_instance_info_list_by_name.instances | length == 0
+
+    - name: Get a non-existent instance by id
+      oracle.oci.oci_instance_info:
+        instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      register: oci_instance_info_get_missing
+
+    - name: Assert getting a non-existent instance returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_info_get_missing.changed | bool
+          - oci_instance_info_get_missing.instances | length == 0
+
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
     oci_instance_integration_vcn_name: "{{ oci_instance_integration_vcn_name }}-{{ oci_integration_rpfx }}"
@@ -83,6 +122,17 @@
         that:
           - oci_instance_create_check.changed | bool
 
+    - name: Read instances by name after create check mode
+      oracle.oci.oci_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_integration_instance_name }}"
+      register: oci_instance_info_create_check_probe
+
+    - name: Assert instance is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_create_check_probe.instances | length == 0
+
     - name: Create instance
       oracle.oci.oci_instance:
         <<: *oci_instance_create_module_options
@@ -106,6 +156,32 @@
           - oci_instance_create.resource.instance_options.are_legacy_imds_endpoints_disabled | bool
           - oci_instance_create.resource.availability_config.recovery_action == "RESTORE_INSTANCE"
           - not oci_instance_create.resource.agent_config.are_all_plugins_disabled | bool
+
+    - name: Read the instance by id
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_by_id
+
+    - name: Assert instance info by id returned the created instance
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_by_id.instances | length == 1
+          - oci_instance_info_by_id.instances[0].id == oci_instance_id
+          - oci_instance_info_by_id.instances[0].name == oci_instance_integration_instance_name
+          - oci_instance_info_by_id.instances[0].lifecycle_state == "RUNNING"
+
+    - name: List instances by name and availability_domain
+      oracle.oci.oci_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_integration_availability_domain }}"
+        name: "{{ oci_instance_integration_instance_name }}"
+        lifecycle_state: RUNNING
+      register: oci_instance_info_list
+
+    - name: Assert instance info list returned the created instance
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_list.instances | selectattr('id', 'equalto', oci_instance_id) | list | length == 1
 
     - name: Assert created instance is a no-op on rerun with returned id
       oracle.oci.oci_instance:
@@ -178,6 +254,18 @@
           - oci_instance_start.resource.shape_config.ocpus == oci_instance_integration_updated_shape_config.ocpus
           - oci_instance_start.resource.shape_config.memory_in_gbs == oci_instance_integration_updated_shape_config.memory_in_gbs
 
+    - name: Read the updated instance by id
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_after_update
+
+    - name: Assert instance info reflects the updated name, shape_config, and tags
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_after_update.instances[0].name == oci_instance_integration_updated_instance_name
+          - oci_instance_info_after_update.instances[0].shape_config.ocpus == oci_instance_integration_updated_shape_config.ocpus
+          - oci_instance_info_after_update.instances[0].freeform_tags.phase == "update"
+
     - name: Update availability_config independently of the shape change
       oracle.oci.oci_instance: &oci_instance_availability_config_module_options
         instance_id: "{{ oci_instance_id }}"
@@ -222,6 +310,16 @@
       ansible.builtin.assert:
         that:
           - oci_instance_delete_check.changed | bool
+
+    - name: Read the instance by id after delete check mode
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_delete_check_probe
+
+    - name: Assert instance still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_delete_check_probe.instances | length == 1
 
     - name: Terminate instance
       oracle.oci.oci_instance:
