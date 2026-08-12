@@ -3,13 +3,14 @@
   ansible.builtin.assert:
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
-      - oci_integration_availability_domain | default('', true) | length > 0
-      - oci_integration_image_id | default('', true) | length > 0
+      - oci_instance_integration_availability_domain | default('', true) | length > 0
     fail_msg: >-
       OCI compute instance integration tests require
-      oci_integration_compartment_id, oci_integration_availability_domain, and
-      oci_integration_image_id to be defined in
-      tests/integration/integration_config.yml.
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml, and
+      oci_instance_integration_availability_domain to be set to a valid
+      availability domain name for the CI tenancy/region in
+      tests/integration/targets/oci_instance/defaults/main.yml.
 
 - name: Exercise compute instance info module argument validation and empty-result paths
   module_defaults:
@@ -50,6 +51,132 @@
           - not oci_instance_info_get_missing.changed | bool
           - oci_instance_info_get_missing.instances | length == 0
 
+    - name: Discover a compatible image
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        operating_system: "{{ oci_instance_integration_operating_system }}"
+        operating_system_version: "{{ oci_instance_integration_operating_system_version }}"
+        shape: "{{ oci_instance_integration_shape }}"
+      register: oci_image_info_discovered
+
+    - name: Assert a compatible image was discovered
+      ansible.builtin.assert:
+        that:
+          - oci_image_info_discovered.images | length > 0
+
+    - name: Set the working image id
+      ansible.builtin.set_fact:
+        oci_instance_discovered_image_id: "{{ oci_image_info_discovered.images[0].id }}"
+
+    - name: Get the working image by id
+      oracle.oci.oci_image_info:
+        image_id: "{{ oci_instance_discovered_image_id }}"
+      register: oci_image_info_by_id
+
+    - name: Assert image lookup by id returns the working image
+      ansible.builtin.assert:
+        that:
+          - not oci_image_info_by_id.changed | bool
+          - oci_image_info_by_id.images | length == 1
+          - oci_image_info_by_id.images[0].id == oci_instance_discovered_image_id
+
+    - name: List images filtered by operating system
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        operating_system: "{{ oci_image_info_by_id.images[0].operating_system }}"
+      register: oci_image_info_by_operating_system
+
+    - name: Assert operating system filtering returns the working image
+      ansible.builtin.assert:
+        that:
+          - not oci_image_info_by_operating_system.changed | bool
+          - oci_image_info_by_operating_system.images
+            | selectattr('id', 'equalto', oci_instance_discovered_image_id)
+            | list | length == 1
+
+    - name: List availability domains for the configured compartment
+      oracle.oci.oci_availability_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_availability_domain_info_list
+
+    - name: Assert the configured availability domain is discoverable
+      ansible.builtin.assert:
+        that:
+          - not oci_availability_domain_info_list.changed | bool
+          - oci_availability_domain_info_list.availability_domains
+            | selectattr('name', 'equalto', oci_instance_integration_availability_domain)
+            | list | length == 1
+
+    - name: List availability domains without compartment_id to exercise the tenancy default
+      oracle.oci.oci_availability_domain_info: {}
+      register: oci_availability_domain_info_default
+
+    - name: Assert the tenancy default returns the same availability domains
+      ansible.builtin.assert:
+        that:
+          - not oci_availability_domain_info_default.changed | bool
+          - oci_availability_domain_info_default.availability_domains
+            | map(attribute='name') | sort
+            == oci_availability_domain_info_list.availability_domains
+            | map(attribute='name') | sort
+
+    - name: List shapes in the availability domain
+      oracle.oci.oci_shape_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
+      register: oci_shape_info_list
+
+    - name: Assert the configured shape is available
+      ansible.builtin.assert:
+        that:
+          - not oci_shape_info_list.changed | bool
+          - oci_shape_info_list.shapes
+            | selectattr('shape', 'equalto', oci_instance_integration_shape)
+            | list | length > 0
+
+    - name: List shapes filtered by exact shape name
+      oracle.oci.oci_shape_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
+        shape: "{{ oci_instance_integration_shape }}"
+      register: oci_shape_info_by_name
+
+    - name: Assert exact shape filtering returns the configured shape
+      ansible.builtin.assert:
+        that:
+          - not oci_shape_info_by_name.changed | bool
+          - oci_shape_info_by_name.shapes | length > 0
+          - oci_shape_info_by_name.shapes
+            | selectattr('shape', 'equalto', oci_instance_integration_shape)
+            | list | length > 0
+
+    - name: List shapes compatible with the working image
+      oracle.oci.oci_shape_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
+        image_id: "{{ oci_instance_discovered_image_id }}"
+      register: oci_shape_info_by_image
+
+    - name: Assert image compatibility filtering returns the configured shape
+      ansible.builtin.assert:
+        that:
+          - not oci_shape_info_by_image.changed | bool
+          - oci_shape_info_by_image.shapes
+            | selectattr('shape', 'equalto', oci_instance_integration_shape)
+            | list | length > 0
+
+    - name: Capture discovered shape value
+      ansible.builtin.set_fact:
+        oci_instance_discovered_shape: >-
+          {{
+            (
+              oci_shape_info_by_image.shapes
+              | selectattr('shape', 'equalto', oci_instance_integration_shape)
+              | list
+              | first
+            ).shape
+          }}
+
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
     oci_instance_integration_vcn_name: "{{ oci_instance_integration_vcn_name }}-{{ oci_integration_rpfx }}"
@@ -86,11 +213,11 @@
         oci_instance_create_params:
           state: present
           compartment_id: "{{ oci_integration_compartment_id }}"
-          availability_domain: "{{ oci_integration_availability_domain }}"
+          availability_domain: "{{ oci_instance_integration_availability_domain }}"
           name: "{{ oci_instance_integration_instance_name }}"
-          shape: "{{ oci_instance_integration_shape }}"
+          shape: "{{ oci_instance_discovered_shape }}"
           shape_config: "{{ oci_instance_integration_shape_config }}"
-          image_id: "{{ oci_integration_image_id }}"
+          image_id: "{{ oci_instance_discovered_image_id }}"
           subnet_id: "{{ oci_instance_subnet_create.resource.id }}"
           freeform_tags: "{{ oci_instance_integration_create_tags }}"
           instance_options:
@@ -150,7 +277,7 @@
         that:
           - oci_instance_create.changed | bool
           - oci_instance_create.resource.name == oci_instance_integration_instance_name
-          - oci_instance_create.resource.shape == oci_instance_integration_shape
+          - oci_instance_create.resource.shape == oci_instance_discovered_shape
           - oci_instance_create.resource.lifecycle_state == "RUNNING"
           - oci_instance_create.resource.freeform_tags.phase == "create"
           - oci_instance_create.resource.instance_options.are_legacy_imds_endpoints_disabled | bool
@@ -173,7 +300,7 @@
     - name: List instances by name and availability_domain
       oracle.oci.oci_instance_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
-        availability_domain: "{{ oci_integration_availability_domain }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
         name: "{{ oci_instance_integration_instance_name }}"
         lifecycle_state: RUNNING
       register: oci_instance_info_list

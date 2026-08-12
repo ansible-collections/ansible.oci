@@ -1,4 +1,12 @@
 ---
+# oci_instance_integration_availability_domain is tenancy-specific (AD names
+# are not portable across OCI accounts)
+oci_instance_integration_availability_domain: "gzqB:US-SANJOSE-1-AD-1"
+# Image OCID is discovered at run time via oci_image_info (tasks/main.yml),
+# filtered by these values, rather than pinned here. Oracle periodically
+# deprecates/rotates platform images, so a hardcoded OCID would go stale.
+oci_instance_integration_operating_system: "Oracle Linux"
+oci_instance_integration_operating_system_version: "9"
 oci_instance_integration_vcn_name: "oci-instance-integration-vcn"
 oci_instance_integration_subnet_name: "oci-instance-integration-subnet"
 oci_instance_integration_instance_name: "oci-instance-integration-instance"

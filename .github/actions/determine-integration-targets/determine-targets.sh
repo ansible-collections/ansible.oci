@@ -26,7 +26,14 @@ classify_file() {
       ;;
     plugins/modules/oci_*_info.py)
       file_name="$(basename "${file_path}" .py)"
-      add_target "${file_name%_info}"
+      case "${file_name}" in
+        oci_image_info|oci_shape_info|oci_availability_domain_info)
+          add_target "oci_instance"
+          ;;
+        *)
+          add_target "${file_name%_info}"
+          ;;
+      esac
       ;;
     plugins/modules/oci_*.py)
       file_name="$(basename "${file_path}" .py)"

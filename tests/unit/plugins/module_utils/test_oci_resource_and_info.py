@@ -396,6 +396,183 @@ def test_oci_resource_base_build_update_plan_supports_sorted_list_compare_and_sk
     assert update_plan["strategy_operations"] == []
 
 
+def test_oci_resource_base_build_update_plan_subset_dict_recurses_into_nested_dicts(monkeypatch):
+    """Regression test: subset_dict must apply subset semantics at every
+    nesting level, not just the top level of the suboption. A resource that
+    echoes back an extra field several levels deep (here ``routing.priority``)
+    should not be treated as drift when the caller never set it, and enum
+    casing declared via ``enum_keys`` should normalize at any depth too.
+    """
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        enum_keys = {"mode"}
+        update_field_specs = (
+            {
+                "param_name": "network_config",
+                "resource_field": "network_config",
+                "update_field": "network_config",
+                "is_mutable": True,
+                "compare": "subset_dict",
+            },
+        )
+
+        def resolve_target_resource(self):
+            raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(
+        DummyModule(
+            {
+                # "priority" is left unset (Ansible fills it with None), and
+                # "mode" is lowercase per this module's own convention.
+                "network_config": {"routing": {"mode": "active", "priority": None}},
+            }
+        )
+    )
+
+    update_plan = resource.build_update_plan(
+        types.SimpleNamespace(
+            # The resource echoes back "priority", a field this caller never set.
+            network_config={"routing": {"mode": "ACTIVE", "priority": 10}},
+        )
+    )
+
+    assert update_plan["update_needed"] is False
+    assert update_plan["update_model_fields"] == {}
+
+    drifted_plan = resource.build_update_plan(
+        types.SimpleNamespace(
+            network_config={"routing": {"mode": "PASSIVE", "priority": 10}},
+        )
+    )
+
+    assert drifted_plan["update_needed"] is True
+    assert drifted_plan["update_model_fields"] == {
+        "network_config": {"routing": {"mode": "active", "priority": None}},
+    }
+
+
+def test_oci_resource_base_build_update_plan_subset_dict_compares_nested_lists_as_a_whole(
+    monkeypatch,
+):
+    """Nested lists (for example a list of plugin suboptions) are compared as
+    a whole after recursively stripping ``None`` placeholders from their
+    elements, rather than matching individual elements by key.
+
+    A fully-specified list that matches the resource exactly is correctly
+    recognized as no drift, and genuinely different content is still caught.
+    A list element that only sets some of its own fields (leaving the rest as
+    Ansible's ``None`` placeholder) still counts as drift against a resource
+    that has real values for those fields, because whole-list equality -
+    unlike the dict case above - does not match elements individually by key.
+    This documents that known, unchanged limitation rather than silently
+    depending on it.
+    """
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        update_field_specs = (
+            {
+                "param_name": "agent_config",
+                "resource_field": "agent_config",
+                "update_field": "agent_config",
+                "is_mutable": True,
+                "compare": "subset_dict",
+            },
+        )
+
+        def resolve_target_resource(self):
+            raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(
+        DummyModule(
+            {
+                "agent_config": {
+                    "plugins_config": [{"name": "monitoring", "desired_state": "enabled"}],
+                },
+            }
+        )
+    )
+
+    matching_plan = resource.build_update_plan(
+        types.SimpleNamespace(
+            agent_config={
+                "plugins_config": [{"name": "monitoring", "desired_state": "enabled"}],
+            },
+        )
+    )
+
+    assert matching_plan["update_needed"] is False
+
+    drifted_plan = resource.build_update_plan(
+        types.SimpleNamespace(
+            agent_config={
+                "plugins_config": [{"name": "monitoring", "desired_state": "disabled"}],
+            },
+        )
+    )
+
+    assert drifted_plan["update_needed"] is True
+
+    partially_specified_resource = ExampleResource(
+        DummyModule(
+            {
+                "agent_config": {
+                    # desired_state is left unset (None); the caller only
+                    # wants to reference the plugin by name.
+                    "plugins_config": [{"name": "monitoring", "desired_state": None}],
+                },
+            }
+        )
+    )
+
+    partial_plan = partially_specified_resource.build_update_plan(
+        types.SimpleNamespace(
+            agent_config={
+                "plugins_config": [{"name": "monitoring", "desired_state": "enabled"}],
+            },
+        )
+    )
+
+    assert partial_plan["update_needed"] is True
+
+
 def test_oci_resource_base_needs_update_uses_shared_update_plan(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(

@@ -25,3 +25,6 @@ action_groups:
     - oci_route_table_info
     - oci_instance
     - oci_instance_info
+    - oci_image_info
+    - oci_shape_info
+    - oci_availability_domain_info

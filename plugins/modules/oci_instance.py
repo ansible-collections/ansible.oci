@@ -69,6 +69,9 @@ options:
       - The availability domain to launch the instance in.
       - Required when creating an instance.
       - The module does not update this field after create.
+      - Availability domain names are tenancy-specific; use
+        M(oracle.oci.oci_availability_domain_info) to discover the valid
+        names for your tenancy and region instead of hardcoding them.
     type: str
   fault_domain:
     description:
@@ -79,6 +82,8 @@ options:
     description:
       - The shape of the instance, for example C(VM.Standard.E4.Flex).
       - Required when creating an instance.
+      - Use M(oracle.oci.oci_shape_info) to discover compatible shape names and
+        their capabilities before launching an instance.
       - Supports updates. OCI requires the instance to be stopped before
         changing its shape.
       - OCI stages shape changes made while the instance is stopped and only
@@ -109,6 +114,8 @@ options:
   image_id:
     description:
       - The OCID of the image used to launch the instance.
+      - Use M(oracle.oci.oci_image_info) to discover platform and custom image
+        OCIDs before launching an instance.
       - Exactly one of C(image_id) or C(boot_volume_id) is required when
         creating an instance.
       - The module does not update this field after create.
@@ -140,6 +147,13 @@ options:
       - Only used when creating from C(image_id).
       - The module does not update this field after create.
     type: str
+  preserve_boot_volume_on_delete:
+    description:
+      - Whether to preserve the boot volume when terminating the instance with
+        C(state=absent).
+      - If omitted or set to C(false), OCI deletes the boot volume.
+      - Only used when deleting an instance.
+    type: bool
   subnet_id:
     description:
       - The OCID of the subnet for the instance's primary VNIC.
@@ -152,6 +166,25 @@ options:
       - Whether to assign a public IP address to the primary VNIC.
       - The module does not update this field after create.
     type: bool
+  vnic_name:
+    description:
+      - The display name for the instance's primary VNIC.
+      - The module does not update this field after create.
+    type: str
+  private_ip:
+    description:
+      - A manually assigned private IPv4 address for the instance's primary
+        VNIC.
+      - Mutually exclusive with C(private_ip_id).
+      - The module does not update this field after create.
+    type: str
+  private_ip_id:
+    description:
+      - The OCID of an existing reserved private IPv4 address to assign to the
+        instance's primary VNIC.
+      - Mutually exclusive with C(private_ip).
+      - The module does not update this field after create.
+    type: str
   hostname_label:
     description:
       - The hostname label for the primary VNIC.
@@ -319,17 +352,11 @@ options:
       type:
         description:
           - The platform configuration family, matching the instance's shape.
+            Not every shape supports C(platform_config); use
+            M(oracle.oci.oci_shape_info) to look up the value for your shape
+            (returned as C(shapes[].platform_config_options.type)) before
+            setting this, since supported types can change as OCI adds shapes.
         type: str
-        choices:
-          - amd_milan_bm
-          - amd_milan_bm_gpu
-          - amd_rome_bm
-          - amd_rome_bm_gpu
-          - amd_vm
-          - generic_bm
-          - intel_icelake_bm
-          - intel_skylake_bm
-          - intel_vm
       is_secure_boot_enabled:
         description:
           - Whether Secure Boot is enabled.
@@ -419,7 +446,9 @@ options:
     type: bool
   is_ai_enterprise_enabled:
     description:
-      - Whether OCI AI Enterprise is enabled for this instance.
+      - Whether NVIDIA AI Enterprise (NVAIE) is enabled for this instance.
+      - Only relevant for supported NVIDIA GPU shapes. OCI ignores this on
+        shapes that don't support NVIDIA AI Enterprise.
       - Supports updates.
     type: bool
   power_state:
@@ -451,6 +480,25 @@ EXAMPLES = r"""
       ssh_authorized_keys: "ssh-rsa AAAA..."
   register: created_instance
 
+- name: Launch an instance with a named primary VNIC and manual private IP
+  oracle.oci.oci_instance:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    name: example-instance-with-static-private-ip
+    shape: VM.Standard.E4.Flex
+    image_id: ocid1.image.oc1..example
+    subnet_id: ocid1.subnet.oc1..example
+    vnic_name: example-primary-vnic
+    private_ip: 10.0.0.10
+
+- name: Look up the platform_config type supported by a shape before using it
+  oracle.oci.oci_shape_info:
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    shape: VM.Standard.E4.Flex
+  register: shape_lookup
+
 - name: Launch an instance from an existing boot volume with confidential computing and agent options
   oracle.oci.oci_instance:
     state: present
@@ -464,6 +512,9 @@ EXAMPLES = r"""
     boot_volume_id: ocid1.bootvolume.oc1..example
     subnet_id: ocid1.subnet.oc1..example
     platform_config:
+      # "amd_vm" here matches VM.Standard.E4.Flex; do not hardcode this for
+      # other shapes, instead use the type discovered above:
+      # "{{ shape_lookup.shapes[0].platform_config_options.type | lower }}"
       type: amd_vm
       is_secure_boot_enabled: true
       is_trusted_platform_module_enabled: true
@@ -512,6 +563,12 @@ EXAMPLES = r"""
   oracle.oci.oci_instance:
     state: absent
     instance_id: "{{ created_instance.resource.id }}"
+
+- name: Terminate the instance but preserve its boot volume
+  oracle.oci.oci_instance:
+    state: absent
+    instance_id: "{{ created_instance.resource.id }}"
+    preserve_boot_volume_on_delete: true
 
 - name: Terminate a uniquely named instance without providing instance_id
   oracle.oci.oci_instance:
@@ -675,7 +732,7 @@ resource:
       returned: always
       sample: null
     is_ai_enterprise_enabled:
-      description: Whether OCI AI Enterprise is enabled for the instance.
+      description: Whether NVIDIA AI Enterprise (NVAIE) is enabled for the instance.
       type: bool
       returned: always
       sample: false
@@ -742,6 +799,7 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
+    normalize_enum_values,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -770,7 +828,9 @@ POWER_STATE_ACTIONS = {
 # example RECOVERY_ACTION_STOP_INSTANCE -> "STOP_INSTANCE"). Every enum-like
 # suboption this module exposes converts cleanly with a plain str.upper(), so
 # a single normalization helper keyed on field name covers all of them,
-# instead of one-off conversions scattered across each builder function.
+# instead of one-off conversions scattered across each builder function. This
+# set is also assigned to OciInstanceModule.enum_keys so the shared
+# "subset_dict" comparator (see oci_resource.py) normalizes the same way.
 ENUM_KEYS = {
     "power_state",
     "recovery_action",
@@ -783,52 +843,15 @@ ENUM_KEYS = {
     "numa_nodes_per_socket",
 }
 
-# OCI uses distinct model classes per operation for several nested configs
-# (for example LaunchInstanceAvailabilityConfigDetails vs
-# UpdateInstanceAvailabilityConfigDetails vs the response-only
-# InstanceAvailabilityConfig), even though the field sets are identical.
-# platform_config is additionally polymorphic on "type", and bare-metal
-# platform_config types have no update-context class at all (OCI does not
-# support updating their platform_config after launch).
-PLATFORM_CONFIG_TYPE_PREFIXES = {
-    "AMD_MILAN_BM": "AmdMilanBm",
-    "AMD_MILAN_BM_GPU": "AmdMilanBmGpu",
-    "AMD_ROME_BM": "AmdRomeBm",
-    "AMD_ROME_BM_GPU": "AmdRomeBmGpu",
-    "AMD_VM": "AmdVm",
-    "GENERIC_BM": "GenericBm",
-    "INTEL_ICELAKE_BM": "IntelIcelakeBm",
-    "INTEL_SKYLAKE_BM": "IntelSkylakeBm",
-    "INTEL_VM": "IntelVm",
-}
-
-
-def normalize_enum_values(value):
-    """Recursively upper-case known OCI enum sub-fields.
-
-    Applies to dicts and lists of dicts so it can be used directly on a
-    suboption dict (for example ``platform_config``) or a list of them (for
-    example ``agent_config.plugins_config``).
-    """
-    if isinstance(value, dict):
-        return {
-            key: (
-                item.upper()
-                if key in ENUM_KEYS and isinstance(item, str)
-                else normalize_enum_values(item)
-            )
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [normalize_enum_values(item) for item in value]
-    return value
-
 
 def build_create_vnic_details(params):
     details = filter_none_values(
         {
             "subnet_id": params.get("subnet_id"),
             "assign_public_ip": params.get("assign_public_ip"),
+            "display_name": params.get("vnic_name"),
+            "private_ip": params.get("private_ip"),
+            "private_ip_id": params.get("private_ip_id"),
             "hostname_label": params.get("hostname_label"),
             "nsg_ids": params.get("nsg_ids"),
         }
@@ -869,7 +892,7 @@ def build_launch_options(params):
     launch_options = params.get("launch_options")
     if not launch_options:
         return None
-    details = filter_none_values(normalize_enum_values(dict(launch_options)))
+    details = filter_none_values(normalize_enum_values(dict(launch_options), ENUM_KEYS))
     return oci.core.models.LaunchOptions(**details)
 
 
@@ -884,7 +907,7 @@ def build_availability_config(params, model_class):
     availability_config = params.get("availability_config")
     if not availability_config:
         return None
-    details = filter_none_values(normalize_enum_values(dict(availability_config)))
+    details = filter_none_values(normalize_enum_values(dict(availability_config), ENUM_KEYS))
     return model_class(**details)
 
 
@@ -911,7 +934,7 @@ def build_agent_config(params, model_class):
     if plugins_config:
         plugins = [
             oci.core.models.InstanceAgentPluginConfigDetails(
-                **filter_none_values(normalize_enum_values(dict(plugin_config)))
+                **filter_none_values(normalize_enum_values(dict(plugin_config), ENUM_KEYS))
             )
             for plugin_config in plugins_config
         ]
@@ -926,17 +949,32 @@ def build_agent_config(params, model_class):
     return model_class(**details)
 
 
+# OCI uses distinct model classes per operation for several nested configs
+# (for example LaunchInstanceAvailabilityConfigDetails vs
+# UpdateInstanceAvailabilityConfigDetails vs the response-only
+# InstanceAvailabilityConfig), even though the field sets are identical.
+# platform_config is additionally polymorphic on "type", and bare-metal
+# platform_config types have no update-context class at all (OCI does not
+# support updating their platform_config after launch).
 def build_platform_config(params, class_suffix):
     platform_config = params.get("platform_config")
     if not platform_config:
         return None
-    normalized = normalize_enum_values(dict(platform_config))
+    normalized = normalize_enum_values(dict(platform_config), ENUM_KEYS)
     platform_type = normalized.pop("type", None)
-    class_prefix = PLATFORM_CONFIG_TYPE_PREFIXES.get(platform_type)
-    if class_prefix is None:
-        raise ValueError(f"Unsupported platform_config type: {platform_config.get('type')}")
+    # OCI's SDK codegen names each polymorphic subtype's class after its
+    # "type" discriminator converted to PascalCase, e.g. "AMD_MILAN_BM" ->
+    # "AmdMilanBm". Deriving it avoids hand-maintaining a type->class map
+    # that would otherwise need a manual update every time OCI adds a new
+    # shape family.
+    class_prefix = "".join(word.capitalize() for word in (platform_type or "").split("_"))
     model_class = getattr(oci.core.models, f"{class_prefix}{class_suffix}", None)
     if model_class is None:
+        is_known_type = any(
+            name.startswith(class_prefix) for name in dir(oci.core.models)
+        )
+        if not is_known_type:
+            raise ValueError(f"Unsupported platform_config type: {platform_config.get('type')}")
         raise ValueError(
             f"platform_config type {platform_config.get('type')} does not support this operation"
         )
@@ -1025,6 +1063,7 @@ class OciInstanceModule(OciResourceBase):
     update_method_name = "update_instance"
     update_details_name = "update_instance_details"
     update_wait_states = WAIT_FOR_SETTLED_STATES
+    enum_keys = ENUM_KEYS
     update_field_specs = [
         {
             "param_name": "name",
@@ -1163,29 +1202,11 @@ class OciInstanceModule(OciResourceBase):
         },
     ]
 
-    def compare_update_field_values(self, current_value, desired_value, compare=None):
-        """Extend the shared comparator with a dict-subset mode.
-
-        OCI echoes back fully populated nested objects (for example
-        ``shape_config`` includes fields this module never sets, such as
-        ``networking_bandwidth_in_gbps``), so a plain equality check would
-        always report drift. This compares only the keys the caller actually
-        supplied, after normalizing enum casing and dropping the ``None``
-        placeholders Ansible fills in for suboptions the caller left unset.
-        """
-        if compare == "subset_dict":
-            current_value = current_value or {}
-            desired_value = filter_none_values(normalize_enum_values(desired_value or {}))
-            return any(
-                current_value.get(key) != value for key, value in desired_value.items()
-            )
-        return super().compare_update_field_values(
-            current_value, desired_value, compare=compare
-        )
-
     def plan_power_state_strategy(self, resource, resource_dict, spec, desired_value):
         current_state = resource_dict.get("lifecycle_state")
-        desired_state = normalize_enum_values({"power_state": desired_value})["power_state"]
+        desired_state = normalize_enum_values({"power_state": desired_value}, ENUM_KEYS)[
+            "power_state"
+        ]
         if desired_state == current_state:
             return []
         action = POWER_STATE_ACTIONS.get(desired_state)
@@ -1236,7 +1257,7 @@ class OciInstanceModule(OciResourceBase):
             WAIT_FOR_LAUNCH_STATES,
         )
         desired_power_state = normalize_enum_values(
-            {"power_state": self.module.params.get("power_state")}
+            {"power_state": self.module.params.get("power_state")}, ENUM_KEYS
         )["power_state"]
         if (
             resource is not None
@@ -1283,10 +1304,18 @@ class OciInstanceModule(OciResourceBase):
         return oci.core.models.UpdateInstanceDetails(**update_model_fields)
 
     def delete_resource(self, resource):
+        delete_kwargs = filter_none_values(
+            {
+                "instance_id": resource.id,
+                "preserve_boot_volume": self.module.params.get(
+                    "preserve_boot_volume_on_delete"
+                ),
+            }
+        )
         return self.delete_resource_and_wait(
             resource,
             self.client.terminate_instance,
-            instance_id=resource.id,
+            **delete_kwargs,
         )
 
 
@@ -1310,8 +1339,12 @@ def main():
         boot_volume_size_in_gbs=dict(type="int"),
         boot_volume_vpus_per_gb=dict(type="int"),
         kms_key_id=dict(type="str"),
+        preserve_boot_volume_on_delete=dict(type="bool"),
         subnet_id=dict(type="str"),
         assign_public_ip=dict(type="bool"),
+        vnic_name=dict(type="str"),
+        private_ip=dict(type="str"),
+        private_ip_id=dict(type="str"),
         hostname_label=dict(type="str"),
         nsg_ids=dict(type="list", elements="str"),
         metadata=dict(type="dict"),
@@ -1374,20 +1407,7 @@ def main():
         platform_config=dict(
             type="dict",
             options=dict(
-                type=dict(
-                    type="str",
-                    choices=[
-                        "amd_milan_bm",
-                        "amd_milan_bm_gpu",
-                        "amd_rome_bm",
-                        "amd_rome_bm_gpu",
-                        "amd_vm",
-                        "generic_bm",
-                        "intel_icelake_bm",
-                        "intel_skylake_bm",
-                        "intel_vm",
-                    ],
-                ),
+                type=dict(type="str"),
                 is_secure_boot_enabled=dict(type="bool"),
                 is_trusted_platform_module_enabled=dict(type="bool"),
                 is_measured_boot_enabled=dict(type="bool"),
@@ -1416,7 +1436,10 @@ def main():
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        mutually_exclusive=[("image_id", "boot_volume_id")],
+        mutually_exclusive=[
+            ("image_id", "boot_volume_id"),
+            ("private_ip", "private_ip_id"),
+        ],
     )
 
     OciInstanceModule(module).execute_resource_module()

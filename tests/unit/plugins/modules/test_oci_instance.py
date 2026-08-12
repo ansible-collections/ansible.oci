@@ -444,7 +444,8 @@ def test_normalize_enum_values_upper_cases_known_keys_recursively(monkeypatch):
             "nested": {"type": "amd_vm"},
             "items": [{"desired_state": "enabled"}],
             "unrelated": "left_alone",
-        }
+        },
+        instance_module.ENUM_KEYS,
     )
 
     assert normalized == {

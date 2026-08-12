@@ -31,6 +31,76 @@ def test_filter_none_values_only_removes_none_entries():
     }
 
 
+def test_normalize_enum_values_upper_cases_only_declared_keys_recursively():
+    oci_common = load_collection_module("oci_common")
+
+    result = oci_common.normalize_enum_values(
+        {
+            "recovery_action": "stop_instance",
+            "nested": {"type": "amd_vm"},
+            "items": [{"desired_state": "enabled"}],
+            "unrelated": "left_alone",
+        },
+        {"recovery_action", "type", "desired_state"},
+    )
+
+    assert result == {
+        "recovery_action": "STOP_INSTANCE",
+        "nested": {"type": "AMD_VM"},
+        "items": [{"desired_state": "ENABLED"}],
+        "unrelated": "left_alone",
+    }
+
+
+def test_strip_none_values_removes_none_at_every_nesting_level():
+    oci_common = load_collection_module("oci_common")
+
+    result = oci_common.strip_none_values(
+        {
+            "kept": "value",
+            "dropped": None,
+            "nested": {"kept": 1, "dropped": None},
+            "items": [{"kept": "a", "dropped": None}, None],
+        }
+    )
+
+    assert result == {
+        "kept": "value",
+        "nested": {"kept": 1},
+        "items": [{"kept": "a"}, None],
+    }
+
+
+def test_values_differ_as_subset_ignores_extra_current_fields_at_any_depth():
+    oci_common = load_collection_module("oci_common")
+
+    current_value = {"mode": "ACTIVE", "routing": {"policy": "STATIC", "priority": 10}}
+    desired_value = {"mode": "ACTIVE", "routing": {"policy": "STATIC", "priority": None}}
+
+    assert oci_common.values_differ_as_subset(current_value, desired_value) is False
+
+
+def test_values_differ_as_subset_detects_nested_drift():
+    oci_common = load_collection_module("oci_common")
+
+    current_value = {"routing": {"policy": "STATIC"}}
+    desired_value = {"routing": {"policy": "DYNAMIC"}}
+
+    assert oci_common.values_differ_as_subset(current_value, desired_value) is True
+
+
+def test_values_differ_as_subset_compares_nested_lists_as_a_whole():
+    oci_common = load_collection_module("oci_common")
+
+    current_value = {"items": [{"name": "a", "state": "ENABLED"}]}
+
+    matching_value = {"items": [{"name": "a", "state": "ENABLED"}]}
+    assert oci_common.values_differ_as_subset(current_value, matching_value) is False
+
+    drifted_value = {"items": [{"name": "a", "state": "DISABLED"}]}
+    assert oci_common.values_differ_as_subset(current_value, drifted_value) is True
+
+
 class FakeOciNestedModel:
     swagger_types = {"name": "str"}
     attribute_map = {"name": "name"}

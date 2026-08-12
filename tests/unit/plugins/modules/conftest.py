@@ -57,6 +57,10 @@ class FakeWorkRequestClient:
     pass
 
 
+class FakeIdentityClient:
+    pass
+
+
 def install_fake_oci(monkeypatch, *, model_names=(), include_work_requests=False):
     oci_module = types.ModuleType("oci")
     exceptions_module = types.ModuleType("oci.exceptions")
@@ -75,6 +79,9 @@ def install_fake_oci(monkeypatch, *, model_names=(), include_work_requests=False
         models=types.SimpleNamespace(
             **{model_name: FakeModel for model_name in model_names}
         ),
+    )
+    oci_module.identity = types.SimpleNamespace(
+        IdentityClient=FakeIdentityClient,
     )
     if include_work_requests:
         oci_module.work_requests = types.SimpleNamespace(
