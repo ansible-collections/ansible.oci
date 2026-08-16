@@ -1,6 +1,28 @@
 ---
-# A throwaway public key used only to exercise the create-request validation
-# path in this target. No corresponding private key is committed or needed:
-# these tests never launch a real instance to actually connect to.
+# A throwaway public key used to create a real console connection against
+# the instance launched below. No corresponding private key is committed or
+# needed: this target verifies the console connection resource lifecycle
+# and its discovery through oci_instance_console_connection_info, not actual
+# SSH connectivity to the console.
 oci_instance_console_connection_integration_public_key: >-
   ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH4edIQ/n4R8WVuNuv7DBhHITMELCpHWT7we2VwYtwW5 integration-test
+
+# oci_instance_console_connection_integration_availability_domain is
+# tenancy-specific (AD names are not portable across OCI accounts), matching
+# the value used by the oci_instance integration target for the same CI
+# tenancy/region.
+oci_instance_console_connection_integration_availability_domain: "gzqB:US-SANJOSE-1-AD-1"
+# Image OCID is discovered at run time via oci_image_info (tasks/main.yml),
+# filtered by these values, rather than pinned here. Oracle periodically
+# deprecates/rotates platform images, so a hardcoded OCID would go stale.
+oci_instance_console_connection_integration_operating_system: "Oracle Linux"
+oci_instance_console_connection_integration_operating_system_version: "9"
+oci_instance_console_connection_integration_shape: "VM.Standard.E4.Flex"
+oci_instance_console_connection_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_instance_console_connection_integration_vcn_name: "oci-instance-console-connection-integration-vcn"
+oci_instance_console_connection_integration_subnet_name: "oci-instance-console-connection-integration-subnet"
+oci_instance_console_connection_integration_instance_name: "oci-instance-console-connection-integration-instance"
+oci_instance_console_connection_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_instance_console_connection_integration_subnet_cidr_block: "10.252.1.0/24"

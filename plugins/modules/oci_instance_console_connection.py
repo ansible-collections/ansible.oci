@@ -16,9 +16,10 @@ description:
     is based on C(instance_id) instead of a scoped name lookup. With
     C(instance_console_connection_id) omitted, C(state=present) manages the
     instance's existing non-deleted console connection (if any), and
-    C(state=absent) deletes it. There is intentionally no paired
-    C(oci_instance_console_connection_info) module; use the
-    C(resource) return value to obtain connection details.
+    C(state=absent) deletes it. Use the C(resource) return value to obtain
+    connection details right after a create or update, or use
+    C(oracle.oci.oci_instance_console_connection_info) to discover existing
+    console connections later.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
   - Create requests must omit C(instance_console_connection_id). After

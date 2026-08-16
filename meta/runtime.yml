@@ -30,3 +30,4 @@ action_groups:
     - oci_shape_info
     - oci_availability_domain_info
     - oci_instance_console_connection
+    - oci_instance_console_connection_info

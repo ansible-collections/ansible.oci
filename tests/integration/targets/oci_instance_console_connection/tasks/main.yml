@@ -1,17 +1,22 @@
 ---
-# This target intentionally does not launch a real compute instance: the
-# module's own resource module (oci_instance) ships in a separate
-# pull request per this epic's one-PR-per-module convention and cannot be
-# depended on here. It still exercises real, non-destructive OCI API calls.
+# This target launches a real compute instance to exercise a real console
+# connection end to end. It depends on the oci_instance, oci_instance_info,
+# and oci_image_info modules shipping in their own pull request per this
+# epic's one-PR-per-module convention, so this target only passes once that
+# PR has merged (or is stacked underneath this branch).
 
 - name: Validate required OCI integration variables
   ansible.builtin.assert:
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_instance_console_connection_integration_availability_domain | default('', true) | length > 0
     fail_msg: >-
       OCI compute instance console connection integration tests require
       oci_integration_compartment_id to be defined in
-      tests/integration/integration_config.yml.
+      tests/integration/integration_config.yml, and
+      oci_instance_console_connection_integration_availability_domain to be
+      set to a valid availability domain name for the CI tenancy/region in
+      tests/integration/targets/oci_instance_console_connection/defaults/main.yml.
 
 - name: Exercise console connection module read/error paths
   module_defaults:
@@ -70,3 +75,244 @@
         that:
           - oci_console_connection_delete_missing_scope is failed
           - "'instance_console_connection_id' in oci_console_connection_delete_missing_scope.msg"
+
+    - name: Fail info lookup without compartment_id or instance_console_connection_id
+      oracle.oci.oci_instance_console_connection_info: {}
+      register: oci_console_connection_info_missing_args
+      ignore_errors: true
+
+    - name: Assert info lookup without required arguments fails
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_info_missing_args is failed
+
+    - name: Get a non-existent console connection by id via the info module
+      oracle.oci.oci_instance_console_connection_info:
+        instance_console_connection_id: "ocid1.instanceconsoleconnection.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      register: oci_console_connection_info_get_missing
+
+    - name: Assert getting a non-existent console connection returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not oci_console_connection_info_get_missing.changed | bool
+          - oci_console_connection_info_get_missing.instance_console_connections | length == 0
+
+    - name: List console connections for a non-existent instance via the info module
+      oracle.oci.oci_instance_console_connection_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      register: oci_console_connection_info_list_missing_instance
+
+    - name: Assert listing for a non-existent instance returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not oci_console_connection_info_list_missing_instance.changed | bool
+          - oci_console_connection_info_list_missing_instance.instance_console_connections | length == 0
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_instance_console_connection_integration_vcn_name: >-
+      {{ oci_instance_console_connection_integration_vcn_name }}-{{ oci_integration_rpfx }}
+    oci_instance_console_connection_integration_subnet_name: >-
+      {{ oci_instance_console_connection_integration_subnet_name }}-{{ oci_integration_rpfx }}
+    oci_instance_console_connection_integration_instance_name: >-
+      {{ oci_instance_console_connection_integration_instance_name }}-{{ oci_integration_rpfx }}
+
+- name: Exercise console connection lifecycle against a real instance
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Discover a compatible image for the integration instance
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        operating_system: "{{ oci_instance_console_connection_integration_operating_system }}"
+        operating_system_version: "{{ oci_instance_console_connection_integration_operating_system_version }}"
+        shape: "{{ oci_instance_console_connection_integration_shape }}"
+      register: oci_console_connection_image_info
+
+    - name: Assert a compatible image was discovered
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_image_info.images | length > 0
+        fail_msg: >-
+          No compatible image was found for shape
+          {{ oci_instance_console_connection_integration_shape }}; adjust
+          tests/integration/targets/oci_instance_console_connection/defaults/main.yml
+          for the CI tenancy/region.
+
+    - name: Set the working image id
+      ansible.builtin.set_fact:
+        oci_console_connection_image_id: "{{ oci_console_connection_image_info.images[0].id }}"
+
+    - name: Create test VCN for console connection integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_console_connection_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_instance_console_connection_integration_vcn_cidr_block }}"
+      register: oci_console_connection_vcn_create
+
+    - name: Create test subnet for console connection integration
+      oracle.oci.oci_subnet:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_console_connection_vcn_create.resource.id }}"
+        cidr_block: "{{ oci_instance_console_connection_integration_subnet_cidr_block }}"
+        name: "{{ oci_instance_console_connection_integration_subnet_name }}"
+      register: oci_console_connection_subnet_create
+
+    - name: Launch a real instance to attach a console connection to
+      oracle.oci.oci_instance:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_console_connection_integration_availability_domain }}"
+        name: "{{ oci_instance_console_connection_integration_instance_name }}"
+        shape: "{{ oci_instance_console_connection_integration_shape }}"
+        shape_config: "{{ oci_instance_console_connection_integration_shape_config }}"
+        image_id: "{{ oci_console_connection_image_id }}"
+        subnet_id: "{{ oci_console_connection_subnet_create.resource.id }}"
+      register: oci_console_connection_instance_create
+
+    - name: Assert the integration instance is running
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_instance_create.changed | bool
+          - oci_console_connection_instance_create.resource.lifecycle_state == "RUNNING"
+
+    - name: Create a console connection for the real instance
+      oracle.oci.oci_instance_console_connection:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
+        public_key: "{{ oci_instance_console_connection_integration_public_key }}"
+      register: oci_console_connection_create
+
+    - name: Capture the created console connection id
+      ansible.builtin.set_fact:
+        oci_console_connection_id: "{{ oci_console_connection_create.resource.id }}"
+
+    - name: Assert the console connection was created and is active
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_create.changed | bool
+          - oci_console_connection_create.resource.instance_id == oci_console_connection_instance_create.resource.id
+          - oci_console_connection_create.resource.lifecycle_state == "ACTIVE"
+          - oci_console_connection_create.resource.connection_string | length > 0
+
+    - name: Assert creating the same console connection again is a no-op
+      oracle.oci.oci_instance_console_connection:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
+        public_key: "{{ oci_instance_console_connection_integration_public_key }}"
+      register: oci_console_connection_create_rerun
+
+    - name: Verify rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_console_connection_create_rerun.changed | bool
+
+    - name: Get the created console connection by id via the info module
+      oracle.oci.oci_instance_console_connection_info:
+        instance_console_connection_id: "{{ oci_console_connection_id }}"
+      register: oci_console_connection_info_by_id
+
+    - name: Assert the info module returns the created console connection by id
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_info_by_id.instance_console_connections | length == 1
+          - oci_console_connection_info_by_id.instance_console_connections[0].id == oci_console_connection_id
+          - oci_console_connection_info_by_id.instance_console_connections[0].instance_id == oci_console_connection_instance_create.resource.id
+          - oci_console_connection_info_by_id.instance_console_connections[0].lifecycle_state == "ACTIVE"
+          - oci_console_connection_info_by_id.instance_console_connections[0].connection_string | length > 0
+
+    - name: List the open console connections for the instance via the info module
+      oracle.oci.oci_instance_console_connection_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
+        lifecycle_state: ACTIVE
+      register: oci_console_connection_info_active_list
+
+    - name: Assert the active console connection is discoverable through the list view
+      ansible.builtin.assert:
+        that:
+          - >-
+            oci_console_connection_info_active_list.instance_console_connections
+            | selectattr('id', 'equalto', oci_console_connection_id) | list | length == 1
+
+    - name: List console connections for the instance without a lifecycle_state filter
+      oracle.oci.oci_instance_console_connection_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
+      register: oci_console_connection_info_unfiltered_list
+
+    - name: Assert the unfiltered list also contains the created console connection
+      ansible.builtin.assert:
+        that:
+          - >-
+            oci_console_connection_info_unfiltered_list.instance_console_connections
+            | selectattr('id', 'equalto', oci_console_connection_id) | list | length == 1
+
+    - name: Delete the console connection in check mode
+      oracle.oci.oci_instance_console_connection:
+        state: absent
+        instance_console_connection_id: "{{ oci_console_connection_id }}"
+      check_mode: true
+      register: oci_console_connection_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_delete_check.changed | bool
+
+    - name: Read the console connection via the info module after delete check mode
+      oracle.oci.oci_instance_console_connection_info:
+        instance_console_connection_id: "{{ oci_console_connection_id }}"
+      register: oci_console_connection_info_delete_check_probe
+
+    - name: Assert the console connection still exists and is active after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_info_delete_check_probe.instance_console_connections | length == 1
+          - oci_console_connection_info_delete_check_probe.instance_console_connections[0].lifecycle_state == "ACTIVE"
+
+    - name: Delete the console connection
+      oracle.oci.oci_instance_console_connection:
+        state: absent
+        instance_console_connection_id: "{{ oci_console_connection_id }}"
+      register: oci_console_connection_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_instance_console_connection:
+        state: absent
+        instance_console_connection_id: "{{ oci_console_connection_id }}"
+      register: oci_console_connection_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_console_connection_delete_rerun.changed | bool
+
+    - name: List open console connections for the instance after delete
+      oracle.oci.oci_instance_console_connection_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
+        lifecycle_state: ACTIVE
+      register: oci_console_connection_info_active_after_delete
+
+    - name: Assert no active/open console connections remain for the instance
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_info_active_after_delete.instance_console_connections | length == 0
+
+  always:
+    - name: Run console connection cleanup
+      ansible.builtin.include_tasks: cleanup.yml
