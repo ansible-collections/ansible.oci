@@ -65,6 +65,8 @@ options:
     description:
       - The SSH public key to use for the console connection.
       - Required when creating a console connection.
+      - OCI accepts RSA keys only. Other types such as C(ssh-ed25519) are
+        rejected by the API.
       - The OCI API does not return this value, so the module cannot detect
         drift on it after create.
     type: str

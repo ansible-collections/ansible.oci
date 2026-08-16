@@ -125,7 +125,7 @@ instance_console_connections:
       compartment_id: ocid1.compartment.oc1..example
       instance_id: ocid1.instance.oc1..example
       lifecycle_state: ACTIVE
-      connection_string: "ssh -o ProxyCommand='ssh -W %h:%p -p 443 ocid1...@instance-console.us-phoenix-1.oci.oraclecloud.com' -p 22 ocid1.instance.oc1..example"
+      connection_string: "ssh -o ProxyCommand='ssh -W %h:%p -p 443 ocid1...@instance-console.example.com' -p 22 ocid1.instance.oc1..example"
       vnc_connection_string: null
       fingerprint: "12:34:56:78:9a:bc:de:f0:12:34:56:78:9a:bc:de:f0"
       service_host_key_fingerprint: null

@@ -1,11 +1,13 @@
 ---
-# A throwaway public key used to create a real console connection against
-# the instance launched below. No corresponding private key is committed or
-# needed: this target verifies the console connection resource lifecycle
-# and its discovery through oci_instance_console_connection_info, not actual
-# SSH connectivity to the console.
+# A throwaway RSA public key used to create a real console connection
+# against the instance launched below. OCI rejects other SSH key types
+# (for example ssh-ed25519) on create_instance_console_connection.
+# No corresponding private key is committed or needed: this target
+# verifies the console connection resource lifecycle and its discovery
+# through oci_instance_console_connection_info, not actual SSH
+# connectivity to the console.
 oci_instance_console_connection_integration_public_key: >-
-  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH4edIQ/n4R8WVuNuv7DBhHITMELCpHWT7we2VwYtwW5 integration-test
+  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0e9sw7AgE2UThMW6Fy1qIqLu3cvdPVJ531TXnjB3ztFrQ7MpRzo7B0iA23bFD2/yN+Am5mifYrOsQbDvnP6UJy3UAQ6d/UZgeg729aFihaawdlmeG9syRsA/h3S2tnSsTCKpc+Sc9XmLylCZnj9EvMoWrQNcVrmuci/TYuZzY3S4KQrc9SjGvd5ozeY3JbKKbBG0RIZzkww1cijkl95DZoEad3hI9bifjPE8wrjb5iPLX3oEQVVe/gnZTCgEbf1aR27jTSAcumlLGAXcnyheEdQnm5NMxuNHbOVOJ6oWt2xSWWPV2d8zrfCUBVVAc0OMa7vypCqArZ2lIC3YXsbO7 integration-test
 
 # oci_instance_console_connection_integration_availability_domain is
 # tenancy-specific (AD names are not portable across OCI accounts), matching
