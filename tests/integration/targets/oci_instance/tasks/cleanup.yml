@@ -1,0 +1,24 @@
+---
+- name: Run compute instance cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked instance during cleanup
+      oracle.oci.oci_instance:
+        state: absent
+        instance_id: "{{ oci_instance_id }}"
+      when: oci_instance_id | default('') | length > 0
+
+    - name: Delete leaked subnet during cleanup
+      oracle.oci.oci_subnet:
+        state: absent
+        subnet_id: "{{ oci_instance_subnet_create.resource.id }}"
+      when: oci_instance_subnet_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_instance_vcn_create.resource.id }}"
+      when: oci_instance_vcn_create.resource.id | default('') | length > 0

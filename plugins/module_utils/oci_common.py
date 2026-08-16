@@ -184,13 +184,22 @@ def filter_resources_by_response_field(resources, response_field, expected_value
 
 
 def rename_aliased_fields(resource_dict, field_aliases):
-    """Rename response fields to their caller-facing parameter names.
+    """Return a shallow copy of ``resource_dict`` with keys renamed via
+    ``field_aliases``.
 
-    ``field_aliases`` maps ``resource_field_name -> module_param_name``. Keys
-    present in the mapping are renamed to the aliased name; every other key is
-    returned unchanged, so module output vocabulary stays loyal to the
-    parameter names callers actually used (e.g. ``display_name`` -> ``name``).
+    This is used in both directions: renaming OCI response fields to their
+    caller-facing parameter names (e.g. ``display_name`` -> ``name``, so
+    module output vocabulary stays loyal to the parameter names callers
+    actually used), and renaming a caller-facing parameter's keys to the
+    names a downstream consumer actually uses (e.g. Ansible's
+    ``all_plugins_disabled`` -> OCI's ``are_all_plugins_disabled``, before
+    building an SDK model or comparing against a resource). Keys absent from
+    ``field_aliases`` are left unchanged. A falsy ``field_aliases`` or a
+    non-dict ``resource_dict`` is returned unchanged, so callers can pass
+    optional, not-always-present mappings without guarding first.
     """
+    if not field_aliases or not isinstance(resource_dict, dict):
+        return resource_dict
     return {
         field_aliases.get(field_name, field_name): value
         for field_name, value in resource_dict.items()
@@ -206,3 +215,76 @@ def filter_none_values(data):
     return {
         key: value for key, value in data.items() if value is not None
     }
+
+
+def normalize_enum_values(value, enum_keys):
+    """Recursively upper-case string values under known OCI enum keys.
+
+    Module inputs commonly use lowercase snake_case choices (Ansible
+    convention), while OCI's wire format and returned resources use
+    upper-case constants (for example ``RECOVERY_ACTION_STOP_INSTANCE`` ->
+    ``"STOP_INSTANCE"``). ``enum_keys`` names the dict keys whose string
+    values should be upper-cased; this recurses into nested dicts and lists
+    so it can be used directly on a suboption dict (for example
+    ``platform_config``) or a list of them (for example
+    ``agent_config.plugins_config``).
+    """
+    if isinstance(value, dict):
+        return {
+            key: (
+                item.upper()
+                if key in enum_keys and isinstance(item, str)
+                else normalize_enum_values(item, enum_keys)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [normalize_enum_values(item, enum_keys) for item in value]
+    return value
+
+
+def strip_none_values(value):
+    """Recursively remove ``None`` entries from nested dicts and lists.
+
+    Unlike ``filter_none_values`` (which only strips the first level),
+    this descends into nested dicts and lists. Ansible fills every
+    declared suboption of a dict or list-of-dicts type with ``None`` when
+    the caller only sets some of them, so this is needed to compare
+    caller-supplied values against a fully-populated API response without
+    those placeholders causing spurious differences.
+    """
+    if isinstance(value, dict):
+        return {
+            key: strip_none_values(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    if isinstance(value, list):
+        return [strip_none_values(item) for item in value]
+    return value
+
+
+def values_differ_as_subset(current_value, desired_value):
+    """Return ``True`` when ``desired_value``'s populated fields differ.
+
+    OCI often echoes back fully populated nested objects that include
+    fields the caller never set, so a plain equality check would always
+    report drift. This recurses into nested dicts, comparing only the keys
+    the caller actually supplied (after dropping ``None`` placeholders, see
+    ``strip_none_values``) at every nesting level. Nested lists are compared
+    as a whole after stripping ``None`` placeholders from their elements,
+    since matching list entries individually (for example by name) isn't
+    supported.
+    """
+    if isinstance(desired_value, dict):
+        current_value = current_value or {}
+        desired_value = {
+            key: item for key, item in desired_value.items() if item is not None
+        }
+        return any(
+            values_differ_as_subset(current_value.get(key), item)
+            for key, item in desired_value.items()
+        )
+    if isinstance(desired_value, list):
+        return strip_none_values(current_value or []) != strip_none_values(desired_value)
+    return current_value != desired_value

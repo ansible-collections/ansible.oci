@@ -1,0 +1,682 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_instance_integration_availability_domain | default('', true) | length > 0
+    fail_msg: >-
+      OCI compute instance integration tests require
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml, and
+      oci_instance_integration_availability_domain to be set to a valid
+      availability domain name for the CI tenancy/region in
+      tests/integration/targets/oci_instance/defaults/main.yml.
+
+- name: Exercise compute instance info module argument validation and empty-result paths
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Fail without compartment_id or instance_id
+      oracle.oci.oci_instance_info: {}
+      register: oci_instance_info_missing_args
+      ignore_errors: true
+
+    - name: Assert missing required arguments fails
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_missing_args is failed
+
+    - name: List instances filtered by a name that will not match
+      oracle.oci.oci_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "oci-instance-info-integration-{{ oci_integration_rpfx }}"
+      register: oci_instance_info_list_by_name
+
+    - name: Assert name filter with no matches returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_info_list_by_name.changed | bool
+          - oci_instance_info_list_by_name.instances | length == 0
+
+    - name: Get a non-existent instance by id
+      oracle.oci.oci_instance_info:
+        instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      register: oci_instance_info_get_missing
+
+    - name: Assert getting a non-existent instance returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_info_get_missing.changed | bool
+          - oci_instance_info_get_missing.instances | length == 0
+
+    - name: Discover a compatible image
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        operating_system: "{{ oci_instance_integration_operating_system }}"
+        operating_system_version: "{{ oci_instance_integration_operating_system_version }}"
+        shape: "{{ oci_instance_integration_shape }}"
+      register: oci_image_info_discovered
+
+    - name: Assert a compatible image was discovered
+      ansible.builtin.assert:
+        that:
+          - oci_image_info_discovered.images | length > 0
+
+    - name: Set the working image id
+      ansible.builtin.set_fact:
+        oci_instance_discovered_image_id: "{{ oci_image_info_discovered.images[0].id }}"
+
+    - name: Get the working image by id
+      oracle.oci.oci_image_info:
+        image_id: "{{ oci_instance_discovered_image_id }}"
+      register: oci_image_info_by_id
+
+    - name: Assert image lookup by id returns the working image
+      ansible.builtin.assert:
+        that:
+          - not oci_image_info_by_id.changed | bool
+          - oci_image_info_by_id.images | length == 1
+          - oci_image_info_by_id.images[0].id == oci_instance_discovered_image_id
+
+    - name: List images filtered by operating system
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        operating_system: "{{ oci_image_info_by_id.images[0].operating_system }}"
+      register: oci_image_info_by_operating_system
+
+    - name: Assert operating system filtering returns the working image
+      ansible.builtin.assert:
+        that:
+          - not oci_image_info_by_operating_system.changed | bool
+          - oci_image_info_by_operating_system.images
+            | selectattr('id', 'equalto', oci_instance_discovered_image_id)
+            | list | length == 1
+
+    - name: List availability domains for the configured compartment
+      oracle.oci.oci_availability_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_availability_domain_info_list
+
+    - name: Assert the configured availability domain is discoverable
+      ansible.builtin.assert:
+        that:
+          - not oci_availability_domain_info_list.changed | bool
+          - oci_availability_domain_info_list.availability_domains
+            | selectattr('name', 'equalto', oci_instance_integration_availability_domain)
+            | list | length == 1
+
+    - name: List availability domains without compartment_id to exercise the tenancy default
+      oracle.oci.oci_availability_domain_info: {}
+      register: oci_availability_domain_info_default
+
+    - name: Assert the tenancy default returns the same availability domains
+      ansible.builtin.assert:
+        that:
+          - not oci_availability_domain_info_default.changed | bool
+          - oci_availability_domain_info_default.availability_domains
+            | map(attribute='name') | sort
+            == oci_availability_domain_info_list.availability_domains
+            | map(attribute='name') | sort
+
+    - name: List shapes in the availability domain
+      oracle.oci.oci_shape_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
+      register: oci_shape_info_list
+
+    - name: Assert the configured shape is available
+      ansible.builtin.assert:
+        that:
+          - not oci_shape_info_list.changed | bool
+          - oci_shape_info_list.shapes
+            | selectattr('shape', 'equalto', oci_instance_integration_shape)
+            | list | length > 0
+
+    - name: List shapes filtered by exact shape name
+      oracle.oci.oci_shape_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
+        shape: "{{ oci_instance_integration_shape }}"
+      register: oci_shape_info_by_name
+
+    - name: Assert exact shape filtering returns the configured shape
+      ansible.builtin.assert:
+        that:
+          - not oci_shape_info_by_name.changed | bool
+          - oci_shape_info_by_name.shapes | length > 0
+          - oci_shape_info_by_name.shapes
+            | selectattr('shape', 'equalto', oci_instance_integration_shape)
+            | list | length > 0
+
+    - name: List shapes compatible with the working image
+      oracle.oci.oci_shape_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
+        image_id: "{{ oci_instance_discovered_image_id }}"
+      register: oci_shape_info_by_image
+
+    - name: Assert image compatibility filtering returns the configured shape
+      ansible.builtin.assert:
+        that:
+          - not oci_shape_info_by_image.changed | bool
+          - oci_shape_info_by_image.shapes
+            | selectattr('shape', 'equalto', oci_instance_integration_shape)
+            | list | length > 0
+
+    - name: Capture discovered shape value
+      ansible.builtin.set_fact:
+        oci_instance_discovered_shape: >-
+          {{
+            (
+              oci_shape_info_by_image.shapes
+              | selectattr('shape', 'equalto', oci_instance_integration_shape)
+              | list
+              | first
+            ).shape
+          }}
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_instance_integration_vcn_name: "{{ oci_instance_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_instance_integration_subnet_name: "{{ oci_instance_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_instance_integration_instance_name: "{{ oci_instance_integration_instance_name }}-{{ oci_integration_rpfx }}"
+    oci_instance_integration_updated_instance_name: "{{ oci_instance_integration_updated_instance_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise compute instance module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for instance integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_instance_integration_vcn_cidr_block }}"
+      register: oci_instance_vcn_create
+
+    - name: Create test subnet for instance integration
+      oracle.oci.oci_subnet:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_instance_vcn_create.resource.id }}"
+        cidr_block: "{{ oci_instance_integration_subnet_cidr_block }}"
+        name: "{{ oci_instance_integration_subnet_name }}"
+      register: oci_instance_subnet_create
+
+    - name: Define instance create and delete parameters
+      ansible.builtin.set_fact:
+        oci_instance_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          availability_domain: "{{ oci_instance_integration_availability_domain }}"
+          name: "{{ oci_instance_integration_instance_name }}"
+          shape: "{{ oci_instance_discovered_shape }}"
+          shape_config: "{{ oci_instance_integration_shape_config }}"
+          image_id: "{{ oci_instance_discovered_image_id }}"
+          subnet_id: "{{ oci_instance_subnet_create.resource.id }}"
+          freeform_tags: "{{ oci_instance_integration_create_tags }}"
+          instance_options:
+            are_legacy_imds_endpoints_disabled: true
+          availability_config:
+            recovery_action: restore_instance
+          agent_config:
+            all_plugins_disabled: false
+
+    - name: Create instance in check mode
+      oracle.oci.oci_instance: &oci_instance_create_module_options
+        state: "{{ oci_instance_create_params.state }}"
+        compartment_id: "{{ oci_instance_create_params.compartment_id }}"
+        availability_domain: "{{ oci_instance_create_params.availability_domain }}"
+        name: "{{ oci_instance_create_params.name }}"
+        shape: "{{ oci_instance_create_params.shape }}"
+        shape_config: "{{ oci_instance_create_params.shape_config }}"
+        image_id: "{{ oci_instance_create_params.image_id }}"
+        subnet_id: "{{ oci_instance_create_params.subnet_id }}"
+        freeform_tags: "{{ oci_instance_create_params.freeform_tags }}"
+        instance_options: "{{ oci_instance_create_params.instance_options }}"
+        availability_config: "{{ oci_instance_create_params.availability_config }}"
+        agent_config: "{{ oci_instance_create_params.agent_config }}"
+      check_mode: true
+      register: oci_instance_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_instance_create_check.changed | bool
+
+    - name: Read instances by name after create check mode
+      oracle.oci.oci_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_integration_instance_name }}"
+      register: oci_instance_info_create_check_probe
+
+    - name: Assert instance is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_create_check_probe.instances | length == 0
+
+    - name: Create instance
+      oracle.oci.oci_instance:
+        <<: *oci_instance_create_module_options
+      register: oci_instance_create
+
+    - name: Capture instance id and define update/delete parameters
+      ansible.builtin.set_fact:
+        oci_instance_id: "{{ oci_instance_create.resource.id }}"
+        oci_instance_delete_params:
+          state: absent
+          instance_id: "{{ oci_instance_create.resource.id }}"
+
+    - name: Assert create reported a change and returned expected fields
+      ansible.builtin.assert:
+        that:
+          - oci_instance_create.changed | bool
+          - oci_instance_create.resource.name == oci_instance_integration_instance_name
+          - oci_instance_create.resource.shape == oci_instance_discovered_shape
+          - oci_instance_create.resource.lifecycle_state == "RUNNING"
+          - oci_instance_create.resource.freeform_tags.phase == "create"
+          - oci_instance_create.resource.instance_options.are_legacy_imds_endpoints_disabled | bool
+          - oci_instance_create.resource.availability_config.recovery_action == "RESTORE_INSTANCE"
+          - not oci_instance_create.resource.agent_config.are_all_plugins_disabled | bool
+
+    - name: Read the instance by id
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_by_id
+
+    - name: Assert instance info by id returned the created instance
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_by_id.instances | length == 1
+          - oci_instance_info_by_id.instances[0].id == oci_instance_id
+          - oci_instance_info_by_id.instances[0].name == oci_instance_integration_instance_name
+          - oci_instance_info_by_id.instances[0].lifecycle_state == "RUNNING"
+
+    - name: List instances by name and availability_domain
+      oracle.oci.oci_instance_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_instance_integration_availability_domain }}"
+        name: "{{ oci_instance_integration_instance_name }}"
+        lifecycle_state: RUNNING
+      register: oci_instance_info_list
+
+    - name: Assert instance info list returned the created instance
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_list.instances | selectattr('id', 'equalto', oci_instance_id) | list | length == 1
+
+    - name: Assert created instance is a no-op on rerun with returned id
+      oracle.oci.oci_instance:
+        <<: *oci_instance_create_module_options
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_create_rerun.changed | bool
+
+    - name: Stop the instance
+      oracle.oci.oci_instance:
+        instance_id: "{{ oci_instance_id }}"
+        power_state: stopped
+      register: oci_instance_stop
+
+    - name: Assert stop reported a change and settled to STOPPED
+      ansible.builtin.assert:
+        that:
+          - oci_instance_stop.changed | bool
+          - oci_instance_stop.resource.lifecycle_state == "STOPPED"
+
+    - name: Assert stop is idempotent on rerun
+      oracle.oci.oci_instance:
+        instance_id: "{{ oci_instance_id }}"
+        power_state: stopped
+      register: oci_instance_stop_rerun
+
+    - name: Verify stop rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_stop_rerun.changed | bool
+
+    - name: Update instance name, shape_config, and tags while stopped
+      oracle.oci.oci_instance: &oci_instance_update_module_options
+        instance_id: "{{ oci_instance_id }}"
+        name: "{{ oci_instance_integration_updated_instance_name }}"
+        shape_config: "{{ oci_instance_integration_updated_shape_config }}"
+        freeform_tags: "{{ oci_instance_integration_update_tags }}"
+      register: oci_instance_update
+
+    - name: Assert update reported a change and applied immediately-visible fields
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update.changed | bool
+          - oci_instance_update.resource.name == oci_instance_integration_updated_instance_name
+          - oci_instance_update.resource.freeform_tags.phase == "update"
+
+    # OCI stages a flexible-shape resize while an instance is stopped and only
+    # applies it once the instance starts again, so shape_config is not yet
+    # reflected here. See the "Start the instance again" assertion below.
+    # OCI also rejects combining a shape change with an availability_config
+    # change in the same update_instance call ("cannot be changed at the same
+    # time"), so availability_config is updated in its own separate task
+    # below instead of alongside shape_config.
+
+    - name: Start the instance again
+      oracle.oci.oci_instance:
+        instance_id: "{{ oci_instance_id }}"
+        power_state: running
+      register: oci_instance_start
+
+    - name: Assert start reported a change, settled to RUNNING, and applied the staged resize
+      ansible.builtin.assert:
+        that:
+          - oci_instance_start.changed | bool
+          - oci_instance_start.resource.lifecycle_state == "RUNNING"
+          - oci_instance_start.resource.shape_config.ocpus == oci_instance_integration_updated_shape_config.ocpus
+          - oci_instance_start.resource.shape_config.memory_in_gbs == oci_instance_integration_updated_shape_config.memory_in_gbs
+
+    - name: Read the updated instance by id
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_after_update
+
+    - name: Assert instance info reflects the updated name, shape_config, and tags
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_after_update.instances[0].name == oci_instance_integration_updated_instance_name
+          - oci_instance_info_after_update.instances[0].shape_config.ocpus == oci_instance_integration_updated_shape_config.ocpus
+          - oci_instance_info_after_update.instances[0].freeform_tags.phase == "update"
+
+    - name: Update availability_config independently of the shape change
+      oracle.oci.oci_instance: &oci_instance_availability_config_module_options
+        instance_id: "{{ oci_instance_id }}"
+        availability_config:
+          recovery_action: stop_instance
+      register: oci_instance_update_availability_config
+
+    - name: Assert availability_config update reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_availability_config.changed | bool
+          - oci_instance_update_availability_config.resource.availability_config.recovery_action == "STOP_INSTANCE"
+
+    - name: Assert availability_config update is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_availability_config_module_options
+      register: oci_instance_update_availability_config_rerun
+
+    - name: Verify availability_config update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_availability_config_rerun.changed | bool
+
+    - name: Assert update is idempotent on rerun now that the resize is applied
+      oracle.oci.oci_instance:
+        <<: *oci_instance_update_module_options
+      register: oci_instance_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_rerun.changed | bool
+
+    - name: Read the instance before exercising agent_config plugin controls
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_before_agent_config
+
+    # OCI leaves plugins_config unset (null) until a per-plugin list is
+    # written. Building from that null value yields [], which compares equal
+    # to null and is a no-op. Prefer the list OCI already reports; otherwise
+    # enable the documented management, monitoring, and Bastion plugins.
+    - name: Build plugins_config from plugins OCI already reports
+      when: >-
+        oci_instance_info_before_agent_config.instances[0].agent_config.plugins_config
+        | default([], true) | length > 0
+      ansible.builtin.set_fact:
+        oci_instance_integration_enable_plugins_config: >-
+          {{
+            oci_instance_info_before_agent_config.instances[0].agent_config.plugins_config
+            | map('combine', {'desired_state': 'enabled'})
+            | list
+          }}
+
+    - name: Use the documented plugin set when OCI has not populated plugins_config
+      when: oci_instance_integration_enable_plugins_config is not defined
+      ansible.builtin.set_fact:
+        oci_instance_integration_enable_plugins_config:
+          - name: Bastion
+            desired_state: enabled
+          - name: Compute Instance Monitoring
+            desired_state: enabled
+          - name: Custom Logs Monitoring
+            desired_state: enabled
+          - name: Compute Instance Run Command
+            desired_state: enabled
+          - name: OS Management Service Agent
+            desired_state: enabled
+
+    - name: Enable every plugin and clear the master switches
+      oracle.oci.oci_instance:
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: false
+          management_disabled: false
+          monitoring_disabled: false
+          plugins_config: "{{ oci_instance_integration_enable_plugins_config }}"
+      register: oci_instance_update_agent_config_enabled
+
+    - name: Assert enabling plugins reported a change and applied the category switches
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_enabled.changed | bool
+          - not oci_instance_update_agent_config_enabled.resource.agent_config.are_all_plugins_disabled | bool
+          - not oci_instance_update_agent_config_enabled.resource.agent_config.is_management_disabled | bool
+          - not oci_instance_update_agent_config_enabled.resource.agent_config.is_monitoring_disabled | bool
+          - oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config
+            | default([], true) | length > 0
+
+    - name: Assert each requested plugin is ENABLED on the resource
+      ansible.builtin.assert:
+        that:
+          - item.name in (oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config | default([], true) | selectattr('desired_state', 'equalto', 'ENABLED') | map(attribute='name') | list)
+      loop: "{{ oci_instance_integration_enable_plugins_config }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # plugins_config is compared as a whole list, so an idempotent rerun must
+    # send back every plugin OCI echoed. OCI may also echo extra plugins that
+    # are still DISABLED; enable those before checking idempotency.
+    - name: Rebuild the full plugins_config list from what OCI now reports
+      ansible.builtin.set_fact:
+        oci_instance_integration_full_plugins_config: >-
+          {{
+            oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config
+            | default([], true)
+            | map('combine', {'desired_state': 'enabled'})
+            | list
+          }}
+
+    - name: Enable every plugin OCI reported on the instance
+      oracle.oci.oci_instance: &oci_instance_agent_config_enabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: false
+          management_disabled: false
+          monitoring_disabled: false
+          plugins_config: "{{ oci_instance_integration_full_plugins_config }}"
+      register: oci_instance_update_agent_config_all_plugins_enabled
+
+    - name: Assert every reported plugin is ENABLED
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.are_all_plugins_disabled | bool
+          - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_management_disabled | bool
+          - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_monitoring_disabled | bool
+          - oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.plugins_config
+            | default([], true)
+            | selectattr('desired_state', 'ne', 'ENABLED') | list | length == 0
+
+    - name: Rebuild the full plugins_config list in the order OCI echoed after enable
+      ansible.builtin.set_fact:
+        oci_instance_integration_full_plugins_config: >-
+          {{
+            oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.plugins_config
+            | default([], true)
+            | map('combine', {'desired_state': 'enabled'})
+            | list
+          }}
+
+    - name: Assert enabling every plugin is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_enabled_module_options
+      register: oci_instance_update_agent_config_enabled_rerun
+
+    - name: Verify enabling every plugin rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_enabled_rerun.changed | bool
+
+    - name: Disable every plugin using the master switch
+      oracle.oci.oci_instance: &oci_instance_agent_config_all_disabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: true
+      register: oci_instance_update_agent_config_all_disabled
+
+    - name: Assert the master switch reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_all_disabled.changed | bool
+          - oci_instance_update_agent_config_all_disabled.resource.agent_config.are_all_plugins_disabled | bool
+
+    - name: Assert the master switch is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_all_disabled_module_options
+      register: oci_instance_update_agent_config_all_disabled_rerun
+
+    - name: Verify the master switch rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_all_disabled_rerun.changed | bool
+
+    - name: Turn the master switch back off
+      oracle.oci.oci_instance: &oci_instance_agent_config_all_enabled_again_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: false
+      register: oci_instance_update_agent_config_all_enabled_again
+
+    - name: Assert turning the master switch back off reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_all_enabled_again.changed | bool
+          - not oci_instance_update_agent_config_all_enabled_again.resource.agent_config.are_all_plugins_disabled | bool
+
+    - name: Assert turning the master switch back off is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_all_enabled_again_module_options
+      register: oci_instance_update_agent_config_all_enabled_again_rerun
+
+    - name: Verify turning the master switch back off rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_all_enabled_again_rerun.changed | bool
+
+    - name: Disable the monitoring plugins
+      oracle.oci.oci_instance: &oci_instance_agent_config_monitoring_disabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          monitoring_disabled: true
+      register: oci_instance_update_agent_config_monitoring_disabled
+
+    - name: Assert disabling monitoring reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_monitoring_disabled.changed | bool
+          - oci_instance_update_agent_config_monitoring_disabled.resource.agent_config.is_monitoring_disabled | bool
+
+    - name: Assert disabling monitoring is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_monitoring_disabled_module_options
+      register: oci_instance_update_agent_config_monitoring_disabled_rerun
+
+    - name: Verify disabling monitoring rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_monitoring_disabled_rerun.changed | bool
+
+    - name: Disable the management plugins
+      oracle.oci.oci_instance: &oci_instance_agent_config_management_disabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          management_disabled: true
+      register: oci_instance_update_agent_config_management_disabled
+
+    - name: Assert disabling management reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_management_disabled.changed | bool
+          - oci_instance_update_agent_config_management_disabled.resource.agent_config.is_management_disabled | bool
+
+    - name: Assert disabling management is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_management_disabled_module_options
+      register: oci_instance_update_agent_config_management_disabled_rerun
+
+    - name: Verify disabling management rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_management_disabled_rerun.changed | bool
+
+    - name: Terminate instance in check mode
+      oracle.oci.oci_instance: &oci_instance_delete_module_options
+        state: "{{ oci_instance_delete_params.state }}"
+        instance_id: "{{ oci_instance_delete_params.instance_id }}"
+      check_mode: true
+      register: oci_instance_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_instance_delete_check.changed | bool
+
+    - name: Read the instance by id after delete check mode
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_delete_check_probe
+
+    - name: Assert instance still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_instance_info_delete_check_probe.instances | length == 1
+
+    - name: Terminate instance
+      oracle.oci.oci_instance:
+        <<: *oci_instance_delete_module_options
+      register: oci_instance_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_instance_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_delete_module_options
+      register: oci_instance_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_delete_rerun.changed | bool
+
+  always:
+    - name: Run compute instance cleanup
+      ansible.builtin.include_tasks: cleanup.yml
