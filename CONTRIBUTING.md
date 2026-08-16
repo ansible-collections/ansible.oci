@@ -52,13 +52,6 @@ python noxfile.py -l
 Also validate the files you touch directly, especially YAML and Markdown
 content.
 
-To generate the same unit-test coverage XML that the SonarCloud job publishes:
-
-```bash
-python3 -m pip install ansible-core pytest pytest-cov pytest-ansible-units
-pytest tests/unit -v --cov-report xml --cov=./
-```
-
 ### Running live OCI integration targets locally
 
 Required runtime input:
