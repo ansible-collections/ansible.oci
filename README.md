@@ -139,8 +139,9 @@ The collection CI is split across dedicated `ansible-lint`, `Sanity`, and
 
 Both integration workflows render their OCI runtime configuration from GitHub
 secrets and variables at run time, then execute `ansible-test integration`
-against the collection's live OCI targets. SonarCloud analysis runs separately
-after the `Units` workflow completes.
+against the collection's live OCI targets. SonarCloud analysis runs after the
+`Units` workflow completes. That job reruns the unit tests with coverage and
+uploads the report with the scan.
 
 The workflow definitions are available at:
 
