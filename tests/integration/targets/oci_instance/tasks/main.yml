@@ -225,7 +225,7 @@
           availability_config:
             recovery_action: restore_instance
           agent_config:
-            are_all_plugins_disabled: false
+            all_plugins_disabled: false
 
     - name: Create instance in check mode
       oracle.oci.oci_instance: &oci_instance_create_module_options
@@ -425,6 +425,215 @@
       ansible.builtin.assert:
         that:
           - not oci_instance_update_rerun.changed | bool
+
+    - name: Read the instance before exercising agent_config plugin controls
+      oracle.oci.oci_instance_info:
+        instance_id: "{{ oci_instance_id }}"
+      register: oci_instance_info_before_agent_config
+
+    # OCI leaves plugins_config unset (null) until a per-plugin list is
+    # written. Building from that null value yields [], which compares equal
+    # to null and is a no-op. Prefer the list OCI already reports; otherwise
+    # enable the documented management, monitoring, and Bastion plugins.
+    - name: Build plugins_config from plugins OCI already reports
+      when: >-
+        oci_instance_info_before_agent_config.instances[0].agent_config.plugins_config
+        | default([], true) | length > 0
+      ansible.builtin.set_fact:
+        oci_instance_integration_enable_plugins_config: >-
+          {{
+            oci_instance_info_before_agent_config.instances[0].agent_config.plugins_config
+            | map('combine', {'desired_state': 'enabled'})
+            | list
+          }}
+
+    - name: Use the documented plugin set when OCI has not populated plugins_config
+      when: oci_instance_integration_enable_plugins_config is not defined
+      ansible.builtin.set_fact:
+        oci_instance_integration_enable_plugins_config:
+          - name: Bastion
+            desired_state: enabled
+          - name: Compute Instance Monitoring
+            desired_state: enabled
+          - name: Custom Logs Monitoring
+            desired_state: enabled
+          - name: Compute Instance Run Command
+            desired_state: enabled
+          - name: OS Management Service Agent
+            desired_state: enabled
+
+    - name: Enable every plugin and clear the master switches
+      oracle.oci.oci_instance:
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: false
+          management_disabled: false
+          monitoring_disabled: false
+          plugins_config: "{{ oci_instance_integration_enable_plugins_config }}"
+      register: oci_instance_update_agent_config_enabled
+
+    - name: Assert enabling plugins reported a change and applied the category switches
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_enabled.changed | bool
+          - not oci_instance_update_agent_config_enabled.resource.agent_config.are_all_plugins_disabled | bool
+          - not oci_instance_update_agent_config_enabled.resource.agent_config.is_management_disabled | bool
+          - not oci_instance_update_agent_config_enabled.resource.agent_config.is_monitoring_disabled | bool
+          - oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config
+            | default([], true) | length > 0
+
+    - name: Assert each requested plugin is ENABLED on the resource
+      ansible.builtin.assert:
+        that:
+          - item.name in (oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config | default([], true) | selectattr('desired_state', 'equalto', 'ENABLED') | map(attribute='name') | list)
+      loop: "{{ oci_instance_integration_enable_plugins_config }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # plugins_config is compared as a whole list, so an idempotent rerun must
+    # send back every plugin OCI echoed. OCI may also echo extra plugins that
+    # are still DISABLED; enable those before checking idempotency.
+    - name: Rebuild the full plugins_config list from what OCI now reports
+      ansible.builtin.set_fact:
+        oci_instance_integration_full_plugins_config: >-
+          {{
+            oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config
+            | default([], true)
+            | map('combine', {'desired_state': 'enabled'})
+            | list
+          }}
+
+    - name: Enable every plugin OCI reported on the instance
+      oracle.oci.oci_instance: &oci_instance_agent_config_enabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: false
+          management_disabled: false
+          monitoring_disabled: false
+          plugins_config: "{{ oci_instance_integration_full_plugins_config }}"
+      register: oci_instance_update_agent_config_all_plugins_enabled
+
+    - name: Assert every reported plugin is ENABLED
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.are_all_plugins_disabled | bool
+          - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_management_disabled | bool
+          - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_monitoring_disabled | bool
+          - oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.plugins_config
+            | default([], true)
+            | selectattr('desired_state', 'ne', 'ENABLED') | list | length == 0
+
+    - name: Rebuild the full plugins_config list in the order OCI echoed after enable
+      ansible.builtin.set_fact:
+        oci_instance_integration_full_plugins_config: >-
+          {{
+            oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.plugins_config
+            | default([], true)
+            | map('combine', {'desired_state': 'enabled'})
+            | list
+          }}
+
+    - name: Assert enabling every plugin is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_enabled_module_options
+      register: oci_instance_update_agent_config_enabled_rerun
+
+    - name: Verify enabling every plugin rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_enabled_rerun.changed | bool
+
+    - name: Disable every plugin using the master switch
+      oracle.oci.oci_instance: &oci_instance_agent_config_all_disabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: true
+      register: oci_instance_update_agent_config_all_disabled
+
+    - name: Assert the master switch reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_all_disabled.changed | bool
+          - oci_instance_update_agent_config_all_disabled.resource.agent_config.are_all_plugins_disabled | bool
+
+    - name: Assert the master switch is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_all_disabled_module_options
+      register: oci_instance_update_agent_config_all_disabled_rerun
+
+    - name: Verify the master switch rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_all_disabled_rerun.changed | bool
+
+    - name: Turn the master switch back off
+      oracle.oci.oci_instance: &oci_instance_agent_config_all_enabled_again_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          all_plugins_disabled: false
+      register: oci_instance_update_agent_config_all_enabled_again
+
+    - name: Assert turning the master switch back off reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_all_enabled_again.changed | bool
+          - not oci_instance_update_agent_config_all_enabled_again.resource.agent_config.are_all_plugins_disabled | bool
+
+    - name: Assert turning the master switch back off is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_all_enabled_again_module_options
+      register: oci_instance_update_agent_config_all_enabled_again_rerun
+
+    - name: Verify turning the master switch back off rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_all_enabled_again_rerun.changed | bool
+
+    - name: Disable the monitoring plugins
+      oracle.oci.oci_instance: &oci_instance_agent_config_monitoring_disabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          monitoring_disabled: true
+      register: oci_instance_update_agent_config_monitoring_disabled
+
+    - name: Assert disabling monitoring reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_monitoring_disabled.changed | bool
+          - oci_instance_update_agent_config_monitoring_disabled.resource.agent_config.is_monitoring_disabled | bool
+
+    - name: Assert disabling monitoring is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_monitoring_disabled_module_options
+      register: oci_instance_update_agent_config_monitoring_disabled_rerun
+
+    - name: Verify disabling monitoring rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_monitoring_disabled_rerun.changed | bool
+
+    - name: Disable the management plugins
+      oracle.oci.oci_instance: &oci_instance_agent_config_management_disabled_module_options
+        instance_id: "{{ oci_instance_id }}"
+        agent_config:
+          management_disabled: true
+      register: oci_instance_update_agent_config_management_disabled
+
+    - name: Assert disabling management reported a change and applied
+      ansible.builtin.assert:
+        that:
+          - oci_instance_update_agent_config_management_disabled.changed | bool
+          - oci_instance_update_agent_config_management_disabled.resource.agent_config.is_management_disabled | bool
+
+    - name: Assert disabling management is idempotent on rerun
+      oracle.oci.oci_instance:
+        <<: *oci_instance_agent_config_management_disabled_module_options
+      register: oci_instance_update_agent_config_management_disabled_rerun
+
+    - name: Verify disabling management rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_update_agent_config_management_disabled_rerun.changed | bool
 
     - name: Terminate instance in check mode
       oracle.oci.oci_instance: &oci_instance_delete_module_options

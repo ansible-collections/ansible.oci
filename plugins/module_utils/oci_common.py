@@ -184,13 +184,22 @@ def filter_resources_by_response_field(resources, response_field, expected_value
 
 
 def rename_aliased_fields(resource_dict, field_aliases):
-    """Rename response fields to their caller-facing parameter names.
+    """Return a shallow copy of ``resource_dict`` with keys renamed via
+    ``field_aliases``.
 
-    ``field_aliases`` maps ``resource_field_name -> module_param_name``. Keys
-    present in the mapping are renamed to the aliased name; every other key is
-    returned unchanged, so module output vocabulary stays loyal to the
-    parameter names callers actually used (e.g. ``display_name`` -> ``name``).
+    This is used in both directions: renaming OCI response fields to their
+    caller-facing parameter names (e.g. ``display_name`` -> ``name``, so
+    module output vocabulary stays loyal to the parameter names callers
+    actually used), and renaming a caller-facing parameter's keys to the
+    names a downstream consumer actually uses (e.g. Ansible's
+    ``all_plugins_disabled`` -> OCI's ``are_all_plugins_disabled``, before
+    building an SDK model or comparing against a resource). Keys absent from
+    ``field_aliases`` are left unchanged. A falsy ``field_aliases`` or a
+    non-dict ``resource_dict`` is returned unchanged, so callers can pass
+    optional, not-always-present mappings without guarding first.
     """
+    if not field_aliases or not isinstance(resource_dict, dict):
+        return resource_dict
     return {
         field_aliases.get(field_name, field_name): value
         for field_name, value in resource_dict.items()

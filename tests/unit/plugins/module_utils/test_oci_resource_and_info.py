@@ -573,6 +573,74 @@ def test_oci_resource_base_build_update_plan_subset_dict_compares_nested_lists_a
     assert partial_plan["update_needed"] is True
 
 
+def test_oci_resource_base_build_update_plan_applies_desired_key_map_before_compare(
+    monkeypatch,
+):
+    """A field spec's ``desired_key_map`` renames the caller-supplied param's
+    keys to the resource's own field names before comparison, so a module can
+    expose factual, non-question-style parameter names (for example
+    ``all_plugins_disabled``) while the underlying resource reports its own
+    vocabulary (for example ``are_all_plugins_disabled``).
+
+    The renamed keys are only used for drift comparison: update_model_fields
+    still records the value under the caller's original param keys, since
+    that is what downstream update-details builders expect.
+    """
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        update_field_specs = (
+            {
+                "param_name": "agent_config",
+                "resource_field": "agent_config",
+                "update_field": "agent_config",
+                "is_mutable": True,
+                "compare": "subset_dict",
+                "desired_key_map": {"all_plugins_disabled": "are_all_plugins_disabled"},
+            },
+        )
+
+        def resolve_target_resource(self):
+            raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(
+        DummyModule({"agent_config": {"all_plugins_disabled": False}})
+    )
+
+    matching_plan = resource.build_update_plan(
+        types.SimpleNamespace(agent_config={"are_all_plugins_disabled": False}),
+    )
+
+    assert matching_plan["update_needed"] is False
+
+    drifted_plan = resource.build_update_plan(
+        types.SimpleNamespace(agent_config={"are_all_plugins_disabled": True}),
+    )
+
+    assert drifted_plan["update_needed"] is True
+    assert drifted_plan["update_model_fields"] == {
+        "agent_config": {"all_plugins_disabled": False},
+    }
+
+
 def test_oci_resource_base_needs_update_uses_shared_update_plan(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(

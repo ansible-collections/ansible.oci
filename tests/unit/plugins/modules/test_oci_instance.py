@@ -476,7 +476,7 @@ def test_build_agent_config_normalizes_plugin_desired_state(monkeypatch):
     agent_config = instance_module.build_agent_config(
         {
             "agent_config": {
-                "are_all_plugins_disabled": False,
+                "all_plugins_disabled": False,
                 "plugins_config": [{"name": "Bastion", "desired_state": "enabled"}],
             }
         },
@@ -488,6 +488,34 @@ def test_build_agent_config_normalizes_plugin_desired_state(monkeypatch):
     assert len(agent_config.plugins_config) == 1
     assert agent_config.plugins_config[0].name == "Bastion"
     assert agent_config.plugins_config[0].desired_state == "ENABLED"
+
+
+def test_build_agent_config_maps_ansible_flag_names_to_oci_keys(monkeypatch):
+    """Ansible's factual flag names (all_plugins_disabled, management_disabled,
+    monitoring_disabled) must be translated to OCI's are_*/is_* model
+    attributes before the SDK model is constructed.
+    """
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    agent_config = instance_module.build_agent_config(
+        {
+            "agent_config": {
+                "all_plugins_disabled": True,
+                "management_disabled": True,
+                "monitoring_disabled": False,
+            }
+        },
+        instance_module.oci.core.models.LaunchInstanceAgentConfigDetails,
+    )
+
+    assert isinstance(agent_config, FakeModel)
+    assert agent_config.are_all_plugins_disabled is True
+    assert agent_config.is_management_disabled is True
+    assert agent_config.is_monitoring_disabled is False
+    assert not hasattr(agent_config, "all_plugins_disabled")
+    assert not hasattr(agent_config, "management_disabled")
+    assert not hasattr(agent_config, "monitoring_disabled")
 
 
 def test_build_platform_config_resolves_type_specific_class(monkeypatch):
@@ -574,6 +602,85 @@ def test_needs_update_returns_true_for_availability_config_drift(monkeypatch):
     resource = FakeModel(
         id="ocid1.instance.oc1..example",
         availability_config={"recovery_action": "RESTORE_INSTANCE"},
+        lifecycle_state="RUNNING",
+    )
+
+    assert instance.needs_update(resource) is True
+
+
+def test_needs_update_maps_agent_config_ansible_keys_to_oci_resource_keys(monkeypatch):
+    """The agent_config update_field_specs entry declares a desired_key_map so
+    Ansible's factual flag names compare correctly against the OCI resource's
+    are_*/is_* fields, instead of always reporting drift because the two
+    vocabularies never match by key.
+    """
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    instance = make_instance_module(
+        instance_module,
+        {
+            "agent_config": {
+                "all_plugins_disabled": False,
+                "management_disabled": False,
+                "monitoring_disabled": False,
+            }
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.instance.oc1..example",
+        agent_config={
+            "are_all_plugins_disabled": False,
+            "is_management_disabled": False,
+            "is_monitoring_disabled": False,
+        },
+        lifecycle_state="RUNNING",
+    )
+
+    assert instance.needs_update(resource) is False
+
+
+def test_needs_update_detects_all_plugins_disabled_drift(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    instance = make_instance_module(
+        instance_module,
+        {"agent_config": {"all_plugins_disabled": True}},
+    )
+    resource = FakeModel(
+        id="ocid1.instance.oc1..example",
+        agent_config={"are_all_plugins_disabled": False},
+        lifecycle_state="RUNNING",
+    )
+
+    assert instance.needs_update(resource) is True
+
+
+def test_needs_update_partial_plugins_config_is_not_idempotent(monkeypatch):
+    """Documents the known limitation: plugins_config is compared as a whole
+    list, not matched per plugin by name. Listing only a subset of the
+    plugins OCI already returns is always seen as drift.
+    """
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    instance = make_instance_module(
+        instance_module,
+        {
+            "agent_config": {
+                "plugins_config": [{"name": "Bastion", "desired_state": "enabled"}],
+            }
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.instance.oc1..example",
+        agent_config={
+            "plugins_config": [
+                {"name": "Bastion", "desired_state": "ENABLED"},
+                {"name": "Compute Instance Monitoring", "desired_state": "ENABLED"},
+            ],
+        },
         lifecycle_state="RUNNING",
     )
 

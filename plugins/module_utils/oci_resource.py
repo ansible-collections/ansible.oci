@@ -12,6 +12,7 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_base import (
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     DEAD_STATES,
     normalize_enum_values,
+    rename_aliased_fields,
     serialize_oci_model,
     values_differ_as_subset,
 )
@@ -269,9 +270,12 @@ class OciResourceBase(OciModuleBase, ABC):
 
             resource_field = spec.get("resource_field", param_name)
             current_value = resource_dict.get(resource_field)
+            compare_desired_value = rename_aliased_fields(
+                desired_value, spec.get("desired_key_map")
+            )
             if not self.compare_update_field_values(
                 current_value,
-                desired_value,
+                compare_desired_value,
                 compare=spec.get("compare"),
             ):
                 continue

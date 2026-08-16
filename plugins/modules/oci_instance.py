@@ -307,25 +307,60 @@ options:
       - Supports updates.
     type: dict
     suboptions:
-      are_all_plugins_disabled:
+      all_plugins_disabled:
         description:
-          - Whether every Oracle Cloud Agent plugin is disabled, overriding
+          - When C(true), every Oracle Cloud Agent plugin is stopped,
+            overriding C(management_disabled), C(monitoring_disabled), and
+            C(plugins_config). This includes the management plugins (OS
+            Management Service Agent, Compute Instance Run Command), the
+            monitoring plugins (Compute Instance Monitoring, Custom Logs
+            Monitoring), and every other plugin (for example Bastion, Block
+            Volume Management, Vulnerability Scanning, OS Management Hub
+            Agent, Management Agent).
+          - When C(false), enablement is decided by C(management_disabled),
+            C(monitoring_disabled), and C(plugins_config) instead. Plugins
+            listed in C(plugins_config) can still report C(ENABLED) on the
+            resource while this is C(true); they are configured but not
+            running.
+          - Returned by OCI as C(are_all_plugins_disabled).
+        type: bool
+      management_disabled:
+        description:
+          - When C(true), the management plugins (OS Management Service
+            Agent, Compute Instance Run Command) are stopped regardless of
             C(plugins_config).
+          - When C(false), those two plugins follow their C(plugins_config)
+            entries (or their platform default when unset).
+          - Returned by OCI as C(is_management_disabled).
         type: bool
-      is_management_disabled:
+      monitoring_disabled:
         description:
-          - Whether Oracle Cloud Agent's management functionality is
-            disabled.
-        type: bool
-      is_monitoring_disabled:
-        description:
-          - Whether Oracle Cloud Agent's monitoring functionality is
-            disabled.
+          - When C(true), the monitoring plugins (Compute Instance
+            Monitoring, Custom Logs Monitoring) are stopped regardless of
+            C(plugins_config).
+          - When C(false), those two plugins follow their C(plugins_config)
+            entries (or their platform default when unset).
+          - Returned by OCI as C(is_monitoring_disabled).
         type: bool
       plugins_config:
         description:
-          - Per-plugin enablement, for example the OS Management Hub Agent or
-            Bastion plugin.
+          - Per-plugin desired state, for example the Bastion or OS
+            Management Hub Agent plugin. Available plugin names depend on
+            the instance's image; use the names returned by
+            M(oracle.oci.oci_instance_info) rather than hardcoding a list.
+          - C(all_plugins_disabled), and C(management_disabled) or
+            C(monitoring_disabled) for the plugins they cover, override the
+            per-plugin C(desired_state) set here.
+          - This list is compared as a whole against the resource, not
+            matched element by element per plugin name. If this task lists
+            only a subset of the plugins OCI returns (for example only
+            Bastion, while OCI also returns Compute Instance Monitoring and
+            others), the comparison always detects drift and the module
+            reports C(changed) on every run, even though the unlisted
+            plugins are left alone. To make this idempotent, supply the
+            full C(plugins_config) list the instance already has (for
+            example built from a prior M(oracle.oci.oci_instance_info)
+            read), not just the plugins you intend to change.
         type: list
         elements: dict
         suboptions:
@@ -524,7 +559,7 @@ EXAMPLES = r"""
     instance_options:
       are_legacy_imds_endpoints_disabled: true
     agent_config:
-      are_all_plugins_disabled: false
+      all_plugins_disabled: false
       plugins_config:
         - name: "Bastion"
           desired_state: enabled
@@ -800,6 +835,7 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
+    rename_aliased_fields,
 )
 from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -841,6 +877,13 @@ ENUM_KEYS = {
     "network_type",
     "remote_data_volume_type",
     "numa_nodes_per_socket",
+}
+
+# For mapping input to SDK model fields.
+AGENT_CONFIG_PARAM_TO_OCI = {
+    "all_plugins_disabled": "are_all_plugins_disabled",
+    "management_disabled": "is_management_disabled",
+    "monitoring_disabled": "is_monitoring_disabled",
 }
 
 
@@ -929,6 +972,7 @@ def build_agent_config(params, model_class):
     agent_config = params.get("agent_config")
     if not agent_config:
         return None
+    agent_config = rename_aliased_fields(agent_config, AGENT_CONFIG_PARAM_TO_OCI)
     plugins_config = agent_config.get("plugins_config")
     plugins = None
     if plugins_config:
@@ -1147,6 +1191,7 @@ class OciInstanceModule(OciResourceBase):
             "update_field": "agent_config",
             "is_mutable": True,
             "compare": "subset_dict",
+            "desired_key_map": AGENT_CONFIG_PARAM_TO_OCI,
         },
         {
             "param_name": "platform_config",
@@ -1391,9 +1436,9 @@ def main():
         agent_config=dict(
             type="dict",
             options=dict(
-                are_all_plugins_disabled=dict(type="bool"),
-                is_management_disabled=dict(type="bool"),
-                is_monitoring_disabled=dict(type="bool"),
+                all_plugins_disabled=dict(type="bool"),
+                management_disabled=dict(type="bool"),
+                monitoring_disabled=dict(type="bool"),
                 plugins_config=dict(
                     type="list",
                     elements="dict",
