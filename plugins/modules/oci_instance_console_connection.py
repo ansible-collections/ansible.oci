@@ -16,8 +16,10 @@ description:
     is based on C(instance_id) instead of a scoped name lookup. With
     C(instance_console_connection_id) omitted, C(state=present) manages the
     instance's existing non-deleted console connection (if any), and
-    C(state=absent) deletes it. Use the C(resource) return value to obtain
-    connection details right after a create or update, or use
+    C(state=absent) deletes it. That lookup is scoped by C(compartment_id);
+    a mismatched compartment misses the existing connection and attempts
+    create. Use the C(resource) return value to obtain connection details
+    right after a create or update, or use
     C(oracle.oci.oci_instance_console_connection_info) to discover existing
     console connections later.
   - Uses the shared OCI helper layer for authentication, waiting, retry
@@ -60,6 +62,11 @@ options:
         connection when C(instance_console_connection_id) is omitted.
       - Not part of the OCI create payload; the connection inherits its
         compartment from the instance.
+      - Lookup is scoped to this compartment. If the value does not match
+        the instance's compartment, the module will not see an existing
+        connection and will attempt create. OCI allows only one serial
+        console connection per instance, so that create typically fails
+        at the API.
     type: str
   public_key:
     description:
@@ -68,7 +75,9 @@ options:
       - OCI accepts RSA keys only. Other types such as C(ssh-ed25519) are
         rejected by the API.
       - The OCI API does not return this value, so the module cannot detect
-        drift on it after create.
+        drift on it after create. Changing C(public_key) on a later
+        C(state=present) run is a no-op. To rotate the key, delete the
+        connection with C(state=absent) and create it again.
     type: str
 """
 
@@ -81,6 +90,8 @@ EXAMPLES = r"""
     public_key: "ssh-rsa AAAA..."
   register: created_console_connection
 
+# Reconcile tags on the existing connection. Rotating public_key requires
+# state=absent then state=present; a new key here is ignored.
 - name: Reconcile the existing console connection for an instance
   oracle.oci.oci_instance_console_connection:
     state: present
@@ -234,7 +245,10 @@ class OciInstanceConsoleConnectionModule(OciResourceBase):
 
     def resolve_target_resource(self):
         if self.resource_id:
-            return self.get_resource_by_id(self.resource_id)
+            resource = self.get_resource_by_id(self.resource_id)
+            if resource is not None and getattr(resource, "lifecycle_state", None) in DEAD_STATES:
+                return None
+            return resource
         return self._find_active_connection_for_instance()
 
     def _find_active_connection_for_instance(self):

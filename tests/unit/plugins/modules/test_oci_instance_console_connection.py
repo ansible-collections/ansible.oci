@@ -7,6 +7,7 @@ import pytest
 
 from conftest import (
     DummyModule,
+    ExitJsonCalled,
     FakeModel,
     FakeResponse,
     FailJsonCalled,
@@ -239,6 +240,90 @@ def test_resolve_target_resource_prefers_explicit_id(monkeypatch):
     resource = instance.resolve_target_resource()
 
     assert resource.id == "ocid1.instanceconsoleconnection.oc1..example"
+
+
+def test_resolve_target_resource_treats_deleted_id_as_not_found(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    console_connection_module = load_collection_module(
+        "oci_instance_console_connection"
+    )
+    instance = make_console_connection_module(
+        console_connection_module,
+        {"instance_console_connection_id": "ocid1.instanceconsoleconnection.oc1..deleted"},
+    )
+    monkeypatch.setattr(
+        instance,
+        "get_resource_by_id",
+        lambda resource_id: FakeModel(id=resource_id, lifecycle_state="DELETED"),
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        raising(AssertionError("list_all_resources should not be called")),
+    )
+
+    assert instance.resolve_target_resource() is None
+
+
+def test_execute_present_fails_when_explicit_id_is_deleted(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    console_connection_module = load_collection_module(
+        "oci_instance_console_connection"
+    )
+    instance = make_console_connection_module(
+        console_connection_module,
+        {
+            "state": "present",
+            "instance_console_connection_id": "ocid1.instanceconsoleconnection.oc1..deleted",
+        },
+    )
+    monkeypatch.setattr(
+        instance,
+        "get_resource_by_id",
+        lambda resource_id: FakeModel(id=resource_id, lifecycle_state="DELETED"),
+    )
+    monkeypatch.setattr(
+        instance,
+        "create_resource",
+        raising(AssertionError("create_resource should not be called")),
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert "instance_console_connection_id" in exc_info.value.payload["msg"]
+
+
+def test_execute_absent_is_noop_when_explicit_id_is_deleted(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    console_connection_module = load_collection_module(
+        "oci_instance_console_connection"
+    )
+    instance = make_console_connection_module(
+        console_connection_module,
+        {
+            "state": "absent",
+            "instance_console_connection_id": "ocid1.instanceconsoleconnection.oc1..deleted",
+        },
+    )
+    monkeypatch.setattr(
+        instance,
+        "get_resource_by_id",
+        lambda resource_id: FakeModel(id=resource_id, lifecycle_state="DELETED"),
+    )
+    monkeypatch.setattr(
+        instance,
+        "delete_resource",
+        raising(AssertionError("delete_resource should not be called")),
+    )
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert exc_info.value.payload == {"changed": False}
 
 
 def test_resolve_target_resource_finds_active_connection_by_instance(monkeypatch):

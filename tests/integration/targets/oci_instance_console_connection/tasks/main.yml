@@ -182,12 +182,36 @@
           - oci_console_connection_instance_create.changed | bool
           - oci_console_connection_instance_create.resource.lifecycle_state == "RUNNING"
 
-    - name: Create a console connection for the real instance
-      oracle.oci.oci_instance_console_connection:
+    - name: Create a console connection for the real instance in check mode
+      oracle.oci.oci_instance_console_connection: &oci_console_connection_create_module_options
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
         public_key: "{{ oci_instance_console_connection_integration_public_key }}"
+        freeform_tags: "{{ oci_instance_console_connection_integration_create_tags }}"
+      check_mode: true
+      register: oci_console_connection_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_create_check.changed | bool
+
+    - name: List console connections after create check mode
+      oracle.oci.oci_instance_console_connection_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
+        lifecycle_state: ACTIVE
+      register: oci_console_connection_create_check_probe
+
+    - name: Assert no console connection was created in check mode
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_create_check_probe.instance_console_connections | length == 0
+
+    - name: Create a console connection for the real instance
+      oracle.oci.oci_instance_console_connection:
+        <<: *oci_console_connection_create_module_options
       register: oci_console_connection_create
 
     - name: Capture the created console connection id
@@ -201,19 +225,62 @@
           - oci_console_connection_create.resource.instance_id == oci_console_connection_instance_create.resource.id
           - oci_console_connection_create.resource.lifecycle_state == "ACTIVE"
           - oci_console_connection_create.resource.connection_string | length > 0
+          - oci_console_connection_create.resource.freeform_tags.phase == "create"
 
     - name: Assert creating the same console connection again is a no-op
       oracle.oci.oci_instance_console_connection:
-        state: present
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
-        public_key: "{{ oci_instance_console_connection_integration_public_key }}"
+        <<: *oci_console_connection_create_module_options
       register: oci_console_connection_create_rerun
 
     - name: Verify rerun is a no-op
       ansible.builtin.assert:
         that:
           - not oci_console_connection_create_rerun.changed | bool
+
+    - name: Update console connection tags in check mode
+      oracle.oci.oci_instance_console_connection: &oci_console_connection_update_module_options
+        state: present
+        instance_console_connection_id: "{{ oci_console_connection_id }}"
+        freeform_tags: "{{ oci_instance_console_connection_integration_update_tags }}"
+      check_mode: true
+      register: oci_console_connection_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_update_check.changed | bool
+
+    - name: Read the console connection after update check mode
+      oracle.oci.oci_instance_console_connection_info:
+        instance_console_connection_id: "{{ oci_console_connection_id }}"
+      register: oci_console_connection_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_update_check_probe.instance_console_connections | length == 1
+          - oci_console_connection_update_check_probe.instance_console_connections[0].freeform_tags.phase == "create"
+
+    - name: Update console connection tags
+      oracle.oci.oci_instance_console_connection:
+        <<: *oci_console_connection_update_module_options
+      register: oci_console_connection_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_console_connection_update.changed | bool
+          - oci_console_connection_update.resource.freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_instance_console_connection:
+        <<: *oci_console_connection_update_module_options
+      register: oci_console_connection_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_console_connection_update_rerun.changed | bool
 
     - name: Get the created console connection by id via the info module
       oracle.oci.oci_instance_console_connection_info:
@@ -228,6 +295,7 @@
           - oci_console_connection_info_by_id.instance_console_connections[0].instance_id == oci_console_connection_instance_create.resource.id
           - oci_console_connection_info_by_id.instance_console_connections[0].lifecycle_state == "ACTIVE"
           - oci_console_connection_info_by_id.instance_console_connections[0].connection_string | length > 0
+          - oci_console_connection_info_by_id.instance_console_connections[0].freeform_tags.phase == "update"
 
     - name: List the open console connections for the instance via the info module
       oracle.oci.oci_instance_console_connection_info:

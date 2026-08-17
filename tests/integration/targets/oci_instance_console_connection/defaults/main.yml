@@ -28,3 +28,9 @@ oci_instance_console_connection_integration_subnet_name: "oci-instance-console-c
 oci_instance_console_connection_integration_instance_name: "oci-instance-console-connection-integration-instance"
 oci_instance_console_connection_integration_vcn_cidr_block: "10.252.0.0/16"
 oci_instance_console_connection_integration_subnet_cidr_block: "10.252.1.0/24"
+oci_instance_console_connection_integration_create_tags:
+  phase: create
+  role: integration
+oci_instance_console_connection_integration_update_tags:
+  phase: update
+  role: integration
