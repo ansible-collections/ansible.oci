@@ -185,6 +185,7 @@
           - oci_blockstorage_volume_info_updated.volumes[0].size_in_gbs == oci_blockstorage_volume_integration_updated_size_in_gbs
           - oci_blockstorage_volume_info_updated.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_updated_vpus_per_gb
           - oci_blockstorage_volume_info_updated.volumes[0].freeform_tags.phase == "update"
+          - oci_blockstorage_volume_info_updated.volumes[0].is_hydrated | bool
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_blockstorage_volume:

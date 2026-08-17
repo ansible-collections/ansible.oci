@@ -15,6 +15,10 @@ description:
     Use C(oci_volume_attachment) to attach it to a compute instance.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
+  - When C(wait) is true, create and update wait until the volume is
+    C(AVAILABLE) and hydration has finished. OCI rejects VPUs and autotune
+    changes while a volume is hydrating, including after an online size
+    increase.
   - Create requests must omit C(volume_id). After create, capture the returned
     volume ID and use it for later C(state=present) and C(state=absent) tasks.
 version_added: "1.0.0"
@@ -374,7 +378,11 @@ resource:
           returned: when the source type carries a single id
           sample: ocid1.volumebackup.oc1..example
     is_hydrated:
-      description: Whether the volume's data has finished copying from its source.
+      description:
+        - Whether the volume has finished hydrating.
+        - This is false while data is still copying after clone, restore, or
+          an online size increase. OCI rejects VPUs and autotune updates
+          until hydration completes.
       type: bool
       returned: always
       sample: true
@@ -425,6 +433,7 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
+    LIFECYCLE_FAILED,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
@@ -772,6 +781,54 @@ class OciBlockstorageVolumeModule(OciResourceBase):
             self.client.get_volume,
             volume_id=resource_id,
         )
+
+    def wait_for_resource_id(self, resource_id, target_states, failure_states=None):
+        resource = super().wait_for_resource_id(
+            resource_id,
+            target_states,
+            failure_states=failure_states,
+        )
+        if not self.module.params.get("wait", True):
+            return resource
+        if LIFECYCLE_AVAILABLE not in target_states:
+            return resource
+        if not self._volume_is_hydrating(resource):
+            return resource
+        return self._wait_for_volume_hydrated(resource_id)
+
+    def update_resource(self, resource):
+        if self.module.params.get("wait", True) and self._volume_is_hydrating(resource):
+            resource = self._wait_for_volume_hydrated(resource.id)
+        return super().update_resource(resource)
+
+    def _volume_is_hydrating(self, resource):
+        return resource is not None and getattr(resource, "is_hydrated", True) is False
+
+    def _wait_for_volume_hydrated(self, resource_id):
+        timeout = self.module.params.get("wait_timeout", 1200)
+        interval = self.module.params.get("wait_interval", 30)
+        initial_response = self.get_resource_response(resource_id)
+
+        def _hydration_complete(response):
+            state = getattr(response.data, "lifecycle_state", None)
+            if state == LIFECYCLE_FAILED:
+                self.module.fail_json(
+                    msg=f"Resource {resource_id} entered failure state: {state}",
+                )
+            return (
+                state in WAIT_FOR_VOLUME_STATES
+                and getattr(response.data, "is_hydrated", True) is not False
+            )
+
+        waiter_result = oci.wait_until(
+            self.client,
+            initial_response,
+            max_interval_seconds=interval,
+            max_wait_seconds=timeout,
+            evaluate_response=_hydration_complete,
+            fetch_func=lambda response=None: self.get_resource_response(resource_id),
+        )
+        return getattr(waiter_result, "data", None)
 
     def create_resource(self):
         create_volume_details = build_create_volume_details(self.module.params)

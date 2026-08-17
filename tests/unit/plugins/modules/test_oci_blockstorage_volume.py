@@ -13,6 +13,7 @@ from conftest import (
     install_fake_oci as shared_install_fake_oci,
     load_collection_module,
     make_module_instance,
+    raising,
 )
 
 
@@ -743,6 +744,249 @@ def test_update_resource_uses_update_volume_details_and_waits(monkeypatch):
     assert update_calls[0][1].display_name == "updated-volume"
     assert update_calls[0][1].size_in_gbs == 100
     assert updated_resource.id == "ocid1.volume.oc1..example"
+
+
+def test_wait_for_resource_id_waits_until_hydrated_after_available(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    hydrating = FakeModel(
+        id="ocid1.volume.oc1..example",
+        lifecycle_state="AVAILABLE",
+        is_hydrated=False,
+    )
+    ready = FakeModel(
+        id="ocid1.volume.oc1..example",
+        lifecycle_state="AVAILABLE",
+        is_hydrated=True,
+    )
+    wait_until_kwargs = {}
+
+    def fake_base_wait(self, resource_id, target_states, failure_states=None):
+        return hydrating
+
+    def fake_wait_until(client, response, **kwargs):
+        wait_until_kwargs.update(kwargs)
+        return FakeResponse(data=ready)
+
+    monkeypatch.setattr(
+        volume_module.OciResourceBase,
+        "wait_for_resource_id",
+        fake_base_wait,
+    )
+    monkeypatch.setattr(volume_module.oci, "wait_until", fake_wait_until, raising=False)
+
+    instance = make_volume_module(
+        volume_module,
+        {"wait": True, "wait_timeout": 90, "wait_interval": 5},
+    )
+    monkeypatch.setattr(
+        instance,
+        "get_resource_response",
+        lambda resource_id: FakeResponse(data=hydrating),
+    )
+
+    resource = instance.wait_for_resource_id(
+        "ocid1.volume.oc1..example",
+        volume_module.WAIT_FOR_VOLUME_STATES,
+    )
+
+    evaluate = wait_until_kwargs["evaluate_response"]
+    assert resource.is_hydrated is True
+    assert wait_until_kwargs["max_wait_seconds"] == 90
+    assert wait_until_kwargs["max_interval_seconds"] == 5
+    assert evaluate(FakeResponse(data=hydrating)) is False
+    assert evaluate(FakeResponse(data=ready)) is True
+
+
+def test_wait_for_resource_id_skips_hydration_wait_when_already_hydrated(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    ready = FakeModel(
+        id="ocid1.volume.oc1..example",
+        lifecycle_state="AVAILABLE",
+        is_hydrated=True,
+    )
+
+    monkeypatch.setattr(
+        volume_module.OciResourceBase,
+        "wait_for_resource_id",
+        lambda self, resource_id, target_states, failure_states=None: ready,
+    )
+    monkeypatch.setattr(
+        volume_module.oci,
+        "wait_until",
+        raising(AssertionError("hydration wait should not run")),
+        raising=False,
+    )
+
+    instance = make_volume_module(volume_module, {"wait": True})
+    resource = instance.wait_for_resource_id(
+        "ocid1.volume.oc1..example",
+        volume_module.WAIT_FOR_VOLUME_STATES,
+    )
+
+    assert resource is ready
+
+
+def test_wait_for_resource_id_skips_hydration_wait_when_wait_disabled(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    hydrating = FakeModel(
+        id="ocid1.volume.oc1..example",
+        lifecycle_state="AVAILABLE",
+        is_hydrated=False,
+    )
+
+    monkeypatch.setattr(
+        volume_module.OciResourceBase,
+        "wait_for_resource_id",
+        lambda self, resource_id, target_states, failure_states=None: hydrating,
+    )
+    monkeypatch.setattr(
+        volume_module.oci,
+        "wait_until",
+        raising(AssertionError("hydration wait should not run")),
+        raising=False,
+    )
+
+    instance = make_volume_module(volume_module, {"wait": False})
+    resource = instance.wait_for_resource_id(
+        "ocid1.volume.oc1..example",
+        volume_module.WAIT_FOR_VOLUME_STATES,
+    )
+
+    assert resource is hydrating
+
+
+def test_update_resource_waits_for_hydration_before_mutating(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    hydrating = FakeModel(
+        id="ocid1.volume.oc1..example",
+        display_name="example-volume",
+        size_in_gbs=100,
+        is_hydrated=False,
+    )
+    ready = FakeModel(
+        id="ocid1.volume.oc1..example",
+        display_name="example-volume",
+        size_in_gbs=100,
+        is_hydrated=True,
+    )
+    call_order = []
+    update_calls = []
+
+    def fake_wait_until(client, response, **kwargs):
+        call_order.append("hydrate")
+        return FakeResponse(data=ready)
+
+    def update_volume(volume_id, update_volume_details):
+        call_order.append("update")
+        update_calls.append((volume_id, update_volume_details))
+        return FakeResponse(data=FakeModel(id=volume_id))
+
+    instance = make_volume_module(
+        volume_module,
+        {
+            "name": "updated-volume",
+            "vpus_per_gb": 20,
+            "wait": True,
+            "wait_timeout": 90,
+            "wait_interval": 5,
+        },
+        client=types.SimpleNamespace(update_volume=update_volume),
+    )
+    monkeypatch.setattr(volume_module.oci, "wait_until", fake_wait_until, raising=False)
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+    monkeypatch.setattr(
+        instance,
+        "get_resource_response",
+        lambda resource_id: FakeResponse(data=hydrating),
+    )
+    monkeypatch.setattr(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
+            id=resource_id,
+            lifecycle_state="AVAILABLE",
+            is_hydrated=True,
+        ),
+    )
+
+    updated_resource = instance.update_resource(hydrating)
+
+    assert call_order == ["hydrate", "update"]
+    assert update_calls[0][0] == "ocid1.volume.oc1..example"
+    assert update_calls[0][1].display_name == "updated-volume"
+    assert update_calls[0][1].vpus_per_gb == 20
+    assert updated_resource.lifecycle_state == "AVAILABLE"
+
+
+def test_update_resource_retries_after_hydrating_conflict(monkeypatch):
+    oci_module, ServiceError = install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    resource = FakeModel(
+        id="ocid1.volume.oc1..example",
+        display_name="example-volume",
+        is_hydrated=True,
+    )
+    ready = FakeModel(
+        id="ocid1.volume.oc1..example",
+        display_name="example-volume",
+        is_hydrated=True,
+    )
+    call_order = []
+
+    def fake_wait_until(client, response, **kwargs):
+        call_order.append("hydrate")
+        return FakeResponse(data=ready)
+
+    def update_volume(volume_id, update_volume_details):
+        if "update-conflict" not in call_order:
+            call_order.append("update-conflict")
+            raise ServiceError(
+                409,
+                "Volume ocid1.volume.oc1..example vpus may not be updated while hydrating.",
+            )
+        call_order.append("update-ok")
+        return FakeResponse(data=FakeModel(id=volume_id))
+
+    instance = make_volume_module(
+        volume_module,
+        {
+            "name": "updated-volume",
+            "wait": True,
+            "wait_timeout": 90,
+            "wait_interval": 5,
+        },
+        client=types.SimpleNamespace(update_volume=update_volume),
+    )
+    monkeypatch.setattr(volume_module.oci, "wait_until", fake_wait_until, raising=False)
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+    monkeypatch.setattr(
+        instance,
+        "get_resource_response",
+        lambda resource_id: FakeResponse(data=resource),
+    )
+    monkeypatch.setattr(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
+            id=resource_id,
+            lifecycle_state="AVAILABLE",
+            is_hydrated=True,
+        ),
+    )
+
+    updated_resource = instance.update_resource(resource)
+
+    assert call_order == ["update-conflict", "hydrate", "update-ok"]
+    assert updated_resource.lifecycle_state == "AVAILABLE"
 
 
 def test_delete_resource_uses_delete_volume_and_waits(monkeypatch):
