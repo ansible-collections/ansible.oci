@@ -1,0 +1,16 @@
+---
+oci_blockstorage_volume_integration_volume_name: "oci-blockstorage-volume-integration-volume"
+oci_blockstorage_volume_integration_updated_volume_name: "oci-blockstorage-volume-integration-volume-updated"
+oci_blockstorage_volume_integration_size_in_gbs: 50
+oci_blockstorage_volume_integration_updated_size_in_gbs: 100
+oci_blockstorage_volume_integration_vpus_per_gb: 10
+oci_blockstorage_volume_integration_updated_vpus_per_gb: 20
+oci_blockstorage_volume_integration_autotune_vpus_per_gb: 20
+oci_blockstorage_volume_integration_autotune_max_vpus_per_gb: 40
+oci_blockstorage_volume_integration_autotune_updated_max_vpus_per_gb: 60
+oci_blockstorage_volume_integration_create_tags:
+  phase: create
+  role: integration
+oci_blockstorage_volume_integration_update_tags:
+  phase: update
+  role: integration
