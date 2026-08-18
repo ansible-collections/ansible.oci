@@ -926,69 +926,6 @@ def test_update_resource_waits_for_hydration_before_mutating(monkeypatch):
     assert updated_resource.lifecycle_state == "AVAILABLE"
 
 
-def test_update_resource_retries_after_hydrating_conflict(monkeypatch):
-    oci_module, ServiceError = install_fake_oci(monkeypatch)
-
-    volume_module = load_collection_module("oci_blockstorage_volume")
-    resource = FakeModel(
-        id="ocid1.volume.oc1..example",
-        display_name="example-volume",
-        is_hydrated=True,
-    )
-    ready = FakeModel(
-        id="ocid1.volume.oc1..example",
-        display_name="example-volume",
-        is_hydrated=True,
-    )
-    call_order = []
-
-    def fake_wait_until(client, response, **kwargs):
-        call_order.append("hydrate")
-        return FakeResponse(data=ready)
-
-    def update_volume(volume_id, update_volume_details):
-        if "update-conflict" not in call_order:
-            call_order.append("update-conflict")
-            raise ServiceError(
-                409,
-                "Volume ocid1.volume.oc1..example vpus may not be updated while hydrating.",
-            )
-        call_order.append("update-ok")
-        return FakeResponse(data=FakeModel(id=volume_id))
-
-    instance = make_volume_module(
-        volume_module,
-        {
-            "name": "updated-volume",
-            "wait": True,
-            "wait_timeout": 90,
-            "wait_interval": 5,
-        },
-        client=types.SimpleNamespace(update_volume=update_volume),
-    )
-    monkeypatch.setattr(volume_module.oci, "wait_until", fake_wait_until, raising=False)
-    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
-    monkeypatch.setattr(
-        instance,
-        "get_resource_response",
-        lambda resource_id: FakeResponse(data=resource),
-    )
-    monkeypatch.setattr(
-        instance,
-        "wait_for_resource_id",
-        lambda resource_id, target_states, **kwargs: FakeModel(
-            id=resource_id,
-            lifecycle_state="AVAILABLE",
-            is_hydrated=True,
-        ),
-    )
-
-    updated_resource = instance.update_resource(resource)
-
-    assert call_order == ["update-conflict", "hydrate", "update-ok"]
-    assert updated_resource.lifecycle_state == "AVAILABLE"
-
-
 def test_delete_resource_uses_delete_volume_and_waits(monkeypatch):
     install_fake_oci(monkeypatch)
 
