@@ -1,0 +1,16 @@
+---
+# The block volume to back up must already exist. The oracle.oci collection
+# does not yet ship a block-volume resource module (tracked separately under
+# ACA-5245), so the source volume cannot be created in-test. Provide the OCID of
+# a pre-existing block volume in the CI tenancy via
+# tests/integration/integration_config.yml.
+oci_volume_backup_integration_volume_id: ""
+oci_volume_backup_integration_backup_name: "oci-volume-backup-integration-backup"
+oci_volume_backup_integration_updated_backup_name: "oci-volume-backup-integration-backup-updated"
+oci_volume_backup_integration_backup_type: "incremental"
+oci_volume_backup_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_backup_integration_update_tags:
+  phase: update
+  role: integration
