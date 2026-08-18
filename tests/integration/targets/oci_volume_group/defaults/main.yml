@@ -1,0 +1,20 @@
+---
+# oci_volume_group_integration_availability_domain is tenancy-specific (AD names
+# are not portable across OCI accounts). It MUST match the availability domain
+# of the member volumes below, since a volume group and its volumes must share
+# one availability domain.
+oci_volume_group_integration_availability_domain: "gzqB:US-SANJOSE-1-AD-1"
+# The member volumes must already exist. The oracle.oci collection does not yet
+# ship a block-volume resource module (tracked separately under ACA-5245), so
+# the member volumes cannot be created in-test. Provide the OCIDs of one or more
+# pre-existing block volumes (in the availability domain above) via
+# tests/integration/integration_config.yml.
+oci_volume_group_integration_volume_ids: []
+oci_volume_group_integration_group_name: "oci-volume-group-integration-group"
+oci_volume_group_integration_updated_group_name: "oci-volume-group-integration-group-updated"
+oci_volume_group_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_group_integration_update_tags:
+  phase: update
+  role: integration
