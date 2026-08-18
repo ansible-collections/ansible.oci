@@ -1,0 +1,16 @@
+---
+# The boot volume to back up must already exist. The oracle.oci collection does
+# not yet ship a boot-volume resource module (tracked separately under
+# ACA-6773), so the source boot volume cannot be created in-test. Provide the
+# OCID of a pre-existing boot volume in the CI tenancy via
+# tests/integration/integration_config.yml.
+oci_boot_volume_backup_integration_boot_volume_id: ""
+oci_boot_volume_backup_integration_backup_name: "oci-boot-volume-backup-integration-backup"
+oci_boot_volume_backup_integration_updated_backup_name: "oci-boot-volume-backup-integration-backup-updated"
+oci_boot_volume_backup_integration_backup_type: "incremental"
+oci_boot_volume_backup_integration_create_tags:
+  phase: create
+  role: integration
+oci_boot_volume_backup_integration_update_tags:
+  phase: update
+  role: integration

@@ -1,0 +1,161 @@
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
+import types
+
+import pytest
+
+from conftest import (
+    DummyModule,
+    ExitJsonCalled,
+    FakeModel,
+    FakeResponse,
+    install_fake_oci,
+    load_collection_module,
+    make_module_instance,
+    raising,
+)
+
+
+def make_boot_volume_backup_info_module(module_obj, params, client=None):
+    return make_module_instance(
+        module_obj,
+        "OciBootVolumeBackupInfoModule",
+        params,
+        client=client,
+    )
+
+
+def test_main_requires_compartment_id_or_backup_id(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    module_obj = load_collection_module("oci_boot_volume_backup_info")
+    captured = {}
+
+    def fake_ansible_module(**kwargs):
+        captured["required_one_of"] = kwargs["required_one_of"]
+        return DummyModule({})
+
+    class FakeInfoModule:
+        def __init__(self, module):
+            self.module = module
+
+        def execute_info_module(self):
+            captured["run_called"] = True
+
+    monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
+    monkeypatch.setattr(module_obj, "OciBootVolumeBackupInfoModule", FakeInfoModule)
+
+    module_obj.main()
+
+    assert captured["run_called"] is True
+    assert captured["required_one_of"] == [
+        ["compartment_id", "boot_volume_backup_id"]
+    ]
+
+
+def test_fetch_resources_prefers_id_lookup(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_boot_volume_backup_info")
+    get_calls = []
+
+    def get_boot_volume_backup(**kwargs):
+        get_calls.append(kwargs)
+        return FakeResponse(
+            data=FakeModel(
+                id=kwargs["boot_volume_backup_id"],
+                display_name="example-boot-backup",
+            )
+        )
+
+    instance = make_boot_volume_backup_info_module(
+        info_module,
+        {"boot_volume_backup_id": "ocid1.bootvolumebackup.oc1..example"},
+        client=types.SimpleNamespace(
+            get_boot_volume_backup=get_boot_volume_backup
+        ),
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        raising(AssertionError("list_all_resources should not be called")),
+    )
+    monkeypatch.setattr(
+        instance,
+        "call_with_retry",
+        lambda fn, **kwargs: fn(**kwargs),
+    )
+
+    resources = instance.fetch_resources()
+
+    assert len(resources) == 1
+    assert resources[0].id == "ocid1.bootvolumebackup.oc1..example"
+    assert get_calls == [
+        {"boot_volume_backup_id": "ocid1.bootvolumebackup.oc1..example"}
+    ]
+
+
+def test_fetch_resources_lists_by_supported_filters(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_boot_volume_backup_info")
+    paginate_calls = []
+    instance = make_boot_volume_backup_info_module(
+        info_module,
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "boot_volume_id": "ocid1.bootvolume.oc1..example",
+            "lifecycle_state": "AVAILABLE",
+        },
+        client=types.SimpleNamespace(list_boot_volume_backups="list_method"),
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        lambda list_fn, **kwargs: paginate_calls.append((list_fn, kwargs)) or [],
+    )
+
+    resources = instance.fetch_resources()
+
+    assert resources == []
+    assert paginate_calls == [
+        (
+            "list_method",
+            {
+                "compartment_id": "ocid1.compartment.oc1..example",
+                "boot_volume_id": "ocid1.bootvolume.oc1..example",
+                "lifecycle_state": "AVAILABLE",
+            },
+        )
+    ]
+
+
+def test_run_returns_boot_volume_backups_key(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_boot_volume_backup_info")
+    resource = FakeModel(
+        id="ocid1.bootvolumebackup.oc1..example",
+        display_name="example-boot-backup",
+        lifecycle_state="AVAILABLE",
+    )
+    instance = make_boot_volume_backup_info_module(
+        info_module,
+        {"compartment_id": "ocid1.compartment.oc1..example"},
+    )
+    monkeypatch.setattr(instance, "fetch_resources", lambda: [resource])
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_info_module()
+
+    assert exc_info.value.payload == {
+        "changed": False,
+        "boot_volume_backups": [
+            {
+                "id": "ocid1.bootvolumebackup.oc1..example",
+                "name": "example-boot-backup",
+                "lifecycle_state": "AVAILABLE",
+            }
+        ],
+    }

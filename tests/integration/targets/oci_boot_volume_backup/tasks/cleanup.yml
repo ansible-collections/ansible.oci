@@ -1,0 +1,12 @@
+---
+- name: Run boot volume backup cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked boot volume backup during cleanup
+      oracle.oci.oci_boot_volume_backup:
+        state: absent
+        boot_volume_backup_id: "{{ oci_boot_volume_backup_id }}"
+      when: oci_boot_volume_backup_id | default('') | length > 0
