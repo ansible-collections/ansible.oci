@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   sanity:
-    uses: ansible/ansible-content-actions/.github/workflows/sanity.yaml@dc47efd46c312b6ffaf10c274825707a65ac1d86 # main
+    uses: ansible/ansible-content-actions/.github/workflows/sanity.yaml@4701d24e9110e9a4c8a15bc65f8e9d6e1c2d156e # main
     with:
       extra_matrix_entries: >-
         [{"name":"sanity-py3.11-2.16","python":"3.11"},
