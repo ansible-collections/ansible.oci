@@ -36,5 +36,7 @@ action_groups:
     - oci_availability_domain_info
     - oci_instance_console_connection
     - oci_instance_console_connection_info
+    - oci_volume_group
+    - oci_volume_group_info
     - oci_volume_backup
     - oci_volume_backup_info
