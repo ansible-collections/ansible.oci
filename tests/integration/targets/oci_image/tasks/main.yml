@@ -158,7 +158,8 @@
     - name: Assert image info list returned the created image
       ansible.builtin.assert:
         that:
-          - oci_image_info_list.images | selectattr('id', 'equalto', oci_image_id) | list | length == 1
+          - oci_image_info_list.images | length == 1
+          - oci_image_info_list.images[0].id == oci_image_id
 
     - name: Assert created image is a no-op on rerun with unique name
       oracle.oci.oci_image:
@@ -169,6 +170,19 @@
       ansible.builtin.assert:
         that:
           - not oci_image_create_rerun_by_name.changed | bool
+          - oci_image_create_rerun_by_name.resource.id == oci_image_id
+
+    - name: List custom image by name after unique-name rerun
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_image_integration_image_name }}"
+      register: oci_image_info_after_name_rerun
+
+    - name: Assert unique-name rerun did not create a second image
+      ansible.builtin.assert:
+        that:
+          - oci_image_info_after_name_rerun.images | length == 1
+          - oci_image_info_after_name_rerun.images[0].id == oci_image_id
 
     - name: Assert created image is a no-op on rerun with returned id
       oracle.oci.oci_image:
@@ -180,6 +194,19 @@
       ansible.builtin.assert:
         that:
           - not oci_image_create_rerun.changed | bool
+          - oci_image_create_rerun.resource.id == oci_image_id
+
+    - name: Assert existing image is a no-op in check mode
+      oracle.oci.oci_image:
+        <<: *oci_image_create_module_options
+      check_mode: true
+      register: oci_image_create_exists_check
+
+    - name: Verify existing-image check mode is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_image_create_exists_check.changed | bool
+          - oci_image_create_exists_check.resource.id == oci_image_id
 
     - name: Update custom image in check mode
       oracle.oci.oci_image: &oci_image_update_module_options
@@ -226,8 +253,46 @@
     - name: Assert image info reflects the updated image
       ansible.builtin.assert:
         that:
-          - oci_image_info_updated.images | selectattr('id', 'equalto', oci_image_id) | list | length == 1
+          - oci_image_info_updated.images | length == 1
+          - oci_image_info_updated.images[0].id == oci_image_id
           - oci_image_info_updated.images[0].freeform_tags.phase == "update"
+
+    - name: List custom image by original name after rename
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_image_integration_image_name }}"
+      register: oci_image_info_original_name_after_update
+
+    - name: Assert original name no longer matches the updated image
+      ansible.builtin.assert:
+        that:
+          - oci_image_info_original_name_after_update.images | length == 0
+
+    - name: Assert updated image is a no-op on rerun with unique name
+      oracle.oci.oci_image:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_image_integration_updated_image_name }}"
+        freeform_tags: "{{ oci_image_integration_update_tags }}"
+      register: oci_image_update_rerun_by_name
+
+    - name: Verify unique-name rerun after update is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_image_update_rerun_by_name.changed | bool
+          - oci_image_update_rerun_by_name.resource.id == oci_image_id
+
+    - name: List custom image by updated name after unique-name rerun
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_image_integration_updated_image_name }}"
+      register: oci_image_info_after_update_name_rerun
+
+    - name: Assert unique-name rerun after update did not create a second image
+      ansible.builtin.assert:
+        that:
+          - oci_image_info_after_update_name_rerun.images | length == 1
+          - oci_image_info_after_update_name_rerun.images[0].id == oci_image_id
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_image:
@@ -238,6 +303,7 @@
       ansible.builtin.assert:
         that:
           - not oci_image_update_rerun.changed | bool
+          - oci_image_update_rerun.resource.id == oci_image_id
 
     - name: Delete custom image in check mode
       oracle.oci.oci_image: &oci_image_delete_module_options
@@ -271,6 +337,17 @@
         that:
           - oci_image_delete.changed | bool
 
+    - name: List custom image by name after delete
+      oracle.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_image_integration_updated_image_name }}"
+      register: oci_image_info_after_delete
+
+    - name: Assert deleted image is gone from name lookup
+      ansible.builtin.assert:
+        that:
+          - oci_image_info_after_delete.images | length == 0
+
     - name: Assert delete is idempotent on rerun
       oracle.oci.oci_image:
         <<: *oci_image_delete_module_options
@@ -280,6 +357,18 @@
       ansible.builtin.assert:
         that:
           - not oci_image_delete_rerun.changed | bool
+
+    - name: Assert delete by unique name is a no-op after id delete
+      oracle.oci.oci_image:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_image_integration_updated_image_name }}"
+      register: oci_image_delete_rerun_by_name
+
+    - name: Verify name-based delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_image_delete_rerun_by_name.changed | bool
 
     - name: Clear custom image id after successful delete
       ansible.builtin.set_fact:
