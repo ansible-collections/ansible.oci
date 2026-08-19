@@ -577,6 +577,20 @@ EXAMPLES = r"""
       ocpus: 2
       memory_in_gbs: 32
 
+- name: Intentionally create a second instance with the same display name
+  oracle.oci.oci_instance:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    name: example-instance
+    shape: VM.Standard.E4.Flex
+    shape_config:
+      ocpus: 1
+      memory_in_gbs: 16
+    image_id: ocid1.image.oc1..example
+    subnet_id: ocid1.subnet.oc1..example
+
 - name: Stop the instance
   oracle.oci.oci_instance:
     instance_id: "{{ created_instance.resource.id }}"

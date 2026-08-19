@@ -261,6 +261,30 @@ EXAMPLES = r"""
           destination_port_min: 443
           destination_port_max: 443
 
+- name: Reconcile a uniquely named security list by name
+  oracle.oci.oci_security_list:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-security-list
+    ingress_security_rules:
+      - source: 10.0.0.0/16
+        protocol: "6"
+        tcp_options:
+          destination_port_min: 443
+          destination_port_max: 443
+
+- name: Intentionally create a second security list with the same display name
+  oracle.oci.oci_security_list:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-security-list
+    egress_security_rules:
+      - destination: 0.0.0.0/0
+        protocol: all
+
 - name: Delete the created security list
   oracle.oci.oci_security_list:
     state: absent

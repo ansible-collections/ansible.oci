@@ -5,6 +5,12 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: Delete leaked duplicate route table during cleanup
+      oracle.oci.oci_route_table:
+        state: absent
+        route_table_id: "{{ oci_route_table_duplicate_id }}"
+      when: oci_route_table_duplicate_id | default('') | length > 0
+
     - name: Delete leaked route table during cleanup
       oracle.oci.oci_route_table:
         state: absent

@@ -144,6 +144,7 @@
       ansible.builtin.assert:
         that:
           - not oci_service_gateway_create_rerun_by_name.changed | bool
+          - oci_service_gateway_create_rerun_by_name.resource.id == oci_service_gateway_id
 
     - name: Assert created service gateway is a no-op on rerun with returned id
       oracle.oci.oci_service_gateway:

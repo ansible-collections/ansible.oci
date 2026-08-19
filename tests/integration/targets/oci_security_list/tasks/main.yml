@@ -127,15 +127,41 @@
           - oci_security_list_info_by_id.security_lists[0].ingress_security_rules | length == 1
           - oci_security_list_info_by_id.security_lists[0].egress_security_rules | length == 1
 
-    - name: Assert created security list is a no-op on rerun
+    - name: Assert created security list is a no-op on rerun with unique name
       oracle.oci.oci_security_list:
         <<: *oci_security_list_create_module_options
-      register: oci_security_list_create_rerun
+      register: oci_security_list_create_rerun_by_name
 
-    - name: Verify rerun is a no-op
+    - name: Verify security list rerun with unique name is a no-op
       ansible.builtin.assert:
         that:
-          - not oci_security_list_create_rerun.changed | bool
+          - not oci_security_list_create_rerun_by_name.changed | bool
+          - oci_security_list_create_rerun_by_name.resource.id == oci_security_list_id
+
+    - name: Intentionally create a second security list with the same display name
+      oracle.oci.oci_security_list:
+        <<: *oci_security_list_create_module_options
+        allow_duplicate_name: true
+      register: oci_security_list_duplicate_create
+
+    - name: Capture duplicate security list id
+      ansible.builtin.set_fact:
+        oci_security_list_duplicate_id: "{{ oci_security_list_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate security list create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_security_list_duplicate_create.changed | bool
+          - oci_security_list_duplicate_id != oci_security_list_id
+
+    - name: Delete the duplicate security list
+      oracle.oci.oci_security_list:
+        state: absent
+        security_list_id: "{{ oci_security_list_duplicate_id }}"
+
+    - name: Clear duplicate security list id after successful delete
+      ansible.builtin.set_fact:
+        oci_security_list_duplicate_id: ""
 
     - name: Update security list in check mode
       oracle.oci.oci_security_list: &oci_security_list_update_module_options

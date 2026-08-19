@@ -147,6 +147,24 @@ EXAMPLES = r"""
       - destination: 0.0.0.0/0
         network_entity_id: "{{ created_nat_gateway.resource.id }}"
 
+- name: Reconcile a uniquely named route table by name
+  oracle.oci.oci_route_table:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-route-table
+    route_rules:
+      - destination: 0.0.0.0/0
+        network_entity_id: "{{ created_nat_gateway.resource.id }}"
+
+- name: Intentionally create a second route table with the same display name
+  oracle.oci.oci_route_table:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-route-table
+
 - name: Delete the created route table
   oracle.oci.oci_route_table:
     state: absent

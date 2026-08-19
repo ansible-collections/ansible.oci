@@ -228,6 +228,34 @@ EXAMPLES = r"""
     compartment_id: ocid1.compartment.oc1..example
     project_id: ocid1.project.oc1..example
     name: example-resource
+  register: created_example
+
+- name: Reconcile a uniquely named example resource by name
+  oracle.oci.oci_example_resource:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    project_id: ocid1.project.oc1..example
+    name: example-resource
+
+- name: Intentionally create a second example resource with the same display name
+  oracle.oci.oci_example_resource:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    project_id: ocid1.project.oc1..example
+    name: example-resource
+
+- name: Delete the created example resource
+  oracle.oci.oci_example_resource:
+    state: absent
+    example_resource_id: "{{ created_example.resource.id }}"
+
+- name: Delete a uniquely named example resource without providing example_resource_id
+  oracle.oci.oci_example_resource:
+    state: absent
+    compartment_id: ocid1.compartment.oc1..example
+    project_id: ocid1.project.oc1..example
+    name: example-resource
 """
 
 RETURN = r"""

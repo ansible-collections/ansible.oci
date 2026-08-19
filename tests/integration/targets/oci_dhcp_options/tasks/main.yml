@@ -147,6 +147,32 @@
       ansible.builtin.assert:
         that:
           - not oci_dhcp_options_create_rerun_by_name.changed | bool
+          - oci_dhcp_options_create_rerun_by_name.resource.id == oci_dhcp_options_id
+
+    - name: Intentionally create a second DHCP options set with the same display name
+      oracle.oci.oci_dhcp_options:
+        <<: *oci_dhcp_options_create_module_options
+        allow_duplicate_name: true
+      register: oci_dhcp_options_duplicate_create
+
+    - name: Capture duplicate DHCP options id
+      ansible.builtin.set_fact:
+        oci_dhcp_options_duplicate_id: "{{ oci_dhcp_options_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate DHCP options create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_duplicate_create.changed | bool
+          - oci_dhcp_options_duplicate_id != oci_dhcp_options_id
+
+    - name: Delete the duplicate DHCP options
+      oracle.oci.oci_dhcp_options:
+        state: absent
+        dhcp_options_id: "{{ oci_dhcp_options_duplicate_id }}"
+
+    - name: Clear duplicate DHCP options id after successful delete
+      ansible.builtin.set_fact:
+        oci_dhcp_options_duplicate_id: ""
 
     - name: Assert created DHCP options is a no-op on rerun with returned id
       oracle.oci.oci_dhcp_options:

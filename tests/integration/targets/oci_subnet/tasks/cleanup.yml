@@ -5,6 +5,12 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: Delete leaked duplicate subnet during cleanup
+      oracle.oci.oci_subnet:
+        state: absent
+        subnet_id: "{{ oci_subnet_duplicate_id }}"
+      when: oci_subnet_duplicate_id | default('') | length > 0
+
     - name: Delete leaked subnet during cleanup
       oracle.oci.oci_subnet:
         state: absent

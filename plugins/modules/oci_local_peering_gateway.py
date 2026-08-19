@@ -133,6 +133,14 @@ EXAMPLES = r"""
     name: example-lpg
     route_table_id: ocid1.routetable.oc1..example
 
+- name: Intentionally create a second local peering gateway with the same display name
+  oracle.oci.oci_local_peering_gateway:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-lpg
+
 - name: Delete the created local peering gateway
   oracle.oci.oci_local_peering_gateway:
     state: absent
