@@ -14,8 +14,8 @@ description:
   - Create by capturing a Compute instance, or by importing an image file from
     Object Storage. Use the resulting image to launch instances with
     M(oracle.oci.oci_instance).
-  - Exactly one create source is required: C(instance_id), C(object_storage),
-    or C(source_uri).
+  - Exactly one create source is required. Use C(instance_id),
+    C(object_storage), or C(source_uri).
   - Use M(oracle.oci.oci_image_info) to list platform and custom images.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
