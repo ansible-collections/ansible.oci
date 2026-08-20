@@ -105,11 +105,73 @@ volume_backups:
       type: int
       returned: always
       sample: 50
+    size_in_mbs:
+      description: The size of the source volume, in MBs.
+      type: int
+      returned: always
+      sample: 51200
     unique_size_in_gbs:
       description: The amount of space this backup consumes, in GBs.
       type: int
       returned: always
       sample: 10
+    unique_size_in_mbs:
+      description: The amount of space this backup consumes, in MBs.
+      type: int
+      returned: always
+      sample: 1
+    source_volume_backup_id:
+      description:
+        - The OCID of the source volume backup when this backup was copied
+          from another backup, if any.
+      type: str
+      returned: always
+      sample: null
+    expiration_time:
+      description: The date and time the backup will expire and be deleted, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-02-01T00:00:00.000Z"
+    kms_key_id:
+      description: The OCID of the Vault key used to encrypt the backup, if any.
+      type: str
+      returned: always
+      sample: ocid1.key.oc1..example
+    retention_period:
+      description: Configured retention duration for the backup, if any.
+      type: dict
+      returned: always
+      contains:
+        retention_time_amount:
+          description: Numeric length of the retention period.
+          type: int
+          sample: 30
+        retention_time_unit:
+          description: Unit for the retention amount.
+          type: str
+          sample: DAYS
+    time_retention_expires_at:
+      description:
+        - When the backup's retention period ends and the backup is set to
+          expire, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-02-01T00:00:00.000Z"
+    is_prevent_deletion_enabled:
+      description: Whether deletion is prevented during the retention period.
+      type: bool
+      returned: always
+      sample: true
+    is_indefinite_retention_enabled:
+      description: Whether a legal hold is applied to the backup.
+      type: bool
+      returned: always
+      sample: false
+    is_retention_lock_enabled:
+      description: Whether the retention period is locked.
+      type: bool
+      returned: always
+      sample: true
     freeform_tags:
       description: Free-form tags applied to the backup.
       type: dict
@@ -120,8 +182,19 @@ volume_backups:
       type: dict
       returned: always
       sample: {"Operations": {"CostCenter": "42"}}
+    system_tags:
+      description: System tags applied to the backup by OCI.
+      type: dict
+      returned: always
+      sample: {}
     time_created:
       description: The date and time the backup was created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+    time_request_received:
+      description:
+        - The date and time the backup request was received, in RFC3339 format.
       type: str
       returned: always
       sample: "2026-01-01T00:00:00.000Z"
@@ -134,10 +207,24 @@ volume_backups:
       type: FULL
       source_type: MANUAL
       size_in_gbs: 50
+      size_in_mbs: 51200
       unique_size_in_gbs: 10
+      unique_size_in_mbs: 1
+      source_volume_backup_id: null
+      expiration_time: "2026-02-01T00:00:00.000Z"
+      kms_key_id: ocid1.key.oc1..example
+      retention_period:
+        retention_time_amount: 30
+        retention_time_unit: DAYS
+      time_retention_expires_at: "2026-02-01T00:00:00.000Z"
+      is_prevent_deletion_enabled: true
+      is_indefinite_retention_enabled: false
+      is_retention_lock_enabled: true
       freeform_tags: {"retention": "30d"}
       defined_tags: {"Operations": {"CostCenter": "42"}}
+      system_tags: {}
       time_created: "2026-01-01T00:00:00.000Z"
+      time_request_received: "2026-01-01T00:00:00.000Z"
 """
 
 from ansible.module_utils.basic import AnsibleModule

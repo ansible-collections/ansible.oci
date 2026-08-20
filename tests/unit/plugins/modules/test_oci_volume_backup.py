@@ -19,7 +19,20 @@ from conftest import (
 VOLUME_BACKUP_MODEL_NAMES = (
     "CreateVolumeBackupDetails",
     "UpdateVolumeBackupDetails",
+    "RetentionDuration",
 )
+
+RETENTION_PERIOD_ARGUMENT_SPEC = {
+    "type": "dict",
+    "options": {
+        "retention_time_amount": {"type": "int", "required": True},
+        "retention_time_unit": {
+            "type": "str",
+            "choices": ["days", "years"],
+            "required": True,
+        },
+    },
+}
 
 
 def install_fake_oci(monkeypatch):
@@ -69,7 +82,16 @@ def test_main_exposes_expected_arguments(monkeypatch):
     }
     assert captured["argument_spec"]["kms_key_id"] == {"type": "str"}
     assert captured["argument_spec"]["name"] == {"type": "str"}
+    assert captured["argument_spec"]["retention_period"] == RETENTION_PERIOD_ARGUMENT_SPEC
+    assert captured["argument_spec"]["prevent_deletion_enabled"] == {"type": "bool"}
+    assert captured["argument_spec"]["indefinite_retention_enabled"] == {
+        "type": "bool"
+    }
+    assert captured["argument_spec"]["retention_lock_enabled"] == {"type": "bool"}
     assert "display_name" not in captured["argument_spec"]
+    assert "is_prevent_deletion_enabled" not in captured["argument_spec"]
+    assert "is_indefinite_retention_enabled" not in captured["argument_spec"]
+    assert "is_retention_lock_enabled" not in captured["argument_spec"]
 
 
 def test_build_create_volume_backup_details_includes_supported_fields(monkeypatch):
@@ -82,6 +104,13 @@ def test_build_create_volume_backup_details_includes_supported_fields(monkeypatc
             "name": "example-backup",
             "type": "full",
             "kms_key_id": "ocid1.key.oc1..example",
+            "retention_period": {
+                "retention_time_amount": 30,
+                "retention_time_unit": "days",
+            },
+            "prevent_deletion_enabled": True,
+            "indefinite_retention_enabled": False,
+            "retention_lock_enabled": True,
             "freeform_tags": {"env": "dev"},
             "defined_tags": {"Operations": {"CostCenter": "42"}},
         }
@@ -93,6 +122,12 @@ def test_build_create_volume_backup_details_includes_supported_fields(monkeypatc
     # Ansible lowercase choice is normalized to the OCI wire constant.
     assert details.type == "FULL"
     assert details.kms_key_id == "ocid1.key.oc1..example"
+    assert isinstance(details.retention_period, FakeModel)
+    assert details.retention_period.retention_time_amount == 30
+    assert details.retention_period.retention_time_unit == "DAYS"
+    assert details.is_prevent_deletion_enabled is True
+    assert details.is_indefinite_retention_enabled is False
+    assert details.is_retention_lock_enabled is True
     assert details.freeform_tags == {"env": "dev"}
     assert details.defined_tags == {"Operations": {"CostCenter": "42"}}
 
@@ -110,6 +145,10 @@ def test_build_create_volume_backup_details_omits_unset_optional_fields(monkeypa
 
     assert not hasattr(details, "type")
     assert not hasattr(details, "kms_key_id")
+    assert not hasattr(details, "retention_period")
+    assert not hasattr(details, "is_prevent_deletion_enabled")
+    assert not hasattr(details, "is_indefinite_retention_enabled")
+    assert not hasattr(details, "is_retention_lock_enabled")
     assert not hasattr(details, "freeform_tags")
 
 
@@ -131,6 +170,103 @@ def test_build_update_plan_maps_backup_fields_to_update_model(monkeypatch):
     assert update_plan["update_needed"] is True
     assert update_plan["update_model_fields"] == {"display_name": "updated-backup"}
     assert update_plan["strategy_operations"] == []
+
+
+def test_build_update_plan_maps_retention_fields(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(
+        backup_module,
+        {
+            "name": "current-backup",
+            "retention_period": {
+                "retention_time_amount": 90,
+                "retention_time_unit": "days",
+            },
+            "prevent_deletion_enabled": True,
+            "indefinite_retention_enabled": True,
+            "retention_lock_enabled": True,
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.volumebackup.oc1..example",
+        display_name="current-backup",
+        retention_period=FakeModel(
+            retention_time_amount=30,
+            retention_time_unit="DAYS",
+        ),
+        is_prevent_deletion_enabled=False,
+        is_indefinite_retention_enabled=False,
+        is_retention_lock_enabled=False,
+    )
+
+    update_plan = instance.build_update_plan(resource)
+
+    assert update_plan["update_needed"] is True
+    assert update_plan["update_model_fields"]["retention_period"] == {
+        "retention_time_amount": 90,
+        "retention_time_unit": "days",
+    }
+    assert update_plan["update_model_fields"]["is_prevent_deletion_enabled"] is True
+    assert update_plan["update_model_fields"]["is_indefinite_retention_enabled"] is True
+    assert update_plan["update_model_fields"]["is_retention_lock_enabled"] is True
+
+
+def test_needs_update_is_noop_when_retention_matches(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(
+        backup_module,
+        {
+            "name": "current-backup",
+            "retention_period": {
+                "retention_time_amount": 30,
+                "retention_time_unit": "days",
+            },
+            "prevent_deletion_enabled": True,
+            "indefinite_retention_enabled": False,
+            "retention_lock_enabled": True,
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.volumebackup.oc1..example",
+        display_name="current-backup",
+        retention_period=FakeModel(
+            retention_time_amount=30,
+            retention_time_unit="DAYS",
+        ),
+        is_prevent_deletion_enabled=True,
+        is_indefinite_retention_enabled=False,
+        is_retention_lock_enabled=True,
+    )
+
+    assert instance.needs_update(resource) is False
+
+
+def test_build_update_details_wraps_retention_period(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(backup_module, {})
+
+    details = instance.build_update_details(
+        {
+            "display_name": "updated-backup",
+            "retention_period": {
+                "retention_time_amount": 1,
+                "retention_time_unit": "years",
+            },
+            "is_prevent_deletion_enabled": True,
+        }
+    )
+
+    assert details.display_name == "updated-backup"
+    assert isinstance(details.retention_period, FakeModel)
+    assert details.retention_period.retention_time_amount == 1
+    assert details.retention_period.retention_time_unit == "YEARS"
+    assert details.is_prevent_deletion_enabled is True
 
 
 def test_needs_update_ignores_create_only_type(monkeypatch):
@@ -285,4 +421,42 @@ def test_create_required_fields_enforced(monkeypatch):
         instance.validate_create_request()
 
     assert "Creating a volume backup requires" in exc_info.value.payload["msg"]
+    assert "volume_id" in exc_info.value.payload["msg"]
+
+
+def test_name_lookup_requires_compartment_id(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(
+        backup_module,
+        {
+            "name": "example-backup",
+            "volume_id": "ocid1.volume.oc1..example",
+        },
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.validate_name_lookup_scope()
+
+    assert "Using name lookup for volume backup requires" in exc_info.value.payload["msg"]
+    assert "compartment_id" in exc_info.value.payload["msg"]
+
+
+def test_name_lookup_requires_volume_id(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(
+        backup_module,
+        {
+            "name": "example-backup",
+            "compartment_id": "ocid1.compartment.oc1..example",
+        },
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.validate_name_lookup_scope()
+
+    assert "Using name lookup for volume backup requires" in exc_info.value.payload["msg"]
     assert "volume_id" in exc_info.value.payload["msg"]

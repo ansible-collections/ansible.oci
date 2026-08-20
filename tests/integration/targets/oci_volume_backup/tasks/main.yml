@@ -3,15 +3,13 @@
   ansible.builtin.assert:
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
-      - oci_volume_backup_integration_volume_id | default('', true) | length > 0
     fail_msg: >-
       OCI volume backup integration tests require oci_integration_compartment_id
-      and oci_volume_backup_integration_volume_id (the OCID of a pre-existing
-      block volume in the CI tenancy) to be defined in
-      tests/integration/integration_config.yml.
+      to be defined in tests/integration/integration_config.yml.
 
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
+    oci_volume_backup_integration_volume_name: "{{ oci_volume_backup_integration_volume_name }}-{{ oci_integration_rpfx }}"
     oci_volume_backup_integration_backup_name: "{{ oci_volume_backup_integration_backup_name }}-{{ oci_integration_rpfx }}"
     oci_volume_backup_integration_updated_backup_name: "{{ oci_volume_backup_integration_updated_backup_name }}-{{ oci_integration_rpfx }}"
 
@@ -21,10 +19,38 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: Discover an availability domain in the compartment
+      oracle.oci.oci_availability_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_volume_backup_ad_info
+
+    - name: Assert at least one availability domain was discovered
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_ad_info.availability_domains | length > 0
+
+    - name: Set the working availability domain
+      ansible.builtin.set_fact:
+        oci_volume_backup_integration_availability_domain: "{{ oci_volume_backup_ad_info.availability_domains[0].name }}"
+
+    - name: Create test block volume for volume backup integration
+      oracle.oci.oci_blockstorage_volume:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_volume_backup_integration_availability_domain }}"
+        name: "{{ oci_volume_backup_integration_volume_name }}"
+        size_in_gbs: "{{ oci_volume_backup_integration_size_in_gbs }}"
+      register: oci_volume_backup_volume_create
+
+    - name: Capture created volume id
+      ansible.builtin.set_fact:
+        oci_volume_backup_integration_volume_id: "{{ oci_volume_backup_volume_create.resource.id }}"
+
     - name: Define volume backup create parameters
       ansible.builtin.set_fact:
         oci_volume_backup_create_params:
           state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
           name: "{{ oci_volume_backup_integration_backup_name }}"
           volume_id: "{{ oci_volume_backup_integration_volume_id }}"
           type: "{{ oci_volume_backup_integration_backup_type }}"
@@ -33,6 +59,7 @@
     - name: Create volume backup in check mode
       oracle.oci.oci_volume_backup: &oci_volume_backup_create_module_options
         state: "{{ oci_volume_backup_create_params.state }}"
+        compartment_id: "{{ oci_volume_backup_create_params.compartment_id }}"
         name: "{{ oci_volume_backup_create_params.name }}"
         volume_id: "{{ oci_volume_backup_create_params.volume_id }}"
         type: "{{ oci_volume_backup_create_params.type }}"
@@ -104,6 +131,17 @@
             | selectattr('id', 'equalto', oci_volume_backup_id)
             | list | length == 1
 
+    - name: Assert created backup is a no-op in check mode with unique name
+      oracle.oci.oci_volume_backup:
+        <<: *oci_volume_backup_create_module_options
+      check_mode: true
+      register: oci_volume_backup_create_check_rerun_by_name
+
+    - name: Verify backup check-mode rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_create_check_rerun_by_name.changed | bool
+
     - name: Assert created backup is a no-op on rerun with unique name
       oracle.oci.oci_volume_backup:
         <<: *oci_volume_backup_create_module_options
@@ -113,6 +151,19 @@
       ansible.builtin.assert:
         that:
           - not oci_volume_backup_create_rerun_by_name.changed | bool
+          - oci_volume_backup_create_rerun_by_name.resource.id == oci_volume_backup_id
+
+    - name: Assert created backup is a no-op in check mode with returned id
+      oracle.oci.oci_volume_backup:
+        <<: *oci_volume_backup_create_module_options
+        volume_backup_id: "{{ oci_volume_backup_id }}"
+      check_mode: true
+      register: oci_volume_backup_create_check_rerun
+
+    - name: Verify check-mode rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_create_check_rerun.changed | bool
 
     - name: Assert created backup is a no-op on rerun with returned id
       oracle.oci.oci_volume_backup:
@@ -174,6 +225,17 @@
             | list | length == 1
           - oci_volume_backup_info_updated.volume_backups[0].freeform_tags.phase == "update"
 
+    - name: Assert update is a no-op in check mode
+      oracle.oci.oci_volume_backup:
+        <<: *oci_volume_backup_update_module_options
+      check_mode: true
+      register: oci_volume_backup_update_check_rerun
+
+    - name: Verify update check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_update_check_rerun.changed | bool
+
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_volume_backup:
         <<: *oci_volume_backup_update_module_options
@@ -215,6 +277,41 @@
       ansible.builtin.assert:
         that:
           - oci_volume_backup_delete.changed | bool
+
+    - name: Read volume backup after delete
+      oracle.oci.oci_volume_backup_info:
+        volume_backup_id: "{{ oci_volume_backup_id }}"
+      register: oci_volume_backup_delete_probe
+
+    - name: Assert volume backup is terminated after delete
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_delete_probe.volume_backups | length == 1
+          - oci_volume_backup_delete_probe.volume_backups[0].id == oci_volume_backup_id
+          - oci_volume_backup_delete_probe.volume_backups[0].lifecycle_state == "TERMINATED"
+
+    - name: List available volume backups by name after delete
+      oracle.oci.oci_volume_backup_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_volume_backup_integration_updated_backup_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_volume_backup_info_available_after_delete
+
+    - name: Assert no available volume backup remains after delete
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_info_available_after_delete.volume_backups | length == 0
+
+    - name: Assert delete is a no-op in check mode
+      oracle.oci.oci_volume_backup:
+        <<: *oci_volume_backup_delete_module_options
+      check_mode: true
+      register: oci_volume_backup_delete_check_rerun
+
+    - name: Verify delete check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_delete_check_rerun.changed | bool
 
     - name: Assert delete is idempotent on rerun
       oracle.oci.oci_volume_backup:

@@ -10,3 +10,9 @@
         state: absent
         volume_backup_id: "{{ oci_volume_backup_id }}"
       when: oci_volume_backup_id | default('') | length > 0
+
+    - name: Delete leaked block volume during cleanup
+      oracle.oci.oci_blockstorage_volume:
+        state: absent
+        volume_id: "{{ oci_volume_backup_integration_volume_id }}"
+      when: oci_volume_backup_integration_volume_id | default('') | length > 0
