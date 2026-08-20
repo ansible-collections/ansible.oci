@@ -46,6 +46,14 @@ def _target_states_include_dead_states(target_states):
     return any(state in DEAD_STATES for state in target_states)
 
 
+def _is_dead_resource(resource):
+    """Return True when ``resource`` is in a terminal deleted/terminated state."""
+    return (
+        resource is not None
+        and getattr(resource, "lifecycle_state", None) in DEAD_STATES
+    )
+
+
 class OciResourceBase(OciModuleBase, ABC):
     """Base class for OCI resource management modules.
 
@@ -101,12 +109,18 @@ class OciResourceBase(OciModuleBase, ABC):
         If the caller supplied the explicit identifier named by
         ``resource_id_param``, this method resolves that resource directly.
         Otherwise it falls back to the subclass-declared name lookup flow and
-        returns ``None`` when no matching resource exists.
+        returns ``None`` when no matching resource exists. Resources in
+        ``DEAD_STATES`` (``DELETED`` / ``TERMINATED``) are treated as missing
+        so present/absent flows do not manage OCI tombstones.
         """
         resource_id = self.resource_id
         if resource_id:
-            return self.get_resource_by_id(resource_id)
-        return self.resolve_resource_by_name()
+            resource = self.get_resource_by_id(resource_id)
+        else:
+            resource = self.resolve_resource_by_name()
+        if _is_dead_resource(resource):
+            return None
+        return resource
 
     @abstractmethod
     def create_resource(self):
@@ -447,9 +461,11 @@ class OciResourceBase(OciModuleBase, ABC):
     def find_resources_by_name(self):
         """List and locally filter resources for the caller-supplied name.
 
-        This helper returns every matching resource because name collisions can
-        be legal for some OCI resource types and must be resolved by the caller
-        or by ``allow_duplicate_name`` handling.
+        This helper returns every matching live resource because name collisions
+        can be legal for some OCI resource types and must be resolved by the
+        caller or by ``allow_duplicate_name`` handling. Matches in
+        ``DEAD_STATES`` are omitted so a leftover tombstone does not collide
+        with a live resource of the same name.
         """
         if not self.supports_name_lookup or not self.has_name_lookup_request:
             return []
@@ -464,7 +480,12 @@ class OciResourceBase(OciModuleBase, ABC):
             ),
         )
         name_lookup_value = self.name_lookup_value
-        return self.filter_resources_by_display_name(resources, name_lookup_value)
+        matches = self.filter_resources_by_display_name(resources, name_lookup_value)
+        return [
+            resource
+            for resource in matches
+            if not _is_dead_resource(resource)
+        ]
 
     def validate_name_lookup_scope(self) -> None:
         """Fail when a scoped name lookup omits required list-filter fields."""
@@ -715,7 +736,7 @@ class OciResourceBase(OciModuleBase, ABC):
         if state == "absent":
             self.validate_delete_request()
             resource = self.resolve_target_resource()
-            if resource is None or getattr(resource, "lifecycle_state", None) in DEAD_STATES:
+            if resource is None or _is_dead_resource(resource):
                 self.module.exit_json(changed=False)
             if self.check_mode:
                 self.module.exit_json(changed=True)

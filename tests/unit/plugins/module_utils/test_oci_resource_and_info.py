@@ -998,6 +998,205 @@ def test_oci_resource_base_treats_dead_state_as_absent(monkeypatch):
     assert exc_info.value.payload == {"changed": False}
 
 
+def test_oci_resource_base_treats_terminated_id_as_not_found(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        resource_id_param = "example_id"
+
+        def get_resource_response(self, resource_id):
+            return types.SimpleNamespace(
+                data=types.SimpleNamespace(
+                    id=resource_id,
+                    lifecycle_state="TERMINATED",
+                )
+            )
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(
+        DummyModule({"example_id": "ocid1.example.oc1..terminated"})
+    )
+
+    assert resource.resolve_target_resource() is None
+
+
+def test_oci_resource_base_find_resources_by_name_excludes_terminated_matches(
+    monkeypatch,
+):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: types.SimpleNamespace(
+            list_examples="list_examples_method"
+        ),
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        resource_id_param = "example_id"
+        list_resource_method = "list_examples"
+        list_filter_params = ()
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    live_resource = types.SimpleNamespace(
+        id="ocid1.example.oc1..live",
+        display_name="example",
+        lifecycle_state="AVAILABLE",
+    )
+    terminated_resource = types.SimpleNamespace(
+        id="ocid1.example.oc1..terminated",
+        display_name="example",
+        lifecycle_state="TERMINATED",
+    )
+    resource = ExampleResource(
+        DummyModule(
+            {
+                "name": "example",
+                "compartment_id": "ocid1.compartment.oc1..example",
+            }
+        )
+    )
+    monkeypatch.setattr(
+        resource,
+        "list_all_resources",
+        lambda list_fn, **kwargs: [live_resource, terminated_resource],
+    )
+
+    assert resource.find_resources_by_name() == [live_resource]
+
+
+def test_oci_resource_base_fails_present_when_explicit_id_is_terminated(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        resource_id_param = "example_id"
+        create_resource_name = "example resource"
+
+        def get_resource_response(self, resource_id):
+            return types.SimpleNamespace(
+                data=types.SimpleNamespace(
+                    id=resource_id,
+                    lifecycle_state="TERMINATED",
+                )
+            )
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(
+        DummyModule(
+            {
+                "state": "present",
+                "example_id": "ocid1.example.oc1..terminated",
+            }
+        )
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        resource.execute_resource_module()
+
+    assert "example_id" in exc_info.value.payload["msg"]
+    assert "ocid1.example.oc1..terminated" in exc_info.value.payload["msg"]
+
+
+def test_oci_resource_base_present_recreates_when_name_match_is_terminated(
+    monkeypatch,
+):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: types.SimpleNamespace(
+            list_examples="list_examples_method"
+        ),
+    )
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        resource_id_param = "example_id"
+        list_resource_method = "list_examples"
+        list_filter_params = ()
+        create_required_fields = ()
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(
+        DummyModule(
+            {
+                "state": "present",
+                "name": "example",
+                "compartment_id": "ocid1.compartment.oc1..example",
+            }
+        )
+    )
+    resource.check_mode = True
+    resource.module.check_mode = True
+    monkeypatch.setattr(
+        resource,
+        "list_all_resources",
+        lambda list_fn, **kwargs: [
+            types.SimpleNamespace(
+                id="ocid1.example.oc1..terminated",
+                display_name="example",
+                lifecycle_state="TERMINATED",
+            )
+        ],
+    )
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        resource.execute_resource_module()
+
+    assert exc_info.value.payload == {"changed": True}
+
+
 def test_oci_resource_base_validates_create_request_in_check_mode(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(

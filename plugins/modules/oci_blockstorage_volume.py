@@ -545,77 +545,58 @@ SELECTABLE_VPUS_CHOICES = tuple(range(0, 121, 10))
 AUTOTUNE_VPUS_CHOICES = tuple(range(10, 121, 10))
 
 
-def _is_selectable_vpus_per_gb(value):
-    return value in SELECTABLE_VPUS_CHOICES
-
-
-def _is_selectable_autotune_vpus(value):
-    return value in AUTOTUNE_VPUS_CHOICES
-
-
 def validate_volume_performance(params, fail_json, current_policies=None):
     vpus_per_gb = params.get("vpus_per_gb")
     performance_based = params.get("performance_based_auto_tune")
     max_vpus_per_gb = params.get("max_vpus_per_gb")
 
-    if vpus_per_gb is not None and not _is_selectable_vpus_per_gb(vpus_per_gb):
+    if vpus_per_gb is not None and vpus_per_gb not in SELECTABLE_VPUS_CHOICES:
         fail_json(
             msg=(
                 "vpus_per_gb must be a selectable value "
                 "(0, 10, 20, 30, ... 120)"
             )
         )
-
-    if performance_based is True:
-        if (
-            vpus_per_gb is not None
-            and not _is_selectable_autotune_vpus(vpus_per_gb)
-        ):
-            fail_json(
-                msg=(
-                    "vpus_per_gb must be a selectable autotune default value "
-                    "(10, 20, 30, ... 120)"
-                )
+    if (
+        performance_based is True
+        and vpus_per_gb is not None
+        and vpus_per_gb not in AUTOTUNE_VPUS_CHOICES
+    ):
+        fail_json(
+            msg=(
+                "vpus_per_gb must be a selectable autotune default value "
+                "(10, 20, 30, ... 120)"
             )
-        if (
-            max_vpus_per_gb is not None
-            and not _is_selectable_autotune_vpus(max_vpus_per_gb)
-        ):
+        )
+
+    if max_vpus_per_gb is not None:
+        if max_vpus_per_gb not in AUTOTUNE_VPUS_CHOICES:
             fail_json(
                 msg=(
                     "max_vpus_per_gb must be a selectable autotune value "
                     "(10, 20, 30, ... 120)"
                 )
             )
-        if (
-            vpus_per_gb is not None
-            and max_vpus_per_gb is not None
-            and max_vpus_per_gb < vpus_per_gb
+        if performance_based is not True and (
+            performance_based is False
+            or not parse_autotune_policies(current_policies)["performance_based"]
         ):
             fail_json(
                 msg=(
-                    "max_vpus_per_gb must be greater than or equal to vpus_per_gb"
+                    "max_vpus_per_gb can only be set when "
+                    "performance_based_auto_tune is true"
                 )
             )
-        return
 
-    if max_vpus_per_gb is None:
-        return
-
-    if not _is_selectable_autotune_vpus(max_vpus_per_gb):
+    if (
+        performance_based is True
+        and vpus_per_gb is not None
+        and max_vpus_per_gb is not None
+        and max_vpus_per_gb < vpus_per_gb
+    ):
         fail_json(
             msg=(
-                "max_vpus_per_gb must be a selectable autotune value "
-                "(10, 20, 30, ... 120)"
-            )
-        )
-
-    current = parse_autotune_policies(current_policies)
-    if performance_based is False or not current["performance_based"]:
-        fail_json(
-            msg=(
-                "max_vpus_per_gb can only be set when "
-                "performance_based_auto_tune is true"
+                "max_vpus_per_gb must be greater than or equal to vpus_per_gb"
             )
         )
 
