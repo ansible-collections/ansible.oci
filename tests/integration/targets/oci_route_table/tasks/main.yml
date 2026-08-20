@@ -126,15 +126,41 @@
           - oci_route_table_info_by_id.route_tables[0].route_rules | length == 1
           - oci_route_table_info_by_id.route_tables[0].route_rules[0].network_entity_id == oci_route_table_ig_create.resource.id
 
-    - name: Assert created route table is a no-op on rerun
+    - name: Assert created route table is a no-op on rerun with unique name
       oracle.oci.oci_route_table:
         <<: *oci_route_table_create_module_options
-      register: oci_route_table_create_rerun
+      register: oci_route_table_create_rerun_by_name
 
-    - name: Verify rerun is a no-op
+    - name: Verify route table rerun with unique name is a no-op
       ansible.builtin.assert:
         that:
-          - not oci_route_table_create_rerun.changed | bool
+          - not oci_route_table_create_rerun_by_name.changed | bool
+          - oci_route_table_create_rerun_by_name.resource.id == oci_route_table_id
+
+    - name: Intentionally create a second route table with the same display name
+      oracle.oci.oci_route_table:
+        <<: *oci_route_table_create_module_options
+        allow_duplicate_name: true
+      register: oci_route_table_duplicate_create
+
+    - name: Capture duplicate route table id
+      ansible.builtin.set_fact:
+        oci_route_table_duplicate_id: "{{ oci_route_table_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate route table create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_route_table_duplicate_create.changed | bool
+          - oci_route_table_duplicate_id != oci_route_table_id
+
+    - name: Delete the duplicate route table
+      oracle.oci.oci_route_table:
+        state: absent
+        route_table_id: "{{ oci_route_table_duplicate_id }}"
+
+    - name: Clear duplicate route table id after successful delete
+      ansible.builtin.set_fact:
+        oci_route_table_duplicate_id: ""
 
     - name: Update route table in check mode
       oracle.oci.oci_route_table: &oci_route_table_update_module_options

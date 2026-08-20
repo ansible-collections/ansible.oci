@@ -107,10 +107,27 @@ EXAMPLES = r"""
     route_table_id: ocid1.routetable.oc1..updated
     drg_route_table_id: ocid1.drgroutetable.oc1..updated
 
+- name: Reconcile a uniquely named DRG attachment by name
+  oracle.oci.oci_drg_attachment:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    drg_id: ocid1.drg.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-drg-attachment
+    route_table_id: ocid1.routetable.oc1..updated
+
 - name: Detach the DRG from the VCN
   oracle.oci.oci_drg_attachment:
     state: absent
     drg_attachment_id: "{{ created_drg_attachment.resource.id }}"
+
+- name: Detach a uniquely named DRG attachment without providing drg_attachment_id
+  oracle.oci.oci_drg_attachment:
+    state: absent
+    compartment_id: ocid1.compartment.oc1..example
+    drg_id: ocid1.drg.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-drg-attachment
 """
 
 RETURN = r"""

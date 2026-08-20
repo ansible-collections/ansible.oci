@@ -149,6 +149,34 @@
       ansible.builtin.assert:
         that:
           - not oci_subnet_create_rerun_by_name.changed | bool
+          - oci_subnet_create_rerun_by_name.resource.id == oci_subnet_id
+
+    - name: Intentionally create a second subnet with the same display name
+      oracle.oci.oci_subnet:
+        <<: *oci_subnet_create_module_options
+        allow_duplicate_name: true
+        cidr_block: 10.251.2.0/24
+        dns_label: "dup{{ oci_integration_rpfx }}"
+      register: oci_subnet_duplicate_create
+
+    - name: Capture duplicate subnet id
+      ansible.builtin.set_fact:
+        oci_subnet_duplicate_id: "{{ oci_subnet_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate subnet create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_subnet_duplicate_create.changed | bool
+          - oci_subnet_duplicate_id != oci_subnet_id
+
+    - name: Delete the duplicate subnet
+      oracle.oci.oci_subnet:
+        state: absent
+        subnet_id: "{{ oci_subnet_duplicate_id }}"
+
+    - name: Clear duplicate subnet id after successful delete
+      ansible.builtin.set_fact:
+        oci_subnet_duplicate_id: ""
 
     - name: Assert created subnet is a no-op on rerun with returned id
       oracle.oci.oci_subnet:

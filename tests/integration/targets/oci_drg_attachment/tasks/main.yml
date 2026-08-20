@@ -124,6 +124,17 @@
         that:
           - oci_drg_attachment_info_list.drg_attachments | selectattr('id', 'equalto', oci_drg_attachment_id) | list | length == 1
 
+    - name: Assert created DRG attachment is a no-op on rerun with unique name
+      oracle.oci.oci_drg_attachment:
+        <<: *oci_drg_attachment_create_module_options
+      register: oci_drg_attachment_create_rerun_by_name
+
+    - name: Verify DRG attachment rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_drg_attachment_create_rerun_by_name.changed | bool
+          - oci_drg_attachment_create_rerun_by_name.resource.id == oci_drg_attachment_id
+
     - name: Assert created DRG attachment is a no-op on rerun with returned id
       oracle.oci.oci_drg_attachment:
         <<: *oci_drg_attachment_create_module_options

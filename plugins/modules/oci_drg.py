@@ -76,6 +76,13 @@ EXAMPLES = r"""
     freeform_tags:
       env: prod
 
+- name: Intentionally create a second DRG with the same display name
+  oracle.oci.oci_drg:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-drg
+
 - name: Delete the created DRG
   oracle.oci.oci_drg:
     state: absent

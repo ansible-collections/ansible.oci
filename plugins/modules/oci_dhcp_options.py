@@ -149,6 +149,17 @@ EXAMPLES = r"""
         search_domain_names:
           - example.oraclevcn.com
 
+- name: Intentionally create a second DHCP options set with the same display name
+  oracle.oci.oci_dhcp_options:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: ocid1.vcn.oc1..example
+    name: example-dhcp-options
+    options:
+      - option_type: domain_name_server
+        server_type: vcn_local_plus_internet
+
 - name: Delete the created DHCP options
   oracle.oci.oci_dhcp_options:
     state: absent

@@ -131,14 +131,6 @@ EXAMPLES = r"""
     name: example-nat-gateway
     block_traffic: true
 
-- name: Intentionally create a second NAT gateway with the same display name
-  oracle.oci.oci_nat_gateway:
-    state: present
-    allow_duplicate_name: true
-    compartment_id: ocid1.compartment.oc1..example
-    vcn_id: ocid1.vcn.oc1..example
-    name: example-nat-gateway
-
 - name: Delete the created NAT gateway
   oracle.oci.oci_nat_gateway:
     state: absent

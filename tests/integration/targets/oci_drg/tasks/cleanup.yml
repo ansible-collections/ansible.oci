@@ -5,6 +5,12 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: Delete leaked duplicate DRG during cleanup
+      oracle.oci.oci_drg:
+        state: absent
+        drg_id: "{{ oci_drg_duplicate_id }}"
+      when: oci_drg_duplicate_id | default('') | length > 0
+
     - name: Delete leaked DRG during cleanup
       oracle.oci.oci_drg:
         state: absent

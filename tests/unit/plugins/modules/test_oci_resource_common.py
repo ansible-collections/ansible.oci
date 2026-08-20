@@ -238,7 +238,211 @@ RESOURCE_CASES = (
             "name": "example-lpg",
         },
     },
+    {
+        "module_name": "oci_internet_gateway",
+        "class_name": "OciInternetGatewayModule",
+        "id_param": "internet_gateway_id",
+        "id_value": "ocid1.internetgateway.oc1..example",
+        "missing_id": "ocid1.internetgateway.oc1..missing",
+        "get_method": "get_internet_gateway",
+        "get_id_kwarg": "ig_id",
+        "list_method": "list_internet_gateways",
+        "delete_method": "delete_internet_gateway",
+        "not_found_label": "internet gateway",
+        "delete_required_msg": "Deleting a internet gateway requires either internet_gateway_id or name (with compartment_id, vcn_id)",
+        "create_missing_msg": "Creating a internet gateway requires",
+        "name_lookup_params": {
+            "name": "example-internet-gateway",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-internet-gateway",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-internet-gateway",
+        },
+    },
+    {
+        "module_name": "oci_dhcp_options",
+        "class_name": "OciDhcpOptionsModule",
+        "id_param": "dhcp_options_id",
+        "id_value": "ocid1.dhcpoptions.oc1..example",
+        "missing_id": "ocid1.dhcpoptions.oc1..missing",
+        "get_method": "get_dhcp_options",
+        "get_id_kwarg": "dhcp_id",
+        "list_method": "list_dhcp_options",
+        "delete_method": "delete_dhcp_options",
+        "not_found_label": "DHCP options",
+        "delete_required_msg": "Deleting a DHCP options requires either dhcp_options_id or name (with compartment_id, vcn_id)",
+        "create_missing_msg": "Creating a DHCP options requires",
+        "name_lookup_params": {
+            "name": "example-dhcp-options",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-dhcp-options",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-dhcp-options",
+        },
+    },
+    {
+        "module_name": "oci_route_table",
+        "class_name": "OciRouteTableModule",
+        "id_param": "route_table_id",
+        "id_value": "ocid1.routetable.oc1..example",
+        "missing_id": "ocid1.routetable.oc1..missing",
+        "get_method": "get_route_table",
+        "get_id_kwarg": "rt_id",
+        "list_method": "list_route_tables",
+        "delete_method": "delete_route_table",
+        "not_found_label": "route table",
+        "delete_required_msg": "Deleting a route table requires either route_table_id or name (with compartment_id, vcn_id)",
+        "create_missing_msg": "Creating a route table requires",
+        "name_lookup_params": {
+            "name": "example-route-table",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-route-table",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-route-table",
+        },
+    },
+    {
+        "module_name": "oci_drg_attachment",
+        "class_name": "OciDrgAttachmentModule",
+        "id_param": "drg_attachment_id",
+        "id_value": "ocid1.drgattachment.oc1..example",
+        "missing_id": "ocid1.drgattachment.oc1..missing",
+        "get_method": "get_drg_attachment",
+        "list_method": "list_drg_attachments",
+        "delete_method": "delete_drg_attachment",
+        "not_found_label": "DRG attachment",
+        "delete_required_msg": "Deleting a DRG attachment requires either drg_attachment_id or name (with compartment_id, drg_id, vcn_id)",
+        "create_missing_msg": "Creating a DRG attachment requires",
+        "name_lookup_params": {
+            "name": "example-drg-attachment",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "drg_id": "ocid1.drg.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "drg_id": "ocid1.drg.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-drg-attachment",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "drg_id": "ocid1.drg.oc1..example",
+            "vcn_id": "ocid1.vcn.oc1..example",
+            "name": "example-drg-attachment",
+        },
+    },
+    {
+        "module_name": "oci_instance",
+        "class_name": "OciInstanceModule",
+        "id_param": "instance_id",
+        "id_value": "ocid1.instance.oc1..example",
+        "missing_id": "ocid1.instance.oc1..missing",
+        "get_method": "get_instance",
+        "list_method": "list_instances",
+        "delete_method": "terminate_instance",
+        "not_found_label": "instance",
+        "delete_required_msg": "Deleting a instance requires either instance_id or name (with compartment_id)",
+        "create_missing_msg": "Creating a instance requires",
+        "name_lookup_params": {
+            "name": "example-instance",
+            "compartment_id": "ocid1.compartment.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-instance",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
+            "shape": "VM.Standard.E4.Flex",
+            "subnet_id": "ocid1.subnet.oc1..example",
+            "image_id": "ocid1.image.oc1..example",
+            "name": "example-instance",
+        },
+    },
 )
+
+
+@pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
+def test_main_exposes_name_lookup_arguments(monkeypatch, case):
+    install_fake_oci(monkeypatch)
+
+    module_obj = load_collection_module(case["module_name"])
+    captured = {}
+
+    def fake_ansible_module(**kwargs):
+        captured["argument_spec"] = kwargs["argument_spec"]
+
+        class Dummy:
+            params = {}
+            check_mode = False
+
+        return Dummy()
+
+    class FakeResourceModule:
+        def __init__(self, module):
+            self.module = module
+
+        def execute_resource_module(self):
+            captured["run_called"] = True
+
+    monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
+    monkeypatch.setattr(module_obj, case["class_name"], FakeResourceModule)
+
+    module_obj.main()
+
+    assert captured["run_called"] is True
+    assert captured["argument_spec"]["name"] == {"type": "str"}
+    assert captured["argument_spec"]["compartment_id"] == {"type": "str"}
+    assert captured["argument_spec"]["allow_duplicate_name"] == {
+        "type": "bool",
+        "default": False,
+    }
 
 
 @pytest.mark.parametrize("case", RESOURCE_CASES, ids=lambda case: case["module_name"])
@@ -249,7 +453,7 @@ def test_get_resource_prefers_id_lookup(monkeypatch, case):
     get_calls = []
 
     def get_resource(**kwargs):
-        resource_id = kwargs[case["id_param"]]
+        resource_id = kwargs[case.get("get_id_kwarg", case["id_param"])]
         get_calls.append(resource_id)
         return FakeResponse(data=FakeModel(id=resource_id))
 

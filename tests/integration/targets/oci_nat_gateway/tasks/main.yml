@@ -139,6 +139,11 @@
       ansible.builtin.assert:
         that:
           - not oci_nat_gateway_create_rerun_by_name.changed | bool
+          - oci_nat_gateway_create_rerun_by_name.resource.id == oci_nat_gateway_id
+
+    # OCI allows only one NAT gateway per VCN, so a live
+    # allow_duplicate_name create in this VCN always returns LimitExceeded.
+    # Name-based present rerun above is the coverage that stays.
 
     - name: Assert created NAT gateway is a no-op on rerun with returned id
       oracle.oci.oci_nat_gateway:

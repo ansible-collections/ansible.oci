@@ -123,15 +123,41 @@
           - oci_lpg_info_by_id.local_peering_gateways[0].name == oci_lpg_integration_lpg_name
           - oci_lpg_info_by_id.local_peering_gateways[0].lifecycle_state == "AVAILABLE"
 
-    - name: Assert created local peering gateway is a no-op on rerun
+    - name: Assert created local peering gateway is a no-op on rerun with unique name
       oracle.oci.oci_local_peering_gateway:
         <<: *oci_lpg_create_module_options
-      register: oci_lpg_create_rerun
+      register: oci_lpg_create_rerun_by_name
 
-    - name: Verify rerun is a no-op
+    - name: Verify local peering gateway rerun with unique name is a no-op
       ansible.builtin.assert:
         that:
-          - not oci_lpg_create_rerun.changed | bool
+          - not oci_lpg_create_rerun_by_name.changed | bool
+          - oci_lpg_create_rerun_by_name.resource.id == oci_lpg_id
+
+    - name: Intentionally create a second local peering gateway with the same display name
+      oracle.oci.oci_local_peering_gateway:
+        <<: *oci_lpg_create_module_options
+        allow_duplicate_name: true
+      register: oci_lpg_duplicate_create
+
+    - name: Capture duplicate local peering gateway id
+      ansible.builtin.set_fact:
+        oci_lpg_duplicate_id: "{{ oci_lpg_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate local peering gateway create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_lpg_duplicate_create.changed | bool
+          - oci_lpg_duplicate_id != oci_lpg_id
+
+    - name: Delete the duplicate local peering gateway
+      oracle.oci.oci_local_peering_gateway:
+        state: absent
+        local_peering_gateway_id: "{{ oci_lpg_duplicate_id }}"
+
+    - name: Clear duplicate local peering gateway id after successful delete
+      ansible.builtin.set_fact:
+        oci_lpg_duplicate_id: ""
 
     - name: Peer the two local peering gateways
       oracle.oci.oci_local_peering_gateway:

@@ -108,6 +108,32 @@
       ansible.builtin.assert:
         that:
           - not oci_drg_create_rerun_by_name.changed | bool
+          - oci_drg_create_rerun_by_name.resource.id == oci_drg_id
+
+    - name: Intentionally create a second DRG with the same display name
+      oracle.oci.oci_drg:
+        <<: *oci_drg_create_module_options
+        allow_duplicate_name: true
+      register: oci_drg_duplicate_create
+
+    - name: Capture duplicate DRG id
+      ansible.builtin.set_fact:
+        oci_drg_duplicate_id: "{{ oci_drg_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate DRG create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_drg_duplicate_create.changed | bool
+          - oci_drg_duplicate_id != oci_drg_id
+
+    - name: Delete the duplicate DRG
+      oracle.oci.oci_drg:
+        state: absent
+        drg_id: "{{ oci_drg_duplicate_id }}"
+
+    - name: Clear duplicate DRG id after successful delete
+      ansible.builtin.set_fact:
+        oci_drg_duplicate_id: ""
 
     - name: Assert created DRG is a no-op on rerun with returned id
       oracle.oci.oci_drg:

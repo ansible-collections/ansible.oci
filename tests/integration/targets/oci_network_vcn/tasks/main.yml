@@ -128,6 +128,35 @@
       ansible.builtin.assert:
         that:
           - not oci_network_vcn_create_rerun_by_name.changed | bool
+          - oci_network_vcn_create_rerun_by_name.resource.id == oci_network_vcn_id
+
+    - name: Intentionally create a second VCN with the same display name
+      oracle.oci.oci_network_vcn:
+        <<: *oci_network_vcn_create_module_options
+        allow_duplicate_name: true
+        cidr_blocks:
+          - 10.243.0.0/16
+        dns_label: "dup{{ oci_integration_rpfx }}"
+      register: oci_network_vcn_duplicate_create
+
+    - name: Capture duplicate VCN id
+      ansible.builtin.set_fact:
+        oci_network_vcn_duplicate_id: "{{ oci_network_vcn_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate VCN create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_duplicate_create.changed | bool
+          - oci_network_vcn_duplicate_id != oci_network_vcn_id
+
+    - name: Delete the duplicate VCN
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_network_vcn_duplicate_id }}"
+
+    - name: Clear duplicate VCN id after successful delete
+      ansible.builtin.set_fact:
+        oci_network_vcn_duplicate_id: ""
 
     - name: Assert created VCN is a no-op on rerun with returned id
       oracle.oci.oci_network_vcn:

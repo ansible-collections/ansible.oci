@@ -310,6 +310,19 @@
         that:
           - oci_instance_info_list.instances | selectattr('id', 'equalto', oci_instance_id) | list | length == 1
 
+    - name: Assert created instance is a no-op on rerun with unique name
+      oracle.oci.oci_instance:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_integration_instance_name }}"
+      register: oci_instance_create_rerun_by_name
+
+    - name: Verify instance rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_create_rerun_by_name.changed | bool
+          - oci_instance_create_rerun_by_name.resource.id == oci_instance_id
+
     - name: Assert created instance is a no-op on rerun with returned id
       oracle.oci.oci_instance:
         <<: *oci_instance_create_module_options
