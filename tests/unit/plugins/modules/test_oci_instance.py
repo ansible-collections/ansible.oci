@@ -354,6 +354,62 @@ def test_create_resource_stops_instance_when_power_state_stopped(monkeypatch):
     assert resource.lifecycle_state == "STOPPED"
 
 
+def test_update_resource_retries_transient_conflict_on_update_instance(monkeypatch):
+    """OCI can return 409 Conflict after lifecycle_state is already
+    RUNNING/STOPPED while an earlier mutation is still finishing internally.
+    Consecutive update_instance calls must retry that transient conflict the
+    same way instance_action already does.
+    """
+    install_fake_oci(monkeypatch)
+
+    instance_module = load_collection_module("oci_instance")
+    update_response = FakeResponse(data=FakeModel(id="ocid1.instance.oc1..example"))
+    retry_kwargs = {}
+
+    def update_instance(instance_id, update_instance_details):
+        return update_response
+
+    def fake_call_with_retry(fn, *args, **kwargs):
+        if fn is update_instance:
+            retry_kwargs["max_retries"] = kwargs.get("max_retries")
+            retry_kwargs["retry_on"] = kwargs.get("retry_on")
+        call_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if key not in ("max_retries", "retry_on")
+        }
+        return fn(*args, **call_kwargs)
+
+    resource = FakeModel(
+        id="ocid1.instance.oc1..example",
+        display_name="current-instance",
+        lifecycle_state="RUNNING",
+    )
+    instance = make_instance_module(
+        instance_module,
+        {
+            "name": "updated-instance",
+            "wait": True,
+        },
+        client=types.SimpleNamespace(update_instance=update_instance),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", fake_call_with_retry)
+    monkeypatch.setattr(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
+            id=resource_id,
+            display_name="updated-instance",
+            lifecycle_state="RUNNING",
+        ),
+    )
+
+    instance.update_resource(resource)
+
+    assert retry_kwargs["max_retries"] == 10
+    assert retry_kwargs["retry_on"] == (409, 429, 500, 503)
+
+
 def test_update_resource_applies_power_action_then_field_update(monkeypatch):
     install_fake_oci(monkeypatch)
 
@@ -386,7 +442,12 @@ def test_update_resource_applies_power_action_then_field_update(monkeypatch):
             update_instance=update_instance,
         ),
     )
-    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+    def fake_call_with_retry(fn, *args, **kwargs):
+        kwargs.pop("max_retries", None)
+        kwargs.pop("retry_on", None)
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(instance, "call_with_retry", fake_call_with_retry)
     monkeypatch.setattr(
         instance,
         "wait_for_resource_id",

@@ -868,6 +868,13 @@ CREATE_REQUIRED_FIELDS = [
 ]
 WAIT_FOR_LAUNCH_STATES = [LIFECYCLE_RUNNING]
 WAIT_FOR_SETTLED_STATES = [LIFECYCLE_RUNNING, LIFECYCLE_STOPPED]
+# OCI can reject instance mutations with 409 Conflict for up to roughly a
+# minute while the instance is still settling from a preceding mutation.
+# Lifecycle waiters only see RUNNING/STOPPED, so that 409 is a transient
+# "try again later" condition, not a real conflict. Ride it out here
+# alongside the default 429/500/503 handling.
+INSTANCE_MUTATION_MAX_RETRIES = 10
+INSTANCE_MUTATION_RETRY_ON = (409, 429, 500, 503)
 POWER_STATE_ACTIONS = {
     LIFECYCLE_RUNNING: "START",
     LIFECYCLE_STOPPED: "STOP",
@@ -1274,18 +1281,12 @@ class OciInstanceModule(OciResourceBase):
         return [action]
 
     def _apply_power_action(self, instance_id, action):
-        # OCI can reject a power action with 409 Conflict for up to roughly a
-        # minute while the instance is still settling from a preceding
-        # mutation (for example, right after an update_instance call). That
-        # is a transient "try again later" condition, not a real conflict, so
-        # retry it here with enough attempts to ride out that window,
-        # alongside the default 429/500/503 handling.
         self.call_with_retry(
             self.client.instance_action,
             instance_id=instance_id,
             action=action,
-            max_retries=10,
-            retry_on=(409, 429, 500, 503),
+            max_retries=INSTANCE_MUTATION_MAX_RETRIES,
+            retry_on=INSTANCE_MUTATION_RETRY_ON,
         )
         target_state = LIFECYCLE_RUNNING if action == "START" else LIFECYCLE_STOPPED
         return self.wait_for_resource_id(instance_id, [target_state])
@@ -1348,6 +1349,8 @@ class OciInstanceModule(OciResourceBase):
             self.client.update_instance,
             instance_id=resource.id,
             update_instance_details=update_details,
+            max_retries=INSTANCE_MUTATION_MAX_RETRIES,
+            retry_on=INSTANCE_MUTATION_RETRY_ON,
         )
         return self.get_mutation_result(
             response.data,
