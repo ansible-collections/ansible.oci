@@ -141,30 +141,9 @@
           - not oci_nat_gateway_create_rerun_by_name.changed | bool
           - oci_nat_gateway_create_rerun_by_name.resource.id == oci_nat_gateway_id
 
-    - name: Intentionally create a second NAT gateway with the same display name
-      oracle.oci.oci_nat_gateway:
-        <<: *oci_nat_gateway_create_module_options
-        allow_duplicate_name: true
-      register: oci_nat_gateway_duplicate_create
-
-    - name: Capture duplicate NAT gateway id
-      ansible.builtin.set_fact:
-        oci_nat_gateway_duplicate_id: "{{ oci_nat_gateway_duplicate_create.resource.id }}"
-
-    - name: Assert duplicate NAT gateway create used a new resource
-      ansible.builtin.assert:
-        that:
-          - oci_nat_gateway_duplicate_create.changed | bool
-          - oci_nat_gateway_duplicate_id != oci_nat_gateway_id
-
-    - name: Delete the duplicate NAT gateway
-      oracle.oci.oci_nat_gateway:
-        state: absent
-        nat_gateway_id: "{{ oci_nat_gateway_duplicate_id }}"
-
-    - name: Clear duplicate NAT gateway id after successful delete
-      ansible.builtin.set_fact:
-        oci_nat_gateway_duplicate_id: ""
+    # OCI allows only one NAT gateway per VCN, so a live
+    # allow_duplicate_name create in this VCN always returns LimitExceeded.
+    # Name-based present rerun above is the coverage that stays.
 
     - name: Assert created NAT gateway is a no-op on rerun with returned id
       oracle.oci.oci_nat_gateway:

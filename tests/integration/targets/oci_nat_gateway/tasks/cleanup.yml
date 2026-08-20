@@ -5,12 +5,6 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
-    - name: Delete leaked duplicate NAT gateway during cleanup
-      oracle.oci.oci_nat_gateway:
-        state: absent
-        nat_gateway_id: "{{ oci_nat_gateway_duplicate_id }}"
-      when: oci_nat_gateway_duplicate_id | default('') | length > 0
-
     - name: Delete leaked NAT gateway during cleanup
       oracle.oci.oci_nat_gateway:
         state: absent

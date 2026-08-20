@@ -442,6 +442,7 @@ def test_update_resource_applies_power_action_then_field_update(monkeypatch):
             update_instance=update_instance,
         ),
     )
+
     def fake_call_with_retry(fn, *args, **kwargs):
         kwargs.pop("max_retries", None)
         kwargs.pop("retry_on", None)
