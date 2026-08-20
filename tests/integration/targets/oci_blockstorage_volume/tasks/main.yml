@@ -1,0 +1,374 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI block volume integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_blockstorage_volume_integration_volume_name: "{{ oci_blockstorage_volume_integration_volume_name }}-{{ oci_integration_rpfx }}"
+    oci_blockstorage_volume_integration_updated_volume_name: "{{ oci_blockstorage_volume_integration_updated_volume_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise block volume module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Discover an availability domain in the compartment
+      oracle.oci.oci_availability_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_blockstorage_volume_ad_info
+
+    - name: Assert at least one availability domain was discovered
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_ad_info.availability_domains | length > 0
+
+    - name: Set the working availability domain
+      ansible.builtin.set_fact:
+        oci_blockstorage_volume_integration_availability_domain: "{{ oci_blockstorage_volume_ad_info.availability_domains[0].name }}"
+
+    - name: Define block volume create and delete parameters
+      ansible.builtin.set_fact:
+        oci_blockstorage_volume_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          availability_domain: "{{ oci_blockstorage_volume_integration_availability_domain }}"
+          name: "{{ oci_blockstorage_volume_integration_volume_name }}"
+          size_in_gbs: "{{ oci_blockstorage_volume_integration_size_in_gbs }}"
+          vpus_per_gb: "{{ oci_blockstorage_volume_integration_vpus_per_gb }}"
+          freeform_tags: "{{ oci_blockstorage_volume_integration_create_tags }}"
+        oci_blockstorage_volume_delete_params:
+          state: absent
+          volume_id: ""
+
+    - name: Create block volume in check mode
+      oracle.oci.oci_blockstorage_volume: &oci_blockstorage_volume_create_module_options
+        state: "{{ oci_blockstorage_volume_create_params.state }}"
+        compartment_id: "{{ oci_blockstorage_volume_create_params.compartment_id }}"
+        availability_domain: "{{ oci_blockstorage_volume_create_params.availability_domain }}"
+        name: "{{ oci_blockstorage_volume_create_params.name }}"
+        size_in_gbs: "{{ oci_blockstorage_volume_create_params.size_in_gbs }}"
+        vpus_per_gb: "{{ oci_blockstorage_volume_create_params.vpus_per_gb }}"
+        freeform_tags: "{{ oci_blockstorage_volume_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_blockstorage_volume_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_create_check.changed | bool
+
+    - name: Read block volume after create check mode
+      oracle.oci.oci_blockstorage_volume_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_blockstorage_volume_integration_volume_name }}"
+      register: oci_blockstorage_volume_create_check_probe
+
+    - name: Assert block volume is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_create_check_probe.volumes | length == 0
+
+    - name: Create block volume
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_create_module_options
+      register: oci_blockstorage_volume_create
+
+    - name: Capture block volume id and define update parameters
+      ansible.builtin.set_fact:
+        oci_blockstorage_volume_id: "{{ oci_blockstorage_volume_create.resource.id }}"
+        oci_blockstorage_volume_update_params:
+          state: present
+          volume_id: "{{ oci_blockstorage_volume_create.resource.id }}"
+          name: "{{ oci_blockstorage_volume_integration_updated_volume_name }}"
+          size_in_gbs: "{{ oci_blockstorage_volume_integration_updated_size_in_gbs }}"
+          vpus_per_gb: "{{ oci_blockstorage_volume_integration_updated_vpus_per_gb }}"
+          freeform_tags: "{{ oci_blockstorage_volume_integration_update_tags }}"
+        oci_blockstorage_volume_delete_params:
+          state: absent
+          volume_id: "{{ oci_blockstorage_volume_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_create.changed | bool
+
+    - name: Read block volume by id
+      oracle.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+      register: oci_blockstorage_volume_info_by_id
+
+    - name: Assert block volume info by id returned the created volume
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_info_by_id.volumes | length == 1
+          - oci_blockstorage_volume_info_by_id.volumes[0].id == oci_blockstorage_volume_id
+          - oci_blockstorage_volume_info_by_id.volumes[0].name == oci_blockstorage_volume_integration_volume_name
+          - oci_blockstorage_volume_info_by_id.volumes[0].lifecycle_state == "AVAILABLE"
+          - oci_blockstorage_volume_info_by_id.volumes[0].size_in_gbs == oci_blockstorage_volume_integration_size_in_gbs
+          - oci_blockstorage_volume_info_by_id.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_vpus_per_gb
+
+    - name: List block volume by name
+      oracle.oci.oci_blockstorage_volume_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_blockstorage_volume_integration_volume_name }}"
+      register: oci_blockstorage_volume_info_list
+
+    - name: Assert block volume info list returned the created volume
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_info_list.volumes | selectattr('id', 'equalto', oci_blockstorage_volume_id) | list | length == 1
+
+    - name: Assert created block volume is a no-op on rerun with unique name
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_create_module_options
+      register: oci_blockstorage_volume_create_rerun_by_name
+
+    - name: Verify block volume rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_create_rerun_by_name.changed | bool
+
+    - name: Update block volume in check mode
+      oracle.oci.oci_blockstorage_volume: &oci_blockstorage_volume_update_module_options
+        state: "{{ oci_blockstorage_volume_update_params.state }}"
+        volume_id: "{{ oci_blockstorage_volume_update_params.volume_id }}"
+        name: "{{ oci_blockstorage_volume_update_params.name }}"
+        size_in_gbs: "{{ oci_blockstorage_volume_update_params.size_in_gbs }}"
+        vpus_per_gb: "{{ oci_blockstorage_volume_update_params.vpus_per_gb }}"
+        freeform_tags: "{{ oci_blockstorage_volume_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_blockstorage_volume_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_update_check.changed | bool
+
+    - name: Read block volume after update check mode
+      oracle.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+      register: oci_blockstorage_volume_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_update_check_probe.volumes[0].name == oci_blockstorage_volume_integration_volume_name
+          - oci_blockstorage_volume_update_check_probe.volumes[0].size_in_gbs == oci_blockstorage_volume_integration_size_in_gbs
+          - oci_blockstorage_volume_update_check_probe.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_vpus_per_gb
+          - oci_blockstorage_volume_update_check_probe.volumes[0].freeform_tags.phase == "create"
+
+    - name: Update block volume
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_update_module_options
+      register: oci_blockstorage_volume_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_update.changed | bool
+
+    - name: Read updated block volume by name
+      oracle.oci.oci_blockstorage_volume_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_blockstorage_volume_integration_updated_volume_name }}"
+      register: oci_blockstorage_volume_info_updated
+
+    - name: Assert block volume info reflects the updated volume
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_info_updated.volumes | selectattr('id', 'equalto', oci_blockstorage_volume_id) | list | length == 1
+          - oci_blockstorage_volume_info_updated.volumes[0].size_in_gbs == oci_blockstorage_volume_integration_updated_size_in_gbs
+          - oci_blockstorage_volume_info_updated.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_updated_vpus_per_gb
+          - oci_blockstorage_volume_info_updated.volumes[0].freeform_tags.phase == "update"
+          - oci_blockstorage_volume_info_updated.volumes[0].is_hydrated | bool
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_update_module_options
+      register: oci_blockstorage_volume_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_update_rerun.changed | bool
+
+    - name: Define autotune update parameters
+      ansible.builtin.set_fact:
+        oci_blockstorage_volume_autotune_params:
+          state: present
+          volume_id: "{{ oci_blockstorage_volume_id }}"
+          vpus_per_gb: "{{ oci_blockstorage_volume_integration_autotune_vpus_per_gb }}"
+          performance_based_auto_tune: true
+          max_vpus_per_gb: "{{ oci_blockstorage_volume_integration_autotune_max_vpus_per_gb }}"
+          detached_volume_auto_tune: true
+        oci_blockstorage_volume_autotune_max_only_params:
+          state: present
+          volume_id: "{{ oci_blockstorage_volume_id }}"
+          max_vpus_per_gb: "{{ oci_blockstorage_volume_integration_autotune_updated_max_vpus_per_gb }}"
+
+    - name: Enable autotune in check mode
+      oracle.oci.oci_blockstorage_volume: &oci_blockstorage_volume_autotune_module_options
+        state: "{{ oci_blockstorage_volume_autotune_params.state }}"
+        volume_id: "{{ oci_blockstorage_volume_autotune_params.volume_id }}"
+        vpus_per_gb: "{{ oci_blockstorage_volume_autotune_params.vpus_per_gb }}"
+        performance_based_auto_tune: "{{ oci_blockstorage_volume_autotune_params.performance_based_auto_tune }}"
+        max_vpus_per_gb: "{{ oci_blockstorage_volume_autotune_params.max_vpus_per_gb }}"
+        detached_volume_auto_tune: "{{ oci_blockstorage_volume_autotune_params.detached_volume_auto_tune }}"
+      check_mode: true
+      register: oci_blockstorage_volume_autotune_check
+
+    - name: Assert autotune check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_autotune_check.changed | bool
+
+    - name: Read block volume after autotune check mode
+      oracle.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+      register: oci_blockstorage_volume_autotune_check_probe
+
+    - name: Assert autotune check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_autotune_check_probe.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_updated_vpus_per_gb
+          - oci_blockstorage_volume_autotune_check_probe.volumes[0].autotune_policies | default([]) | length == 0
+
+    - name: Enable autotune
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_autotune_module_options
+      register: oci_blockstorage_volume_autotune
+
+    - name: Assert autotune update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_autotune.changed | bool
+
+    - name: Read autotuned block volume
+      oracle.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+      register: oci_blockstorage_volume_info_autotuned
+
+    - name: Assert block volume info reflects autotune configuration
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_info_autotuned.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_autotune_vpus_per_gb
+          - (oci_blockstorage_volume_info_autotuned.volumes[0].autotune_policies | selectattr('autotune_type', 'equalto', 'PERFORMANCE_BASED') | map(attribute='max_vpus_per_gb') | list) == [oci_blockstorage_volume_integration_autotune_max_vpus_per_gb]
+          - (oci_blockstorage_volume_info_autotuned.volumes[0].autotune_policies | selectattr('autotune_type', 'equalto', 'DETACHED_VOLUME') | list | length) == 1
+
+    - name: Assert autotune enablement is idempotent on rerun
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_autotune_module_options
+      register: oci_blockstorage_volume_autotune_rerun
+
+    - name: Verify autotune enablement rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_autotune_rerun.changed | bool
+
+    - name: Update autotune max VPUs in check mode
+      oracle.oci.oci_blockstorage_volume: &oci_blockstorage_volume_autotune_max_only_module_options
+        state: "{{ oci_blockstorage_volume_autotune_max_only_params.state }}"
+        volume_id: "{{ oci_blockstorage_volume_autotune_max_only_params.volume_id }}"
+        max_vpus_per_gb: "{{ oci_blockstorage_volume_autotune_max_only_params.max_vpus_per_gb }}"
+      check_mode: true
+      register: oci_blockstorage_volume_autotune_max_only_check
+
+    - name: Assert autotune max-only check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_autotune_max_only_check.changed | bool
+
+    - name: Read block volume after max-only check mode
+      oracle.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+      register: oci_blockstorage_volume_autotune_max_only_check_probe
+
+    - name: Assert max-only check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_autotune_max_only_check_probe.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_autotune_vpus_per_gb
+          - (oci_blockstorage_volume_autotune_max_only_check_probe.volumes[0].autotune_policies | selectattr('autotune_type', 'equalto', 'PERFORMANCE_BASED') | map(attribute='max_vpus_per_gb') | list) == [oci_blockstorage_volume_integration_autotune_max_vpus_per_gb]
+          - (oci_blockstorage_volume_autotune_max_only_check_probe.volumes[0].autotune_policies | selectattr('autotune_type', 'equalto', 'DETACHED_VOLUME') | list | length) == 1
+
+    - name: Update autotune max VPUs
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_autotune_max_only_module_options
+      register: oci_blockstorage_volume_autotune_max_only
+
+    - name: Assert autotune max-only update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_autotune_max_only.changed | bool
+
+    - name: Read autotuned block volume after max-only update
+      oracle.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+      register: oci_blockstorage_volume_info_autotuned_updated
+
+    - name: Assert max-only update preserved existing autotune policies
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_info_autotuned_updated.volumes[0].vpus_per_gb == oci_blockstorage_volume_integration_autotune_vpus_per_gb
+          - (oci_blockstorage_volume_info_autotuned_updated.volumes[0].autotune_policies | selectattr('autotune_type', 'equalto', 'PERFORMANCE_BASED') | map(attribute='max_vpus_per_gb') | list) == [oci_blockstorage_volume_integration_autotune_updated_max_vpus_per_gb]
+          - (oci_blockstorage_volume_info_autotuned_updated.volumes[0].autotune_policies | selectattr('autotune_type', 'equalto', 'DETACHED_VOLUME') | list | length) == 1
+
+    - name: Assert autotune max-only update is idempotent on rerun
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_autotune_max_only_module_options
+      register: oci_blockstorage_volume_autotune_max_only_rerun
+
+    - name: Verify autotune max-only rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_autotune_max_only_rerun.changed | bool
+
+    - name: Delete block volume in check mode
+      oracle.oci.oci_blockstorage_volume: &oci_blockstorage_volume_delete_module_options
+        state: "{{ oci_blockstorage_volume_delete_params.state }}"
+        volume_id: "{{ oci_blockstorage_volume_delete_params.volume_id }}"
+      check_mode: true
+      register: oci_blockstorage_volume_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_delete_check.changed | bool
+
+    - name: Read block volume after delete check mode
+      oracle.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+      register: oci_blockstorage_volume_delete_check_probe
+
+    - name: Assert block volume still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_delete_check_probe.volumes | length == 1
+
+    - name: Delete block volume
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_delete_module_options
+      register: oci_blockstorage_volume_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_delete_module_options
+      register: oci_blockstorage_volume_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_delete_rerun.changed | bool
+
+  always:
+    - name: Run block volume cleanup
+      ansible.builtin.include_tasks: cleanup.yml

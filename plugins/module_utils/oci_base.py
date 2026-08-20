@@ -27,6 +27,7 @@ class OciModuleBase(ABC):
     common_field_param_aliases = COMMON_FIELD_PARAM_ALIASES
     field_param_aliases = {}
     name_response_field = "display_name"
+    redacted_result_keys = ()
 
     def __init__(self, module):
         """Store the active module and create the configured OCI client."""
@@ -87,6 +88,17 @@ class OciModuleBase(ABC):
         Response fields whose OCI name differs from the module parameter the
         caller used (e.g. ``display_name`` vs ``name``) are renamed so the
         result vocabulary stays loyal to the input the caller provided.
+        Keys listed on ``redacted_result_keys`` are dropped so secrets such as
+        iSCSI CHAP credentials never appear in module results or logs.
         """
         resource_dict = serialize_oci_model(resource)
-        return rename_aliased_fields(resource_dict, self.build_result_field_aliases())
+        resource_dict = rename_aliased_fields(
+            resource_dict, self.build_result_field_aliases()
+        )
+        if not isinstance(resource_dict, dict) or not self.redacted_result_keys:
+            return resource_dict
+        return {
+            key: value
+            for key, value in resource_dict.items()
+            if key not in self.redacted_result_keys
+        }

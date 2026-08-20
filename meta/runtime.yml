@@ -12,6 +12,10 @@ action_groups:
     - oci_drg_info
     - oci_drg_attachment
     - oci_drg_attachment_info
+    - oci_blockstorage_volume
+    - oci_blockstorage_volume_info
+    - oci_volume_attachment
+    - oci_volume_attachment_info
     - oci_nat_gateway
     - oci_nat_gateway_info
     - oci_security_list
