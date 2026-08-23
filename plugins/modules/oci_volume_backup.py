@@ -67,7 +67,8 @@ options:
       - Required when creating a backup.
       - Also scopes name-based backup lookups when C(volume_backup_id) is
         omitted.
-      - The module does not update this field after create.
+      - Set only at create time; changing the source volume of an existing
+        backup is not supported, so a change is rejected.
     type: str
   type:
     description:
@@ -78,14 +79,17 @@ options:
       - If omitted, OCI defaults to C(incremental). The returned C(type)
         field reports C(INCREMENTAL) or C(FULL) as stored, including when
         this is the first backup of the volume.
-      - The module does not update this field after create.
+      - Applied only at create time. The module does not compare this field
+        after create, so rerunning a create task that includes C(type) is a
+        no-op even though the resource stores C(FULL) or C(INCREMENTAL).
     type: str
     choices: [full, incremental]
   kms_key_id:
     description:
       - The OCID of the Vault service key used to encrypt the backup.
       - Omit this to use Oracle-managed encryption.
-      - The module does not update this field after create.
+      - This is applied only at create time. Changing the encryption key of an
+        existing backup is not supported, so a change is rejected.
     type: str
   retention_period:
     description:
@@ -141,6 +145,8 @@ notes:
     fails until the retention period expires.
   - C(prevent_deletion_enabled) and C(indefinite_retention_enabled) prevent
     C(state=absent) from deleting the backup while they remain in effect.
+  - Changing the encryption key or source volume of an existing backup is
+    not supported.
 """
 
 EXAMPLES = r"""
@@ -389,7 +395,10 @@ WAIT_FOR_BACKUP_STATES = [LIFECYCLE_AVAILABLE]
 
 # Module inputs use lowercase snake_case choices (Ansible convention), while
 # OCI's wire format uses upper-case constants (for example "full" -> "FULL").
-ENUM_KEYS = {"type", "retention_time_unit"}
+# Assigned to OciVolumeBackupModule.enum_keys so the shared "subset_dict"
+# comparator (see oci_resource.py) normalizes retention_period the same way
+# the create builder does.
+ENUM_KEYS = frozenset({"type", "retention_time_unit"})
 
 
 def build_retention_period(retention_period):
@@ -434,6 +443,14 @@ def build_create_volume_backup_details(params):
     return oci.core.models.CreateVolumeBackupDetails(**details)
 
 
+# For updates, the shared planner records the raw parameter values in the update
+# model; these builders convert them into the SDK model objects the update call
+# expects, mirroring the create path (see oci_blockstorage_volume.py).
+NESTED_UPDATE_BUILDERS = {
+    "retention_period": build_retention_period,
+}
+
+
 class OciVolumeBackupModule(OciResourceBase):
     """Concrete resource adapter for OCI block volume backups."""
 
@@ -450,10 +467,10 @@ class OciVolumeBackupModule(OciResourceBase):
     update_details_name = "update_volume_backup_details"
     update_wait_states = WAIT_FOR_BACKUP_STATES
     enum_keys = ENUM_KEYS
-    # volume_id, type, and kms_key_id are create-only. They either have no
-    # update counterpart or use a case-normalized enum whose raw module value
-    # would false-positive against the upper-case resource field, so they are
-    # excluded from drift detection to keep create-task reruns idempotent.
+    # type is create-only and uses a case-normalized enum ("full" vs "FULL").
+    # Including it in drift detection would false-positive on create-task
+    # reruns, so it is omitted. volume_id and kms_key_id are compared like
+    # oci_blockstorage_volume's create-only identity fields.
     update_field_specs = [
         {
             "param_name": "name",
@@ -486,6 +503,20 @@ class OciVolumeBackupModule(OciResourceBase):
             "update_field": "is_retention_lock_enabled",
             "is_mutable": True,
         },
+        {
+            "param_name": "volume_id",
+            "resource_field": "volume_id",
+            "is_mutable": False,
+        },
+        {
+            "param_name": "kms_key_id",
+            "resource_field": "kms_key_id",
+            "is_mutable": False,
+            "immutable_reason": (
+                "changing a backup's encryption key after create is not "
+                "supported"
+            ),
+        },
     ]
 
     def get_resource_response(self, resource_id):
@@ -510,10 +541,11 @@ class OciVolumeBackupModule(OciResourceBase):
 
     def build_update_details(self, update_model_fields):
         update_model_fields = dict(update_model_fields)
-        if "retention_period" in update_model_fields:
-            update_model_fields["retention_period"] = build_retention_period(
-                update_model_fields["retention_period"]
-            )
+        for field_name, builder in NESTED_UPDATE_BUILDERS.items():
+            if field_name in update_model_fields:
+                update_model_fields[field_name] = builder(
+                    update_model_fields[field_name]
+                )
         return oci.core.models.UpdateVolumeBackupDetails(**update_model_fields)
 
     def delete_resource(self, resource):

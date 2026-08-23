@@ -289,6 +289,66 @@ def test_needs_update_ignores_create_only_type(monkeypatch):
     assert instance.needs_update(resource) is False
 
 
+def test_needs_update_rejects_volume_id_drift(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(
+        backup_module,
+        {"volume_id": "ocid1.volume.oc1..desired"},
+    )
+    resource = FakeModel(
+        id="ocid1.volumebackup.oc1..example",
+        volume_id="ocid1.volume.oc1..current",
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.needs_update(resource)
+
+    assert "volume_id" in exc_info.value.payload["msg"]
+
+
+def test_needs_update_rejects_kms_key_id_drift(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(
+        backup_module,
+        {"kms_key_id": "ocid1.key.oc1..desired"},
+    )
+    resource = FakeModel(
+        id="ocid1.volumebackup.oc1..example",
+        kms_key_id="ocid1.key.oc1..current",
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.needs_update(resource)
+
+    assert "kms_key_id" in exc_info.value.payload["msg"]
+
+
+def test_needs_update_is_noop_when_create_only_ids_match(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    backup_module = load_collection_module("oci_volume_backup")
+    instance = make_volume_backup_module(
+        backup_module,
+        {
+            "name": "current-backup",
+            "volume_id": "ocid1.volume.oc1..example",
+            "kms_key_id": "ocid1.key.oc1..example",
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.volumebackup.oc1..example",
+        display_name="current-backup",
+        volume_id="ocid1.volume.oc1..example",
+        kms_key_id="ocid1.key.oc1..example",
+    )
+
+    assert instance.needs_update(resource) is False
+
+
 def test_create_resource_uses_create_volume_backup_and_waits(monkeypatch):
     install_fake_oci(monkeypatch)
 
