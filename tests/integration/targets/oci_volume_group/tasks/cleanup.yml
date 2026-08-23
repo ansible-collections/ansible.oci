@@ -10,3 +10,10 @@
         state: absent
         volume_group_id: "{{ oci_volume_group_id }}"
       when: oci_volume_group_id | default('') | length > 0
+
+    - name: Delete leaked member volumes during cleanup
+      oracle.oci.oci_blockstorage_volume:
+        state: absent
+        volume_id: "{{ item }}"
+      loop: "{{ oci_volume_group_integration_volume_ids | default([]) }}"
+      when: item | default('') | length > 0
