@@ -111,6 +111,36 @@ RESOURCE_CASES = (
         },
     },
     {
+        "module_name": "oci_image",
+        "class_name": "OciImageModule",
+        "id_param": "image_id",
+        "id_value": "ocid1.image.oc1..example",
+        "missing_id": "ocid1.image.oc1..missing",
+        "get_method": "get_image",
+        "list_method": "list_images",
+        "delete_method": "delete_image",
+        "not_found_label": "image",
+        "delete_required_msg": "Deleting a image requires either image_id or name (with compartment_id)",
+        "create_missing_msg": "Creating a image requires",
+        "name_lookup_params": {
+            "name": "example-image",
+            "compartment_id": "ocid1.compartment.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-image",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "name": "example-image",
+            "instance_id": "ocid1.instance.oc1..example",
+        },
+    },
+    {
         "module_name": "oci_nat_gateway",
         "class_name": "OciNatGatewayModule",
         "id_param": "nat_gateway_id",

@@ -1,0 +1,30 @@
+---
+- name: Run image cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked custom image during cleanup
+      oracle.oci.oci_image:
+        state: absent
+        image_id: "{{ oci_image_id }}"
+      when: oci_image_id | default('') | length > 0
+
+    - name: Delete leaked source instance during cleanup
+      oracle.oci.oci_instance:
+        state: absent
+        instance_id: "{{ oci_image_instance_id }}"
+      when: oci_image_instance_id | default('') | length > 0
+
+    - name: Delete leaked subnet during cleanup
+      oracle.oci.oci_subnet:
+        state: absent
+        subnet_id: "{{ oci_image_subnet_create.resource.id }}"
+      when: oci_image_subnet_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_image_vcn_create.resource.id }}"
+      when: oci_image_vcn_create.resource.id | default('') | length > 0
