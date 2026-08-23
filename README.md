@@ -21,7 +21,7 @@ The collection currently declares the following baseline requirements:
 
 * `ansible-core >= 2.16.0`
 * `python >= 3.8`
-* `oci >= 2.168.2`
+* `oci >= 2.183.0`
 
 Use a controller or execution environment with a Python version supported by
 both `ansible-core` and the OCI Python SDK. OCI authentication material and

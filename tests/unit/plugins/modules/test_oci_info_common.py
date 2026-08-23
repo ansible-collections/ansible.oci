@@ -384,6 +384,39 @@ INFO_CASES = (
             "volume_id": "ocid1.volume.oc1..example",
         },
     },
+    {
+        "module_name": "oci_volume_backup_info",
+        "class_name": "OciVolumeBackupInfoModule",
+        "results_key": "volume_backups",
+        "id_param": "volume_backup_id",
+        "id_value": "ocid1.volumebackup.oc1..example",
+        "missing_id": "ocid1.volumebackup.oc1..missing",
+        "get_method": "get_volume_backup",
+        "list_method": "list_volume_backups",
+        "list_params": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "volume_id": "ocid1.volume.oc1..example",
+            "name": "example-backup",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "expected_list_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "volume_id": "ocid1.volume.oc1..example",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "run_resource": FakeModel(
+            id="ocid1.volumebackup.oc1..example",
+            display_name="example-backup",
+            lifecycle_state="AVAILABLE",
+            volume_id="ocid1.volume.oc1..example",
+        ),
+        "expected_run_payload": {
+            "id": "ocid1.volumebackup.oc1..example",
+            "name": "example-backup",
+            "lifecycle_state": "AVAILABLE",
+            "volume_id": "ocid1.volume.oc1..example",
+        },
+    },
 )
 
 

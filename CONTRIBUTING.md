@@ -36,7 +36,7 @@ When changing collection metadata or runtime dependencies:
 
 * Keep `galaxy.yml` aligned with the repository identity and supported collection metadata.
 * Keep `requirements.txt` and `meta/ee-requirements.txt` in sync for controller-side Python dependencies.
-* The current OCI SDK floor for this collection is `oci>=2.168.2`.
+* The current OCI SDK floor for this collection is `oci>=2.183.0`.
 
 ## Local validation
 
