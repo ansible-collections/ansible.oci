@@ -1,0 +1,24 @@
+---
+# There is no boot-volume resource module yet. This target launches a
+# throwaway instance so the attached boot volume can be the backup source.
+# Availability domain and image are discovered at run time in tasks/main.yml.
+oci_boot_volume_backup_integration_operating_system: "Oracle Linux"
+oci_boot_volume_backup_integration_operating_system_version: "9"
+oci_boot_volume_backup_integration_shape: "VM.Standard.E4.Flex"
+oci_boot_volume_backup_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_boot_volume_backup_integration_vcn_name: "oci-boot-volume-backup-integration-vcn"
+oci_boot_volume_backup_integration_subnet_name: "oci-boot-volume-backup-integration-subnet"
+oci_boot_volume_backup_integration_instance_name: "oci-boot-volume-backup-integration-instance"
+oci_boot_volume_backup_integration_vcn_cidr_block: "10.251.0.0/16"
+oci_boot_volume_backup_integration_subnet_cidr_block: "10.251.1.0/24"
+oci_boot_volume_backup_integration_backup_name: "oci-boot-volume-backup-integration-backup"
+oci_boot_volume_backup_integration_updated_backup_name: "oci-boot-volume-backup-integration-backup-updated"
+oci_boot_volume_backup_integration_backup_type: "incremental"
+oci_boot_volume_backup_integration_create_tags:
+  phase: create
+  role: integration
+oci_boot_volume_backup_integration_update_tags:
+  phase: update
+  role: integration

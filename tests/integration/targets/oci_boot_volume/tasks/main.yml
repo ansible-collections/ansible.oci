@@ -1,0 +1,8 @@
+---
+# CI maps oci_boot_volume_info.py to target name oci_boot_volume (strip _info).
+# There is no boot-volume resource module. Live oci_boot_volume_info coverage
+# is in oci_boot_volume_backup; this target exists so ansible-test can resolve
+# the name.
+- name: Resolve oci_boot_volume integration target name
+  ansible.builtin.debug:
+    msg: oci_boot_volume_info is covered by oci_boot_volume_backup

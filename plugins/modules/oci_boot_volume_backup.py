@@ -7,17 +7,21 @@ __metaclass__ = type
 
 DOCUMENTATION = r"""
 ---
-module: oci_volume_backup
-short_description: Manage a block volume backup resource in Oracle Cloud Infrastructure
+module: oci_boot_volume_backup
+short_description: Manage a boot volume backup resource in Oracle Cloud Infrastructure
 description:
-  - Create, update, and delete OCI block volume backups.
-  - A volume backup is a point-in-time copy of a block volume's data that can be
-    used to restore the volume or create new volumes.
-  - Use M(oracle.oci.oci_volume_backup_info) to list or fetch volume backups.
+  - Create, update, and delete OCI boot volume backups.
+  - A boot volume backup is a point-in-time copy of a boot volume's data that
+    can be used to restore the OS disk or create new boot volumes.
+  - Boot volume backups use a separate OCI API from block (data) volume backups;
+    use M(oracle.oci.oci_volume_backup) for block volumes.
+  - Use M(oracle.oci.oci_boot_volume_info) to look up boot volume OCIDs.
+  - Use M(oracle.oci.oci_boot_volume_backup_info) to list or fetch boot volume
+    backups.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
-  - Create requests must omit C(volume_backup_id). After create, capture the
-    returned backup ID and use it for later C(state=present) and
+  - Create requests must omit C(boot_volume_backup_id). After create, capture
+    the returned backup ID and use it for later C(state=present) and
     C(state=absent) tasks.
 version_added: "1.0.0"
 author:
@@ -30,55 +34,55 @@ extends_documentation_fragment:
 options:
   state:
     description:
-      - The desired lifecycle state of the volume backup.
+      - The desired lifecycle state of the boot volume backup.
     type: str
     choices: [present, absent]
     default: present
-  volume_backup_id:
+  boot_volume_backup_id:
     description:
-      - The OCID of the volume backup.
+      - The OCID of the boot volume backup.
       - When provided, the module manages this exact backup.
       - Required to distinguish between multiple backups that share the same
         scoped C(name).
     type: str
   name:
     description:
-      - Human-readable name for the volume backup.
+      - Human-readable name for the boot volume backup.
       - Required when creating a backup.
-      - When C(volume_backup_id) is omitted, the module uses
-        C(compartment_id + volume_id + name) to find an existing backup.
+      - When C(boot_volume_backup_id) is omitted, the module uses
+        C(compartment_id + boot_volume_id + name) to find an existing backup.
       - If exactly one backup matches, C(state=present) manages it as the update
         target and C(state=absent) deletes it.
       - If more than one backup matches, the task fails and the caller must
-        supply C(volume_backup_id).
+        supply C(boot_volume_backup_id).
     type: str
   compartment_id:
     description:
       - The OCID of the compartment used to scope name-based backup lookups
-        when C(volume_backup_id) is omitted.
+        when C(boot_volume_backup_id) is omitted.
       - This is not part of the OCI create payload (the backup inherits its
-        compartment from the source volume), but it is required to scope the
-        list call used for name-based lookup, including the lookup that runs
-        before create.
+        compartment from the source boot volume), but it is required to scope
+        the list call used for name-based lookup, including the lookup that
+        runs before create.
     type: str
-  volume_id:
+  boot_volume_id:
     description:
-      - The OCID of the block volume to back up.
+      - The OCID of the boot volume to back up.
       - Required when creating a backup.
-      - Also scopes name-based backup lookups when C(volume_backup_id) is
+      - Also scopes name-based backup lookups when C(boot_volume_backup_id) is
         omitted.
-      - Set only at create time; changing the source volume of an existing
-        backup is not supported, so a change is rejected.
+      - Set only at create time; changing the source boot volume of an
+        existing backup is not supported, so a change is rejected.
     type: str
   type:
     description:
       - The type of backup to create.
-      - C(full) copies every block on the volume.
+      - C(full) copies every block on the boot volume.
       - C(incremental) copies only the blocks that changed since the last
-        backup of that volume.
+        backup of that boot volume.
       - If omitted, OCI defaults to C(incremental). The returned C(type)
         field reports C(INCREMENTAL) or C(FULL) as stored, including when
-        this is the first backup of the volume.
+        this is the first backup of the boot volume.
       - Applied only at create time. The module does not compare this field
         after create, so rerunning a create task that includes C(type) is a
         no-op even though the resource stores C(FULL) or C(INCREMENTAL).
@@ -145,34 +149,34 @@ notes:
     fails until the retention period expires.
   - C(prevent_deletion_enabled) and C(indefinite_retention_enabled) prevent
     C(state=absent) from deleting the backup while they remain in effect.
-  - Changing the encryption key or source volume of an existing backup is
-    not supported.
+  - Changing the encryption key or source boot volume of an existing backup
+    is not supported.
 """
 
 EXAMPLES = r"""
-- name: Create a full backup of a block volume
-  oracle.oci.oci_volume_backup:
+- name: Create a full backup of a boot volume before maintenance
+  oracle.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
-    name: pre-maintenance-backup
-    volume_id: ocid1.volume.oc1..example
+    name: pre-maintenance-boot-backup
+    boot_volume_id: ocid1.bootvolume.oc1..example
     type: full
   register: created_backup
 
-- name: Create an incremental backup
-  oracle.oci.oci_volume_backup:
+- name: Create an incremental boot volume backup
+  oracle.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
-    name: nightly-backup
-    volume_id: ocid1.volume.oc1..example
+    name: nightly-boot-backup
+    boot_volume_id: ocid1.bootvolume.oc1..example
     type: incremental
 
 - name: Create a backup with a 30-day retention period and delete prevention
-  oracle.oci.oci_volume_backup:
+  oracle.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
-    name: retained-backup
-    volume_id: ocid1.volume.oc1..example
+    name: retained-boot-backup
+    boot_volume_id: ocid1.bootvolume.oc1..example
     type: full
     retention_period:
       retention_time_amount: 30
@@ -180,56 +184,65 @@ EXAMPLES = r"""
     prevent_deletion_enabled: true
     retention_lock_enabled: true
 
-- name: Reconcile a uniquely named backup by name (update tags)
-  oracle.oci.oci_volume_backup:
+- name: Reconcile a uniquely named boot volume backup by name (update tags)
+  oracle.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
-    volume_id: ocid1.volume.oc1..example
-    name: pre-maintenance-backup
+    boot_volume_id: ocid1.bootvolume.oc1..example
+    name: pre-maintenance-boot-backup
     freeform_tags:
       retention: 30d
 
-- name: Delete the backup
-  oracle.oci.oci_volume_backup:
-    state: absent
-    volume_backup_id: "{{ created_backup.resource.id }}"
+- name: Intentionally create a second backup with the same display name
+  oracle.oci.oci_boot_volume_backup:
+    state: present
+    allow_duplicate_name: true
+    compartment_id: ocid1.compartment.oc1..example
+    name: pre-maintenance-boot-backup
+    boot_volume_id: ocid1.bootvolume.oc1..example
+    type: full
 
-- name: Delete a uniquely named backup without providing volume_backup_id
-  oracle.oci.oci_volume_backup:
+- name: Delete the boot volume backup
+  oracle.oci.oci_boot_volume_backup:
+    state: absent
+    boot_volume_backup_id: "{{ created_backup.resource.id }}"
+
+- name: Delete a uniquely named boot volume backup without providing its id
+  oracle.oci.oci_boot_volume_backup:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
-    volume_id: ocid1.volume.oc1..example
-    name: pre-maintenance-backup
+    boot_volume_id: ocid1.bootvolume.oc1..example
+    name: pre-maintenance-boot-backup
 """
 
 RETURN = r"""
 resource:
-  description: The volume backup resource.
+  description: The boot volume backup resource.
   returned: when state != absent
   type: dict
   contains:
     id:
-      description: The OCID of the volume backup.
+      description: The OCID of the boot volume backup.
       type: str
       returned: always
-      sample: ocid1.volumebackup.oc1..example
+      sample: ocid1.bootvolumebackup.oc1..example
     name:
-      description: The display name of the volume backup.
+      description: The display name of the boot volume backup.
       type: str
       returned: always
-      sample: pre-maintenance-backup
+      sample: pre-maintenance-boot-backup
     compartment_id:
-      description: The OCID of the compartment containing the volume backup.
+      description: The OCID of the compartment containing the boot volume backup.
       type: str
       returned: always
       sample: ocid1.compartment.oc1..example
-    volume_id:
-      description: The OCID of the source block volume.
+    boot_volume_id:
+      description: The OCID of the source boot volume.
       type: str
       returned: always
-      sample: ocid1.volume.oc1..example
+      sample: ocid1.bootvolume.oc1..example
     lifecycle_state:
-      description: The current lifecycle state of the volume backup.
+      description: The current lifecycle state of the boot volume backup.
       type: str
       returned: always
       sample: AVAILABLE
@@ -243,30 +256,25 @@ resource:
       type: str
       returned: always
       sample: MANUAL
+    image_id:
+      description: The OCID of the image from which the source boot volume was created, if any.
+      type: str
+      returned: always
+      sample: ocid1.image.oc1..example
     size_in_gbs:
-      description: The size of the source volume, in GBs.
+      description: The size of the source boot volume, in GBs.
       type: int
       returned: always
       sample: 50
-    size_in_mbs:
-      description: The size of the source volume, in MBs.
-      type: int
-      returned: always
-      sample: 51200
     unique_size_in_gbs:
       description: The amount of space this backup consumes, in GBs.
       type: int
       returned: always
       sample: 10
-    unique_size_in_mbs:
-      description: The amount of space this backup consumes, in MBs.
-      type: int
-      returned: always
-      sample: 1
-    source_volume_backup_id:
+    source_boot_volume_backup_id:
       description:
-        - The OCID of the source volume backup when this backup was copied
-          from another backup, if any.
+        - The OCID of the source boot volume backup when this backup was
+          copied from another backup, if any.
       type: str
       returned: always
       sample: null
@@ -342,18 +350,17 @@ resource:
       returned: always
       sample: "2026-01-01T00:00:00.000Z"
   sample:
-    id: ocid1.volumebackup.oc1..example
-    name: pre-maintenance-backup
+    id: ocid1.bootvolumebackup.oc1..example
+    name: pre-maintenance-boot-backup
     compartment_id: ocid1.compartment.oc1..example
-    volume_id: ocid1.volume.oc1..example
+    boot_volume_id: ocid1.bootvolume.oc1..example
     lifecycle_state: AVAILABLE
     type: FULL
     source_type: MANUAL
+    image_id: ocid1.image.oc1..example
     size_in_gbs: 50
-    size_in_mbs: 51200
     unique_size_in_gbs: 10
-    unique_size_in_mbs: 1
-    source_volume_backup_id: null
+    source_boot_volume_backup_id: null
     expiration_time: "2026-02-01T00:00:00.000Z"
     kms_key_id: ocid1.key.oc1..example
     retention_period:
@@ -391,14 +398,14 @@ oci = imported_oci_sdk[0]
 HAS_OCI_SDK = imported_oci_sdk[1]
 
 CREATE_REQUIRED_FIELDS = [
-    "volume_id",
+    "boot_volume_id",
     "name",
 ]
 WAIT_FOR_BACKUP_STATES = [LIFECYCLE_AVAILABLE]
 
 # Module inputs use lowercase snake_case choices (Ansible convention), while
 # OCI's wire format uses upper-case constants (for example "full" -> "FULL").
-# Assigned to OciVolumeBackupModule.enum_keys so the shared "subset_dict"
+# Assigned to OciBootVolumeBackupModule.enum_keys so the shared "subset_dict"
 # comparator (see oci_resource.py) normalizes retention_period the same way
 # the create builder does.
 ENUM_KEYS = frozenset({"type", "retention_time_unit"})
@@ -418,10 +425,10 @@ def build_retention_period(retention_period):
     )
 
 
-def build_create_volume_backup_details(params):
+def build_create_boot_volume_backup_details(params):
     details = filter_none_values(
         {
-            "volume_id": params.get("volume_id"),
+            "boot_volume_id": params.get("boot_volume_id"),
             "display_name": params.get("name"),
             "type": normalize_enum_values(
                 {"type": params.get("type")}, ENUM_KEYS
@@ -443,7 +450,7 @@ def build_create_volume_backup_details(params):
             "defined_tags": params.get("defined_tags"),
         }
     )
-    return oci.core.models.CreateVolumeBackupDetails(**details)
+    return oci.core.models.CreateBootVolumeBackupDetails(**details)
 
 
 # For updates, the shared planner records the raw parameter values in the update
@@ -454,41 +461,41 @@ NESTED_UPDATE_BUILDERS = {
 }
 
 
-class OciVolumeBackupModule(OciResourceBase):
-    """Concrete resource adapter for OCI block volume backups."""
+class OciBootVolumeBackupModule(OciResourceBase):
+    """Concrete resource adapter for OCI boot volume backups."""
 
     @property
     def client_class(self):
         return oci.core.BlockstorageClient
 
-    resource_id_param = "volume_backup_id"
-    list_resource_method = "list_volume_backups"
-    list_filter_params = ("volume_id",)
+    resource_id_param = "boot_volume_backup_id"
+    list_resource_method = "list_boot_volume_backups"
+    list_filter_params = ("boot_volume_id",)
     create_required_fields = CREATE_REQUIRED_FIELDS
-    create_resource_name = "volume backup"
-    update_method_name = "update_volume_backup"
-    update_details_name = "update_volume_backup_details"
+    create_resource_name = "boot volume backup"
+    update_method_name = "update_boot_volume_backup"
+    update_details_name = "update_boot_volume_backup_details"
     update_wait_states = WAIT_FOR_BACKUP_STATES
     enum_keys = ENUM_KEYS
     # type is create-only and uses a case-normalized enum ("full" vs "FULL").
     # Including it in drift detection would false-positive on create-task
-    # reruns, so it is omitted. volume_id and kms_key_id are compared like
-    # oci_blockstorage_volume's create-only identity fields.
-    update_field_specs = build_backup_update_field_specs("volume_id")
+    # reruns, so it is omitted. boot_volume_id and kms_key_id are compared
+    # like oci_blockstorage_volume's create-only identity fields.
+    update_field_specs = build_backup_update_field_specs("boot_volume_id")
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(
-            self.client.get_volume_backup,
-            volume_backup_id=resource_id,
+            self.client.get_boot_volume_backup,
+            boot_volume_backup_id=resource_id,
         )
 
     def create_resource(self):
-        create_volume_backup_details = build_create_volume_backup_details(
+        create_boot_volume_backup_details = build_create_boot_volume_backup_details(
             self.module.params
         )
         response = self.call_with_retry(
-            self.client.create_volume_backup,
-            create_volume_backup_details=create_volume_backup_details,
+            self.client.create_boot_volume_backup,
+            create_boot_volume_backup_details=create_boot_volume_backup_details,
         )
         return self.get_mutation_result(
             response.data,
@@ -503,13 +510,13 @@ class OciVolumeBackupModule(OciResourceBase):
                 update_model_fields[field_name] = builder(
                     update_model_fields[field_name]
                 )
-        return oci.core.models.UpdateVolumeBackupDetails(**update_model_fields)
+        return oci.core.models.UpdateBootVolumeBackupDetails(**update_model_fields)
 
     def delete_resource(self, resource):
         return self.delete_resource_and_wait(
             resource,
-            self.client.delete_volume_backup,
-            volume_backup_id=resource.id,
+            self.client.delete_boot_volume_backup,
+            boot_volume_backup_id=resource.id,
         )
 
 
@@ -517,8 +524,8 @@ def main():
     argument_spec = dict(
         OCI_COMMON_ARGS,
         state=dict(type="str", choices=["present", "absent"], default="present"),
-        volume_backup_id=dict(type="str"),
-        volume_id=dict(type="str"),
+        boot_volume_backup_id=dict(type="str"),
+        boot_volume_id=dict(type="str"),
         type=dict(type="str", choices=["full", "incremental"]),
         kms_key_id=dict(type="str"),
         retention_period=dict(
@@ -542,7 +549,7 @@ def main():
         supports_check_mode=True,
     )
 
-    OciVolumeBackupModule(module).execute_resource_module()
+    OciBootVolumeBackupModule(module).execute_resource_module()
 
 
 if __name__ == "__main__":

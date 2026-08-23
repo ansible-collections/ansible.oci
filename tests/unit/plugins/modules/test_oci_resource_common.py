@@ -435,6 +435,41 @@ RESOURCE_CASES = (
             "name": "example-instance",
         },
     },
+    {
+        "module_name": "oci_boot_volume_backup",
+        "class_name": "OciBootVolumeBackupModule",
+        "id_param": "boot_volume_backup_id",
+        "id_value": "ocid1.bootvolumebackup.oc1..example",
+        "missing_id": "ocid1.bootvolumebackup.oc1..missing",
+        "get_method": "get_boot_volume_backup",
+        "list_method": "list_boot_volume_backups",
+        "delete_method": "delete_boot_volume_backup",
+        "not_found_label": "boot volume backup",
+        "delete_required_msg": (
+            "Deleting a boot volume backup requires either "
+            "boot_volume_backup_id or name (with compartment_id, boot_volume_id)"
+        ),
+        "create_missing_msg": "Creating a boot volume backup requires",
+        "name_lookup_params": {
+            "name": "example-boot-backup",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "boot_volume_id": "ocid1.bootvolume.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "boot_volume_id": "ocid1.bootvolume.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-boot-backup",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "boot_volume_id": "ocid1.bootvolume.oc1..example",
+            "name": "example-boot-backup",
+        },
+    },
 )
 
 

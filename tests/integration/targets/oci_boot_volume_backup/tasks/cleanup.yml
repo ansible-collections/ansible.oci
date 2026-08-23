@@ -1,0 +1,36 @@
+---
+- name: Run boot volume backup cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked duplicate boot volume backup during cleanup
+      oracle.oci.oci_boot_volume_backup:
+        state: absent
+        boot_volume_backup_id: "{{ oci_boot_volume_backup_duplicate_id }}"
+      when: oci_boot_volume_backup_duplicate_id | default('') | length > 0
+
+    - name: Delete leaked boot volume backup during cleanup
+      oracle.oci.oci_boot_volume_backup:
+        state: absent
+        boot_volume_backup_id: "{{ oci_boot_volume_backup_id }}"
+      when: oci_boot_volume_backup_id | default('') | length > 0
+
+    - name: Delete leaked compute instance during cleanup
+      oracle.oci.oci_instance:
+        state: absent
+        instance_id: "{{ oci_boot_volume_backup_instance_id }}"
+      when: oci_boot_volume_backup_instance_id | default('') | length > 0
+
+    - name: Delete leaked subnet during cleanup
+      oracle.oci.oci_subnet:
+        state: absent
+        subnet_id: "{{ oci_boot_volume_backup_subnet_create.resource.id }}"
+      when: oci_boot_volume_backup_subnet_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_boot_volume_backup_vcn_create.resource.id }}"
+      when: oci_boot_volume_backup_vcn_create.resource.id | default('') | length > 0
