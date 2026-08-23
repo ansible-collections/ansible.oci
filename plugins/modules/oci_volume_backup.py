@@ -372,6 +372,9 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
+from ansible_collections.oracle.oci.plugins.module_utils.oci_backup import (
+    build_backup_update_field_specs,
+)
 from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
@@ -471,53 +474,7 @@ class OciVolumeBackupModule(OciResourceBase):
     # Including it in drift detection would false-positive on create-task
     # reruns, so it is omitted. volume_id and kms_key_id are compared like
     # oci_blockstorage_volume's create-only identity fields.
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "retention_period",
-            "resource_field": "retention_period",
-            "update_field": "retention_period",
-            "is_mutable": True,
-            "compare": "subset_dict",
-        },
-        {
-            "param_name": "prevent_deletion_enabled",
-            "resource_field": "is_prevent_deletion_enabled",
-            "update_field": "is_prevent_deletion_enabled",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "indefinite_retention_enabled",
-            "resource_field": "is_indefinite_retention_enabled",
-            "update_field": "is_indefinite_retention_enabled",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "retention_lock_enabled",
-            "resource_field": "is_retention_lock_enabled",
-            "update_field": "is_retention_lock_enabled",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "volume_id",
-            "resource_field": "volume_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "kms_key_id",
-            "resource_field": "kms_key_id",
-            "is_mutable": False,
-            "immutable_reason": (
-                "changing a backup's encryption key after create is not "
-                "supported"
-            ),
-        },
-    ]
+    update_field_specs = build_backup_update_field_specs("volume_id")
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(
