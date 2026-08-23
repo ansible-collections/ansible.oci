@@ -20,7 +20,6 @@ author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -36,6 +35,11 @@ options:
     description:
       - Filter listed boot volumes by availability domain.
       - OCI requires this value when listing boot volumes by compartment.
+      - Only used when C(compartment_id) is provided.
+    type: str
+  name:
+    description:
+      - Filter listed boot volumes by name.
       - Only used when C(compartment_id) is provided.
     type: str
 """

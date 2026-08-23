@@ -29,6 +29,7 @@ def test_main_requires_compartment_id_or_boot_volume_id(monkeypatch):
     assert captured["argument_spec"]["boot_volume_id"] == {"type": "str"}
     assert captured["argument_spec"]["availability_domain"] == {"type": "str"}
     assert captured["argument_spec"]["name"] == {"type": "str"}
+    # list_boot_volumes has no lifecycle_state query param in the OCI SDK.
     assert "lifecycle_state" not in captured["argument_spec"]
 
 
