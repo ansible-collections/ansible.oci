@@ -71,7 +71,7 @@
     - name: Assert create check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_create_check.changed | bool
+          - oci_subnet_create_check.changed | bool
 
     - name: Read subnet after create check mode
       oracle.oci.oci_network_subnet_info:
@@ -83,7 +83,7 @@
     - name: Assert subnet is still absent after create check mode
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_create_check_probe.subnets | length == 0
+          - oci_subnet_create_check_probe.subnets | length == 0
 
     - name: Create subnet
       oracle.oci.oci_network_subnet:
@@ -109,7 +109,7 @@
     - name: Assert create reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_create.changed | bool
+          - oci_subnet_create.changed | bool
 
     - name: Read subnet by id
       oracle.oci.oci_network_subnet_info:
@@ -119,13 +119,13 @@
     - name: Assert subnet info by id returned the created subnet
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_info_by_id.subnets | length == 1
-          - oci_network_subnet_info_by_id.subnets[0].id == oci_subnet_id
-          - oci_network_subnet_info_by_id.subnets[0].name == oci_subnet_integration_subnet_name
-          - oci_network_subnet_info_by_id.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
-          - oci_network_subnet_info_by_id.subnets[0].lifecycle_state == "AVAILABLE"
-          - oci_network_subnet_info_by_id.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
-          - oci_network_subnet_info_by_id.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
+          - oci_subnet_info_by_id.subnets | length == 1
+          - oci_subnet_info_by_id.subnets[0].id == oci_subnet_id
+          - oci_subnet_info_by_id.subnets[0].name == oci_subnet_integration_subnet_name
+          - oci_subnet_info_by_id.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
+          - oci_subnet_info_by_id.subnets[0].lifecycle_state == "AVAILABLE"
+          - oci_subnet_info_by_id.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
+          - oci_subnet_info_by_id.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
 
     - name: List subnet by name
       oracle.oci.oci_network_subnet_info:
@@ -138,7 +138,7 @@
     - name: Assert subnet info list returned the created subnet
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_info_list.subnets | selectattr('id', 'equalto', oci_subnet_id) | list | length == 1
+          - oci_subnet_info_list.subnets | selectattr('id', 'equalto', oci_subnet_id) | list | length == 1
 
     - name: Assert created subnet is a no-op on rerun with unique name
       oracle.oci.oci_network_subnet:
@@ -149,7 +149,7 @@
       ansible.builtin.assert:
         that:
           - not oci_subnet_create_rerun_by_name.changed | bool
-          - oci_network_subnet_create_rerun_by_name.resource.id == oci_subnet_id
+          - oci_subnet_create_rerun_by_name.resource.id == oci_subnet_id
 
     - name: Intentionally create a second subnet with the same display name
       oracle.oci.oci_network_subnet:
@@ -166,8 +166,8 @@
     - name: Assert duplicate subnet create used a new resource
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_duplicate_create.changed | bool
-          - oci_network_subnet_duplicate_id != oci_subnet_id
+          - oci_subnet_duplicate_create.changed | bool
+          - oci_subnet_duplicate_id != oci_subnet_id
 
     - name: Delete the duplicate subnet
       oracle.oci.oci_network_subnet:
@@ -204,7 +204,7 @@
     - name: Assert update check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_update_check.changed | bool
+          - oci_subnet_update_check.changed | bool
 
     - name: Read subnet after update check mode
       oracle.oci.oci_network_subnet_info:
@@ -214,12 +214,12 @@
     - name: Assert update check mode did not mutate cloud state
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_update_check_probe.subnets | length == 1
-          - oci_network_subnet_update_check_probe.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
-          - oci_network_subnet_update_check_probe.subnets[0].name == oci_subnet_integration_subnet_name
-          - oci_network_subnet_update_check_probe.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
-          - oci_network_subnet_update_check_probe.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
-          - oci_network_subnet_update_check_probe.subnets[0].freeform_tags.phase == "create"
+          - oci_subnet_update_check_probe.subnets | length == 1
+          - oci_subnet_update_check_probe.subnets[0].cidr_block == oci_subnet_integration_subnet_cidr_block
+          - oci_subnet_update_check_probe.subnets[0].name == oci_subnet_integration_subnet_name
+          - oci_subnet_update_check_probe.subnets[0].route_table_id == oci_subnet_integration_network.default_route_table_id
+          - oci_subnet_update_check_probe.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
+          - oci_subnet_update_check_probe.subnets[0].freeform_tags.phase == "create"
 
     - name: Update subnet
       oracle.oci.oci_network_subnet:
@@ -229,7 +229,7 @@
     - name: Assert update reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_update.changed | bool
+          - oci_subnet_update.changed | bool
 
     - name: Read updated subnet by name
       oracle.oci.oci_network_subnet_info:
@@ -242,8 +242,8 @@
     - name: Assert subnet info reflects updated subnet
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_info_updated.subnets | selectattr('id', 'equalto', oci_subnet_id) | list | length == 1
-          - oci_network_subnet_info_updated.subnets | selectattr('cidr_block', 'equalto', oci_subnet_integration_updated_subnet_cidr_block) | list | length == 1
+          - oci_subnet_info_updated.subnets | selectattr('id', 'equalto', oci_subnet_id) | list | length == 1
+          - oci_subnet_info_updated.subnets | selectattr('cidr_block', 'equalto', oci_subnet_integration_updated_subnet_cidr_block) | list | length == 1
           - >-
             oci_subnet_info_updated.subnets
             | selectattr('route_table_id', 'equalto',
@@ -254,7 +254,7 @@
             | selectattr('security_list_ids', 'equalto',
               [oci_subnet_integration_network.default_security_list_id])
             | list | length == 1
-          - oci_network_subnet_info_updated.subnets[0].freeform_tags.phase == "update"
+          - oci_subnet_info_updated.subnets[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_network_subnet:
@@ -276,7 +276,7 @@
     - name: Assert delete check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_delete_check.changed | bool
+          - oci_subnet_delete_check.changed | bool
 
     - name: Read subnet after delete check mode
       oracle.oci.oci_network_subnet_info:
@@ -286,7 +286,7 @@
     - name: Assert subnet still exists after delete check mode
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_delete_check_probe.subnets | length == 1
+          - oci_subnet_delete_check_probe.subnets | length == 1
 
     - name: Delete subnet
       oracle.oci.oci_network_subnet:
@@ -296,7 +296,7 @@
     - name: Assert delete reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_subnet_delete.changed | bool
+          - oci_subnet_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
       oracle.oci.oci_network_subnet:

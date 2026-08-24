@@ -40,7 +40,7 @@
     - name: Assert create check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_drg_create_check.changed | bool
+          - oci_drg_create_check.changed | bool
 
     - name: Read DRG after create check mode
       oracle.oci.oci_network_drg_info:
@@ -51,7 +51,7 @@
     - name: Assert DRG is still absent after create check mode
       ansible.builtin.assert:
         that:
-          - oci_network_drg_create_check_probe.drgs | length == 0
+          - oci_drg_create_check_probe.drgs | length == 0
 
     - name: Create DRG
       oracle.oci.oci_network_drg:
@@ -73,7 +73,7 @@
     - name: Assert create reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_drg_create.changed | bool
+          - oci_drg_create.changed | bool
 
     - name: Read DRG by id
       oracle.oci.oci_network_drg_info:
@@ -83,10 +83,10 @@
     - name: Assert DRG info by id returned the created DRG
       ansible.builtin.assert:
         that:
-          - oci_network_drg_info_by_id.drgs | length == 1
-          - oci_network_drg_info_by_id.drgs[0].id == oci_drg_id
-          - oci_network_drg_info_by_id.drgs[0].name == oci_drg_integration_drg_name
-          - oci_network_drg_info_by_id.drgs[0].lifecycle_state == "AVAILABLE"
+          - oci_drg_info_by_id.drgs | length == 1
+          - oci_drg_info_by_id.drgs[0].id == oci_drg_id
+          - oci_drg_info_by_id.drgs[0].name == oci_drg_integration_drg_name
+          - oci_drg_info_by_id.drgs[0].lifecycle_state == "AVAILABLE"
 
     - name: List DRG by name
       oracle.oci.oci_network_drg_info:
@@ -97,7 +97,7 @@
     - name: Assert DRG info list returned the created DRG
       ansible.builtin.assert:
         that:
-          - oci_network_drg_info_list.drgs | selectattr('id', 'equalto', oci_drg_id) | list | length == 1
+          - oci_drg_info_list.drgs | selectattr('id', 'equalto', oci_drg_id) | list | length == 1
 
     - name: Assert created DRG is a no-op on rerun with unique name
       oracle.oci.oci_network_drg:
@@ -108,7 +108,7 @@
       ansible.builtin.assert:
         that:
           - not oci_drg_create_rerun_by_name.changed | bool
-          - oci_network_drg_create_rerun_by_name.resource.id == oci_drg_id
+          - oci_drg_create_rerun_by_name.resource.id == oci_drg_id
 
     - name: Intentionally create a second DRG with the same display name
       oracle.oci.oci_network_drg:
@@ -123,8 +123,8 @@
     - name: Assert duplicate DRG create used a new resource
       ansible.builtin.assert:
         that:
-          - oci_network_drg_duplicate_create.changed | bool
-          - oci_network_drg_duplicate_id != oci_drg_id
+          - oci_drg_duplicate_create.changed | bool
+          - oci_drg_duplicate_id != oci_drg_id
 
     - name: Delete the duplicate DRG
       oracle.oci.oci_network_drg:
@@ -158,7 +158,7 @@
     - name: Assert update check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_drg_update_check.changed | bool
+          - oci_drg_update_check.changed | bool
 
     - name: Read DRG after update check mode
       oracle.oci.oci_network_drg_info:
@@ -168,9 +168,9 @@
     - name: Assert update check mode did not mutate cloud state
       ansible.builtin.assert:
         that:
-          - oci_network_drg_update_check_probe.drgs | length == 1
-          - oci_network_drg_update_check_probe.drgs[0].name == oci_drg_integration_drg_name
-          - oci_network_drg_update_check_probe.drgs[0].freeform_tags.phase == "create"
+          - oci_drg_update_check_probe.drgs | length == 1
+          - oci_drg_update_check_probe.drgs[0].name == oci_drg_integration_drg_name
+          - oci_drg_update_check_probe.drgs[0].freeform_tags.phase == "create"
 
     - name: Update DRG
       oracle.oci.oci_network_drg:
@@ -180,7 +180,7 @@
     - name: Assert update reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_drg_update.changed | bool
+          - oci_drg_update.changed | bool
 
     - name: Read updated DRG by name
       oracle.oci.oci_network_drg_info:
@@ -191,8 +191,8 @@
     - name: Assert DRG info reflects updated DRG
       ansible.builtin.assert:
         that:
-          - oci_network_drg_info_updated.drgs | selectattr('id', 'equalto', oci_drg_id) | list | length == 1
-          - oci_network_drg_info_updated.drgs[0].freeform_tags.phase == "update"
+          - oci_drg_info_updated.drgs | selectattr('id', 'equalto', oci_drg_id) | list | length == 1
+          - oci_drg_info_updated.drgs[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_network_drg:
@@ -214,7 +214,7 @@
     - name: Assert delete check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_drg_delete_check.changed | bool
+          - oci_drg_delete_check.changed | bool
 
     - name: Read DRG after delete check mode
       oracle.oci.oci_network_drg_info:
@@ -224,7 +224,7 @@
     - name: Assert DRG still exists after delete check mode
       ansible.builtin.assert:
         that:
-          - oci_network_drg_delete_check_probe.drgs | length == 1
+          - oci_drg_delete_check_probe.drgs | length == 1
 
     - name: Delete DRG
       oracle.oci.oci_network_drg:
@@ -234,7 +234,7 @@
     - name: Assert delete reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_drg_delete.changed | bool
+          - oci_drg_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
       oracle.oci.oci_network_drg:

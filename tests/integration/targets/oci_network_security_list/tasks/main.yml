@@ -67,7 +67,7 @@
     - name: Assert create check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_create_check.changed | bool
+          - oci_security_list_create_check.changed | bool
 
     - name: Read security list after create check mode
       oracle.oci.oci_network_security_list_info:
@@ -79,7 +79,7 @@
     - name: Assert security list is still absent after create check mode
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_create_check_probe.security_lists | length == 0
+          - oci_security_list_create_check_probe.security_lists | length == 0
 
     - name: Create security list
       oracle.oci.oci_network_security_list:
@@ -110,7 +110,7 @@
     - name: Assert create reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_create.changed | bool
+          - oci_security_list_create.changed | bool
 
     - name: Read security list by id
       oracle.oci.oci_network_security_list_info:
@@ -120,12 +120,12 @@
     - name: Assert security list info by id returned the created security list
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_info_by_id.security_lists | length == 1
-          - oci_network_security_list_info_by_id.security_lists[0].id == oci_security_list_id
-          - oci_network_security_list_info_by_id.security_lists[0].name == oci_security_list_integration_security_list_name
-          - oci_network_security_list_info_by_id.security_lists[0].lifecycle_state == "AVAILABLE"
-          - oci_network_security_list_info_by_id.security_lists[0].ingress_security_rules | length == 1
-          - oci_network_security_list_info_by_id.security_lists[0].egress_security_rules | length == 1
+          - oci_security_list_info_by_id.security_lists | length == 1
+          - oci_security_list_info_by_id.security_lists[0].id == oci_security_list_id
+          - oci_security_list_info_by_id.security_lists[0].name == oci_security_list_integration_security_list_name
+          - oci_security_list_info_by_id.security_lists[0].lifecycle_state == "AVAILABLE"
+          - oci_security_list_info_by_id.security_lists[0].ingress_security_rules | length == 1
+          - oci_security_list_info_by_id.security_lists[0].egress_security_rules | length == 1
 
     - name: Assert created security list is a no-op on rerun with unique name
       oracle.oci.oci_network_security_list:
@@ -136,7 +136,7 @@
       ansible.builtin.assert:
         that:
           - not oci_security_list_create_rerun_by_name.changed | bool
-          - oci_network_security_list_create_rerun_by_name.resource.id == oci_security_list_id
+          - oci_security_list_create_rerun_by_name.resource.id == oci_security_list_id
 
     - name: Intentionally create a second security list with the same display name
       oracle.oci.oci_network_security_list:
@@ -151,8 +151,8 @@
     - name: Assert duplicate security list create used a new resource
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_duplicate_create.changed | bool
-          - oci_network_security_list_duplicate_id != oci_security_list_id
+          - oci_security_list_duplicate_create.changed | bool
+          - oci_security_list_duplicate_id != oci_security_list_id
 
     - name: Delete the duplicate security list
       oracle.oci.oci_network_security_list:
@@ -177,7 +177,7 @@
     - name: Assert update check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_update_check.changed | bool
+          - oci_security_list_update_check.changed | bool
 
     - name: Read security list after update check mode
       oracle.oci.oci_network_security_list_info:
@@ -187,8 +187,8 @@
     - name: Assert update check mode did not mutate cloud state
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_update_check_probe.security_lists[0].name == oci_security_list_integration_security_list_name
-          - oci_network_security_list_update_check_probe.security_lists[0].ingress_security_rules[0].source == "0.0.0.0/0"
+          - oci_security_list_update_check_probe.security_lists[0].name == oci_security_list_integration_security_list_name
+          - oci_security_list_update_check_probe.security_lists[0].ingress_security_rules[0].source == "0.0.0.0/0"
 
     - name: Update security list
       oracle.oci.oci_network_security_list:
@@ -198,7 +198,7 @@
     - name: Assert update reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_update.changed | bool
+          - oci_security_list_update.changed | bool
 
     - name: Read updated security list by id
       oracle.oci.oci_network_security_list_info:
@@ -208,9 +208,9 @@
     - name: Assert security list info reflects the update
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_info_updated.security_lists[0].name == oci_security_list_integration_updated_security_list_name
-          - oci_network_security_list_info_updated.security_lists[0].ingress_security_rules[0].source == "10.0.0.0/16"
-          - oci_network_security_list_info_updated.security_lists[0].freeform_tags.phase == "update"
+          - oci_security_list_info_updated.security_lists[0].name == oci_security_list_integration_updated_security_list_name
+          - oci_security_list_info_updated.security_lists[0].ingress_security_rules[0].source == "10.0.0.0/16"
+          - oci_security_list_info_updated.security_lists[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_network_security_list:
@@ -232,7 +232,7 @@
     - name: Assert delete check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_delete_check.changed | bool
+          - oci_security_list_delete_check.changed | bool
 
     - name: Read security list after delete check mode
       oracle.oci.oci_network_security_list_info:
@@ -242,7 +242,7 @@
     - name: Assert security list still exists after delete check mode
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_delete_check_probe.security_lists | length == 1
+          - oci_security_list_delete_check_probe.security_lists | length == 1
 
     - name: Delete security list
       oracle.oci.oci_network_security_list:
@@ -252,7 +252,7 @@
     - name: Assert delete reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_security_list_delete.changed | bool
+          - oci_security_list_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
       oracle.oci.oci_network_security_list:

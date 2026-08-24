@@ -59,7 +59,7 @@
     - name: Assert create check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_create_check.changed | bool
+          - oci_internet_gateway_create_check.changed | bool
 
     - name: Read internet gateway after create check mode
       oracle.oci.oci_network_internet_gateway_info:
@@ -71,7 +71,7 @@
     - name: Assert internet gateway is still absent after create check mode
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_create_check_probe.internet_gateways | length == 0
+          - oci_internet_gateway_create_check_probe.internet_gateways | length == 0
 
     - name: Create internet gateway
       oracle.oci.oci_network_internet_gateway:
@@ -95,7 +95,7 @@
     - name: Assert create reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_create.changed | bool
+          - oci_internet_gateway_create.changed | bool
 
     - name: Read internet gateway by id
       oracle.oci.oci_network_internet_gateway_info:
@@ -105,11 +105,11 @@
     - name: Assert internet gateway info by id returned the created internet gateway
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_info_by_id.internet_gateways | length == 1
-          - oci_network_internet_gateway_info_by_id.internet_gateways[0].id == oci_internet_gateway_id
-          - oci_network_internet_gateway_info_by_id.internet_gateways[0].name == oci_internet_gateway_integration_ig_name
-          - oci_network_internet_gateway_info_by_id.internet_gateways[0].lifecycle_state == "AVAILABLE"
-          - oci_network_internet_gateway_info_by_id.internet_gateways[0].is_enabled | bool
+          - oci_internet_gateway_info_by_id.internet_gateways | length == 1
+          - oci_internet_gateway_info_by_id.internet_gateways[0].id == oci_internet_gateway_id
+          - oci_internet_gateway_info_by_id.internet_gateways[0].name == oci_internet_gateway_integration_ig_name
+          - oci_internet_gateway_info_by_id.internet_gateways[0].lifecycle_state == "AVAILABLE"
+          - oci_internet_gateway_info_by_id.internet_gateways[0].is_enabled | bool
 
     - name: List internet gateway by name
       oracle.oci.oci_network_internet_gateway_info:
@@ -122,7 +122,7 @@
     - name: Assert internet gateway info list returned the created internet gateway
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_info_list.internet_gateways | selectattr('id', 'equalto', oci_internet_gateway_id) | list | length == 1
+          - oci_internet_gateway_info_list.internet_gateways | selectattr('id', 'equalto', oci_internet_gateway_id) | list | length == 1
 
     - name: Assert created internet gateway is a no-op on rerun with unique name
       oracle.oci.oci_network_internet_gateway:
@@ -133,7 +133,7 @@
       ansible.builtin.assert:
         that:
           - not oci_internet_gateway_create_rerun_by_name.changed | bool
-          - oci_network_internet_gateway_create_rerun_by_name.resource.id == oci_internet_gateway_id
+          - oci_internet_gateway_create_rerun_by_name.resource.id == oci_internet_gateway_id
 
     - name: Assert created internet gateway is a no-op on rerun with returned id
       oracle.oci.oci_network_internet_gateway:
@@ -160,7 +160,7 @@
     - name: Assert update check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_update_check.changed | bool
+          - oci_internet_gateway_update_check.changed | bool
 
     - name: Read internet gateway after update check mode
       oracle.oci.oci_network_internet_gateway_info:
@@ -170,10 +170,10 @@
     - name: Assert update check mode did not mutate cloud state
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_update_check_probe.internet_gateways | length == 1
-          - oci_network_internet_gateway_update_check_probe.internet_gateways[0].name == oci_internet_gateway_integration_ig_name
-          - oci_network_internet_gateway_update_check_probe.internet_gateways[0].is_enabled | bool
-          - oci_network_internet_gateway_update_check_probe.internet_gateways[0].freeform_tags.phase == "create"
+          - oci_internet_gateway_update_check_probe.internet_gateways | length == 1
+          - oci_internet_gateway_update_check_probe.internet_gateways[0].name == oci_internet_gateway_integration_ig_name
+          - oci_internet_gateway_update_check_probe.internet_gateways[0].is_enabled | bool
+          - oci_internet_gateway_update_check_probe.internet_gateways[0].freeform_tags.phase == "create"
 
     - name: Update internet gateway
       oracle.oci.oci_network_internet_gateway:
@@ -183,7 +183,7 @@
     - name: Assert update reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_update.changed | bool
+          - oci_internet_gateway_update.changed | bool
 
     - name: Read updated internet gateway by name
       oracle.oci.oci_network_internet_gateway_info:
@@ -196,12 +196,12 @@
     - name: Assert internet gateway info reflects updated internet gateway
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_info_updated.internet_gateways | selectattr('id', 'equalto', oci_internet_gateway_id) | list | length == 1
+          - oci_internet_gateway_info_updated.internet_gateways | selectattr('id', 'equalto', oci_internet_gateway_id) | list | length == 1
           - not (oci_internet_gateway_info_updated.internet_gateways[0].is_enabled | bool)
           - >-
             oci_internet_gateway_info_updated.internet_gateways[0].route_table_id ==
             oci_internet_gateway_integration_network.default_route_table_id
-          - oci_network_internet_gateway_info_updated.internet_gateways[0].freeform_tags.phase == "update"
+          - oci_internet_gateway_info_updated.internet_gateways[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
       oracle.oci.oci_network_internet_gateway:
@@ -223,7 +223,7 @@
     - name: Assert delete check mode reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_delete_check.changed | bool
+          - oci_internet_gateway_delete_check.changed | bool
 
     - name: Read internet gateway after delete check mode
       oracle.oci.oci_network_internet_gateway_info:
@@ -233,7 +233,7 @@
     - name: Assert internet gateway still exists after delete check mode
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_delete_check_probe.internet_gateways | length == 1
+          - oci_internet_gateway_delete_check_probe.internet_gateways | length == 1
 
     - name: Delete internet gateway
       oracle.oci.oci_network_internet_gateway:
@@ -243,7 +243,7 @@
     - name: Assert delete reported a change
       ansible.builtin.assert:
         that:
-          - oci_network_internet_gateway_delete.changed | bool
+          - oci_internet_gateway_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
       oracle.oci.oci_network_internet_gateway:
