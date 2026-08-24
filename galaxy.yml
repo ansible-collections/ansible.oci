@@ -16,8 +16,6 @@ tags:
   - cloud
   - infrastructure
   - networking
-  - database
-  - iam
   - storage
   - security
 repository: https://github.com/ansible-collections/oracle.oci

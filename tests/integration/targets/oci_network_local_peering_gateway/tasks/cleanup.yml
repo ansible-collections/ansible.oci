@@ -1,0 +1,36 @@
+---
+- name: Run local peering gateway cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked duplicate local peering gateway during cleanup
+      oracle.oci.oci_network_local_peering_gateway:
+        state: absent
+        local_peering_gateway_id: "{{ oci_lpg_duplicate_id }}"
+      when: oci_lpg_duplicate_id | default('') | length > 0
+
+    - name: Delete leaked local peering gateway during cleanup
+      oracle.oci.oci_network_local_peering_gateway:
+        state: absent
+        local_peering_gateway_id: "{{ oci_lpg_id }}"
+      when: oci_lpg_id | default('') | length > 0
+
+    - name: Delete leaked peer local peering gateway during cleanup
+      oracle.oci.oci_network_local_peering_gateway:
+        state: absent
+        local_peering_gateway_id: "{{ oci_lpg_peer_create.resource.id }}"
+      when: oci_lpg_peer_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_lpg_vcn_create.resource.id }}"
+      when: oci_lpg_vcn_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked peer VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_lpg_peer_vcn_create.resource.id }}"
+      when: oci_lpg_peer_vcn_create.resource.id | default('') | length > 0

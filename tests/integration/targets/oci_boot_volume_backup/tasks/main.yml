@@ -67,7 +67,7 @@
       register: oci_boot_volume_backup_vcn_create
 
     - name: Create test subnet for boot volume backup integration
-      oracle.oci.oci_subnet:
+      oracle.oci.oci_network_subnet:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_boot_volume_backup_vcn_create.resource.id }}"

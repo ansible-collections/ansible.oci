@@ -44,9 +44,9 @@ Read these files before you add a new module:
    Learn the required hooks and metadata for a resource module.
 3. `plugins/module_utils/oci_info.py`
    Learn the metadata-only pattern used by most info modules.
-4. `plugins/modules/oci_subnet.py`
+4. `plugins/modules/oci_network_subnet.py`
    Use this as the standard resource-module reference.
-5. `plugins/modules/oci_subnet_info.py`
+5. `plugins/modules/oci_network_subnet_info.py`
    Use this as the standard info-module reference.
 6. `plugins/modules/oci_network_vcn.py`
    Read this when your update flow is more complex than one OCI
@@ -174,7 +174,7 @@ Use these documentation fragments:
 
 ## Resource Module Skeleton
 
-The following skeleton follows the same structure as `oci_subnet.py`. Replace
+The following skeleton follows the same structure as `oci_network_subnet.py`. Replace
 the placeholder names with your real OCI service, methods, and models.
 
 ```python
@@ -455,7 +455,7 @@ When you call `execute_info_module()`, the base class:
 
 ## Info Module Skeleton
 
-The following skeleton follows the same pattern as `oci_subnet_info.py`.
+The following skeleton follows the same pattern as `oci_network_subnet_info.py`.
 
 ```python
 # -*- coding: utf-8 -*-
@@ -637,5 +637,5 @@ following:
 6. includes unit-test coverage that matches nearby modules
 7. documents the public module interface clearly
 
-If your module follows the `oci_subnet` and `oci_subnet_info` patterns first,
+If your module follows the `oci_network_subnet` and `oci_network_subnet_info` patterns first,
 you will usually stay aligned with the rest of this collection.

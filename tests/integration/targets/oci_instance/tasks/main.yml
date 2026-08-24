@@ -200,7 +200,7 @@
       register: oci_instance_vcn_create
 
     - name: Create test subnet for instance integration
-      oracle.oci.oci_subnet:
+      oracle.oci.oci_network_subnet:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_instance_vcn_create.resource.id }}"

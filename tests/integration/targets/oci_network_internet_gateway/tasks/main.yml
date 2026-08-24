@@ -1,0 +1,260 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI internet gateway integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_internet_gateway_integration_vcn_name: "{{ oci_internet_gateway_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_internet_gateway_integration_ig_name: "{{ oci_internet_gateway_integration_ig_name }}-{{ oci_integration_rpfx }}"
+    oci_internet_gateway_integration_updated_ig_name: "{{ oci_internet_gateway_integration_updated_ig_name }}-{{ oci_integration_rpfx }}"
+    oci_internet_gateway_integration_vcn_dns_label: "vcn{{ oci_integration_rpfx }}"
+
+- name: Exercise internet gateway module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for internet gateway integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_internet_gateway_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_internet_gateway_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_internet_gateway_integration_vcn_dns_label }}"
+      register: oci_internet_gateway_vcn_create
+
+    - name: Capture created network ids
+      ansible.builtin.set_fact:
+        oci_internet_gateway_integration_network:
+          vcn_id: "{{ oci_internet_gateway_vcn_create.resource.id }}"
+          default_route_table_id: "{{ oci_internet_gateway_vcn_create.resource.default_route_table_id }}"
+
+    - name: Define internet gateway create parameters
+      ansible.builtin.set_fact:
+        oci_internet_gateway_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          vcn_id: "{{ oci_internet_gateway_integration_network.vcn_id }}"
+          name: "{{ oci_internet_gateway_integration_ig_name }}"
+          is_enabled: true
+          freeform_tags: "{{ oci_internet_gateway_integration_create_tags }}"
+
+    - name: Create internet gateway in check mode
+      oracle.oci.oci_network_internet_gateway: &oci_internet_gateway_create_module_options
+        state: "{{ oci_internet_gateway_create_params.state }}"
+        compartment_id: "{{ oci_internet_gateway_create_params.compartment_id }}"
+        vcn_id: "{{ oci_internet_gateway_create_params.vcn_id }}"
+        name: "{{ oci_internet_gateway_create_params.name }}"
+        is_enabled: "{{ oci_internet_gateway_create_params.is_enabled }}"
+        freeform_tags: "{{ oci_internet_gateway_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_internet_gateway_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_create_check.changed | bool
+
+    - name: Read internet gateway after create check mode
+      oracle.oci.oci_network_internet_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_internet_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_internet_gateway_integration_ig_name }}"
+      register: oci_internet_gateway_create_check_probe
+
+    - name: Assert internet gateway is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_create_check_probe.internet_gateways | length == 0
+
+    - name: Create internet gateway
+      oracle.oci.oci_network_internet_gateway:
+        <<: *oci_internet_gateway_create_module_options
+      register: oci_internet_gateway_create
+
+    - name: Capture internet gateway id and define update parameters
+      ansible.builtin.set_fact:
+        oci_internet_gateway_id: "{{ oci_internet_gateway_create.resource.id }}"
+        oci_internet_gateway_update_params:
+          state: present
+          internet_gateway_id: "{{ oci_internet_gateway_create.resource.id }}"
+          name: "{{ oci_internet_gateway_integration_updated_ig_name }}"
+          is_enabled: false
+          route_table_id: "{{ oci_internet_gateway_integration_network.default_route_table_id }}"
+          freeform_tags: "{{ oci_internet_gateway_integration_update_tags }}"
+        oci_internet_gateway_delete_params:
+          state: absent
+          internet_gateway_id: "{{ oci_internet_gateway_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_create.changed | bool
+
+    - name: Read internet gateway by id
+      oracle.oci.oci_network_internet_gateway_info:
+        internet_gateway_id: "{{ oci_internet_gateway_id }}"
+      register: oci_internet_gateway_info_by_id
+
+    - name: Assert internet gateway info by id returned the created internet gateway
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_info_by_id.internet_gateways | length == 1
+          - oci_internet_gateway_info_by_id.internet_gateways[0].id == oci_internet_gateway_id
+          - oci_internet_gateway_info_by_id.internet_gateways[0].name == oci_internet_gateway_integration_ig_name
+          - oci_internet_gateway_info_by_id.internet_gateways[0].lifecycle_state == "AVAILABLE"
+          - oci_internet_gateway_info_by_id.internet_gateways[0].is_enabled | bool
+
+    - name: List internet gateway by name
+      oracle.oci.oci_network_internet_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_internet_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_internet_gateway_integration_ig_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_internet_gateway_info_list
+
+    - name: Assert internet gateway info list returned the created internet gateway
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_info_list.internet_gateways | selectattr('id', 'equalto', oci_internet_gateway_id) | list | length == 1
+
+    - name: Assert created internet gateway is a no-op on rerun with unique name
+      oracle.oci.oci_network_internet_gateway:
+        <<: *oci_internet_gateway_create_module_options
+      register: oci_internet_gateway_create_rerun_by_name
+
+    - name: Verify internet gateway rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_internet_gateway_create_rerun_by_name.changed | bool
+          - oci_internet_gateway_create_rerun_by_name.resource.id == oci_internet_gateway_id
+
+    - name: Assert created internet gateway is a no-op on rerun with returned id
+      oracle.oci.oci_network_internet_gateway:
+        <<: *oci_internet_gateway_create_module_options
+        internet_gateway_id: "{{ oci_internet_gateway_id }}"
+      register: oci_internet_gateway_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_internet_gateway_create_rerun.changed | bool
+
+    - name: Update internet gateway in check mode
+      oracle.oci.oci_network_internet_gateway: &oci_internet_gateway_update_module_options
+        state: "{{ oci_internet_gateway_update_params.state }}"
+        internet_gateway_id: "{{ oci_internet_gateway_update_params.internet_gateway_id }}"
+        name: "{{ oci_internet_gateway_update_params.name }}"
+        is_enabled: "{{ oci_internet_gateway_update_params.is_enabled }}"
+        route_table_id: "{{ oci_internet_gateway_update_params.route_table_id }}"
+        freeform_tags: "{{ oci_internet_gateway_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_internet_gateway_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_update_check.changed | bool
+
+    - name: Read internet gateway after update check mode
+      oracle.oci.oci_network_internet_gateway_info:
+        internet_gateway_id: "{{ oci_internet_gateway_id }}"
+      register: oci_internet_gateway_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_update_check_probe.internet_gateways | length == 1
+          - oci_internet_gateway_update_check_probe.internet_gateways[0].name == oci_internet_gateway_integration_ig_name
+          - oci_internet_gateway_update_check_probe.internet_gateways[0].is_enabled | bool
+          - oci_internet_gateway_update_check_probe.internet_gateways[0].freeform_tags.phase == "create"
+
+    - name: Update internet gateway
+      oracle.oci.oci_network_internet_gateway:
+        <<: *oci_internet_gateway_update_module_options
+      register: oci_internet_gateway_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_update.changed | bool
+
+    - name: Read updated internet gateway by name
+      oracle.oci.oci_network_internet_gateway_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_internet_gateway_integration_network.vcn_id }}"
+        name: "{{ oci_internet_gateway_integration_updated_ig_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_internet_gateway_info_updated
+
+    - name: Assert internet gateway info reflects updated internet gateway
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_info_updated.internet_gateways | selectattr('id', 'equalto', oci_internet_gateway_id) | list | length == 1
+          - not (oci_internet_gateway_info_updated.internet_gateways[0].is_enabled | bool)
+          - >-
+            oci_internet_gateway_info_updated.internet_gateways[0].route_table_id ==
+            oci_internet_gateway_integration_network.default_route_table_id
+          - oci_internet_gateway_info_updated.internet_gateways[0].freeform_tags.phase == "update"
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_network_internet_gateway:
+        <<: *oci_internet_gateway_update_module_options
+      register: oci_internet_gateway_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_internet_gateway_update_rerun.changed | bool
+
+    - name: Delete internet gateway in check mode
+      oracle.oci.oci_network_internet_gateway: &oci_internet_gateway_delete_module_options
+        state: "{{ oci_internet_gateway_delete_params.state }}"
+        internet_gateway_id: "{{ oci_internet_gateway_delete_params.internet_gateway_id }}"
+      check_mode: true
+      register: oci_internet_gateway_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_delete_check.changed | bool
+
+    - name: Read internet gateway after delete check mode
+      oracle.oci.oci_network_internet_gateway_info:
+        internet_gateway_id: "{{ oci_internet_gateway_id }}"
+      register: oci_internet_gateway_delete_check_probe
+
+    - name: Assert internet gateway still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_delete_check_probe.internet_gateways | length == 1
+
+    - name: Delete internet gateway
+      oracle.oci.oci_network_internet_gateway:
+        <<: *oci_internet_gateway_delete_module_options
+      register: oci_internet_gateway_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_internet_gateway_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_network_internet_gateway:
+        <<: *oci_internet_gateway_delete_module_options
+      register: oci_internet_gateway_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_internet_gateway_delete_rerun.changed | bool
+
+  always:
+    - name: Run internet gateway cleanup
+      ansible.builtin.include_tasks: cleanup.yml

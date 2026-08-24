@@ -1,0 +1,294 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI DHCP options integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_dhcp_options_integration_vcn_name: "{{ oci_dhcp_options_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_dhcp_options_integration_dhcp_options_name: "{{ oci_dhcp_options_integration_dhcp_options_name }}-{{ oci_integration_rpfx }}"
+    oci_dhcp_options_integration_updated_dhcp_options_name: "{{ oci_dhcp_options_integration_updated_dhcp_options_name }}-{{ oci_integration_rpfx }}"
+    oci_dhcp_options_integration_vcn_dns_label: "vcn{{ oci_integration_rpfx }}"
+
+- name: Exercise DHCP options module lifecycle
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for DHCP options integration
+      oracle.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_dhcp_options_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_dhcp_options_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_dhcp_options_integration_vcn_dns_label }}"
+      register: oci_dhcp_options_vcn_create
+
+    - name: Capture created network ids
+      ansible.builtin.set_fact:
+        oci_dhcp_options_integration_network:
+          vcn_id: "{{ oci_dhcp_options_vcn_create.resource.id }}"
+
+    - name: Define DHCP options create and delete parameters
+      ansible.builtin.set_fact:
+        oci_dhcp_options_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          vcn_id: "{{ oci_dhcp_options_integration_network.vcn_id }}"
+          name: "{{ oci_dhcp_options_integration_dhcp_options_name }}"
+          options:
+            - option_type: domain_name_server
+              server_type: vcn_local_plus_internet
+            - option_type: search_domain
+              search_domain_names:
+                - example.oraclevcn.com
+          freeform_tags: "{{ oci_dhcp_options_integration_create_tags }}"
+        oci_dhcp_options_delete_params:
+          state: absent
+          dhcp_options_id: ""
+
+    - name: Create DHCP options in check mode
+      oracle.oci.oci_network_dhcp_options: &oci_dhcp_options_create_module_options
+        state: "{{ oci_dhcp_options_create_params.state }}"
+        compartment_id: "{{ oci_dhcp_options_create_params.compartment_id }}"
+        vcn_id: "{{ oci_dhcp_options_create_params.vcn_id }}"
+        name: "{{ oci_dhcp_options_create_params.name }}"
+        options: "{{ oci_dhcp_options_create_params.options }}"
+        freeform_tags: "{{ oci_dhcp_options_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_dhcp_options_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_create_check.changed | bool
+
+    - name: Read DHCP options after create check mode
+      oracle.oci.oci_network_dhcp_options_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_dhcp_options_integration_network.vcn_id }}"
+        name: "{{ oci_dhcp_options_integration_dhcp_options_name }}"
+      register: oci_dhcp_options_create_check_probe
+
+    - name: Assert DHCP options is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_create_check_probe.dhcp_options | length == 0
+
+    - name: Create DHCP options
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_create_module_options
+      register: oci_dhcp_options_create
+
+    - name: Capture DHCP options id and define update parameters
+      ansible.builtin.set_fact:
+        oci_dhcp_options_id: "{{ oci_dhcp_options_create.resource.id }}"
+        oci_dhcp_options_update_params:
+          state: present
+          dhcp_options_id: "{{ oci_dhcp_options_create.resource.id }}"
+          name: "{{ oci_dhcp_options_integration_updated_dhcp_options_name }}"
+          options:
+            - option_type: domain_name_server
+              server_type: custom_dns_server
+              custom_dns_servers:
+                - 10.0.0.10
+                - 10.0.0.11
+            - option_type: search_domain
+              search_domain_names:
+                - example.oraclevcn.com
+          freeform_tags: "{{ oci_dhcp_options_integration_update_tags }}"
+        oci_dhcp_options_delete_params:
+          state: absent
+          dhcp_options_id: "{{ oci_dhcp_options_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_create.changed | bool
+
+    - name: Read DHCP options by id
+      oracle.oci.oci_network_dhcp_options_info:
+        dhcp_options_id: "{{ oci_dhcp_options_id }}"
+      register: oci_dhcp_options_info_by_id
+
+    - name: Assert DHCP options info by id returned the created resource
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_info_by_id.dhcp_options | length == 1
+          - oci_dhcp_options_info_by_id.dhcp_options[0].id == oci_dhcp_options_id
+          - oci_dhcp_options_info_by_id.dhcp_options[0].name == oci_dhcp_options_integration_dhcp_options_name
+          - oci_dhcp_options_info_by_id.dhcp_options[0].lifecycle_state == "AVAILABLE"
+          - oci_dhcp_options_info_by_id.dhcp_options[0].options | length == 2
+
+    - name: List DHCP options by name
+      oracle.oci.oci_network_dhcp_options_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_dhcp_options_integration_network.vcn_id }}"
+        name: "{{ oci_dhcp_options_integration_dhcp_options_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_dhcp_options_info_list
+
+    - name: Assert DHCP options info list returned the created resource
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_info_list.dhcp_options | selectattr('id', 'equalto', oci_dhcp_options_id) | list | length == 1
+
+    - name: Assert created DHCP options is a no-op on rerun with unique name
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_create_module_options
+      register: oci_dhcp_options_create_rerun_by_name
+
+    - name: Verify DHCP options rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_dhcp_options_create_rerun_by_name.changed | bool
+          - oci_dhcp_options_create_rerun_by_name.resource.id == oci_dhcp_options_id
+
+    - name: Intentionally create a second DHCP options set with the same display name
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_create_module_options
+        allow_duplicate_name: true
+      register: oci_dhcp_options_duplicate_create
+
+    - name: Capture duplicate DHCP options id
+      ansible.builtin.set_fact:
+        oci_dhcp_options_duplicate_id: "{{ oci_dhcp_options_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate DHCP options create used a new resource
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_duplicate_create.changed | bool
+          - oci_dhcp_options_duplicate_id != oci_dhcp_options_id
+
+    - name: Delete the duplicate DHCP options
+      oracle.oci.oci_network_dhcp_options:
+        state: absent
+        dhcp_options_id: "{{ oci_dhcp_options_duplicate_id }}"
+
+    - name: Clear duplicate DHCP options id after successful delete
+      ansible.builtin.set_fact:
+        oci_dhcp_options_duplicate_id: ""
+
+    - name: Assert created DHCP options is a no-op on rerun with returned id
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_create_module_options
+        dhcp_options_id: "{{ oci_dhcp_options_id }}"
+      register: oci_dhcp_options_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_dhcp_options_create_rerun.changed | bool
+
+    - name: Update DHCP options in check mode
+      oracle.oci.oci_network_dhcp_options: &oci_dhcp_options_update_module_options
+        state: "{{ oci_dhcp_options_update_params.state }}"
+        dhcp_options_id: "{{ oci_dhcp_options_update_params.dhcp_options_id }}"
+        name: "{{ oci_dhcp_options_update_params.name }}"
+        options: "{{ oci_dhcp_options_update_params.options }}"
+        freeform_tags: "{{ oci_dhcp_options_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_dhcp_options_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_update_check.changed | bool
+
+    - name: Read DHCP options after update check mode
+      oracle.oci.oci_network_dhcp_options_info:
+        dhcp_options_id: "{{ oci_dhcp_options_id }}"
+      register: oci_dhcp_options_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_update_check_probe.dhcp_options | length == 1
+          - oci_dhcp_options_update_check_probe.dhcp_options[0].name == oci_dhcp_options_integration_dhcp_options_name
+          - oci_dhcp_options_update_check_probe.dhcp_options[0].freeform_tags.phase == "create"
+
+    - name: Update DHCP options
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_update_module_options
+      register: oci_dhcp_options_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_update.changed | bool
+
+    - name: Read updated DHCP options by name
+      oracle.oci.oci_network_dhcp_options_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_dhcp_options_integration_network.vcn_id }}"
+        name: "{{ oci_dhcp_options_integration_updated_dhcp_options_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_dhcp_options_info_updated
+
+    - name: Assert DHCP options info reflects updated resource
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_info_updated.dhcp_options | selectattr('id', 'equalto', oci_dhcp_options_id) | list | length == 1
+          - oci_dhcp_options_info_updated.dhcp_options[0].freeform_tags.phase == "update"
+          - oci_dhcp_options_info_updated.dhcp_options[0].options | selectattr('option_type', 'equalto', 'domain_name_server') | map(attribute='server_type') | list == ['custom_dns_server']
+
+    - name: Assert update is idempotent on rerun
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_update_module_options
+      register: oci_dhcp_options_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_dhcp_options_update_rerun.changed | bool
+
+    - name: Delete DHCP options in check mode
+      oracle.oci.oci_network_dhcp_options: &oci_dhcp_options_delete_module_options
+        state: "{{ oci_dhcp_options_delete_params.state }}"
+        dhcp_options_id: "{{ oci_dhcp_options_delete_params.dhcp_options_id }}"
+      check_mode: true
+      register: oci_dhcp_options_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_delete_check.changed | bool
+
+    - name: Read DHCP options after delete check mode
+      oracle.oci.oci_network_dhcp_options_info:
+        dhcp_options_id: "{{ oci_dhcp_options_id }}"
+      register: oci_dhcp_options_delete_check_probe
+
+    - name: Assert DHCP options still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_delete_check_probe.dhcp_options | length == 1
+
+    - name: Delete DHCP options
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_delete_module_options
+      register: oci_dhcp_options_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_dhcp_options_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      oracle.oci.oci_network_dhcp_options:
+        <<: *oci_dhcp_options_delete_module_options
+      register: oci_dhcp_options_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_dhcp_options_delete_rerun.changed | bool
+
+  always:
+    - name: Run DHCP options cleanup
+      ansible.builtin.include_tasks: cleanup.yml

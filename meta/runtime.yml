@@ -4,30 +4,30 @@ action_groups:
   oci:
     - oci_network_vcn
     - oci_network_vcn_info
-    - oci_subnet
-    - oci_subnet_info
-    - oci_dhcp_options
-    - oci_dhcp_options_info
-    - oci_drg
-    - oci_drg_info
-    - oci_drg_attachment
-    - oci_drg_attachment_info
+    - oci_network_subnet
+    - oci_network_subnet_info
+    - oci_network_dhcp_options
+    - oci_network_dhcp_options_info
+    - oci_network_drg
+    - oci_network_drg_info
+    - oci_network_drg_attachment
+    - oci_network_drg_attachment_info
     - oci_blockstorage_volume
     - oci_blockstorage_volume_info
     - oci_volume_attachment
     - oci_volume_attachment_info
-    - oci_nat_gateway
-    - oci_nat_gateway_info
-    - oci_security_list
-    - oci_security_list_info
-    - oci_internet_gateway
-    - oci_internet_gateway_info
-    - oci_service_gateway
-    - oci_service_gateway_info
-    - oci_local_peering_gateway
-    - oci_local_peering_gateway_info
-    - oci_route_table
-    - oci_route_table_info
+    - oci_network_nat_gateway
+    - oci_network_nat_gateway_info
+    - oci_network_security_list
+    - oci_network_security_list_info
+    - oci_network_internet_gateway
+    - oci_network_internet_gateway_info
+    - oci_network_service_gateway
+    - oci_network_service_gateway_info
+    - oci_network_local_peering_gateway
+    - oci_network_local_peering_gateway_info
+    - oci_network_route_table
+    - oci_network_route_table_info
     - oci_instance
     - oci_instance_info
     - oci_image
