@@ -2,80 +2,72 @@
 
 [![Ansible lint](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-lint.yml) [![Sanity](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-sanity.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-sanity.yml) [![Units](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-unit.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-unit.yml) [![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=ansible-collections_oracle.oci&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ansible-collections_oracle.oci)
 
+This collection automates Oracle Cloud Infrastructure (OCI).
 
 ## Description
 
-The `oracle.oci` collection provides Ansible automation content for Oracle Cloud
-Infrastructure (OCI). It is intended for platform engineers, cloud
-administrators, and automation teams that want to manage OCI resources through
-repeatable playbooks and workflows.
-
-The collection is designed to support OCI automation across common service
-areas, including compute, networking, database, identity and access management,
-storage, security, and dynamic inventory use cases. The upstream project home is
-[ansible-collections/oracle.oci](https://github.com/ansible-collections/oracle.oci).
+The `oracle.oci` collection provides Ansible modules for Oracle Cloud Infrastructure. It is intended for platform engineers, cloud administrators, and automation teams that want to manage OCI resources through repeatable playbooks.
 
 ## Requirements
 
 The collection currently declares the following baseline requirements:
 
 * `ansible-core >= 2.16.0`
-* `python >= 3.8`
+* `python >= 3.8` (module execution)
 * `oci >= 2.183.0`
 
-Use a controller or execution environment with a Python version supported by
-both `ansible-core` and the OCI Python SDK. OCI authentication material and
-related configuration must also be available to the automation environment that
-runs the collection.
+This collection does not depend on other Ansible collections.
+
+Use a controller or execution environment with a Python version supported by both `ansible-core` and the OCI Python SDK. Red Hat Ansible Automation Platform customers run `ansible-core` in execution environments; do not install `ansible-core` with `pip` in supported AAP environments. OCI authentication material and related configuration must also be available to the automation environment that runs the collection.
 
 ## Installation
 
-Before using this collection, install it with the Ansible Galaxy command-line
-tool:
+
+### Installing a collection
+
+Install this collection with the Ansible Galaxy command-line tool:
 
 ```bash
 ansible-galaxy collection install oracle.oci
 ```
 
-You can also include it in a `requirements.yml` file and install it with
-`ansible-galaxy collection install -r requirements.yml`, using the format:
+### Installing from a requirements file
+
+You can include this collection in a `requirements.yml` file and install it with `ansible-galaxy collection install -r requirements.yml`:
 
 ```yaml
 collections:
   - name: oracle.oci
 ```
 
-To upgrade the collection to the latest available version, run:
+### Installing a specific version
 
-```bash
-ansible-galaxy collection install oracle.oci --upgrade
-```
-
-You can also install a specific version of the collection. For example, to
-install version `1.0.0`:
+Use the following syntax to install version 1.0.0:
 
 ```bash
 ansible-galaxy collection install oracle.oci:==1.0.0
 ```
 
-See [Using Ansible collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html)
-for more details.
+See [using Ansible collections](https://docs.ansible.com/ansible/devel/user_guide/collections_using.html) for more details.
 
-## Authentication Defaults
+### Upgrading a collection
 
-OCI modules in this collection support shared authentication defaults so
-playbooks do not need to repeat the same auth arguments on every task.
+To upgrade the collection to the latest available version, run the following command:
+
+```bash
+ansible-galaxy collection install oracle.oci --upgrade
+```
+
+### Authentication defaults
+
+OCI modules in this collection support shared authentication defaults so playbooks do not need to repeat the same auth arguments on every task.
 
 Authentication settings are resolved in this order:
 
 * `auth_type`: module parameter, then `OCI_AUTH_TYPE`, then `api_key`
-* `config_file_location`: module parameter, then `OCI_CONFIG_FILE`, then
-  `~/.oci/config`
-* `config_profile_name`: module parameter, then `OCI_CONFIG_PROFILE`, then
-  `DEFAULT`
-* API key fields such as tenancy, user, region, fingerprint, key file, and key
-  pass phrase: module parameter, then the matching `OCI_*` environment
-  variable, then the selected OCI config profile
+* `config_file_location`: module parameter, then `OCI_CONFIG_FILE`, then `~/.oci/config`
+* `config_profile_name`: module parameter, then `OCI_CONFIG_PROFILE`, then `DEFAULT`
+* API key fields (`tenancy`, `api_user`, `region`, `api_user_fingerprint`, `api_user_key_file`, `api_user_key_pass_phrase`): module parameter, then the matching `OCI_*` environment variable, then the selected OCI config profile
 
 Supported environment variables include:
 
@@ -89,13 +81,11 @@ Supported environment variables include:
 * `OCI_USER_KEY_FILE`
 * `OCI_USER_KEY_PASS_PHRASE`
 
-For `session_token` authentication, the selected OCI profile must still include
-`security_token_file`.
+For `session_token` authentication, the selected OCI profile must still include `security_token_file`.
 
-### module_defaults
+#### module_defaults
 
-The collection defines the action group `group/oracle.oci.oci` so a play or
-role can set shared OCI auth options once with `module_defaults`:
+The collection defines the action group `group/oracle.oci.oci` so a play or role can set shared OCI auth options once with `module_defaults`:
 
 ```yaml
 - hosts: localhost
@@ -114,36 +104,98 @@ role can set shared OCI auth options once with `module_defaults`:
           - 10.0.0.0/16
 ```
 
-## Use Cases
+## Use cases
 
-Common use cases for this collection include:
+### Provision a VCN and subnet
 
-* provisioning and updating OCI compute and networking resources as part of
-  environment builds
-* automating IAM configuration such as users, groups, policies, and compartment
-  access controls
-* managing OCI storage and database-related workflows in repeatable playbooks
-* using dynamic inventory patterns to target OCI-hosted infrastructure in
-  Ansible Automation Platform
+Create a Virtual Cloud Network and a subnet that later tasks can attach compute or gateways to:
+
+```yaml
+- name: Create a VCN
+  oracle.oci.oci_network_vcn:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-vcn
+    cidr_blocks:
+      - 10.0.0.0/16
+  register: example_vcn
+
+- name: Create a subnet
+  oracle.oci.oci_network_subnet:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: "{{ example_vcn.resource.id }}"
+    name: example-subnet
+    cidr_block: 10.0.1.0/24
+  register: example_subnet
+```
+
+### Add internet and NAT gateways
+
+Expose a VCN to the public internet and provide outbound NAT for private subnets:
+
+```yaml
+- name: Create an internet gateway
+  oracle.oci.oci_network_internet_gateway:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: "{{ example_vcn.resource.id }}"
+    name: example-internet-gateway
+
+- name: Create a NAT gateway
+  oracle.oci.oci_network_nat_gateway:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    vcn_id: "{{ example_vcn.resource.id }}"
+    name: example-nat-gateway
+```
+
+### Launch a compute instance on that network
+
+Place an instance on the subnet created above:
+
+```yaml
+- name: Launch an instance
+  oracle.oci.oci_instance:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    name: example-instance
+    shape: VM.Standard.E4.Flex
+    shape_config:
+      ocpus: 1
+      memory_in_gbs: 16
+    image_id: ocid1.image.oc1..example
+    subnet_id: "{{ example_subnet.resource.id }}"
+```
+
+### Manage a block volume
+
+Create additional block storage that can be attached to compute:
+
+```yaml
+- name: Create a block volume
+  oracle.oci.oci_blockstorage_volume:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    name: example-volume
+    size_in_gbs: 50
+```
 
 ## Testing
 
-The collection CI is split across dedicated `ansible-lint`, `Sanity`, and
-`Units` workflows, plus two live OCI integration workflows:
+This collection supports:
 
-* `Integration PR` runs on pull requests that change `plugins/modules/` or
-  `plugins/module_utils/`, with a protected GitHub Environment (approve before
-  secrets are available), fixed Python `3.12`, and Ansible `stable-2.18`.
-* `Integration Weekly` runs on a weekly schedule and by manual dispatch with a
-  reduced Python/Ansible compatibility matrix.
+* ansible-core `>= 2.16.0` (CI currently covers 2.16 and 2.18)
+* Python `>= 3.8` for modules (CI currently covers 3.11, 3.12, and 3.13)
+* OCI Python SDK `>= 2.183.0`
+* Live integration against Oracle Cloud Infrastructure
 
-Both integration workflows render their OCI runtime configuration from GitHub
-secrets and variables at run time, then execute `ansible-test integration`
-against the collection's live OCI targets. SonarCloud analysis runs after the
-`Units` workflow completes. That job reruns the unit tests with coverage and
-uploads the report with the scan.
+There are no additional known platform limitations beyond those OCI service constraints documented on each module.
 
-The workflow definitions are available at:
+
+CI workflow definitions (secondary):
 
 * [`.github/workflows/ansible-lint.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-lint.yml)
 * [`.github/workflows/ansible-sanity.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-sanity.yml)
@@ -154,48 +206,39 @@ The workflow definitions are available at:
 
 ## Contributing
 
-Contribution guidelines are documented in
-[CONTRIBUTING.md](https://github.com/ansible-collections/oracle.oci/blob/main/CONTRIBUTING.md).
+Contribution guidelines are documented in [CONTRIBUTING.md](https://github.com/ansible-collections/oracle.oci/blob/main/CONTRIBUTING.md).
 
-Contributors adding new OCI modules should start with the
-[Module Authoring Guide](docs/module_development.md).
+Contributors adding new OCI modules should start with the [Module Authoring Guide](https://github.com/ansible-collections/oracle.oci/blob/main/docs/module_development.md).
 
-Project code of conduct information is available in
-[CODE_OF_CONDUCT.md](https://github.com/ansible-collections/oracle.oci/blob/main/CODE_OF_CONDUCT.md).
+Project code of conduct information is available in [CODE_OF_CONDUCT.md](https://github.com/ansible-collections/oracle.oci/blob/main/CODE_OF_CONDUCT.md).
 
-Use [repository issues](https://github.com/ansible-collections/oracle.oci/issues)
-for bugs, feature requests, and design discussion.
+Use [repository issues](https://github.com/ansible-collections/oracle.oci/issues) for bugs, feature requests, and design discussion. Community discussion is also available on the [Ansible Forum](https://forum.ansible.com/).
 
 ## Support
 
-If this collection is consumed as Red Hat Ansible Certified Content, support is
-available through Red Hat Ansible Automation Platform using the **Create issue**
-button. If the collection is obtained from GitHub or Ansible Galaxy, community
-help may also be available on the [Ansible Forum](https://forum.ansible.com/).
+This collection is maintained by the Oracle OCI Ansible collection maintainers.
 
-## Release Notes and Roadmap
+As Red Hat Ansible Certified Content, this collection is entitled to support through Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner of Automation Hub. If a support case cannot be opened with Red Hat and the collection has been obtained either from Galaxy or GitHub, community help may also be available on the [Ansible Forum](https://forum.ansible.com/) and through [GitHub issues](https://github.com/ansible-collections/oracle.oci/issues).
+
+## Release notes and roadmap
 
 Release notes are available at:
 
 * [CHANGELOG.rst](https://github.com/ansible-collections/oracle.oci/blob/main/CHANGELOG.rst)
 * [CHANGELOG.md](https://github.com/ansible-collections/oracle.oci/blob/main/CHANGELOG.md)
 
-Current planning and future work can be tracked through repository issues and
-pull requests:
+Current planning and future work can be tracked through repository issues and pull requests:
 
 * [Issues](https://github.com/ansible-collections/oracle.oci/issues)
 * [Pull requests](https://github.com/ansible-collections/oracle.oci/pulls)
 
-## Related Information
 
-Additional OCI and collection-related documentation:
+## Related information
 
-* [Oracle Cloud Infrastructure Ansible documentation](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/ansible.htm)
-* [OCI Ansible collection module documentation](https://docs.oracle.com/en-us/iaas/tools/oci-ansible-collection/latest/collections/oracle/oci/index.html)
-* [Ansible collections user guide](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html)
+* [Ansible collections user guide](https://docs.ansible.com/ansible/devel/user_guide/collections_using.html)
+* [Oracle Cloud Infrastructure documentation](https://docs.oracle.com/en-us/iaas/Content/home.htm)
+* [OCI Python SDK documentation](https://docs.oracle.com/en-us/iaas/tools/python/latest/)
 
-## License Information
+## License information
 
-This collection is published under GNU General Public License v3.0 or later.
-License details are available in
-[LICENSE](https://github.com/ansible-collections/oracle.oci/blob/main/LICENSE).
+This collection is published under GNU General Public License v3.0 or later, an [OSI-approved license](https://opensource.org/licenses/). License details are available in [LICENSE](https://github.com/ansible-collections/oracle.oci/blob/main/LICENSE).

@@ -326,7 +326,7 @@
           - not oci_network_vcn_update_rerun.changed | bool
 
     - name: Create dependent subnet for blocked delete test
-      oracle.oci.oci_subnet:
+      oracle.oci.oci_network_subnet:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_network_vcn_id }}"
@@ -352,7 +352,7 @@
           - "'dependent resources' in (oci_network_vcn_delete_blocked.msg | default(''))"
 
     - name: Delete dependent subnet after blocked delete test
-      oracle.oci.oci_subnet:
+      oracle.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_network_vcn_integration_subnet_id }}"
 

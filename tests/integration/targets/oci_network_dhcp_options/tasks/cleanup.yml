@@ -1,0 +1,24 @@
+---
+- name: Run DHCP options cleanup with shared OCI auth defaults
+  module_defaults:
+    group/oracle.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked duplicate DHCP options during cleanup
+      oracle.oci.oci_network_dhcp_options:
+        state: absent
+        dhcp_options_id: "{{ oci_dhcp_options_duplicate_id }}"
+      when: oci_dhcp_options_duplicate_id | default('') | length > 0
+
+    - name: Delete leaked DHCP options during cleanup
+      oracle.oci.oci_network_dhcp_options:
+        state: absent
+        dhcp_options_id: "{{ oci_dhcp_options_id }}"
+      when: oci_dhcp_options_id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      oracle.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_dhcp_options_integration_network.vcn_id }}"
+      when: oci_dhcp_options_integration_network.vcn_id | default('') | length > 0

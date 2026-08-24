@@ -18,7 +18,7 @@
       when: oci_console_connection_instance_create.resource.id | default('') | length > 0
 
     - name: Delete leaked subnet during cleanup
-      oracle.oci.oci_subnet:
+      oracle.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_console_connection_subnet_create.resource.id }}"
       when: oci_console_connection_subnet_create.resource.id | default('') | length > 0
