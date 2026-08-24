@@ -54,6 +54,36 @@ def _is_dead_resource(resource):
     )
 
 
+_RETRYABLE_WAIT_STATUSES = frozenset({429, 500, 503})
+
+
+def _is_retryable_wait_error(exc):
+    """Return True when a waiter poll failed with a transient throttle or outage.
+
+    ``oci.wait_until`` re-raises any non-404/401 service error, so a 429 during
+    delete/create wait aborts the whole task. Treat throttles, 5xx, and an open
+    SDK circuit breaker as "try again next interval" instead.
+    """
+    if getattr(exc, "status", None) in _RETRYABLE_WAIT_STATUSES:
+        return True
+    return type(exc).__name__ == "CircuitBreakerError"
+
+
+def _fetch_during_wait(fetch_fn, previous_response=None):
+    """Call ``fetch_fn`` and keep waiting when the poll hits a retryable error.
+
+    Returning ``previous_response`` lets ``wait_until`` sleep and poll again
+    until ``wait_timeout``. 404 is re-raised so delete waits can still succeed
+    on not-found.
+    """
+    try:
+        return fetch_fn()
+    except Exception as exc:
+        if previous_response is not None and _is_retryable_wait_error(exc):
+            return previous_response
+        raise
+
+
 class OciResourceBase(OciModuleBase, ABC):
     """Base class for OCI resource management modules.
 
@@ -588,7 +618,10 @@ class OciResourceBase(OciModuleBase, ABC):
                 failure_states,
                 resource_id,
             ),
-            fetch_func=lambda response=None: self.get_resource_response(resource_id),
+            fetch_func=lambda response=None: _fetch_during_wait(
+                lambda: self.get_resource_response(resource_id),
+                response,
+            ),
         )
         return getattr(waiter_result, "data", None)
 
@@ -636,8 +669,11 @@ class OciResourceBase(OciModuleBase, ABC):
                 failure_states,
                 work_request_id,
             ),
-            fetch_func=lambda response=None: self.call_with_retry(
-                get_work_request_fn, work_request_id
+            fetch_func=lambda response=None: _fetch_during_wait(
+                lambda: self.call_with_retry(
+                    get_work_request_fn, work_request_id
+                ),
+                response,
             ),
         )
         return getattr(waiter_result, "data", None)

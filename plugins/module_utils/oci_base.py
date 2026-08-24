@@ -49,7 +49,7 @@ class OciModuleBase(ABC):
         """
         return oci.pagination.list_call_get_all_results(list_fn, *args, **kwargs).data
 
-    def call_with_retry(self, fn, *args, max_retries=3, retry_on=(429, 500, 503), **kwargs):
+    def call_with_retry(self, fn, *args, max_retries=7, retry_on=(429, 500, 503), **kwargs):
         """Call an OCI SDK function with retry handling for transient failures.
 
         ``fn`` receives the provided positional and keyword arguments through

@@ -1966,6 +1966,139 @@ def test_oci_module_base_call_with_retry_uses_oci_retry_strategy_builder(monkeyp
     }
 
 
+def test_oci_module_base_call_with_retry_defaults_to_eight_attempts(monkeypatch):
+    recorded_call = {}
+
+    class FakeRetryStrategy:
+        def make_retrying_call(self, fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+    class FakeRetryStrategyBuilder:
+        def __init__(self, **kwargs):
+            recorded_call["builder_kwargs"] = kwargs
+
+        def get_retry_strategy(self):
+            return FakeRetryStrategy()
+
+    install_fake_oci_sdk(
+        monkeypatch,
+        retry=types.SimpleNamespace(
+            RetryStrategyBuilder=FakeRetryStrategyBuilder,
+        ),
+    )
+
+    oci_base = load_collection_module("oci_base", plugin_dir="module_utils")
+    patch_create_service_client(
+        monkeypatch,
+        oci_base,
+        lambda module, client_class: "client",
+    )
+
+    class ExampleModule(oci_base.OciModuleBase):
+        client_class = object
+
+    instance = ExampleModule(DummyModule())
+    instance.call_with_retry(lambda: "ok")
+
+    assert recorded_call["builder_kwargs"]["max_attempts"] == 8
+
+
+def _capture_resource_wait_fetch_func(monkeypatch, get_resource_fn):
+    """Return wait_until fetch_func after an initial GET succeeds."""
+    recorded = {}
+
+    def fake_wait_until(client, response, **kwargs):
+        recorded["fetch_func"] = kwargs["fetch_func"]
+        return response
+
+    ServiceError = install_fake_oci_sdk(monkeypatch, wait_until=fake_wait_until)
+    load_collection_module("oci_base", plugin_dir="module_utils")
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: types.SimpleNamespace(),
+    )
+
+    initial_response = types.SimpleNamespace(
+        data=types.SimpleNamespace(lifecycle_state="TERMINATING"),
+    )
+    lookups = {"count": 0}
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+
+        def get_resource_response(self, resource_id):
+            lookups["count"] += 1
+            if lookups["count"] == 1:
+                return initial_response
+            return get_resource_fn(resource_id)
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def update_resource(self, resource):
+            raise AssertionError("update_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    instance = ExampleResource(
+        DummyModule({"wait": True, "wait_timeout": 1200, "wait_interval": 30})
+    )
+    instance.wait_for_resource_id("resource-ocid", ("TERMINATED", "DELETED"))
+    return recorded["fetch_func"], ServiceError, initial_response
+
+
+def test_oci_resource_base_wait_fetch_returns_previous_response_on_429(monkeypatch):
+    ServiceErrorHolder = {}
+
+    def get_resource(resource_id):
+        raise ServiceErrorHolder["cls"](429)
+
+    fetch_func, ServiceError, previous_response = _capture_resource_wait_fetch_func(
+        monkeypatch, get_resource
+    )
+    ServiceErrorHolder["cls"] = ServiceError
+
+    result = fetch_func(response=previous_response)
+
+    assert result is previous_response
+
+
+def test_oci_resource_base_wait_fetch_reraises_404(monkeypatch):
+    ServiceErrorHolder = {}
+
+    def get_resource(resource_id):
+        raise ServiceErrorHolder["cls"](404)
+
+    fetch_func, ServiceError, previous_response = _capture_resource_wait_fetch_func(
+        monkeypatch, get_resource
+    )
+    ServiceErrorHolder["cls"] = ServiceError
+
+    with pytest.raises(ServiceError) as exc_info:
+        fetch_func(response=previous_response)
+
+    assert exc_info.value.status == 404
+
+
+def test_oci_resource_base_wait_fetch_returns_previous_response_on_circuit_breaker(monkeypatch):
+    class CircuitBreakerError(Exception):
+        pass
+
+    def get_resource(resource_id):
+        raise CircuitBreakerError("open")
+
+    fetch_func, _ServiceError, previous_response = _capture_resource_wait_fetch_func(
+        monkeypatch, get_resource
+    )
+
+    result = fetch_func(response=previous_response)
+
+    assert result is previous_response
+
+
 def test_oci_resource_base_wait_for_resource_id_uses_oci_wait_until(monkeypatch):
     recorded_call = {}
     final_response = types.SimpleNamespace(
