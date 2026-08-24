@@ -24,6 +24,8 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
+      # One tenant: 5 resources parallely can fail in integhration test
+      max-parallel: 1
       matrix:
         include:
           - { ansible-ref: stable-2.16, python-version: "3.10" }
