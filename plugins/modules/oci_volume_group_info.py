@@ -103,6 +103,75 @@ volume_groups:
       type: int
       returned: always
       sample: 100
+    size_in_mbs:
+      description: The aggregate size of the volume group, in MBs.
+      type: int
+      returned: always
+      sample: 102400
+    source_details:
+      description: The source the volume group was provisioned from.
+      type: dict
+      returned: always
+      contains:
+        type:
+          description:
+            - The source type.
+            - C(volumeIds) when created from member volumes, C(volumeGroupId)
+              when cloned from another volume group, C(volumeGroupBackupId)
+              when restored from a backup, or C(volumeGroupReplicaId) when
+              created from a replica.
+          type: str
+          returned: always
+          sample: volumeIds
+        volume_ids:
+          description: The OCIDs of the source volumes, when C(type) is C(volumeIds).
+          type: list
+          elements: str
+          returned: when type is volumeIds
+          sample:
+            - ocid1.volume.oc1..example1
+            - ocid1.volume.oc1..example2
+        volume_group_id:
+          description: The OCID of the source volume group, when C(type) is C(volumeGroupId).
+          type: str
+          returned: when type is volumeGroupId
+          sample: ocid1.volumegroup.oc1..example
+        volume_group_backup_id:
+          description: The OCID of the source volume group backup, when C(type) is C(volumeGroupBackupId).
+          type: str
+          returned: when type is volumeGroupBackupId
+          sample: ocid1.volumegroupbackup.oc1..example
+        volume_group_replica_id:
+          description: The OCID of the source volume group replica, when C(type) is C(volumeGroupReplicaId).
+          type: str
+          returned: when type is volumeGroupReplicaId
+          sample: ocid1.volumegroupreplica.oc1..example
+    volume_group_replicas:
+      description: The volume group replicas maintained for this volume group.
+      type: list
+      elements: dict
+      returned: always
+      contains:
+        volume_group_replica_id:
+          description: The OCID of the volume group replica.
+          type: str
+          returned: always
+          sample: ocid1.volumegroupreplica.oc1..example
+        availability_domain:
+          description: The availability domain of the replica.
+          type: str
+          returned: always
+          sample: Uocm:PHX-AD-2
+        display_name:
+          description: The name of the replica.
+          type: str
+          returned: always
+          sample: app-volume-group-replica
+        kms_key_id:
+          description: The OCID of the encryption key used by the replica, if any.
+          type: str
+          returned: always
+          sample: null
     is_hydrated:
       description: Whether the volume group's contents have finished copying from its source.
       type: bool
@@ -133,6 +202,13 @@ volume_groups:
         - ocid1.volume.oc1..example1
         - ocid1.volume.oc1..example2
       size_in_gbs: 100
+      size_in_mbs: 102400
+      source_details:
+        type: volumeIds
+        volume_ids:
+          - ocid1.volume.oc1..example1
+          - ocid1.volume.oc1..example2
+      volume_group_replicas: []
       is_hydrated: true
       freeform_tags: {"environment": "production"}
       defined_tags: {"Operations": {"CostCenter": "42"}}
