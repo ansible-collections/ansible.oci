@@ -7,6 +7,7 @@ version: 1.0.0
 readme: README.md
 authors:
   - Ron Gershburg (github.com/ronger4)
+  - Ansible Eco Content Team (github.com/eco-ansible-content)
 description: Oracle Cloud Infrastructure collection for Ansible
 license:
   - GPL-3.0-or-later
@@ -40,3 +41,8 @@ build_ignore:
   - tests/integration/.runtime
   - sonar-project.properties
   - playbooks
+  - .claude
+  - .cursor
+  - playbooks
+  - .pytest_cache
+  - .nox

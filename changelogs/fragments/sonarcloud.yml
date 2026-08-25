@@ -1,3 +1,0 @@
----
-minor_changes:
-  - Added SonarCloud project configuration and a dedicated GitHub Actions workflow for CI-based repository analysis.
