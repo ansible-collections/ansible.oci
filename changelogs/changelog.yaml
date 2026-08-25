@@ -1,3 +1,140 @@
 ---
 ancestor: null
-releases: {}
+releases:
+  1.0.0:
+    changes:
+      release_summary: Release summary for v1.0.0
+    fragments:
+      - 1.0.0.yml
+    modules:
+      - description: Retrieve Availability Domain information from Oracle Cloud Infrastructure.
+        name: oci_availability_domain_info
+        namespace: ''
+      - description: Manage a block volume resource in Oracle Cloud Infrastructure.
+        name: oci_blockstorage_volume
+        namespace: ''
+      - description: Retrieve block volume information from Oracle Cloud Infrastructure.
+        name: oci_blockstorage_volume_info
+        namespace: ''
+      - description: Manage a boot volume backup resource in Oracle Cloud Infrastructure.
+        name: oci_boot_volume_backup
+        namespace: ''
+      - description: Retrieve boot volume backup information from Oracle Cloud Infrastructure.
+        name: oci_boot_volume_backup_info
+        namespace: ''
+      - description: Retrieve boot volume information from Oracle Cloud Infrastructure.
+        name: oci_boot_volume_info
+        namespace: ''
+      - description: Manage a custom Compute image resource in Oracle Cloud Infrastructure.
+        name: oci_image
+        namespace: ''
+      - description: Retrieve Compute image information from Oracle Cloud Infrastructure.
+        name: oci_image_info
+        namespace: ''
+      - description: Manage a Compute instance resource in Oracle Cloud Infrastructure.
+        name: oci_instance
+        namespace: ''
+      - description: Manage a Compute instance console connection resource in Oracle
+          Cloud Infrastructure.
+        name: oci_instance_console_connection
+        namespace: ''
+      - description: Retrieve Compute instance console connection information from
+          Oracle Cloud Infrastructure.
+        name: oci_instance_console_connection_info
+        namespace: ''
+      - description: Retrieve Compute instance information from Oracle Cloud Infrastructure.
+        name: oci_instance_info
+        namespace: ''
+      - description: Manage a DHCP Options resource in Oracle Cloud Infrastructure.
+        name: oci_network_dhcp_options
+        namespace: ''
+      - description: Retrieve DHCP Options information from Oracle Cloud Infrastructure.
+        name: oci_network_dhcp_options_info
+        namespace: ''
+      - description: Manage a Dynamic Routing Gateway (DRG) resource in Oracle Cloud
+          Infrastructure.
+        name: oci_network_drg
+        namespace: ''
+      - description: Manage a DRG attachment resource in Oracle Cloud Infrastructure.
+        name: oci_network_drg_attachment
+        namespace: ''
+      - description: Retrieve DRG attachment information from Oracle Cloud Infrastructure.
+        name: oci_network_drg_attachment_info
+        namespace: ''
+      - description: Retrieve Dynamic Routing Gateway (DRG) information from Oracle
+          Cloud Infrastructure.
+        name: oci_network_drg_info
+        namespace: ''
+      - description: Manage an Internet Gateway resource in Oracle Cloud Infrastructure.
+        name: oci_network_internet_gateway
+        namespace: ''
+      - description: Retrieve Internet Gateway information from Oracle Cloud Infrastructure.
+        name: oci_network_internet_gateway_info
+        namespace: ''
+      - description: Manage a Local Peering Gateway resource in Oracle Cloud Infrastructure.
+        name: oci_network_local_peering_gateway
+        namespace: ''
+      - description: Retrieve Local Peering Gateway information from Oracle Cloud
+          Infrastructure.
+        name: oci_network_local_peering_gateway_info
+        namespace: ''
+      - description: Manage a NAT Gateway resource in Oracle Cloud Infrastructure.
+        name: oci_network_nat_gateway
+        namespace: ''
+      - description: Retrieve NAT Gateway information from Oracle Cloud Infrastructure.
+        name: oci_network_nat_gateway_info
+        namespace: ''
+      - description: Manage a Route Table resource in Oracle Cloud Infrastructure.
+        name: oci_network_route_table
+        namespace: ''
+      - description: Retrieve Route Table information from Oracle Cloud Infrastructure.
+        name: oci_network_route_table_info
+        namespace: ''
+      - description: Manage a Security List resource in Oracle Cloud Infrastructure.
+        name: oci_network_security_list
+        namespace: ''
+      - description: Retrieve Security List information from Oracle Cloud Infrastructure.
+        name: oci_network_security_list_info
+        namespace: ''
+      - description: Manage a Service Gateway resource in Oracle Cloud Infrastructure.
+        name: oci_network_service_gateway
+        namespace: ''
+      - description: Retrieve Service Gateway information from Oracle Cloud Infrastructure.
+        name: oci_network_service_gateway_info
+        namespace: ''
+      - description: Manage a Subnet resource in Oracle Cloud Infrastructure.
+        name: oci_network_subnet
+        namespace: ''
+      - description: Retrieve Subnet information from Oracle Cloud Infrastructure.
+        name: oci_network_subnet_info
+        namespace: ''
+      - description: Manage a Virtual Cloud Network resource in Oracle Cloud Infrastructure.
+        name: oci_network_vcn
+        namespace: ''
+      - description: Retrieve Virtual Cloud Network information from Oracle Cloud
+          Infrastructure.
+        name: oci_network_vcn_info
+        namespace: ''
+      - description: Retrieve Compute shape information from Oracle Cloud Infrastructure.
+        name: oci_shape_info
+        namespace: ''
+      - description: Manage a block volume attachment resource in Oracle Cloud Infrastructure.
+        name: oci_volume_attachment
+        namespace: ''
+      - description: Retrieve block volume attachment information from Oracle Cloud
+          Infrastructure.
+        name: oci_volume_attachment_info
+        namespace: ''
+      - description: Manage a block volume backup resource in Oracle Cloud Infrastructure.
+        name: oci_volume_backup
+        namespace: ''
+      - description: Retrieve block volume backup information from Oracle Cloud Infrastructure.
+        name: oci_volume_backup_info
+        namespace: ''
+      - description: Manage a volume group resource in Oracle Cloud Infrastructure.
+        name: oci_volume_group
+        namespace: ''
+      - description: Retrieve volume group information from Oracle Cloud Infrastructure.
+        name: oci_volume_group_info
+        namespace: ''
+    release_date: '2026-08-25'
