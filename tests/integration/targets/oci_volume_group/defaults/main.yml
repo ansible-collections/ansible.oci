@@ -1,0 +1,13 @@
+---
+# Availability domain is discovered at run time (tasks/main.yml).
+oci_volume_group_integration_volume_name: "oci-volume-group-integration-volume"
+oci_volume_group_integration_second_volume_name: "oci-volume-group-integration-volume-2"
+oci_volume_group_integration_size_in_gbs: 50
+oci_volume_group_integration_group_name: "oci-volume-group-integration-group"
+oci_volume_group_integration_updated_group_name: "oci-volume-group-integration-group-updated"
+oci_volume_group_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_group_integration_update_tags:
+  phase: update
+  role: integration
