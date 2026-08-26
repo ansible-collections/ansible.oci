@@ -7,8 +7,8 @@ from abc import ABC
 
 from ansible.module_utils.basic import missing_required_lib
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_auth import create_service_client
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_auth import create_service_client
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     COMMON_FIELD_PARAM_ALIASES,
     collect_list_filters,
     filter_resources_by_response_field,

@@ -21,12 +21,12 @@
 
 - name: Exercise custom image module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Discover a compatible source image
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         operating_system: "{{ oci_image_integration_operating_system }}"
         operating_system_version: "{{ oci_image_integration_operating_system_version }}"
@@ -43,7 +43,7 @@
         oci_image_source_image_id: "{{ oci_image_source_discovered.images[0].id }}"
 
     - name: Create test VCN for image integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_vcn_name }}"
@@ -52,7 +52,7 @@
       register: oci_image_vcn_create
 
     - name: Create test subnet for image integration
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_image_vcn_create.resource.id }}"
@@ -61,7 +61,7 @@
       register: oci_image_subnet_create
 
     - name: Create the source instance to capture an image from
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_image_integration_availability_domain }}"
@@ -77,7 +77,7 @@
         oci_image_instance_id: "{{ oci_image_instance_create.resource.id }}"
 
     - name: Stop the source instance for a consistent image capture
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         instance_id: "{{ oci_image_instance_id }}"
         power_state: stopped
       register: oci_image_instance_stop
@@ -92,7 +92,7 @@
           freeform_tags: "{{ oci_image_integration_create_tags }}"
 
     - name: Create custom image in check mode
-      oracle.oci.oci_image: &oci_image_create_module_options
+      ansible.oci.oci_image: &oci_image_create_module_options
         state: "{{ oci_image_create_params.state }}"
         compartment_id: "{{ oci_image_create_params.compartment_id }}"
         name: "{{ oci_image_create_params.name }}"
@@ -107,7 +107,7 @@
           - oci_image_create_check.changed | bool
 
     - name: Read custom image after create check mode
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_image_name }}"
       register: oci_image_create_check_probe
@@ -118,7 +118,7 @@
           - oci_image_create_check_probe.images | length == 0
 
     - name: Create custom image
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_create_module_options
       register: oci_image_create
 
@@ -138,7 +138,7 @@
           - oci_image_create.resource.lifecycle_state == "AVAILABLE"
 
     - name: Read custom image by id
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         image_id: "{{ oci_image_id }}"
       register: oci_image_info_by_id
 
@@ -150,7 +150,7 @@
           - oci_image_info_by_id.images[0].name == oci_image_integration_image_name
 
     - name: List custom image by name
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_image_name }}"
       register: oci_image_info_list
@@ -162,7 +162,7 @@
           - oci_image_info_list.images[0].id == oci_image_id
 
     - name: Assert created image is a no-op on rerun with unique name
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_create_module_options
       register: oci_image_create_rerun_by_name
 
@@ -173,7 +173,7 @@
           - oci_image_create_rerun_by_name.resource.id == oci_image_id
 
     - name: List custom image by name after unique-name rerun
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_image_name }}"
       register: oci_image_info_after_name_rerun
@@ -185,7 +185,7 @@
           - oci_image_info_after_name_rerun.images[0].id == oci_image_id
 
     - name: Assert created image is a no-op on rerun with returned id
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_create_module_options
         image_id: "{{ oci_image_id }}"
       register: oci_image_create_rerun
@@ -197,7 +197,7 @@
           - oci_image_create_rerun.resource.id == oci_image_id
 
     - name: Assert existing image is a no-op in check mode
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_create_module_options
       check_mode: true
       register: oci_image_create_exists_check
@@ -209,7 +209,7 @@
           - oci_image_create_exists_check.resource.id == oci_image_id
 
     - name: Update custom image in check mode
-      oracle.oci.oci_image: &oci_image_update_module_options
+      ansible.oci.oci_image: &oci_image_update_module_options
         state: "{{ oci_image_update_params.state }}"
         image_id: "{{ oci_image_update_params.image_id }}"
         name: "{{ oci_image_update_params.name }}"
@@ -223,7 +223,7 @@
           - oci_image_update_check.changed | bool
 
     - name: Read custom image after update check mode
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         image_id: "{{ oci_image_id }}"
       register: oci_image_update_check_probe
 
@@ -235,7 +235,7 @@
           - oci_image_update_check_probe.images[0].freeform_tags.phase == "create"
 
     - name: Update custom image
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_update_module_options
       register: oci_image_update
 
@@ -245,7 +245,7 @@
           - oci_image_update.changed | bool
 
     - name: Read updated custom image by name
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_updated_image_name }}"
       register: oci_image_info_updated
@@ -258,7 +258,7 @@
           - oci_image_info_updated.images[0].freeform_tags.phase == "update"
 
     - name: List custom image by original name after rename
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_image_name }}"
       register: oci_image_info_original_name_after_update
@@ -269,7 +269,7 @@
           - oci_image_info_original_name_after_update.images | length == 0
 
     - name: Assert updated image is a no-op on rerun with unique name
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_updated_image_name }}"
@@ -283,7 +283,7 @@
           - oci_image_update_rerun_by_name.resource.id == oci_image_id
 
     - name: List custom image by updated name after unique-name rerun
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_updated_image_name }}"
       register: oci_image_info_after_update_name_rerun
@@ -295,7 +295,7 @@
           - oci_image_info_after_update_name_rerun.images[0].id == oci_image_id
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_update_module_options
       register: oci_image_update_rerun
 
@@ -306,7 +306,7 @@
           - oci_image_update_rerun.resource.id == oci_image_id
 
     - name: Delete custom image in check mode
-      oracle.oci.oci_image: &oci_image_delete_module_options
+      ansible.oci.oci_image: &oci_image_delete_module_options
         state: absent
         image_id: "{{ oci_image_id }}"
       check_mode: true
@@ -318,7 +318,7 @@
           - oci_image_delete_check.changed | bool
 
     - name: Read custom image after delete check mode
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         image_id: "{{ oci_image_id }}"
       register: oci_image_delete_check_probe
 
@@ -328,7 +328,7 @@
           - oci_image_delete_check_probe.images | length == 1
 
     - name: Delete custom image
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_delete_module_options
       register: oci_image_delete
 
@@ -338,7 +338,7 @@
           - oci_image_delete.changed | bool
 
     - name: List custom image by name after delete
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_updated_image_name }}"
       register: oci_image_info_after_delete
@@ -349,7 +349,7 @@
           - oci_image_info_after_delete.images | length == 0
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         <<: *oci_image_delete_module_options
       register: oci_image_delete_rerun
 
@@ -359,7 +359,7 @@
           - not oci_image_delete_rerun.changed | bool
 
     - name: Assert delete by unique name is a no-op after id delete
-      oracle.oci.oci_image:
+      ansible.oci.oci_image:
         state: absent
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_image_integration_updated_image_name }}"

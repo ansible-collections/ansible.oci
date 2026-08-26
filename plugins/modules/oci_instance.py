@@ -27,10 +27,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -70,7 +70,7 @@ options:
       - Required when creating an instance.
       - The module does not update this field after create.
       - Availability domain names are tenancy-specific; use
-        M(oracle.oci.oci_availability_domain_info) to discover the valid
+        M(ansible.oci.oci_availability_domain_info) to discover the valid
         names for your tenancy and region instead of hardcoding them.
     type: str
   fault_domain:
@@ -82,7 +82,7 @@ options:
     description:
       - The shape of the instance, for example C(VM.Standard.E4.Flex).
       - Required when creating an instance.
-      - Use M(oracle.oci.oci_shape_info) to discover compatible shape names and
+      - Use M(ansible.oci.oci_shape_info) to discover compatible shape names and
         their capabilities before launching an instance.
       - Supports updates. OCI requires the instance to be stopped before
         changing its shape.
@@ -114,7 +114,7 @@ options:
   image_id:
     description:
       - The OCID of the image used to launch the instance.
-      - Use M(oracle.oci.oci_image_info) to discover platform and custom image
+      - Use M(ansible.oci.oci_image_info) to discover platform and custom image
         OCIDs before launching an instance.
       - Exactly one of C(image_id) or C(boot_volume_id) is required when
         creating an instance.
@@ -347,7 +347,7 @@ options:
           - Per-plugin desired state, for example the Bastion or OS
             Management Hub Agent plugin. Available plugin names depend on
             the instance's image; use the names returned by
-            M(oracle.oci.oci_instance_info) rather than hardcoding a list.
+            M(ansible.oci.oci_instance_info) rather than hardcoding a list.
           - C(all_plugins_disabled), and C(management_disabled) or
             C(monitoring_disabled) for the plugins they cover, override the
             per-plugin C(desired_state) set here.
@@ -359,7 +359,7 @@ options:
             reports C(changed) on every run, even though the unlisted
             plugins are left alone. To make this idempotent, supply the
             full C(plugins_config) list the instance already has (for
-            example built from a prior M(oracle.oci.oci_instance_info)
+            example built from a prior M(ansible.oci.oci_instance_info)
             read), not just the plugins you intend to change.
         type: list
         elements: dict
@@ -388,7 +388,7 @@ options:
         description:
           - The platform configuration family, matching the instance's shape.
             Not every shape supports C(platform_config); use
-            M(oracle.oci.oci_shape_info) to look up the value for your shape
+            M(ansible.oci.oci_shape_info) to look up the value for your shape
             (returned as C(shapes[].platform_config_options.type)) before
             setting this, since supported types can change as OCI adds shapes.
         type: str
@@ -499,7 +499,7 @@ options:
 
 EXAMPLES = r"""
 - name: Launch an instance
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -516,7 +516,7 @@ EXAMPLES = r"""
   register: created_instance
 
 - name: Launch an instance with a named primary VNIC and manual private IP
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -528,14 +528,14 @@ EXAMPLES = r"""
     private_ip: 10.0.0.10
 
 - name: Look up the platform_config type supported by a shape before using it
-  oracle.oci.oci_shape_info:
+  ansible.oci.oci_shape_info:
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
     shape: VM.Standard.E4.Flex
   register: shape_lookup
 
 - name: Launch an instance from an existing boot volume with confidential computing and agent options
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -565,7 +565,7 @@ EXAMPLES = r"""
           desired_state: enabled
 
 - name: Reconcile a uniquely named instance by name
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -578,7 +578,7 @@ EXAMPLES = r"""
       memory_in_gbs: 32
 
 - name: Intentionally create a second instance with the same display name
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -592,35 +592,35 @@ EXAMPLES = r"""
     subnet_id: ocid1.subnet.oc1..example
 
 - name: Stop the instance
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     instance_id: "{{ created_instance.resource.id }}"
     power_state: stopped
 
 - name: Resize the stopped instance's flexible shape
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     instance_id: "{{ created_instance.resource.id }}"
     shape_config:
       ocpus: 4
       memory_in_gbs: 64
 
 - name: Start the instance again
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     instance_id: "{{ created_instance.resource.id }}"
     power_state: running
 
 - name: Terminate the instance
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: absent
     instance_id: "{{ created_instance.resource.id }}"
 
 - name: Terminate the instance but preserve its boot volume
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: absent
     instance_id: "{{ created_instance.resource.id }}"
     preserve_boot_volume_on_delete: true
 
 - name: Terminate a uniquely named instance without providing instance_id
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     name: example-instance
@@ -842,7 +842,7 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_RUNNING,
     LIFECYCLE_STOPPED,
     OCI_COMMON_ARGS,
@@ -851,7 +851,7 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     normalize_enum_values,
     rename_aliased_fields,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

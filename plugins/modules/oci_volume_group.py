@@ -14,7 +14,7 @@ description:
   - A volume group is a collection of block and boot volumes that can be managed
     and backed up together, providing crash-consistent, point-in-time snapshots
     across all member volumes.
-  - Use M(oracle.oci.oci_volume_group_info) to list or fetch volume groups.
+  - Use M(ansible.oci.oci_volume_group_info) to list or fetch volume groups.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
   - Create requests must omit C(volume_group_id). After create, capture the
@@ -24,10 +24,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -68,7 +68,7 @@ options:
       - Required when creating a volume group.
       - The module does not update this field after create.
       - Availability domain names are tenancy-specific; use
-        M(oracle.oci.oci_availability_domain_info) to discover the valid names
+        M(ansible.oci.oci_availability_domain_info) to discover the valid names
         for your tenancy and region.
     type: str
   volume_ids:
@@ -89,7 +89,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create a volume group from existing volumes
-  oracle.oci.oci_volume_group:
+  ansible.oci.oci_volume_group:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -100,7 +100,7 @@ EXAMPLES = r"""
   register: created_volume_group
 
 - name: Add a volume to the group by updating the member list
-  oracle.oci.oci_volume_group:
+  ansible.oci.oci_volume_group:
     state: present
     volume_group_id: "{{ created_volume_group.resource.id }}"
     volume_ids:
@@ -109,7 +109,7 @@ EXAMPLES = r"""
       - ocid1.volume.oc1..example3
 
 - name: Reconcile a uniquely named volume group by name (update tags)
-  oracle.oci.oci_volume_group:
+  ansible.oci.oci_volume_group:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -121,12 +121,12 @@ EXAMPLES = r"""
       env: prod
 
 - name: Delete the volume group
-  oracle.oci.oci_volume_group:
+  ansible.oci.oci_volume_group:
     state: absent
     volume_group_id: "{{ created_volume_group.resource.id }}"
 
 - name: Delete a uniquely named volume group without providing volume_group_id
-  oracle.oci.oci_volume_group:
+  ansible.oci.oci_volume_group:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     name: app-volume-group
@@ -290,13 +290,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

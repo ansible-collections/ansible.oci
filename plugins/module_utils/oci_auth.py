@@ -5,7 +5,7 @@ __metaclass__ = type
 
 import os
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
 )
 

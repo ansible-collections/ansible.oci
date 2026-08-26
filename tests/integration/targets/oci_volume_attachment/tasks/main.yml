@@ -16,12 +16,12 @@
 
 - name: Exercise volume attachment module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Discover an availability domain in the compartment
-      oracle.oci.oci_availability_domain_info:
+      ansible.oci.oci_availability_domain_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
       register: oci_volume_attachment_ad_info
 
@@ -35,7 +35,7 @@
         oci_volume_attachment_integration_availability_domain: "{{ oci_volume_attachment_ad_info.availability_domains[0].name }}"
 
     - name: Discover a compatible image
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         operating_system: "{{ oci_volume_attachment_integration_operating_system }}"
         operating_system_version: "{{ oci_volume_attachment_integration_operating_system_version }}"
@@ -52,7 +52,7 @@
         oci_volume_attachment_image_id: "{{ oci_volume_attachment_image_info.images[0].id }}"
 
     - name: Create test VCN for volume attachment integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_volume_attachment_integration_vcn_name }}"
@@ -61,7 +61,7 @@
       register: oci_volume_attachment_vcn_create
 
     - name: Create test subnet for volume attachment integration
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_volume_attachment_vcn_create.resource.id }}"
@@ -70,7 +70,7 @@
       register: oci_volume_attachment_subnet_create
 
     - name: Create test compute instance for volume attachment integration
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_volume_attachment_integration_availability_domain }}"
@@ -86,7 +86,7 @@
         oci_volume_attachment_instance_id: "{{ oci_volume_attachment_instance_create.resource.id }}"
 
     - name: Create test block volume for volume attachment integration
-      oracle.oci.oci_blockstorage_volume:
+      ansible.oci.oci_blockstorage_volume:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_volume_attachment_integration_availability_domain }}"
@@ -112,7 +112,7 @@
           volume_attachment_id: ""
 
     - name: Create volume attachment in check mode
-      oracle.oci.oci_volume_attachment: &oci_volume_attachment_create_module_options
+      ansible.oci.oci_volume_attachment: &oci_volume_attachment_create_module_options
         state: "{{ oci_volume_attachment_create_params.state }}"
         compartment_id: "{{ oci_volume_attachment_create_params.compartment_id }}"
         instance_id: "{{ oci_volume_attachment_create_params.instance_id }}"
@@ -128,7 +128,7 @@
           - oci_volume_attachment_create_check.changed | bool
 
     - name: Read volume attachment after create check mode
-      oracle.oci.oci_volume_attachment_info:
+      ansible.oci.oci_volume_attachment_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         instance_id: "{{ oci_volume_attachment_instance_id }}"
         volume_id: "{{ oci_volume_attachment_volume_id }}"
@@ -141,7 +141,7 @@
           - oci_volume_attachment_create_check_probe.volume_attachments | length == 0
 
     - name: Create volume attachment
-      oracle.oci.oci_volume_attachment:
+      ansible.oci.oci_volume_attachment:
         <<: *oci_volume_attachment_create_module_options
       register: oci_volume_attachment_create
 
@@ -158,7 +158,7 @@
           - oci_volume_attachment_create.changed | bool
 
     - name: Read created volume attachment by id
-      oracle.oci.oci_volume_attachment_info:
+      ansible.oci.oci_volume_attachment_info:
         volume_attachment_id: "{{ oci_volume_attachment_id }}"
       register: oci_volume_attachment_probe_after_create
 
@@ -172,7 +172,7 @@
           - oci_volume_attachment_probe_after_create.volume_attachments[0].lifecycle_state == "ATTACHED"
 
     - name: List created volume attachment by scoped name
-      oracle.oci.oci_volume_attachment_info:
+      ansible.oci.oci_volume_attachment_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         instance_id: "{{ oci_volume_attachment_instance_id }}"
         volume_id: "{{ oci_volume_attachment_volume_id }}"
@@ -185,7 +185,7 @@
           - oci_volume_attachment_info_list.volume_attachments | selectattr('id', 'equalto', oci_volume_attachment_id) | list | length == 1
 
     - name: Assert created volume attachment is a no-op on rerun with returned id
-      oracle.oci.oci_volume_attachment:
+      ansible.oci.oci_volume_attachment:
         <<: *oci_volume_attachment_create_module_options
         volume_attachment_id: "{{ oci_volume_attachment_id }}"
       register: oci_volume_attachment_create_rerun
@@ -196,7 +196,7 @@
           - not oci_volume_attachment_create_rerun.changed | bool
 
     - name: Assert created volume attachment is a no-op on rerun with scoped name
-      oracle.oci.oci_volume_attachment:
+      ansible.oci.oci_volume_attachment:
         <<: *oci_volume_attachment_create_module_options
       register: oci_volume_attachment_create_rerun_by_name
 
@@ -206,7 +206,7 @@
           - not oci_volume_attachment_create_rerun_by_name.changed | bool
 
     - name: Detach volume attachment in check mode
-      oracle.oci.oci_volume_attachment: &oci_volume_attachment_delete_module_options
+      ansible.oci.oci_volume_attachment: &oci_volume_attachment_delete_module_options
         state: "{{ oci_volume_attachment_delete_params.state }}"
         volume_attachment_id: "{{ oci_volume_attachment_delete_params.volume_attachment_id }}"
       check_mode: true
@@ -218,7 +218,7 @@
           - oci_volume_attachment_delete_check.changed | bool
 
     - name: Read volume attachment after detach check mode
-      oracle.oci.oci_volume_attachment_info:
+      ansible.oci.oci_volume_attachment_info:
         volume_attachment_id: "{{ oci_volume_attachment_id }}"
       register: oci_volume_attachment_delete_check_probe
 
@@ -229,7 +229,7 @@
           - oci_volume_attachment_delete_check_probe.volume_attachments[0].id == oci_volume_attachment_id
 
     - name: Detach volume attachment
-      oracle.oci.oci_volume_attachment:
+      ansible.oci.oci_volume_attachment:
         <<: *oci_volume_attachment_delete_module_options
       register: oci_volume_attachment_delete
 
@@ -239,7 +239,7 @@
           - oci_volume_attachment_delete.changed | bool
 
     - name: Assert detach is idempotent on rerun
-      oracle.oci.oci_volume_attachment:
+      ansible.oci.oci_volume_attachment:
         <<: *oci_volume_attachment_delete_module_options
       register: oci_volume_attachment_delete_rerun
 

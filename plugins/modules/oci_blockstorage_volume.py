@@ -25,10 +25,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -165,7 +165,7 @@ notes:
 
 EXAMPLES = r"""
 - name: Create a volume with OCI default size and performance
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -173,7 +173,7 @@ EXAMPLES = r"""
   register: created_volume
 
 - name: Create a custom 50 GB Balanced block volume
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -183,7 +183,7 @@ EXAMPLES = r"""
   register: created_volume
 
 - name: Create a custom Ultra High Performance volume without autotune
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -192,7 +192,7 @@ EXAMPLES = r"""
     vpus_per_gb: 30
 
 - name: Create a volume with performance-based autotuning
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -203,7 +203,7 @@ EXAMPLES = r"""
     max_vpus_per_gb: 120
 
 - name: Create a volume with detached-volume autotuning
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -213,7 +213,7 @@ EXAMPLES = r"""
     detached_volume_auto_tune: true
 
 - name: Create a volume with a customer-managed encryption key
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -223,19 +223,19 @@ EXAMPLES = r"""
     backup_policy_id: ocid1.volumebackuppolicy.oc1..example
 
 - name: Grow the volume and change its performance level
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     volume_id: "{{ created_volume.resource.id }}"
     size_in_gbs: 100
     vpus_per_gb: 20
 
 - name: Delete the created volume
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: absent
     volume_id: "{{ created_volume.resource.id }}"
 
 - name: Delete a uniquely named volume without providing volume_id
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     name: example-volume
@@ -431,14 +431,14 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     LIFECYCLE_FAILED,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

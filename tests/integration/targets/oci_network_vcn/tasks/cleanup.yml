@@ -1,24 +1,24 @@
 ---
 - name: Run VCN cleanup with shared OCI auth defaults
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Delete leaked duplicate VCN during cleanup
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_network_vcn_duplicate_id }}"
       when: oci_network_vcn_duplicate_id | default('') | length > 0
 
     - name: Delete leaked subnet during cleanup
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_network_vcn_integration_subnet_id }}"
       when: oci_network_vcn_integration_subnet_id | default('') | length > 0
 
     - name: Delete leaked VCN during cleanup
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_network_vcn_id }}"
       when: oci_network_vcn_id | default('') | length > 0

@@ -15,12 +15,12 @@
 
 - name: Exercise volume backup module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Discover an availability domain in the compartment
-      oracle.oci.oci_availability_domain_info:
+      ansible.oci.oci_availability_domain_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
       register: oci_volume_backup_ad_info
 
@@ -34,7 +34,7 @@
         oci_volume_backup_integration_availability_domain: "{{ oci_volume_backup_ad_info.availability_domains[0].name }}"
 
     - name: Create test block volume for volume backup integration
-      oracle.oci.oci_blockstorage_volume:
+      ansible.oci.oci_blockstorage_volume:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_volume_backup_integration_availability_domain }}"
@@ -57,7 +57,7 @@
           freeform_tags: "{{ oci_volume_backup_integration_create_tags }}"
 
     - name: Create volume backup in check mode
-      oracle.oci.oci_volume_backup: &oci_volume_backup_create_module_options
+      ansible.oci.oci_volume_backup: &oci_volume_backup_create_module_options
         state: "{{ oci_volume_backup_create_params.state }}"
         compartment_id: "{{ oci_volume_backup_create_params.compartment_id }}"
         name: "{{ oci_volume_backup_create_params.name }}"
@@ -73,7 +73,7 @@
           - oci_volume_backup_create_check.changed | bool
 
     - name: Read volume backup after create check mode
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_volume_backup_integration_backup_name }}"
       register: oci_volume_backup_create_check_probe
@@ -86,7 +86,7 @@
             | list | length == 0
 
     - name: Create volume backup
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_create_module_options
       register: oci_volume_backup_create
 
@@ -107,7 +107,7 @@
           - oci_volume_backup_create.resource.volume_id == oci_volume_backup_integration_volume_id
 
     - name: Read volume backup by id
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         volume_backup_id: "{{ oci_volume_backup_id }}"
       register: oci_volume_backup_info_by_id
 
@@ -119,7 +119,7 @@
           - oci_volume_backup_info_by_id.volume_backups[0].name == oci_volume_backup_integration_backup_name
 
     - name: List volume backups by source volume
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         volume_id: "{{ oci_volume_backup_integration_volume_id }}"
       register: oci_volume_backup_info_by_volume
@@ -132,7 +132,7 @@
             | list | length == 1
 
     - name: Assert created backup is a no-op in check mode with unique name
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_create_module_options
       check_mode: true
       register: oci_volume_backup_create_check_rerun_by_name
@@ -143,7 +143,7 @@
           - not oci_volume_backup_create_check_rerun_by_name.changed | bool
 
     - name: Assert created backup is a no-op on rerun with unique name
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_create_module_options
       register: oci_volume_backup_create_rerun_by_name
 
@@ -154,7 +154,7 @@
           - oci_volume_backup_create_rerun_by_name.resource.id == oci_volume_backup_id
 
     - name: Assert created backup is a no-op in check mode with returned id
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_create_module_options
         volume_backup_id: "{{ oci_volume_backup_id }}"
       check_mode: true
@@ -166,7 +166,7 @@
           - not oci_volume_backup_create_check_rerun.changed | bool
 
     - name: Assert created backup is a no-op on rerun with returned id
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_create_module_options
         volume_backup_id: "{{ oci_volume_backup_id }}"
       register: oci_volume_backup_create_rerun
@@ -177,7 +177,7 @@
           - not oci_volume_backup_create_rerun.changed | bool
 
     - name: Update volume backup in check mode
-      oracle.oci.oci_volume_backup: &oci_volume_backup_update_module_options
+      ansible.oci.oci_volume_backup: &oci_volume_backup_update_module_options
         state: "{{ oci_volume_backup_update_params.state }}"
         volume_backup_id: "{{ oci_volume_backup_update_params.volume_backup_id }}"
         name: "{{ oci_volume_backup_update_params.name }}"
@@ -191,7 +191,7 @@
           - oci_volume_backup_update_check.changed | bool
 
     - name: Read volume backup after update check mode
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         volume_backup_id: "{{ oci_volume_backup_id }}"
       register: oci_volume_backup_update_check_probe
 
@@ -202,7 +202,7 @@
           - oci_volume_backup_update_check_probe.volume_backups[0].freeform_tags.phase == "create"
 
     - name: Update volume backup
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_update_module_options
       register: oci_volume_backup_update
 
@@ -212,7 +212,7 @@
           - oci_volume_backup_update.changed | bool
 
     - name: Read updated volume backup by name
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_volume_backup_integration_updated_backup_name }}"
       register: oci_volume_backup_info_updated
@@ -226,7 +226,7 @@
           - oci_volume_backup_info_updated.volume_backups[0].freeform_tags.phase == "update"
 
     - name: Assert update is a no-op in check mode
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_update_module_options
       check_mode: true
       register: oci_volume_backup_update_check_rerun
@@ -237,7 +237,7 @@
           - not oci_volume_backup_update_check_rerun.changed | bool
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_update_module_options
       register: oci_volume_backup_update_rerun
 
@@ -247,7 +247,7 @@
           - not oci_volume_backup_update_rerun.changed | bool
 
     - name: Delete volume backup in check mode
-      oracle.oci.oci_volume_backup: &oci_volume_backup_delete_module_options
+      ansible.oci.oci_volume_backup: &oci_volume_backup_delete_module_options
         state: absent
         volume_backup_id: "{{ oci_volume_backup_id }}"
       check_mode: true
@@ -259,7 +259,7 @@
           - oci_volume_backup_delete_check.changed | bool
 
     - name: Read volume backup after delete check mode
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         volume_backup_id: "{{ oci_volume_backup_id }}"
       register: oci_volume_backup_delete_check_probe
 
@@ -269,7 +269,7 @@
           - oci_volume_backup_delete_check_probe.volume_backups | length == 1
 
     - name: Delete volume backup
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_delete_module_options
       register: oci_volume_backup_delete
 
@@ -279,7 +279,7 @@
           - oci_volume_backup_delete.changed | bool
 
     - name: Read volume backup after delete
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         volume_backup_id: "{{ oci_volume_backup_id }}"
       register: oci_volume_backup_delete_probe
 
@@ -291,7 +291,7 @@
           - oci_volume_backup_delete_probe.volume_backups[0].lifecycle_state == "TERMINATED"
 
     - name: List available volume backups by name after delete
-      oracle.oci.oci_volume_backup_info:
+      ansible.oci.oci_volume_backup_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_volume_backup_integration_updated_backup_name }}"
         lifecycle_state: AVAILABLE
@@ -303,7 +303,7 @@
           - oci_volume_backup_info_available_after_delete.volume_backups | length == 0
 
     - name: Assert delete is a no-op in check mode
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_delete_module_options
       check_mode: true
       register: oci_volume_backup_delete_check_rerun
@@ -314,7 +314,7 @@
           - not oci_volume_backup_delete_check_rerun.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_volume_backup:
+      ansible.oci.oci_volume_backup:
         <<: *oci_volume_backup_delete_module_options
       register: oci_volume_backup_delete_rerun
 

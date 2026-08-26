@@ -22,10 +22,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -62,14 +62,14 @@ options:
 
 EXAMPLES = r"""
 - name: Create a DRG
-  oracle.oci.oci_network_drg:
+  ansible.oci.oci_network_drg:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: example-drg
   register: created_drg
 
 - name: Reconcile a uniquely named DRG by name
-  oracle.oci.oci_network_drg:
+  ansible.oci.oci_network_drg:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: example-drg
@@ -77,19 +77,19 @@ EXAMPLES = r"""
       env: prod
 
 - name: Intentionally create a second DRG with the same display name
-  oracle.oci.oci_network_drg:
+  ansible.oci.oci_network_drg:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
     name: example-drg
 
 - name: Delete the created DRG
-  oracle.oci.oci_network_drg:
+  ansible.oci.oci_network_drg:
     state: absent
     drg_id: "{{ created_drg.resource.id }}"
 
 - name: Delete a uniquely named DRG without providing drg_id
-  oracle.oci.oci_network_drg:
+  ansible.oci.oci_network_drg:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     name: example-drg
@@ -186,13 +186,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

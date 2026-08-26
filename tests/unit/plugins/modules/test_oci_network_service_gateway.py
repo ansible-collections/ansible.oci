@@ -92,7 +92,7 @@ def test_build_service_models_wraps_each_id(monkeypatch):
 
 
 def test_build_service_models_handles_none_and_empty():
-    from ansible_collections.oracle.oci.plugins.modules.oci_network_service_gateway import (
+    from ansible_collections.ansible.oci.plugins.modules.oci_network_service_gateway import (
         build_service_models,
     )
 

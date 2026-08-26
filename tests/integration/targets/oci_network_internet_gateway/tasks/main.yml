@@ -15,12 +15,12 @@
 
 - name: Exercise internet gateway module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for internet gateway integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_internet_gateway_integration_vcn_name }}"
@@ -46,7 +46,7 @@
           freeform_tags: "{{ oci_internet_gateway_integration_create_tags }}"
 
     - name: Create internet gateway in check mode
-      oracle.oci.oci_network_internet_gateway: &oci_internet_gateway_create_module_options
+      ansible.oci.oci_network_internet_gateway: &oci_internet_gateway_create_module_options
         state: "{{ oci_internet_gateway_create_params.state }}"
         compartment_id: "{{ oci_internet_gateway_create_params.compartment_id }}"
         vcn_id: "{{ oci_internet_gateway_create_params.vcn_id }}"
@@ -62,7 +62,7 @@
           - oci_internet_gateway_create_check.changed | bool
 
     - name: Read internet gateway after create check mode
-      oracle.oci.oci_network_internet_gateway_info:
+      ansible.oci.oci_network_internet_gateway_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_internet_gateway_integration_network.vcn_id }}"
         name: "{{ oci_internet_gateway_integration_ig_name }}"
@@ -74,7 +74,7 @@
           - oci_internet_gateway_create_check_probe.internet_gateways | length == 0
 
     - name: Create internet gateway
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         <<: *oci_internet_gateway_create_module_options
       register: oci_internet_gateway_create
 
@@ -98,7 +98,7 @@
           - oci_internet_gateway_create.changed | bool
 
     - name: Read internet gateway by id
-      oracle.oci.oci_network_internet_gateway_info:
+      ansible.oci.oci_network_internet_gateway_info:
         internet_gateway_id: "{{ oci_internet_gateway_id }}"
       register: oci_internet_gateway_info_by_id
 
@@ -112,7 +112,7 @@
           - oci_internet_gateway_info_by_id.internet_gateways[0].is_enabled | bool
 
     - name: List internet gateway by name
-      oracle.oci.oci_network_internet_gateway_info:
+      ansible.oci.oci_network_internet_gateway_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_internet_gateway_integration_network.vcn_id }}"
         name: "{{ oci_internet_gateway_integration_ig_name }}"
@@ -125,7 +125,7 @@
           - oci_internet_gateway_info_list.internet_gateways | selectattr('id', 'equalto', oci_internet_gateway_id) | list | length == 1
 
     - name: Assert created internet gateway is a no-op on rerun with unique name
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         <<: *oci_internet_gateway_create_module_options
       register: oci_internet_gateway_create_rerun_by_name
 
@@ -136,7 +136,7 @@
           - oci_internet_gateway_create_rerun_by_name.resource.id == oci_internet_gateway_id
 
     - name: Assert created internet gateway is a no-op on rerun with returned id
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         <<: *oci_internet_gateway_create_module_options
         internet_gateway_id: "{{ oci_internet_gateway_id }}"
       register: oci_internet_gateway_create_rerun
@@ -147,7 +147,7 @@
           - not oci_internet_gateway_create_rerun.changed | bool
 
     - name: Update internet gateway in check mode
-      oracle.oci.oci_network_internet_gateway: &oci_internet_gateway_update_module_options
+      ansible.oci.oci_network_internet_gateway: &oci_internet_gateway_update_module_options
         state: "{{ oci_internet_gateway_update_params.state }}"
         internet_gateway_id: "{{ oci_internet_gateway_update_params.internet_gateway_id }}"
         name: "{{ oci_internet_gateway_update_params.name }}"
@@ -163,7 +163,7 @@
           - oci_internet_gateway_update_check.changed | bool
 
     - name: Read internet gateway after update check mode
-      oracle.oci.oci_network_internet_gateway_info:
+      ansible.oci.oci_network_internet_gateway_info:
         internet_gateway_id: "{{ oci_internet_gateway_id }}"
       register: oci_internet_gateway_update_check_probe
 
@@ -176,7 +176,7 @@
           - oci_internet_gateway_update_check_probe.internet_gateways[0].freeform_tags.phase == "create"
 
     - name: Update internet gateway
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         <<: *oci_internet_gateway_update_module_options
       register: oci_internet_gateway_update
 
@@ -186,7 +186,7 @@
           - oci_internet_gateway_update.changed | bool
 
     - name: Read updated internet gateway by name
-      oracle.oci.oci_network_internet_gateway_info:
+      ansible.oci.oci_network_internet_gateway_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_internet_gateway_integration_network.vcn_id }}"
         name: "{{ oci_internet_gateway_integration_updated_ig_name }}"
@@ -204,7 +204,7 @@
           - oci_internet_gateway_info_updated.internet_gateways[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         <<: *oci_internet_gateway_update_module_options
       register: oci_internet_gateway_update_rerun
 
@@ -214,7 +214,7 @@
           - not oci_internet_gateway_update_rerun.changed | bool
 
     - name: Delete internet gateway in check mode
-      oracle.oci.oci_network_internet_gateway: &oci_internet_gateway_delete_module_options
+      ansible.oci.oci_network_internet_gateway: &oci_internet_gateway_delete_module_options
         state: "{{ oci_internet_gateway_delete_params.state }}"
         internet_gateway_id: "{{ oci_internet_gateway_delete_params.internet_gateway_id }}"
       check_mode: true
@@ -226,7 +226,7 @@
           - oci_internet_gateway_delete_check.changed | bool
 
     - name: Read internet gateway after delete check mode
-      oracle.oci.oci_network_internet_gateway_info:
+      ansible.oci.oci_network_internet_gateway_info:
         internet_gateway_id: "{{ oci_internet_gateway_id }}"
       register: oci_internet_gateway_delete_check_probe
 
@@ -236,7 +236,7 @@
           - oci_internet_gateway_delete_check_probe.internet_gateways | length == 1
 
     - name: Delete internet gateway
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         <<: *oci_internet_gateway_delete_module_options
       register: oci_internet_gateway_delete
 
@@ -246,7 +246,7 @@
           - oci_internet_gateway_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         <<: *oci_internet_gateway_delete_module_options
       register: oci_internet_gateway_delete_rerun
 

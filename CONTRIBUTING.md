@@ -1,12 +1,12 @@
 # Contributing to this project
 
-Thank you for your interest in contributing to `oracle.oci`.
+Thank you for your interest in contributing to `ansible.oci`.
 
 ## Before you start
 
 * Read the [Ansible community guide](https://docs.ansible.com/projects/ansible/devel/community/index.html).
 * Review the [Ansible collection development guide](https://docs.ansible.com/projects/ansible/devel/dev_guide/developing_collections.html#contributing-to-collections).
-* Use [GitHub Issues](https://github.com/ansible-collections/oracle.oci/issues) for bugs, feature requests, and design discussions.
+* Use [GitHub Issues](https://github.com/ansible-collections/ansible.oci/issues) for bugs, feature requests, and design discussions.
 
 If you are planning a larger change, open an issue first so the approach can be
 discussed before implementation.

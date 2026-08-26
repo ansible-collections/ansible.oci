@@ -15,7 +15,7 @@
 
 - name: Exercise VCN module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
@@ -34,7 +34,7 @@
           vcn_id: ""
 
     - name: Create VCN in check mode
-      oracle.oci.oci_network_vcn: &oci_network_vcn_create_module_options
+      ansible.oci.oci_network_vcn: &oci_network_vcn_create_module_options
         state: "{{ oci_network_vcn_create_params.state }}"
         compartment_id: "{{ oci_network_vcn_create_params.compartment_id }}"
         name: "{{ oci_network_vcn_create_params.name }}"
@@ -50,7 +50,7 @@
           - oci_network_vcn_create_check.changed | bool
 
     - name: Read VCN after create check mode
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_network_vcn_integration_vcn_name }}"
       register: oci_network_vcn_create_check_probe
@@ -61,7 +61,7 @@
           - oci_network_vcn_create_check_probe.vcns | length == 0
 
     - name: Create VCN
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_create_module_options
       register: oci_network_vcn_create
 
@@ -96,7 +96,7 @@
           - oci_network_vcn_create.changed | bool
 
     - name: Read VCN by id
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         vcn_id: "{{ oci_network_vcn_id }}"
       register: oci_network_vcn_info_by_id
 
@@ -108,7 +108,7 @@
           - oci_network_vcn_info_by_id.vcns[0].lifecycle_state == "AVAILABLE"
 
     - name: List VCN by name
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_network_vcn_integration_vcn_name }}"
         lifecycle_state: AVAILABLE
@@ -120,7 +120,7 @@
           - oci_network_vcn_info_list.vcns | selectattr('id', 'equalto', oci_network_vcn_id) | list | length == 1
 
     - name: Assert created VCN is a no-op on rerun with unique name
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_create_module_options
       register: oci_network_vcn_create_rerun_by_name
 
@@ -131,7 +131,7 @@
           - oci_network_vcn_create_rerun_by_name.resource.id == oci_network_vcn_id
 
     - name: Intentionally create a second VCN with the same display name
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_create_module_options
         allow_duplicate_name: true
         cidr_blocks:
@@ -150,7 +150,7 @@
           - oci_network_vcn_duplicate_id != oci_network_vcn_id
 
     - name: Delete the duplicate VCN
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_network_vcn_duplicate_id }}"
 
@@ -159,7 +159,7 @@
         oci_network_vcn_duplicate_id: ""
 
     - name: Assert created VCN is a no-op on rerun with returned id
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_create_module_options
         vcn_id: "{{ oci_network_vcn_id }}"
       register: oci_network_vcn_create_rerun
@@ -170,7 +170,7 @@
           - not oci_network_vcn_create_rerun.changed | bool
 
     - name: Update VCN CIDR in check mode
-      oracle.oci.oci_network_vcn: &oci_network_vcn_cidr_modify_module_options
+      ansible.oci.oci_network_vcn: &oci_network_vcn_cidr_modify_module_options
         state: "{{ oci_network_vcn_cidr_modify_params.state }}"
         vcn_id: "{{ oci_network_vcn_cidr_modify_params.vcn_id }}"
         cidr_blocks: "{{ oci_network_vcn_cidr_modify_params.cidr_blocks }}"
@@ -183,7 +183,7 @@
           - oci_network_vcn_cidr_modify_check.changed | bool
 
     - name: Read VCN after CIDR update check mode
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         vcn_id: "{{ oci_network_vcn_id }}"
       register: oci_network_vcn_info_cidr_check
 
@@ -194,7 +194,7 @@
           - oci_network_vcn_info_cidr_check.vcns[0].cidr_blocks == [oci_network_vcn_integration_vcn_cidr_block]
 
     - name: Modify primary VCN CIDR block
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_cidr_modify_module_options
       register: oci_network_vcn_cidr_modify
 
@@ -204,7 +204,7 @@
           - oci_network_vcn_cidr_modify.changed | bool
 
     - name: Read VCN after primary CIDR modify
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         vcn_id: "{{ oci_network_vcn_id }}"
       register: oci_network_vcn_info_cidr_modified
 
@@ -215,7 +215,7 @@
           - oci_network_vcn_info_cidr_modified.vcns[0].cidr_blocks == [oci_network_vcn_integration_modified_vcn_cidr_block]
 
     - name: Assert primary CIDR modify is idempotent on rerun
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_cidr_modify_module_options
       register: oci_network_vcn_cidr_modify_rerun
 
@@ -225,7 +225,7 @@
           - not oci_network_vcn_cidr_modify_rerun.changed | bool
 
     - name: Add an additional VCN CIDR block
-      oracle.oci.oci_network_vcn: &oci_network_vcn_cidr_add_module_options
+      ansible.oci.oci_network_vcn: &oci_network_vcn_cidr_add_module_options
         state: "{{ oci_network_vcn_cidr_add_params.state }}"
         vcn_id: "{{ oci_network_vcn_cidr_add_params.vcn_id }}"
         cidr_blocks: "{{ oci_network_vcn_cidr_add_params.cidr_blocks }}"
@@ -237,7 +237,7 @@
           - oci_network_vcn_cidr_add.changed | bool
 
     - name: Read VCN after additional CIDR add
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         vcn_id: "{{ oci_network_vcn_id }}"
       register: oci_network_vcn_info_cidr_added
 
@@ -251,7 +251,7 @@
             oci_network_vcn_integration_modified_vcn_cidr_block] | sort)
 
     - name: Assert additional CIDR add is idempotent on rerun
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_cidr_add_module_options
       register: oci_network_vcn_cidr_add_rerun
 
@@ -261,7 +261,7 @@
           - not oci_network_vcn_cidr_add_rerun.changed | bool
 
     - name: Update VCN in check mode
-      oracle.oci.oci_network_vcn: &oci_network_vcn_update_module_options
+      ansible.oci.oci_network_vcn: &oci_network_vcn_update_module_options
         state: "{{ oci_network_vcn_update_params.state }}"
         vcn_id: "{{ oci_network_vcn_update_params.vcn_id }}"
         cidr_blocks: "{{ oci_network_vcn_update_params.cidr_blocks }}"
@@ -276,7 +276,7 @@
           - oci_network_vcn_update_check.changed | bool
 
     - name: Read VCN after update check mode
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         vcn_id: "{{ oci_network_vcn_id }}"
       register: oci_network_vcn_update_check_probe
 
@@ -292,7 +292,7 @@
           - oci_network_vcn_update_check_probe.vcns[0].freeform_tags.phase == "create"
 
     - name: Update VCN
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_update_module_options
       register: oci_network_vcn_update
 
@@ -302,7 +302,7 @@
           - oci_network_vcn_update.changed | bool
 
     - name: Read updated VCN by name
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_network_vcn_integration_updated_vcn_name }}"
         lifecycle_state: AVAILABLE
@@ -316,7 +316,7 @@
           - oci_network_vcn_info_updated.vcns[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_update_module_options
       register: oci_network_vcn_update_rerun
 
@@ -326,7 +326,7 @@
           - not oci_network_vcn_update_rerun.changed | bool
 
     - name: Create dependent subnet for blocked delete test
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_network_vcn_id }}"
@@ -339,7 +339,7 @@
         oci_network_vcn_integration_subnet_id: "{{ oci_network_vcn_subnet_create.resource.id }}"
 
     - name: Assert delete fails cleanly while dependent subnet exists
-      oracle.oci.oci_network_vcn: &oci_network_vcn_delete_module_options
+      ansible.oci.oci_network_vcn: &oci_network_vcn_delete_module_options
         state: "{{ oci_network_vcn_delete_params.state }}"
         vcn_id: "{{ oci_network_vcn_delete_params.vcn_id }}"
       register: oci_network_vcn_delete_blocked
@@ -352,12 +352,12 @@
           - "'dependent resources' in (oci_network_vcn_delete_blocked.msg | default(''))"
 
     - name: Delete dependent subnet after blocked delete test
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_network_vcn_integration_subnet_id }}"
 
     - name: Delete VCN in check mode
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_delete_module_options
       check_mode: true
       register: oci_network_vcn_delete_check
@@ -368,7 +368,7 @@
           - oci_network_vcn_delete_check.changed | bool
 
     - name: Read VCN after delete check mode
-      oracle.oci.oci_network_vcn_info:
+      ansible.oci.oci_network_vcn_info:
         vcn_id: "{{ oci_network_vcn_id }}"
       register: oci_network_vcn_delete_check_probe
 
@@ -378,7 +378,7 @@
           - oci_network_vcn_delete_check_probe.vcns | length == 1
 
     - name: Delete VCN
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_delete_module_options
       register: oci_network_vcn_delete
 
@@ -388,7 +388,7 @@
           - oci_network_vcn_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         <<: *oci_network_vcn_delete_module_options
       register: oci_network_vcn_delete_rerun
 

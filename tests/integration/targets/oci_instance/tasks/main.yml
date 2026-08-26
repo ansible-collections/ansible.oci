@@ -14,12 +14,12 @@
 
 - name: Exercise compute instance info module argument validation and empty-result paths
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Fail without compartment_id or instance_id
-      oracle.oci.oci_instance_info: {}
+      ansible.oci.oci_instance_info: {}
       register: oci_instance_info_missing_args
       ignore_errors: true
 
@@ -29,7 +29,7 @@
           - oci_instance_info_missing_args is failed
 
     - name: List instances filtered by a name that will not match
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "oci-instance-info-integration-{{ oci_integration_rpfx }}"
       register: oci_instance_info_list_by_name
@@ -41,7 +41,7 @@
           - oci_instance_info_list_by_name.instances | length == 0
 
     - name: Get a non-existent instance by id
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         instance_id: "ocid1.instance.oc1..nonexistentxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       register: oci_instance_info_get_missing
 
@@ -52,7 +52,7 @@
           - oci_instance_info_get_missing.instances | length == 0
 
     - name: Discover a compatible image
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         operating_system: "{{ oci_instance_integration_operating_system }}"
         operating_system_version: "{{ oci_instance_integration_operating_system_version }}"
@@ -69,7 +69,7 @@
         oci_instance_discovered_image_id: "{{ oci_image_info_discovered.images[0].id }}"
 
     - name: Get the working image by id
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         image_id: "{{ oci_instance_discovered_image_id }}"
       register: oci_image_info_by_id
 
@@ -81,7 +81,7 @@
           - oci_image_info_by_id.images[0].id == oci_instance_discovered_image_id
 
     - name: List images filtered by operating system
-      oracle.oci.oci_image_info:
+      ansible.oci.oci_image_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         operating_system: "{{ oci_image_info_by_id.images[0].operating_system }}"
       register: oci_image_info_by_operating_system
@@ -95,7 +95,7 @@
             | list | length == 1
 
     - name: List availability domains for the configured compartment
-      oracle.oci.oci_availability_domain_info:
+      ansible.oci.oci_availability_domain_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
       register: oci_availability_domain_info_list
 
@@ -108,7 +108,7 @@
             | list | length == 1
 
     - name: List availability domains without compartment_id to exercise the tenancy default
-      oracle.oci.oci_availability_domain_info: {}
+      ansible.oci.oci_availability_domain_info: {}
       register: oci_availability_domain_info_default
 
     - name: Assert the tenancy default returns the same availability domains
@@ -121,7 +121,7 @@
             | map(attribute='name') | sort
 
     - name: List shapes in the availability domain
-      oracle.oci.oci_shape_info:
+      ansible.oci.oci_shape_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_instance_integration_availability_domain }}"
       register: oci_shape_info_list
@@ -135,7 +135,7 @@
             | list | length > 0
 
     - name: List shapes filtered by exact shape name
-      oracle.oci.oci_shape_info:
+      ansible.oci.oci_shape_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_instance_integration_availability_domain }}"
         shape: "{{ oci_instance_integration_shape }}"
@@ -151,7 +151,7 @@
             | list | length > 0
 
     - name: List shapes compatible with the working image
-      oracle.oci.oci_shape_info:
+      ansible.oci.oci_shape_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_instance_integration_availability_domain }}"
         image_id: "{{ oci_instance_discovered_image_id }}"
@@ -186,12 +186,12 @@
 
 - name: Exercise compute instance module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for instance integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_instance_integration_vcn_name }}"
@@ -200,7 +200,7 @@
       register: oci_instance_vcn_create
 
     - name: Create test subnet for instance integration
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_instance_vcn_create.resource.id }}"
@@ -228,7 +228,7 @@
             all_plugins_disabled: false
 
     - name: Create instance in check mode
-      oracle.oci.oci_instance: &oci_instance_create_module_options
+      ansible.oci.oci_instance: &oci_instance_create_module_options
         state: "{{ oci_instance_create_params.state }}"
         compartment_id: "{{ oci_instance_create_params.compartment_id }}"
         availability_domain: "{{ oci_instance_create_params.availability_domain }}"
@@ -250,7 +250,7 @@
           - oci_instance_create_check.changed | bool
 
     - name: Read instances by name after create check mode
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_instance_integration_instance_name }}"
       register: oci_instance_info_create_check_probe
@@ -261,7 +261,7 @@
           - oci_instance_info_create_check_probe.instances | length == 0
 
     - name: Create instance
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_create_module_options
       register: oci_instance_create
 
@@ -285,7 +285,7 @@
           - not oci_instance_create.resource.agent_config.are_all_plugins_disabled | bool
 
     - name: Read the instance by id
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         instance_id: "{{ oci_instance_id }}"
       register: oci_instance_info_by_id
 
@@ -298,7 +298,7 @@
           - oci_instance_info_by_id.instances[0].lifecycle_state == "RUNNING"
 
     - name: List instances by name and availability_domain
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         availability_domain: "{{ oci_instance_integration_availability_domain }}"
         name: "{{ oci_instance_integration_instance_name }}"
@@ -311,7 +311,7 @@
           - oci_instance_info_list.instances | selectattr('id', 'equalto', oci_instance_id) | list | length == 1
 
     - name: Assert created instance is a no-op on rerun with unique name
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_instance_integration_instance_name }}"
@@ -324,7 +324,7 @@
           - oci_instance_create_rerun_by_name.resource.id == oci_instance_id
 
     - name: Assert created instance is a no-op on rerun with returned id
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_create_module_options
         instance_id: "{{ oci_instance_id }}"
       register: oci_instance_create_rerun
@@ -335,7 +335,7 @@
           - not oci_instance_create_rerun.changed | bool
 
     - name: Stop the instance
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         instance_id: "{{ oci_instance_id }}"
         power_state: stopped
       register: oci_instance_stop
@@ -347,7 +347,7 @@
           - oci_instance_stop.resource.lifecycle_state == "STOPPED"
 
     - name: Assert stop is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         instance_id: "{{ oci_instance_id }}"
         power_state: stopped
       register: oci_instance_stop_rerun
@@ -358,7 +358,7 @@
           - not oci_instance_stop_rerun.changed | bool
 
     - name: Update instance name, shape_config, and tags while stopped
-      oracle.oci.oci_instance: &oci_instance_update_module_options
+      ansible.oci.oci_instance: &oci_instance_update_module_options
         instance_id: "{{ oci_instance_id }}"
         name: "{{ oci_instance_integration_updated_instance_name }}"
         shape_config: "{{ oci_instance_integration_updated_shape_config }}"
@@ -381,7 +381,7 @@
     # below instead of alongside shape_config.
 
     - name: Start the instance again
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         instance_id: "{{ oci_instance_id }}"
         power_state: running
       register: oci_instance_start
@@ -395,7 +395,7 @@
           - oci_instance_start.resource.shape_config.memory_in_gbs == oci_instance_integration_updated_shape_config.memory_in_gbs
 
     - name: Read the updated instance by id
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         instance_id: "{{ oci_instance_id }}"
       register: oci_instance_info_after_update
 
@@ -407,7 +407,7 @@
           - oci_instance_info_after_update.instances[0].freeform_tags.phase == "update"
 
     - name: Update availability_config independently of the shape change
-      oracle.oci.oci_instance: &oci_instance_availability_config_module_options
+      ansible.oci.oci_instance: &oci_instance_availability_config_module_options
         instance_id: "{{ oci_instance_id }}"
         availability_config:
           recovery_action: stop_instance
@@ -420,7 +420,7 @@
           - oci_instance_update_availability_config.resource.availability_config.recovery_action == "STOP_INSTANCE"
 
     - name: Assert availability_config update is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_availability_config_module_options
       register: oci_instance_update_availability_config_rerun
 
@@ -430,7 +430,7 @@
           - not oci_instance_update_availability_config_rerun.changed | bool
 
     - name: Assert update is idempotent on rerun now that the resize is applied
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_update_module_options
       register: oci_instance_update_rerun
 
@@ -440,7 +440,7 @@
           - not oci_instance_update_rerun.changed | bool
 
     - name: Read the instance before exercising agent_config plugin controls
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         instance_id: "{{ oci_instance_id }}"
       register: oci_instance_info_before_agent_config
 
@@ -476,7 +476,7 @@
             desired_state: enabled
 
     - name: Enable every plugin and clear the master switches
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         instance_id: "{{ oci_instance_id }}"
         agent_config:
           all_plugins_disabled: false
@@ -517,7 +517,7 @@
           }}
 
     - name: Enable every plugin OCI reported on the instance
-      oracle.oci.oci_instance: &oci_instance_agent_config_enabled_module_options
+      ansible.oci.oci_instance: &oci_instance_agent_config_enabled_module_options
         instance_id: "{{ oci_instance_id }}"
         agent_config:
           all_plugins_disabled: false
@@ -547,7 +547,7 @@
           }}
 
     - name: Assert enabling every plugin is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_agent_config_enabled_module_options
       register: oci_instance_update_agent_config_enabled_rerun
 
@@ -557,7 +557,7 @@
           - not oci_instance_update_agent_config_enabled_rerun.changed | bool
 
     - name: Disable every plugin using the master switch
-      oracle.oci.oci_instance: &oci_instance_agent_config_all_disabled_module_options
+      ansible.oci.oci_instance: &oci_instance_agent_config_all_disabled_module_options
         instance_id: "{{ oci_instance_id }}"
         agent_config:
           all_plugins_disabled: true
@@ -570,7 +570,7 @@
           - oci_instance_update_agent_config_all_disabled.resource.agent_config.are_all_plugins_disabled | bool
 
     - name: Assert the master switch is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_agent_config_all_disabled_module_options
       register: oci_instance_update_agent_config_all_disabled_rerun
 
@@ -580,7 +580,7 @@
           - not oci_instance_update_agent_config_all_disabled_rerun.changed | bool
 
     - name: Turn the master switch back off
-      oracle.oci.oci_instance: &oci_instance_agent_config_all_enabled_again_module_options
+      ansible.oci.oci_instance: &oci_instance_agent_config_all_enabled_again_module_options
         instance_id: "{{ oci_instance_id }}"
         agent_config:
           all_plugins_disabled: false
@@ -593,7 +593,7 @@
           - not oci_instance_update_agent_config_all_enabled_again.resource.agent_config.are_all_plugins_disabled | bool
 
     - name: Assert turning the master switch back off is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_agent_config_all_enabled_again_module_options
       register: oci_instance_update_agent_config_all_enabled_again_rerun
 
@@ -603,7 +603,7 @@
           - not oci_instance_update_agent_config_all_enabled_again_rerun.changed | bool
 
     - name: Disable the monitoring plugins
-      oracle.oci.oci_instance: &oci_instance_agent_config_monitoring_disabled_module_options
+      ansible.oci.oci_instance: &oci_instance_agent_config_monitoring_disabled_module_options
         instance_id: "{{ oci_instance_id }}"
         agent_config:
           monitoring_disabled: true
@@ -616,7 +616,7 @@
           - oci_instance_update_agent_config_monitoring_disabled.resource.agent_config.is_monitoring_disabled | bool
 
     - name: Assert disabling monitoring is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_agent_config_monitoring_disabled_module_options
       register: oci_instance_update_agent_config_monitoring_disabled_rerun
 
@@ -626,7 +626,7 @@
           - not oci_instance_update_agent_config_monitoring_disabled_rerun.changed | bool
 
     - name: Disable the management plugins
-      oracle.oci.oci_instance: &oci_instance_agent_config_management_disabled_module_options
+      ansible.oci.oci_instance: &oci_instance_agent_config_management_disabled_module_options
         instance_id: "{{ oci_instance_id }}"
         agent_config:
           management_disabled: true
@@ -639,7 +639,7 @@
           - oci_instance_update_agent_config_management_disabled.resource.agent_config.is_management_disabled | bool
 
     - name: Assert disabling management is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_agent_config_management_disabled_module_options
       register: oci_instance_update_agent_config_management_disabled_rerun
 
@@ -649,7 +649,7 @@
           - not oci_instance_update_agent_config_management_disabled_rerun.changed | bool
 
     - name: Terminate instance in check mode
-      oracle.oci.oci_instance: &oci_instance_delete_module_options
+      ansible.oci.oci_instance: &oci_instance_delete_module_options
         state: "{{ oci_instance_delete_params.state }}"
         instance_id: "{{ oci_instance_delete_params.instance_id }}"
       check_mode: true
@@ -661,7 +661,7 @@
           - oci_instance_delete_check.changed | bool
 
     - name: Read the instance by id after delete check mode
-      oracle.oci.oci_instance_info:
+      ansible.oci.oci_instance_info:
         instance_id: "{{ oci_instance_id }}"
       register: oci_instance_info_delete_check_probe
 
@@ -671,7 +671,7 @@
           - oci_instance_info_delete_check_probe.instances | length == 1
 
     - name: Terminate instance
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_delete_module_options
       register: oci_instance_delete
 
@@ -681,7 +681,7 @@
           - oci_instance_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         <<: *oci_instance_delete_module_options
       register: oci_instance_delete_rerun
 

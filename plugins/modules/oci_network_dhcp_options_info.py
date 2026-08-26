@@ -18,8 +18,8 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -39,7 +39,7 @@ options:
 notes:
   - Each returned C(options) entry uses the same C(option_type)/
     C(server_type) snake_case vocabulary accepted by
-    C(oracle.oci.oci_network_dhcp_options), translated from OCI's native enum
+    C(ansible.oci.oci_network_dhcp_options), translated from OCI's native enum
     casing.
   - The returned C(domain_name_type) uses this same snake_case vocabulary,
     also translated from OCI's native enum casing.
@@ -47,17 +47,17 @@ notes:
 
 EXAMPLES = r"""
 - name: List all DHCP options in a compartment
-  oracle.oci.oci_network_dhcp_options_info:
+  ansible.oci.oci_network_dhcp_options_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List DHCP options in a VCN by name
-  oracle.oci.oci_network_dhcp_options_info:
+  ansible.oci.oci_network_dhcp_options_info:
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
     name: example-dhcp-options
 
 - name: Get a specific DHCP options set
-  oracle.oci.oci_network_dhcp_options_info:
+  ansible.oci.oci_network_dhcp_options_info:
     dhcp_options_id: ocid1.dhcpoptions.oc1..example
 """
 
@@ -96,7 +96,7 @@ dhcp_options:
     options:
       description: >-
         The DHCP options, using the same C(option_type)/C(server_type)
-        snake_case vocabulary accepted as input by oracle.oci.oci_network_dhcp_options.
+        snake_case vocabulary accepted as input by ansible.oci.oci_network_dhcp_options.
       type: list
       elements: dict
       returned: always
@@ -146,11 +146,11 @@ dhcp_options:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

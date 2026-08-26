@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 PYTHON_BIN ?= python3
 INTEGRATION_TARGETS ?=
-COLLECTION_ROOT ?= $(HOME)/.ansible/collections/ansible_collections/oracle/oci
+COLLECTION_ROOT ?= $(HOME)/.ansible/collections/ansible_collections/ansible/oci
 
 .PHONY: install-integration-reqs
 install-integration-reqs:

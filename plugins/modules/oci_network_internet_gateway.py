@@ -20,10 +20,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -88,7 +88,7 @@ options:
         route table as usual.
       - Because a route table's own rules may need to reference this
         gateway's OCID (see C(network_entity_id) on
-        C(oracle.oci.oci_network_route_table)), create the gateway first without
+        C(ansible.oci.oci_network_route_table)), create the gateway first without
         C(route_table_id), create the route table referencing the gateway,
         then update the gateway with C(route_table_id) if transit routing is
         required. See the examples below.
@@ -97,7 +97,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create an internet gateway with only the required parameters
-  oracle.oci.oci_network_internet_gateway:
+  ansible.oci.oci_network_internet_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -105,7 +105,7 @@ EXAMPLES = r"""
   register: created_internet_gateway
 
 - name: Create a route table with a rule pointing at that internet gateway
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -116,13 +116,13 @@ EXAMPLES = r"""
   register: created_route_table
 
 - name: (Optional) enable transit routing by pointing the gateway back at that route table
-  oracle.oci.oci_network_internet_gateway:
+  ansible.oci.oci_network_internet_gateway:
     state: present
     internet_gateway_id: "{{ created_internet_gateway.resource.id }}"
     route_table_id: "{{ created_route_table.resource.id }}"
 
 - name: Reconcile a uniquely named internet gateway by name
-  oracle.oci.oci_network_internet_gateway:
+  ansible.oci.oci_network_internet_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -130,12 +130,12 @@ EXAMPLES = r"""
     is_enabled: false
 
 - name: Delete the created internet gateway
-  oracle.oci.oci_network_internet_gateway:
+  ansible.oci.oci_network_internet_gateway:
     state: absent
     internet_gateway_id: "{{ created_internet_gateway.resource.id }}"
 
 - name: Delete a uniquely named internet gateway without providing internet_gateway_id
-  oracle.oci.oci_network_internet_gateway:
+  ansible.oci.oci_network_internet_gateway:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -213,13 +213,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

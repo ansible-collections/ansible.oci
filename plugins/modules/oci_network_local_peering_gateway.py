@@ -20,10 +20,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -80,7 +80,7 @@ options:
         route table as usual.
       - Because a route table's own rules may need to reference this
         gateway's OCID (see C(network_entity_id) on
-        C(oracle.oci.oci_network_route_table)), create the gateway first without
+        C(ansible.oci.oci_network_route_table)), create the gateway first without
         C(route_table_id), create the route table referencing the gateway,
         then update the gateway with C(route_table_id) if transit routing is
         required.
@@ -89,7 +89,7 @@ options:
     description:
       - The OCID of the other local peering gateway to peer with.
       - This is not a fixed or well-known value. Like C(network_entity_id)
-        on C(oracle.oci.oci_network_route_table), it is the OCID OCI assigns to the
+        on C(ansible.oci.oci_network_route_table), it is the OCID OCI assigns to the
         other LPG when it is created, so both local peering gateways must
         already exist before you can peer them. Peering is typically
         initiated from one side only; setting C(peer_id) here establishes
@@ -104,7 +104,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create a local peering gateway with only the required parameters
-  oracle.oci.oci_network_local_peering_gateway:
+  ansible.oci.oci_network_local_peering_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -112,7 +112,7 @@ EXAMPLES = r"""
   register: created_lpg
 
 - name: Create a second local peering gateway in a different VCN to peer with
-  oracle.oci.oci_network_local_peering_gateway:
+  ansible.oci.oci_network_local_peering_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..other-example
@@ -120,13 +120,13 @@ EXAMPLES = r"""
   register: created_lpg_peer
 
 - name: Peer the two local peering gateways
-  oracle.oci.oci_network_local_peering_gateway:
+  ansible.oci.oci_network_local_peering_gateway:
     state: present
     local_peering_gateway_id: "{{ created_lpg.resource.id }}"
     peer_id: "{{ created_lpg_peer.resource.id }}"
 
 - name: Reconcile a uniquely named local peering gateway by name
-  oracle.oci.oci_network_local_peering_gateway:
+  ansible.oci.oci_network_local_peering_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -134,7 +134,7 @@ EXAMPLES = r"""
     route_table_id: ocid1.routetable.oc1..example
 
 - name: Intentionally create a second local peering gateway with the same display name
-  oracle.oci.oci_network_local_peering_gateway:
+  ansible.oci.oci_network_local_peering_gateway:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -142,12 +142,12 @@ EXAMPLES = r"""
     name: example-lpg
 
 - name: Delete the created local peering gateway
-  oracle.oci.oci_network_local_peering_gateway:
+  ansible.oci.oci_network_local_peering_gateway:
     state: absent
     local_peering_gateway_id: "{{ created_lpg.resource.id }}"
 
 - name: Delete a uniquely named local peering gateway without providing local_peering_gateway_id
-  oracle.oci.oci_network_local_peering_gateway:
+  ansible.oci.oci_network_local_peering_gateway:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -262,13 +262,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

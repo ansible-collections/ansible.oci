@@ -14,9 +14,9 @@ description:
   - A boot volume backup is a point-in-time copy of a boot volume's data that
     can be used to restore the OS disk or create new boot volumes.
   - Boot volume backups use a separate OCI API from block (data) volume backups;
-    use M(oracle.oci.oci_volume_backup) for block volumes.
-  - Use M(oracle.oci.oci_boot_volume_info) to look up boot volume OCIDs.
-  - Use M(oracle.oci.oci_boot_volume_backup_info) to list or fetch boot volume
+    use M(ansible.oci.oci_volume_backup) for block volumes.
+  - Use M(ansible.oci.oci_boot_volume_info) to look up boot volume OCIDs.
+  - Use M(ansible.oci.oci_boot_volume_backup_info) to list or fetch boot volume
     backups.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
@@ -27,10 +27,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -155,7 +155,7 @@ notes:
 
 EXAMPLES = r"""
 - name: Create a full backup of a boot volume before maintenance
-  oracle.oci.oci_boot_volume_backup:
+  ansible.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: pre-maintenance-boot-backup
@@ -164,7 +164,7 @@ EXAMPLES = r"""
   register: created_backup
 
 - name: Create an incremental boot volume backup
-  oracle.oci.oci_boot_volume_backup:
+  ansible.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: nightly-boot-backup
@@ -172,7 +172,7 @@ EXAMPLES = r"""
     type: incremental
 
 - name: Create a backup with a 30-day retention period and delete prevention
-  oracle.oci.oci_boot_volume_backup:
+  ansible.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: retained-boot-backup
@@ -185,7 +185,7 @@ EXAMPLES = r"""
     retention_lock_enabled: true
 
 - name: Reconcile a uniquely named boot volume backup by name (update tags)
-  oracle.oci.oci_boot_volume_backup:
+  ansible.oci.oci_boot_volume_backup:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     boot_volume_id: ocid1.bootvolume.oc1..example
@@ -194,7 +194,7 @@ EXAMPLES = r"""
       retention: 30d
 
 - name: Intentionally create a second backup with the same display name
-  oracle.oci.oci_boot_volume_backup:
+  ansible.oci.oci_boot_volume_backup:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -203,12 +203,12 @@ EXAMPLES = r"""
     type: full
 
 - name: Delete the boot volume backup
-  oracle.oci.oci_boot_volume_backup:
+  ansible.oci.oci_boot_volume_backup:
     state: absent
     boot_volume_backup_id: "{{ created_backup.resource.id }}"
 
 - name: Delete a uniquely named boot volume backup without providing its id
-  oracle.oci.oci_boot_volume_backup:
+  ansible.oci.oci_boot_volume_backup:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     boot_volume_id: ocid1.bootvolume.oc1..example
@@ -379,17 +379,17 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_backup import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_backup import (
     build_backup_update_field_specs,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

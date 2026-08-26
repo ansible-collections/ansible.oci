@@ -1,7 +1,7 @@
 ---
 # See https://docs.ansible.com/projects/ansible/latest/dev_guide/collections_galaxy_meta.html
 
-namespace: oracle
+namespace: ansible
 name: oci
 version: 1.0.0
 readme: README.md
@@ -19,10 +19,10 @@ tags:
   - networking
   - storage
   - security
-repository: https://github.com/ansible-collections/oracle.oci
-documentation: https://github.com/ansible-collections/oracle.oci
-homepage: https://github.com/ansible-collections/oracle.oci
-issues: https://github.com/ansible-collections/oracle.oci/issues
+repository: https://github.com/ansible-collections/ansible.oci
+documentation: https://github.com/ansible-collections/ansible.oci
+homepage: https://github.com/ansible-collections/ansible.oci
+issues: https://github.com/ansible-collections/ansible.oci/issues
 build_ignore:
   # https://docs.ansible.com/projects/ansible/devel/dev_guide/developing_collections_distributing.html#ignoring-files-and-folders
   - .AGENTS

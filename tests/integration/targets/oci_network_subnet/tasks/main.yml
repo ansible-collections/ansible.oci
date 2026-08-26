@@ -16,12 +16,12 @@
 
 - name: Exercise subnet module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for subnet integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_subnet_integration_vcn_name }}"
@@ -55,7 +55,7 @@
           subnet_id: ""
 
     - name: Create subnet in check mode
-      oracle.oci.oci_network_subnet: &oci_subnet_create_module_options
+      ansible.oci.oci_network_subnet: &oci_subnet_create_module_options
         state: "{{ oci_subnet_create_params.state }}"
         compartment_id: "{{ oci_subnet_create_params.compartment_id }}"
         vcn_id: "{{ oci_subnet_create_params.vcn_id }}"
@@ -74,7 +74,7 @@
           - oci_subnet_create_check.changed | bool
 
     - name: Read subnet after create check mode
-      oracle.oci.oci_network_subnet_info:
+      ansible.oci.oci_network_subnet_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_subnet_integration_network.vcn_id }}"
         name: "{{ oci_subnet_integration_subnet_name }}"
@@ -86,7 +86,7 @@
           - oci_subnet_create_check_probe.subnets | length == 0
 
     - name: Create subnet
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_create_module_options
       register: oci_subnet_create
 
@@ -112,7 +112,7 @@
           - oci_subnet_create.changed | bool
 
     - name: Read subnet by id
-      oracle.oci.oci_network_subnet_info:
+      ansible.oci.oci_network_subnet_info:
         subnet_id: "{{ oci_subnet_id }}"
       register: oci_subnet_info_by_id
 
@@ -128,7 +128,7 @@
           - oci_subnet_info_by_id.subnets[0].security_list_ids == [oci_subnet_integration_network.default_security_list_id]
 
     - name: List subnet by name
-      oracle.oci.oci_network_subnet_info:
+      ansible.oci.oci_network_subnet_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_subnet_integration_network.vcn_id }}"
         name: "{{ oci_subnet_integration_subnet_name }}"
@@ -141,7 +141,7 @@
           - oci_subnet_info_list.subnets | selectattr('id', 'equalto', oci_subnet_id) | list | length == 1
 
     - name: Assert created subnet is a no-op on rerun with unique name
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_create_module_options
       register: oci_subnet_create_rerun_by_name
 
@@ -152,7 +152,7 @@
           - oci_subnet_create_rerun_by_name.resource.id == oci_subnet_id
 
     - name: Intentionally create a second subnet with the same display name
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_create_module_options
         allow_duplicate_name: true
         cidr_block: 10.251.2.0/24
@@ -170,7 +170,7 @@
           - oci_subnet_duplicate_id != oci_subnet_id
 
     - name: Delete the duplicate subnet
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_subnet_duplicate_id }}"
 
@@ -179,7 +179,7 @@
         oci_subnet_duplicate_id: ""
 
     - name: Assert created subnet is a no-op on rerun with returned id
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_create_module_options
         subnet_id: "{{ oci_subnet_id }}"
       register: oci_subnet_create_rerun
@@ -190,7 +190,7 @@
           - not oci_subnet_create_rerun.changed | bool
 
     - name: Update subnet in check mode
-      oracle.oci.oci_network_subnet: &oci_subnet_update_module_options
+      ansible.oci.oci_network_subnet: &oci_subnet_update_module_options
         state: "{{ oci_subnet_update_params.state }}"
         subnet_id: "{{ oci_subnet_update_params.subnet_id }}"
         name: "{{ oci_subnet_update_params.name }}"
@@ -207,7 +207,7 @@
           - oci_subnet_update_check.changed | bool
 
     - name: Read subnet after update check mode
-      oracle.oci.oci_network_subnet_info:
+      ansible.oci.oci_network_subnet_info:
         subnet_id: "{{ oci_subnet_id }}"
       register: oci_subnet_update_check_probe
 
@@ -222,7 +222,7 @@
           - oci_subnet_update_check_probe.subnets[0].freeform_tags.phase == "create"
 
     - name: Update subnet
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_update_module_options
       register: oci_subnet_update
 
@@ -232,7 +232,7 @@
           - oci_subnet_update.changed | bool
 
     - name: Read updated subnet by name
-      oracle.oci.oci_network_subnet_info:
+      ansible.oci.oci_network_subnet_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_subnet_integration_network.vcn_id }}"
         name: "{{ oci_subnet_integration_updated_subnet_name }}"
@@ -257,7 +257,7 @@
           - oci_subnet_info_updated.subnets[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_update_module_options
       register: oci_subnet_update_rerun
 
@@ -267,7 +267,7 @@
           - not oci_subnet_update_rerun.changed | bool
 
     - name: Delete subnet in check mode
-      oracle.oci.oci_network_subnet: &oci_subnet_delete_module_options
+      ansible.oci.oci_network_subnet: &oci_subnet_delete_module_options
         state: "{{ oci_subnet_delete_params.state }}"
         subnet_id: "{{ oci_subnet_delete_params.subnet_id }}"
       check_mode: true
@@ -279,7 +279,7 @@
           - oci_subnet_delete_check.changed | bool
 
     - name: Read subnet after delete check mode
-      oracle.oci.oci_network_subnet_info:
+      ansible.oci.oci_network_subnet_info:
         subnet_id: "{{ oci_subnet_id }}"
       register: oci_subnet_delete_check_probe
 
@@ -289,7 +289,7 @@
           - oci_subnet_delete_check_probe.subnets | length == 1
 
     - name: Delete subnet
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_delete_module_options
       register: oci_subnet_delete
 
@@ -299,7 +299,7 @@
           - oci_subnet_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         <<: *oci_subnet_delete_module_options
       register: oci_subnet_delete_rerun
 

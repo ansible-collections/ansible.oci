@@ -5,11 +5,11 @@ __metaclass__ = type
 
 from abc import ABC, abstractmethod
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_base import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_base import (
     OciModuleBase,
     oci,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     DEAD_STATES,
     normalize_enum_values,
     rename_aliased_fields,

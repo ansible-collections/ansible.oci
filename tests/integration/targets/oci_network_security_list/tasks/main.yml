@@ -17,12 +17,12 @@
 
 - name: Exercise security list module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for security list integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_security_list_integration_vcn_name }}"
@@ -53,7 +53,7 @@
           security_list_id: ""
 
     - name: Create security list in check mode
-      oracle.oci.oci_network_security_list: &oci_security_list_create_module_options
+      ansible.oci.oci_network_security_list: &oci_security_list_create_module_options
         state: "{{ oci_security_list_create_params.state }}"
         compartment_id: "{{ oci_security_list_create_params.compartment_id }}"
         vcn_id: "{{ oci_security_list_create_params.vcn_id }}"
@@ -70,7 +70,7 @@
           - oci_security_list_create_check.changed | bool
 
     - name: Read security list after create check mode
-      oracle.oci.oci_network_security_list_info:
+      ansible.oci.oci_network_security_list_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_security_list_create_params.vcn_id }}"
         name: "{{ oci_security_list_integration_security_list_name }}"
@@ -82,7 +82,7 @@
           - oci_security_list_create_check_probe.security_lists | length == 0
 
     - name: Create security list
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         <<: *oci_security_list_create_module_options
       register: oci_security_list_create
 
@@ -113,7 +113,7 @@
           - oci_security_list_create.changed | bool
 
     - name: Read security list by id
-      oracle.oci.oci_network_security_list_info:
+      ansible.oci.oci_network_security_list_info:
         security_list_id: "{{ oci_security_list_id }}"
       register: oci_security_list_info_by_id
 
@@ -128,7 +128,7 @@
           - oci_security_list_info_by_id.security_lists[0].egress_security_rules | length == 1
 
     - name: Assert created security list is a no-op on rerun with unique name
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         <<: *oci_security_list_create_module_options
       register: oci_security_list_create_rerun_by_name
 
@@ -139,7 +139,7 @@
           - oci_security_list_create_rerun_by_name.resource.id == oci_security_list_id
 
     - name: Intentionally create a second security list with the same display name
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         <<: *oci_security_list_create_module_options
         allow_duplicate_name: true
       register: oci_security_list_duplicate_create
@@ -155,7 +155,7 @@
           - oci_security_list_duplicate_id != oci_security_list_id
 
     - name: Delete the duplicate security list
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         state: absent
         security_list_id: "{{ oci_security_list_duplicate_id }}"
 
@@ -164,7 +164,7 @@
         oci_security_list_duplicate_id: ""
 
     - name: Update security list in check mode
-      oracle.oci.oci_network_security_list: &oci_security_list_update_module_options
+      ansible.oci.oci_network_security_list: &oci_security_list_update_module_options
         state: "{{ oci_security_list_update_params.state }}"
         security_list_id: "{{ oci_security_list_update_params.security_list_id }}"
         name: "{{ oci_security_list_update_params.name }}"
@@ -180,7 +180,7 @@
           - oci_security_list_update_check.changed | bool
 
     - name: Read security list after update check mode
-      oracle.oci.oci_network_security_list_info:
+      ansible.oci.oci_network_security_list_info:
         security_list_id: "{{ oci_security_list_id }}"
       register: oci_security_list_update_check_probe
 
@@ -191,7 +191,7 @@
           - oci_security_list_update_check_probe.security_lists[0].ingress_security_rules[0].source == "0.0.0.0/0"
 
     - name: Update security list
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         <<: *oci_security_list_update_module_options
       register: oci_security_list_update
 
@@ -201,7 +201,7 @@
           - oci_security_list_update.changed | bool
 
     - name: Read updated security list by id
-      oracle.oci.oci_network_security_list_info:
+      ansible.oci.oci_network_security_list_info:
         security_list_id: "{{ oci_security_list_id }}"
       register: oci_security_list_info_updated
 
@@ -213,7 +213,7 @@
           - oci_security_list_info_updated.security_lists[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         <<: *oci_security_list_update_module_options
       register: oci_security_list_update_rerun
 
@@ -223,7 +223,7 @@
           - not oci_security_list_update_rerun.changed | bool
 
     - name: Delete security list in check mode
-      oracle.oci.oci_network_security_list: &oci_security_list_delete_module_options
+      ansible.oci.oci_network_security_list: &oci_security_list_delete_module_options
         state: "{{ oci_security_list_delete_params.state }}"
         security_list_id: "{{ oci_security_list_delete_params.security_list_id }}"
       check_mode: true
@@ -235,7 +235,7 @@
           - oci_security_list_delete_check.changed | bool
 
     - name: Read security list after delete check mode
-      oracle.oci.oci_network_security_list_info:
+      ansible.oci.oci_network_security_list_info:
         security_list_id: "{{ oci_security_list_id }}"
       register: oci_security_list_delete_check_probe
 
@@ -245,7 +245,7 @@
           - oci_security_list_delete_check_probe.security_lists | length == 1
 
     - name: Delete security list
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         <<: *oci_security_list_delete_module_options
       register: oci_security_list_delete
 
@@ -255,7 +255,7 @@
           - oci_security_list_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list:
         <<: *oci_security_list_delete_module_options
       register: oci_security_list_delete_rerun
 

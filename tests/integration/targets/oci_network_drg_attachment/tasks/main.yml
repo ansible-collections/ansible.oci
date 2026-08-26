@@ -15,12 +15,12 @@
 
 - name: Exercise DRG attachment module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for DRG attachment integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_drg_attachment_integration_vcn_name }}"
@@ -34,7 +34,7 @@
         oci_drg_attachment_integration_vcn_id: "{{ oci_drg_attachment_vcn_create.resource.id }}"
 
     - name: Create test DRG for DRG attachment integration
-      oracle.oci.oci_network_drg:
+      ansible.oci.oci_network_drg:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_drg_attachment_integration_drg_name }}"
@@ -58,7 +58,7 @@
           drg_attachment_id: ""
 
     - name: Create DRG attachment in check mode
-      oracle.oci.oci_network_drg_attachment: &oci_drg_attachment_create_module_options
+      ansible.oci.oci_network_drg_attachment: &oci_drg_attachment_create_module_options
         state: "{{ oci_drg_attachment_create_params.state }}"
         compartment_id: "{{ oci_drg_attachment_create_params.compartment_id }}"
         drg_id: "{{ oci_drg_attachment_create_params.drg_id }}"
@@ -74,7 +74,7 @@
           - oci_drg_attachment_create_check.changed | bool
 
     - name: Create DRG attachment
-      oracle.oci.oci_network_drg_attachment:
+      ansible.oci.oci_network_drg_attachment:
         <<: *oci_drg_attachment_create_module_options
       register: oci_drg_attachment_create
 
@@ -96,7 +96,7 @@
           - oci_drg_attachment_create.changed | bool
 
     - name: Read created DRG attachment by id
-      oracle.oci.oci_network_drg_attachment_info:
+      ansible.oci.oci_network_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_probe_after_create
 
@@ -112,7 +112,7 @@
           - oci_drg_attachment_probe_after_create.drg_attachments[0].freeform_tags.phase == "create"
 
     - name: List created DRG attachment by scoped name
-      oracle.oci.oci_network_drg_attachment_info:
+      ansible.oci.oci_network_drg_attachment_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         drg_id: "{{ oci_drg_attachment_integration_drg_id }}"
         vcn_id: "{{ oci_drg_attachment_integration_vcn_id }}"
@@ -125,7 +125,7 @@
           - oci_drg_attachment_info_list.drg_attachments | selectattr('id', 'equalto', oci_drg_attachment_id) | list | length == 1
 
     - name: Assert created DRG attachment is a no-op on rerun with unique name
-      oracle.oci.oci_network_drg_attachment:
+      ansible.oci.oci_network_drg_attachment:
         <<: *oci_drg_attachment_create_module_options
       register: oci_drg_attachment_create_rerun_by_name
 
@@ -136,7 +136,7 @@
           - oci_drg_attachment_create_rerun_by_name.resource.id == oci_drg_attachment_id
 
     - name: Assert created DRG attachment is a no-op on rerun with returned id
-      oracle.oci.oci_network_drg_attachment:
+      ansible.oci.oci_network_drg_attachment:
         <<: *oci_drg_attachment_create_module_options
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_create_rerun
@@ -147,7 +147,7 @@
           - not oci_drg_attachment_create_rerun.changed | bool
 
     - name: Update DRG attachment in check mode
-      oracle.oci.oci_network_drg_attachment: &oci_drg_attachment_update_module_options
+      ansible.oci.oci_network_drg_attachment: &oci_drg_attachment_update_module_options
         state: "{{ oci_drg_attachment_update_params.state }}"
         drg_attachment_id: "{{ oci_drg_attachment_update_params.drg_attachment_id }}"
         name: "{{ oci_drg_attachment_update_params.name }}"
@@ -161,7 +161,7 @@
           - oci_drg_attachment_update_check.changed | bool
 
     - name: Read DRG attachment after update check mode
-      oracle.oci.oci_network_drg_attachment_info:
+      ansible.oci.oci_network_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_update_check_probe
 
@@ -173,7 +173,7 @@
           - oci_drg_attachment_update_check_probe.drg_attachments[0].freeform_tags.phase == "create"
 
     - name: Update DRG attachment
-      oracle.oci.oci_network_drg_attachment:
+      ansible.oci.oci_network_drg_attachment:
         <<: *oci_drg_attachment_update_module_options
       register: oci_drg_attachment_update
 
@@ -183,7 +183,7 @@
           - oci_drg_attachment_update.changed | bool
 
     - name: Read DRG attachment after update
-      oracle.oci.oci_network_drg_attachment_info:
+      ansible.oci.oci_network_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_probe_after_update
 
@@ -195,7 +195,7 @@
           - oci_drg_attachment_probe_after_update.drg_attachments[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_drg_attachment:
+      ansible.oci.oci_network_drg_attachment:
         <<: *oci_drg_attachment_update_module_options
       register: oci_drg_attachment_update_rerun
 
@@ -205,7 +205,7 @@
           - not oci_drg_attachment_update_rerun.changed | bool
 
     - name: Delete DRG attachment in check mode
-      oracle.oci.oci_network_drg_attachment: &oci_drg_attachment_delete_module_options
+      ansible.oci.oci_network_drg_attachment: &oci_drg_attachment_delete_module_options
         state: "{{ oci_drg_attachment_delete_params.state }}"
         drg_attachment_id: "{{ oci_drg_attachment_delete_params.drg_attachment_id }}"
       check_mode: true
@@ -217,7 +217,7 @@
           - oci_drg_attachment_delete_check.changed | bool
 
     - name: Read DRG attachment after delete check mode
-      oracle.oci.oci_network_drg_attachment_info:
+      ansible.oci.oci_network_drg_attachment_info:
         drg_attachment_id: "{{ oci_drg_attachment_id }}"
       register: oci_drg_attachment_delete_check_probe
 
@@ -228,7 +228,7 @@
           - oci_drg_attachment_delete_check_probe.drg_attachments[0].id == oci_drg_attachment_id
 
     - name: Delete DRG attachment
-      oracle.oci.oci_network_drg_attachment:
+      ansible.oci.oci_network_drg_attachment:
         <<: *oci_drg_attachment_delete_module_options
       register: oci_drg_attachment_delete
 
@@ -238,7 +238,7 @@
           - oci_drg_attachment_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_drg_attachment:
+      ansible.oci.oci_network_drg_attachment:
         <<: *oci_drg_attachment_delete_module_options
       register: oci_drg_attachment_delete_rerun
 

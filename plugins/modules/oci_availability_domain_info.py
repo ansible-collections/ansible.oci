@@ -23,7 +23,7 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
+  - ansible.oci.oci_auth_options
 options:
   compartment_id:
     description:
@@ -35,7 +35,7 @@ options:
     type: str
 notes:
   - Use this module to discover valid values for C(availability_domain) on
-    M(oracle.oci.oci_instance) and M(oracle.oci.oci_shape_info) instead of
+    M(ansible.oci.oci_instance) and M(ansible.oci.oci_shape_info) instead of
     hardcoding tenancy-specific names.
   - Fails with a clear error when C(compartment_id) is omitted and no tenancy
     OCID can be resolved (for example, with C(instance_principal) or
@@ -45,10 +45,10 @@ notes:
 
 EXAMPLES = r"""
 - name: List availability domains for the caller's tenancy
-  oracle.oci.oci_availability_domain_info: {}
+  ansible.oci.oci_availability_domain_info: {}
 
 - name: List availability domains for a specific compartment
-  oracle.oci.oci_availability_domain_info:
+  ansible.oci.oci_availability_domain_info:
     compartment_id: ocid1.compartment.oc1..example
 """
 
@@ -81,11 +81,11 @@ availability_domains:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

@@ -1,12 +1,12 @@
 # Oracle Cloud Infrastructure Collection for Ansible
 
-[![Ansible lint](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-lint.yml) [![Sanity](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-sanity.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-sanity.yml) [![Units](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-unit.yml/badge.svg?branch=main)](https://github.com/ansible-collections/oracle.oci/actions/workflows/ansible-unit.yml) [![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=ansible-collections_oracle.oci&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ansible-collections_oracle.oci)
+[![Ansible lint](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-lint.yml) [![Sanity](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-sanity.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-sanity.yml) [![Units](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-unit.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-unit.yml) [![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=ansible-collections_ansible.oci&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ansible-collections_ansible.oci)
 
 This collection automates Oracle Cloud Infrastructure (OCI).
 
 ## Description
 
-The `oracle.oci` collection provides Ansible modules for Oracle Cloud Infrastructure. It is intended for platform engineers, cloud administrators, and automation teams that want to manage OCI resources through repeatable playbooks.
+The `ansible.oci` collection provides Ansible modules for Oracle Cloud Infrastructure. It is intended for platform engineers, cloud administrators, and automation teams that want to manage OCI resources through repeatable playbooks.
 
 ## Requirements
 
@@ -28,7 +28,7 @@ Use a controller or execution environment with a Python version supported by bot
 Install this collection with the Ansible Galaxy command-line tool:
 
 ```bash
-ansible-galaxy collection install oracle.oci
+ansible-galaxy collection install ansible.oci
 ```
 
 ### Installing from a requirements file
@@ -37,7 +37,7 @@ You can include this collection in a `requirements.yml` file and install it with
 
 ```yaml
 collections:
-  - name: oracle.oci
+  - name: ansible.oci
 ```
 
 ### Installing a specific version
@@ -45,7 +45,7 @@ collections:
 Use the following syntax to install version 1.0.0:
 
 ```bash
-ansible-galaxy collection install oracle.oci:==1.0.0
+ansible-galaxy collection install ansible.oci:==1.0.0
 ```
 
 See [using Ansible collections](https://docs.ansible.com/ansible/devel/user_guide/collections_using.html) for more details.
@@ -55,7 +55,7 @@ See [using Ansible collections](https://docs.ansible.com/ansible/devel/user_guid
 To upgrade the collection to the latest available version, run the following command:
 
 ```bash
-ansible-galaxy collection install oracle.oci --upgrade
+ansible-galaxy collection install ansible.oci --upgrade
 ```
 
 ### Authentication defaults
@@ -85,18 +85,18 @@ For `session_token` authentication, the selected OCI profile must still include 
 
 #### module_defaults
 
-The collection defines the action group `group/oracle.oci.oci` so a play or role can set shared OCI auth options once with `module_defaults`:
+The collection defines the action group `group/ansible.oci.oci` so a play or role can set shared OCI auth options once with `module_defaults`:
 
 ```yaml
 - hosts: localhost
   gather_facts: false
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       auth_type: api_key
       config_file_location: ~/.oci/config
       config_profile_name: PROD
   tasks:
-    - oracle.oci.oci_network_vcn:
+    - ansible.oci.oci_network_vcn:
         state: present
         compartment_id: ocid1.compartment.oc1..example
         name: example-vcn
@@ -112,7 +112,7 @@ Create a Virtual Cloud Network and a subnet that later tasks can attach compute 
 
 ```yaml
 - name: Create a VCN
-  oracle.oci.oci_network_vcn:
+  ansible.oci.oci_network_vcn:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: example-vcn
@@ -121,7 +121,7 @@ Create a Virtual Cloud Network and a subnet that later tasks can attach compute 
   register: example_vcn
 
 - name: Create a subnet
-  oracle.oci.oci_network_subnet:
+  ansible.oci.oci_network_subnet:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: "{{ example_vcn.resource.id }}"
@@ -136,14 +136,14 @@ Expose a VCN to the public internet and provide outbound NAT for private subnets
 
 ```yaml
 - name: Create an internet gateway
-  oracle.oci.oci_network_internet_gateway:
+  ansible.oci.oci_network_internet_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: "{{ example_vcn.resource.id }}"
     name: example-internet-gateway
 
 - name: Create a NAT gateway
-  oracle.oci.oci_network_nat_gateway:
+  ansible.oci.oci_network_nat_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: "{{ example_vcn.resource.id }}"
@@ -156,7 +156,7 @@ Place an instance on the subnet created above:
 
 ```yaml
 - name: Launch an instance
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -175,7 +175,7 @@ Create additional block storage that can be attached to compute:
 
 ```yaml
 - name: Create a block volume
-  oracle.oci.oci_blockstorage_volume:
+  ansible.oci.oci_blockstorage_volume:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -197,40 +197,40 @@ There are no additional known platform limitations beyond those OCI service cons
 
 CI workflow definitions (secondary):
 
-* [`.github/workflows/ansible-lint.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-lint.yml)
-* [`.github/workflows/ansible-sanity.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-sanity.yml)
-* [`.github/workflows/ansible-unit.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-unit.yml)
-* [`.github/workflows/ansible-integration-pr.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-integration-pr.yml)
-* [`.github/workflows/ansible-integration-weekly.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/ansible-integration-weekly.yml)
-* [`.github/workflows/sonarcloud.yml`](https://github.com/ansible-collections/oracle.oci/blob/main/.github/workflows/sonarcloud.yml)
+* [`.github/workflows/ansible-lint.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-lint.yml)
+* [`.github/workflows/ansible-sanity.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-sanity.yml)
+* [`.github/workflows/ansible-unit.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-unit.yml)
+* [`.github/workflows/ansible-integration-pr.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-integration-pr.yml)
+* [`.github/workflows/ansible-integration-weekly.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-integration-weekly.yml)
+* [`.github/workflows/sonarcloud.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/sonarcloud.yml)
 
 ## Contributing
 
-Contribution guidelines are documented in [CONTRIBUTING.md](https://github.com/ansible-collections/oracle.oci/blob/main/CONTRIBUTING.md).
+Contribution guidelines are documented in [CONTRIBUTING.md](https://github.com/ansible-collections/ansible.oci/blob/main/CONTRIBUTING.md).
 
-Contributors adding new OCI modules should start with the [Module Authoring Guide](https://github.com/ansible-collections/oracle.oci/blob/main/docs/module_development.md).
+Contributors adding new OCI modules should start with the [Module Authoring Guide](https://github.com/ansible-collections/ansible.oci/blob/main/docs/module_development.md).
 
-Project code of conduct information is available in [CODE_OF_CONDUCT.md](https://github.com/ansible-collections/oracle.oci/blob/main/CODE_OF_CONDUCT.md).
+Project code of conduct information is available in [CODE_OF_CONDUCT.md](https://github.com/ansible-collections/ansible.oci/blob/main/CODE_OF_CONDUCT.md).
 
-Use [repository issues](https://github.com/ansible-collections/oracle.oci/issues) for bugs, feature requests, and design discussion. Community discussion is also available on the [Ansible Forum](https://forum.ansible.com/).
+Use [repository issues](https://github.com/ansible-collections/ansible.oci/issues) for bugs, feature requests, and design discussion. Community discussion is also available on the [Ansible Forum](https://forum.ansible.com/).
 
 ## Support
 
 This collection is maintained by the Oracle OCI Ansible collection maintainers.
 
-As Red Hat Ansible Certified Content, this collection is entitled to support through Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner of Automation Hub. If a support case cannot be opened with Red Hat and the collection has been obtained either from Galaxy or GitHub, community help may also be available on the [Ansible Forum](https://forum.ansible.com/) and through [GitHub issues](https://github.com/ansible-collections/oracle.oci/issues).
+As Red Hat Ansible Certified Content, this collection is entitled to support through Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner of Automation Hub. If a support case cannot be opened with Red Hat and the collection has been obtained either from Galaxy or GitHub, community help may also be available on the [Ansible Forum](https://forum.ansible.com/) and through [GitHub issues](https://github.com/ansible-collections/ansible.oci/issues).
 
 ## Release notes and roadmap
 
 Release notes are available at:
 
-* [CHANGELOG.rst](https://github.com/ansible-collections/oracle.oci/blob/main/CHANGELOG.rst)
-* [CHANGELOG.md](https://github.com/ansible-collections/oracle.oci/blob/main/CHANGELOG.md)
+* [CHANGELOG.rst](https://github.com/ansible-collections/ansible.oci/blob/main/CHANGELOG.rst)
+* [CHANGELOG.md](https://github.com/ansible-collections/ansible.oci/blob/main/CHANGELOG.md)
 
 Current planning and future work can be tracked through repository issues and pull requests:
 
-* [Issues](https://github.com/ansible-collections/oracle.oci/issues)
-* [Pull requests](https://github.com/ansible-collections/oracle.oci/pulls)
+* [Issues](https://github.com/ansible-collections/ansible.oci/issues)
+* [Pull requests](https://github.com/ansible-collections/ansible.oci/pulls)
 
 
 ## Related information
@@ -241,4 +241,4 @@ Current planning and future work can be tracked through repository issues and pu
 
 ## License information
 
-This collection is published under GNU General Public License v3.0 or later, an [OSI-approved license](https://opensource.org/licenses/). License details are available in [LICENSE](https://github.com/ansible-collections/oracle.oci/blob/main/LICENSE).
+This collection is published under GNU General Public License v3.0 or later, an [OSI-approved license](https://opensource.org/licenses/). License details are available in [LICENSE](https://github.com/ansible-collections/ansible.oci/blob/main/LICENSE).
