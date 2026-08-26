@@ -19,7 +19,7 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
+  - ansible.oci.oci_auth_options
 options:
   compartment_id:
     description:
@@ -46,18 +46,18 @@ options:
 
 EXAMPLES = r"""
 - name: List boot volumes in a compartment and availability domain
-  oracle.oci.oci_boot_volume_info:
+  ansible.oci.oci_boot_volume_info:
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
 
 - name: List boot volumes in a compartment by name
-  oracle.oci.oci_boot_volume_info:
+  ansible.oci.oci_boot_volume_info:
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
     name: example-instance (Boot Volume)
 
 - name: Get a specific boot volume
-  oracle.oci.oci_boot_volume_info:
+  ansible.oci.oci_boot_volume_info:
     boot_volume_id: ocid1.bootvolume.oc1..example
 """
 
@@ -198,11 +198,11 @@ boot_volumes:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

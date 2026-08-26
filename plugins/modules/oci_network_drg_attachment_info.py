@@ -18,8 +18,8 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -44,25 +44,25 @@ options:
 notes:
   - OCI's C(list_drg_attachments) operation lists only VCN attachments by
     default unless C(attachment_type=ALL) is supplied.
-  - This module intentionally mirrors C(oracle.oci.oci_network_drg_attachment)'s
+  - This module intentionally mirrors C(ansible.oci.oci_network_drg_attachment)'s
     VCN-only scope and therefore does not expose C(attachment_type) or
     C(network_id).
 """
 
 EXAMPLES = r"""
 - name: List all DRG attachments in a compartment
-  oracle.oci.oci_network_drg_attachment_info:
+  ansible.oci.oci_network_drg_attachment_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List DRG attachments for a specific DRG and VCN by name
-  oracle.oci.oci_network_drg_attachment_info:
+  ansible.oci.oci_network_drg_attachment_info:
     compartment_id: ocid1.compartment.oc1..example
     drg_id: ocid1.drg.oc1..example
     vcn_id: ocid1.vcn.oc1..example
     name: example-drg-attachment
 
 - name: Get a specific DRG attachment
-  oracle.oci.oci_network_drg_attachment_info:
+  ansible.oci.oci_network_drg_attachment_info:
     drg_attachment_id: ocid1.drgattachment.oc1..example
 """
 
@@ -162,11 +162,11 @@ drg_attachments:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

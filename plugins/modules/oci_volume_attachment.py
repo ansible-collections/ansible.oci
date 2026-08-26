@@ -27,9 +27,9 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
 options:
   state:
     description:
@@ -126,7 +126,7 @@ notes:
 
 EXAMPLES = r"""
 - name: Attach a volume as a paravirtualized device
-  oracle.oci.oci_volume_attachment:
+  ansible.oci.oci_volume_attachment:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -136,7 +136,7 @@ EXAMPLES = r"""
   register: created_attachment
 
 - name: Attach a volume over iSCSI in read-only mode
-  oracle.oci.oci_volume_attachment:
+  ansible.oci.oci_volume_attachment:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -147,7 +147,7 @@ EXAMPLES = r"""
     device: /dev/oracleoci/oraclevdb
 
 - name: Detach the volume
-  oracle.oci.oci_volume_attachment:
+  ansible.oci.oci_volume_attachment:
     state: absent
     volume_attachment_id: "{{ created_attachment.resource.id }}"
 """
@@ -265,14 +265,14 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     OCI_NAME_LOOKUP_ARGS,
     OCI_WAIT_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

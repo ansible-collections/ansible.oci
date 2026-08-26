@@ -13,10 +13,10 @@ description:
   - Create, update, and delete OCI custom Compute images.
   - Create by capturing a Compute instance, or by importing an image file from
     Object Storage. Use the resulting image to launch instances with
-    M(oracle.oci.oci_instance).
+    M(ansible.oci.oci_instance).
   - Exactly one create source is required. Use C(instance_id),
     C(object_storage), or C(source_uri).
-  - Use M(oracle.oci.oci_image_info) to list platform and custom images.
+  - Use M(ansible.oci.oci_image_info) to list platform and custom images.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
   - Create requests must omit C(image_id). After create, capture the returned
@@ -25,10 +25,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -168,7 +168,7 @@ notes:
 
 EXAMPLES = r"""
 - name: Capture a custom image from a stopped instance
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: hardened-oracle-linux
@@ -176,7 +176,7 @@ EXAMPLES = r"""
   register: created_image
 
 - name: Import a QCOW2 image from an Object Storage bucket
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: imported-oracle-linux
@@ -190,7 +190,7 @@ EXAMPLES = r"""
   register: imported_image
 
 - name: Import an image from an Object Storage URL
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: imported-from-url
@@ -199,7 +199,7 @@ EXAMPLES = r"""
     source_image_type: qcow2
 
 - name: Import a Windows VMDK image
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: imported-windows
@@ -213,7 +213,7 @@ EXAMPLES = r"""
     launch_mode: paravirtualized
 
 - name: Import an OCI-format image exported from another region
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: imported-oci-export
@@ -222,7 +222,7 @@ EXAMPLES = r"""
     source_image_type: oci
 
 - name: Reconcile a uniquely named image by name (update tags)
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     name: hardened-oracle-linux
@@ -230,7 +230,7 @@ EXAMPLES = r"""
       env: prod
 
 - name: Intentionally create a second image with the same display name
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -238,7 +238,7 @@ EXAMPLES = r"""
     instance_id: ocid1.instance.oc1..example
 
 - name: Launch an instance from the custom image
-  oracle.oci.oci_instance:
+  ansible.oci.oci_instance:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     availability_domain: Uocm:PHX-AD-1
@@ -248,12 +248,12 @@ EXAMPLES = r"""
     subnet_id: ocid1.subnet.oc1..example
 
 - name: Delete the custom image
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: absent
     image_id: "{{ created_image.resource.id }}"
 
 - name: Delete a uniquely named image without providing image_id
-  oracle.oci.oci_image:
+  ansible.oci.oci_image:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     name: hardened-oracle-linux
@@ -352,14 +352,14 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

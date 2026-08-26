@@ -20,10 +20,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -88,7 +88,7 @@ options:
         route table as usual.
       - Because a route table's own rules may need to reference this
         gateway's OCID (see C(network_entity_id) on
-        M(oracle.oci.oci_network_route_table)), create the gateway first without
+        M(ansible.oci.oci_network_route_table)), create the gateway first without
         C(route_table_id), create the route table referencing the gateway,
         then update the gateway with C(route_table_id) if transit routing is
         required. See the examples below.
@@ -103,7 +103,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create a service gateway with only the required parameters
-  oracle.oci.oci_network_service_gateway:
+  ansible.oci.oci_network_service_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -111,7 +111,7 @@ EXAMPLES = r"""
   register: created_service_gateway
 
 - name: Attach one or more OCI services to the service gateway
-  oracle.oci.oci_network_service_gateway:
+  ansible.oci.oci_network_service_gateway:
     state: present
     service_gateway_id: "{{ created_service_gateway.resource.id }}"
     service_ids:
@@ -119,7 +119,7 @@ EXAMPLES = r"""
       - ocid1.service.oc1..another-example
 
 - name: Create a route table with a rule pointing at that service gateway
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -133,13 +133,13 @@ EXAMPLES = r"""
   register: created_route_table
 
 - name: (Optional) enable transit routing by pointing the gateway back at that route table
-  oracle.oci.oci_network_service_gateway:
+  ansible.oci.oci_network_service_gateway:
     state: present
     service_gateway_id: "{{ created_service_gateway.resource.id }}"
     route_table_id: "{{ created_route_table.resource.id }}"
 
 - name: Intentionally create a second service gateway with the same display name
-  oracle.oci.oci_network_service_gateway:
+  ansible.oci.oci_network_service_gateway:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -147,18 +147,18 @@ EXAMPLES = r"""
     name: example-service-gateway
 
 - name: Block traffic through the created service gateway
-  oracle.oci.oci_network_service_gateway:
+  ansible.oci.oci_network_service_gateway:
     state: present
     service_gateway_id: "{{ created_service_gateway.resource.id }}"
     block_traffic: true
 
 - name: Delete the created service gateway
-  oracle.oci.oci_network_service_gateway:
+  ansible.oci.oci_network_service_gateway:
     state: absent
     service_gateway_id: "{{ created_service_gateway.resource.id }}"
 
 - name: Delete a uniquely named service gateway without providing service_gateway_id
-  oracle.oci.oci_network_service_gateway:
+  ansible.oci.oci_network_service_gateway:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -247,13 +247,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

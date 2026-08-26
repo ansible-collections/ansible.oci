@@ -20,7 +20,7 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
+  - ansible.oci.oci_auth_options
 options:
   compartment_id:
     description:
@@ -49,17 +49,17 @@ options:
 
 EXAMPLES = r"""
 - name: List all console connections in a compartment
-  oracle.oci.oci_instance_console_connection_info:
+  ansible.oci.oci_instance_console_connection_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List the active console connections for an instance
-  oracle.oci.oci_instance_console_connection_info:
+  ansible.oci.oci_instance_console_connection_info:
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
     lifecycle_state: ACTIVE
 
 - name: Get a specific console connection
-  oracle.oci.oci_instance_console_connection_info:
+  ansible.oci.oci_instance_console_connection_info:
     instance_console_connection_id: ocid1.instanceconsoleconnection.oc1..example
 """
 
@@ -135,11 +135,11 @@ instance_console_connections:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

@@ -23,10 +23,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -120,7 +120,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create DHCP options with a DNS and a search domain option
-  oracle.oci.oci_network_dhcp_options:
+  ansible.oci.oci_network_dhcp_options:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -134,7 +134,7 @@ EXAMPLES = r"""
   register: created_dhcp_options
 
 - name: Reconcile a uniquely named DHCP options set by name
-  oracle.oci.oci_network_dhcp_options:
+  ansible.oci.oci_network_dhcp_options:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -150,7 +150,7 @@ EXAMPLES = r"""
           - example.oraclevcn.com
 
 - name: Intentionally create a second DHCP options set with the same display name
-  oracle.oci.oci_network_dhcp_options:
+  ansible.oci.oci_network_dhcp_options:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -161,12 +161,12 @@ EXAMPLES = r"""
         server_type: vcn_local_plus_internet
 
 - name: Delete the created DHCP options
-  oracle.oci.oci_network_dhcp_options:
+  ansible.oci.oci_network_dhcp_options:
     state: absent
     dhcp_options_id: "{{ created_dhcp_options.resource.id }}"
 
 - name: Delete a uniquely named DHCP options set without providing dhcp_options_id
-  oracle.oci.oci_network_dhcp_options:
+  ansible.oci.oci_network_dhcp_options:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -259,13 +259,13 @@ import json
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

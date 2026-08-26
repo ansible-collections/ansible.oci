@@ -18,8 +18,8 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -70,24 +70,24 @@ notes:
 
 EXAMPLES = r"""
 - name: List all images in a compartment
-  oracle.oci.oci_image_info:
+  ansible.oci.oci_image_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List Oracle Linux images compatible with a shape
-  oracle.oci.oci_image_info:
+  ansible.oci.oci_image_info:
     compartment_id: ocid1.compartment.oc1..example
     operating_system: Oracle Linux
     operating_system_version: "9"
     shape: VM.Standard.E4.Flex
 
 - name: List Ubuntu 22.04 images
-  oracle.oci.oci_image_info:
+  ansible.oci.oci_image_info:
     compartment_id: ocid1.compartment.oc1..example
     operating_system: Ubuntu
     operating_system_version: "22.04"
 
 - name: Get a specific image by OCID
-  oracle.oci.oci_image_info:
+  ansible.oci.oci_image_info:
     image_id: ocid1.image.oc1..example
 """
 
@@ -236,11 +236,11 @@ images:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

@@ -17,8 +17,8 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -34,16 +34,16 @@ options:
 
 EXAMPLES = r"""
 - name: List all VCNs in a compartment
-  oracle.oci.oci_network_vcn_info:
+  ansible.oci.oci_network_vcn_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List VCNs in a compartment by name
-  oracle.oci.oci_network_vcn_info:
+  ansible.oci.oci_network_vcn_info:
     compartment_id: ocid1.compartment.oc1..example
     name: example-vcn
 
 - name: Get a specific VCN
-  oracle.oci.oci_network_vcn_info:
+  ansible.oci.oci_network_vcn_info:
     vcn_id: ocid1.vcn.oc1..example
 """
 
@@ -57,11 +57,11 @@ vcns:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

@@ -20,7 +20,7 @@ description:
     a mismatched compartment misses the existing connection and attempts
     create. Use the C(resource) return value to obtain connection details
     right after a create or update, or use
-    C(oracle.oci.oci_instance_console_connection_info) to discover existing
+    C(ansible.oci.oci_instance_console_connection_info) to discover existing
     console connections later.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
@@ -31,9 +31,9 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -83,7 +83,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create a console connection to an instance
-  oracle.oci.oci_instance_console_connection:
+  ansible.oci.oci_instance_console_connection:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -93,7 +93,7 @@ EXAMPLES = r"""
 # Reconcile tags on the existing connection. Rotating public_key requires
 # state=absent then state=present; a new key here is ignored.
 - name: Reconcile the existing console connection for an instance
-  oracle.oci.oci_instance_console_connection:
+  ansible.oci.oci_instance_console_connection:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -102,12 +102,12 @@ EXAMPLES = r"""
       role: sre-runbook
 
 - name: Delete the console connection by id
-  oracle.oci.oci_instance_console_connection:
+  ansible.oci.oci_instance_console_connection:
     state: absent
     instance_console_connection_id: "{{ created_console_connection.resource.id }}"
 
 - name: Delete an instance's console connection without tracking its id
-  oracle.oci.oci_instance_console_connection:
+  ansible.oci.oci_instance_console_connection:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
@@ -178,7 +178,7 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_ACTIVE,
     OCI_AUTH_ARGS,
     OCI_TAG_ARGS,
@@ -187,7 +187,7 @@ from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

@@ -1,7 +1,7 @@
 # Module Authoring Guide
 
 This guide explains how to add a new module and a matching `*_info` module to
-the `oracle.oci` collection.
+the `ansible.oci` collection.
 
 It is intentionally collection-specific. It does not try to replace the general
 Ansible contributor guides linked from `CONTRIBUTING.md`. Instead, it explains
@@ -162,15 +162,15 @@ Use these documentation fragments:
 
 ### Resource modules
 
-- `oracle.oci.oci_auth_options`
-- `oracle.oci.oci_name_lookup_options`
-- `oracle.oci.oci_wait_options`
-- `oracle.oci.oci_tags_options`
+- `ansible.oci.oci_auth_options`
+- `ansible.oci.oci_name_lookup_options`
+- `ansible.oci.oci_wait_options`
+- `ansible.oci.oci_tags_options`
 
 ### Info modules
 
-- `oracle.oci.oci_auth_options`
-- `oracle.oci.oci_info_filter_options`
+- `ansible.oci.oci_auth_options`
+- `ansible.oci.oci_info_filter_options`
 
 ## Resource Module Skeleton
 
@@ -192,10 +192,10 @@ version_added: "1.0.0"
 author:
   - Your Name (@github-handle)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -223,7 +223,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create an example resource
-  oracle.oci.oci_example_resource:
+  ansible.oci.oci_example_resource:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     project_id: ocid1.project.oc1..example
@@ -231,14 +231,14 @@ EXAMPLES = r"""
   register: created_example
 
 - name: Reconcile a uniquely named example resource by name
-  oracle.oci.oci_example_resource:
+  ansible.oci.oci_example_resource:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     project_id: ocid1.project.oc1..example
     name: example-resource
 
 - name: Intentionally create a second example resource with the same display name
-  oracle.oci.oci_example_resource:
+  ansible.oci.oci_example_resource:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -246,12 +246,12 @@ EXAMPLES = r"""
     name: example-resource
 
 - name: Delete the created example resource
-  oracle.oci.oci_example_resource:
+  ansible.oci.oci_example_resource:
     state: absent
     example_resource_id: "{{ created_example.resource.id }}"
 
 - name: Delete a uniquely named example resource without providing example_resource_id
-  oracle.oci.oci_example_resource:
+  ansible.oci.oci_example_resource:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     project_id: ocid1.project.oc1..example
@@ -267,13 +267,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 
@@ -472,8 +472,8 @@ version_added: "1.0.0"
 author:
   - Your Name (@github-handle)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -487,11 +487,11 @@ options:
 
 EXAMPLES = r"""
 - name: List example resources in a compartment
-  oracle.oci.oci_example_resource_info:
+  ansible.oci.oci_example_resource_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: Get one example resource
-  oracle.oci.oci_example_resource_info:
+  ansible.oci.oci_example_resource_info:
     example_resource_id: ocid1.example.oc1..example
 """
 
@@ -505,11 +505,11 @@ example_resources:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

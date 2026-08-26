@@ -12,13 +12,13 @@ short_description: Retrieve Compute shape information from Oracle Cloud Infrastr
 description:
   - Retrieve one or more OCI Compute shapes available in a compartment.
   - OCI shapes do not have OCIDs; the returned C(shape) value is the shape name
-    that can be passed directly to C(oracle.oci.oci_instance).
+    that can be passed directly to C(ansible.oci.oci_instance).
   - This is a read-only module and does not modify resources.
 version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
+  - ansible.oci.oci_auth_options
 options:
   compartment_id:
     description:
@@ -48,22 +48,22 @@ notes:
   - Use an unfiltered C(oci_shape_info) query first if you need to discover the
     current shape names available in your region, compartment, and availability
     domain.
-  - Use M(oracle.oci.oci_availability_domain_info) to discover valid
+  - Use M(ansible.oci.oci_availability_domain_info) to discover valid
     C(availability_domain) values instead of hardcoding tenancy-specific names.
 """
 
 EXAMPLES = r"""
 - name: List all shapes available in a compartment
-  oracle.oci.oci_shape_info:
+  ansible.oci.oci_shape_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List shapes compatible with a specific image
-  oracle.oci.oci_shape_info:
+  ansible.oci.oci_shape_info:
     compartment_id: ocid1.compartment.oc1..example
     image_id: ocid1.image.oc1..example
 
 - name: Filter the list down to one shape definition by exact name
-  oracle.oci.oci_shape_info:
+  ansible.oci.oci_shape_info:
     compartment_id: ocid1.compartment.oc1..example
     shape: VM.Standard.E4.Flex
 """
@@ -76,7 +76,7 @@ shapes:
   elements: dict
   contains:
     shape:
-      description: The shape name that can be forwarded to C(oracle.oci.oci_instance).
+      description: The shape name that can be forwarded to C(ansible.oci.oci_instance).
       type: str
       returned: always
       sample: VM.Standard.E4.Flex
@@ -132,7 +132,7 @@ shapes:
       description:
         - The platform configuration options supported by the shape, if any.
         - Use C(platform_config_options.type) as the C(platform_config.type)
-          value in M(oracle.oci.oci_instance) for an instance launched with
+          value in M(ansible.oci.oci_instance) for an instance launched with
           this shape. Shapes that don't support C(platform_config) (for
           example Ampere/ARM shapes) omit this field.
       type: dict
@@ -238,11 +238,11 @@ shapes:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

@@ -23,12 +23,12 @@
 
 - name: Exercise service gateway module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for service gateway integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_service_gateway_integration_vcn_name }}"
@@ -57,7 +57,7 @@
           service_gateway_id: ""
 
     - name: Create service gateway in check mode
-      oracle.oci.oci_network_service_gateway: &oci_service_gateway_create_module_options
+      ansible.oci.oci_network_service_gateway: &oci_service_gateway_create_module_options
         state: "{{ oci_service_gateway_create_params.state }}"
         compartment_id: "{{ oci_service_gateway_create_params.compartment_id }}"
         vcn_id: "{{ oci_service_gateway_create_params.vcn_id }}"
@@ -73,7 +73,7 @@
           - oci_service_gateway_create_check.changed | bool
 
     - name: Read service gateway after create check mode
-      oracle.oci.oci_network_service_gateway_info:
+      ansible.oci.oci_network_service_gateway_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_service_gateway_integration_network.vcn_id }}"
         name: "{{ oci_service_gateway_integration_gateway_name }}"
@@ -85,7 +85,7 @@
           - oci_service_gateway_create_check_probe.service_gateways | length == 0
 
     - name: Create service gateway
-      oracle.oci.oci_network_service_gateway:
+      ansible.oci.oci_network_service_gateway:
         <<: *oci_service_gateway_create_module_options
       register: oci_service_gateway_create
 
@@ -109,7 +109,7 @@
           - oci_service_gateway_create.changed | bool
 
     - name: Read service gateway by id
-      oracle.oci.oci_network_service_gateway_info:
+      ansible.oci.oci_network_service_gateway_info:
         service_gateway_id: "{{ oci_service_gateway_id }}"
       register: oci_service_gateway_info_by_id
 
@@ -123,7 +123,7 @@
           - oci_service_gateway_info_by_id.service_gateways[0].services == []
 
     - name: List service gateway by name
-      oracle.oci.oci_network_service_gateway_info:
+      ansible.oci.oci_network_service_gateway_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_service_gateway_integration_network.vcn_id }}"
         name: "{{ oci_service_gateway_integration_gateway_name }}"
@@ -136,7 +136,7 @@
           - oci_service_gateway_info_list.service_gateways | selectattr('id', 'equalto', oci_service_gateway_id) | list | length == 1
 
     - name: Assert created service gateway is a no-op on rerun with unique name
-      oracle.oci.oci_network_service_gateway:
+      ansible.oci.oci_network_service_gateway:
         <<: *oci_service_gateway_create_module_options
       register: oci_service_gateway_create_rerun_by_name
 
@@ -147,7 +147,7 @@
           - oci_service_gateway_create_rerun_by_name.resource.id == oci_service_gateway_id
 
     - name: Assert created service gateway is a no-op on rerun with returned id
-      oracle.oci.oci_network_service_gateway:
+      ansible.oci.oci_network_service_gateway:
         <<: *oci_service_gateway_create_module_options
         service_gateway_id: "{{ oci_service_gateway_id }}"
       register: oci_service_gateway_create_rerun
@@ -158,7 +158,7 @@
           - not oci_service_gateway_create_rerun.changed | bool
 
     - name: Update service gateway in check mode
-      oracle.oci.oci_network_service_gateway: &oci_service_gateway_update_module_options
+      ansible.oci.oci_network_service_gateway: &oci_service_gateway_update_module_options
         state: "{{ oci_service_gateway_update_params.state }}"
         service_gateway_id: "{{ oci_service_gateway_update_params.service_gateway_id }}"
         name: "{{ oci_service_gateway_update_params.name }}"
@@ -174,7 +174,7 @@
           - oci_service_gateway_update_check.changed | bool
 
     - name: Read service gateway after update check mode
-      oracle.oci.oci_network_service_gateway_info:
+      ansible.oci.oci_network_service_gateway_info:
         service_gateway_id: "{{ oci_service_gateway_id }}"
       register: oci_service_gateway_update_check_probe
 
@@ -187,7 +187,7 @@
           - oci_service_gateway_update_check_probe.service_gateways[0].freeform_tags.phase == "create"
 
     - name: Update service gateway
-      oracle.oci.oci_network_service_gateway:
+      ansible.oci.oci_network_service_gateway:
         <<: *oci_service_gateway_update_module_options
       register: oci_service_gateway_update
 
@@ -197,7 +197,7 @@
           - oci_service_gateway_update.changed | bool
 
     - name: Read updated service gateway by name
-      oracle.oci.oci_network_service_gateway_info:
+      ansible.oci.oci_network_service_gateway_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_service_gateway_integration_network.vcn_id }}"
         name: "{{ oci_service_gateway_integration_updated_gateway_name }}"
@@ -217,7 +217,7 @@
           - oci_service_gateway_info_updated.service_gateways[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_service_gateway:
+      ansible.oci.oci_network_service_gateway:
         <<: *oci_service_gateway_update_module_options
       register: oci_service_gateway_update_rerun
 
@@ -227,7 +227,7 @@
           - not oci_service_gateway_update_rerun.changed | bool
 
     - name: Delete service gateway in check mode
-      oracle.oci.oci_network_service_gateway: &oci_service_gateway_delete_module_options
+      ansible.oci.oci_network_service_gateway: &oci_service_gateway_delete_module_options
         state: "{{ oci_service_gateway_delete_params.state }}"
         service_gateway_id: "{{ oci_service_gateway_delete_params.service_gateway_id }}"
       check_mode: true
@@ -239,7 +239,7 @@
           - oci_service_gateway_delete_check.changed | bool
 
     - name: Read service gateway after delete check mode
-      oracle.oci.oci_network_service_gateway_info:
+      ansible.oci.oci_network_service_gateway_info:
         service_gateway_id: "{{ oci_service_gateway_id }}"
       register: oci_service_gateway_delete_check_probe
 
@@ -249,7 +249,7 @@
           - oci_service_gateway_delete_check_probe.service_gateways | length == 1
 
     - name: Delete service gateway
-      oracle.oci.oci_network_service_gateway:
+      ansible.oci.oci_network_service_gateway:
         <<: *oci_service_gateway_delete_module_options
       register: oci_service_gateway_delete
 
@@ -259,7 +259,7 @@
           - oci_service_gateway_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_service_gateway:
+      ansible.oci.oci_network_service_gateway:
         <<: *oci_service_gateway_delete_module_options
       register: oci_service_gateway_delete_rerun
 

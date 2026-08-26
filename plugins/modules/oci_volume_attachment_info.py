@@ -18,7 +18,7 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
+  - ansible.oci.oci_auth_options
 options:
   compartment_id:
     description:
@@ -54,18 +54,18 @@ options:
 
 EXAMPLES = r"""
 - name: List all volume attachments in a compartment
-  oracle.oci.oci_volume_attachment_info:
+  ansible.oci.oci_volume_attachment_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List volume attachments for a specific instance and volume by name
-  oracle.oci.oci_volume_attachment_info:
+  ansible.oci.oci_volume_attachment_info:
     compartment_id: ocid1.compartment.oc1..example
     instance_id: ocid1.instance.oc1..example
     volume_id: ocid1.volume.oc1..example
     name: example-attachment
 
 - name: Get a specific volume attachment
-  oracle.oci.oci_volume_attachment_info:
+  ansible.oci.oci_volume_attachment_info:
     volume_attachment_id: ocid1.volumeattachment.oc1..example
 """
 
@@ -183,11 +183,11 @@ volume_attachments:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

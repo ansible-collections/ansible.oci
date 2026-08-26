@@ -18,8 +18,8 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
@@ -40,17 +40,17 @@ options:
 
 EXAMPLES = r"""
 - name: List all security lists in a compartment
-  oracle.oci.oci_network_security_list_info:
+  ansible.oci.oci_network_security_list_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List security lists in a VCN by name
-  oracle.oci.oci_network_security_list_info:
+  ansible.oci.oci_network_security_list_info:
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
     name: example-security-list
 
 - name: Get a specific security list
-  oracle.oci.oci_network_security_list_info:
+  ansible.oci.oci_network_security_list_info:
     security_list_id: ocid1.securitylist.oc1..example
 """
 
@@ -144,11 +144,11 @@ security_lists:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 

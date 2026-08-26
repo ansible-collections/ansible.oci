@@ -23,10 +23,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -234,7 +234,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create a security list allowing inbound SSH and all outbound traffic
-  oracle.oci.oci_network_security_list:
+  ansible.oci.oci_network_security_list:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -251,7 +251,7 @@ EXAMPLES = r"""
   register: created_security_list
 
 - name: Replace the ingress rules on an existing security list
-  oracle.oci.oci_network_security_list:
+  ansible.oci.oci_network_security_list:
     state: present
     security_list_id: "{{ created_security_list.resource.id }}"
     ingress_security_rules:
@@ -262,7 +262,7 @@ EXAMPLES = r"""
           destination_port_max: 443
 
 - name: Reconcile a uniquely named security list by name
-  oracle.oci.oci_network_security_list:
+  ansible.oci.oci_network_security_list:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -275,7 +275,7 @@ EXAMPLES = r"""
           destination_port_max: 443
 
 - name: Intentionally create a second security list with the same display name
-  oracle.oci.oci_network_security_list:
+  ansible.oci.oci_network_security_list:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -286,12 +286,12 @@ EXAMPLES = r"""
         protocol: all
 
 - name: Delete the created security list
-  oracle.oci.oci_network_security_list:
+  ansible.oci.oci_network_security_list:
     state: absent
     security_list_id: "{{ created_security_list.resource.id }}"
 
 - name: Delete a uniquely named security list without providing security_list_id
-  oracle.oci.oci_network_security_list:
+  ansible.oci.oci_network_security_list:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -409,13 +409,13 @@ import json
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

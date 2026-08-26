@@ -17,12 +17,12 @@
 
 - name: Exercise route table module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for route table integration
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_route_table_integration_vcn_name }}"
@@ -32,7 +32,7 @@
       register: oci_route_table_vcn_create
 
     - name: Create test internet gateway to use as a route rule target
-      oracle.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_route_table_vcn_create.resource.id }}"
@@ -57,7 +57,7 @@
           route_table_id: ""
 
     - name: Create route table in check mode
-      oracle.oci.oci_network_route_table: &oci_route_table_create_module_options
+      ansible.oci.oci_network_route_table: &oci_route_table_create_module_options
         state: "{{ oci_route_table_create_params.state }}"
         compartment_id: "{{ oci_route_table_create_params.compartment_id }}"
         vcn_id: "{{ oci_route_table_create_params.vcn_id }}"
@@ -73,7 +73,7 @@
           - oci_route_table_create_check.changed | bool
 
     - name: Read route table after create check mode
-      oracle.oci.oci_network_route_table_info:
+      ansible.oci.oci_network_route_table_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_route_table_create_params.vcn_id }}"
         name: "{{ oci_route_table_integration_route_table_name }}"
@@ -85,7 +85,7 @@
           - oci_route_table_create_check_probe.route_tables | length == 0
 
     - name: Create route table
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         <<: *oci_route_table_create_module_options
       register: oci_route_table_create
 
@@ -112,7 +112,7 @@
           - oci_route_table_create.changed | bool
 
     - name: Read route table by id
-      oracle.oci.oci_network_route_table_info:
+      ansible.oci.oci_network_route_table_info:
         route_table_id: "{{ oci_route_table_id }}"
       register: oci_route_table_info_by_id
 
@@ -127,7 +127,7 @@
           - oci_route_table_info_by_id.route_tables[0].route_rules[0].network_entity_id == oci_route_table_ig_create.resource.id
 
     - name: Assert created route table is a no-op on rerun with unique name
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         <<: *oci_route_table_create_module_options
       register: oci_route_table_create_rerun_by_name
 
@@ -138,7 +138,7 @@
           - oci_route_table_create_rerun_by_name.resource.id == oci_route_table_id
 
     - name: Intentionally create a second route table with the same display name
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         <<: *oci_route_table_create_module_options
         allow_duplicate_name: true
       register: oci_route_table_duplicate_create
@@ -154,7 +154,7 @@
           - oci_route_table_duplicate_id != oci_route_table_id
 
     - name: Delete the duplicate route table
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         state: absent
         route_table_id: "{{ oci_route_table_duplicate_id }}"
 
@@ -163,7 +163,7 @@
         oci_route_table_duplicate_id: ""
 
     - name: Update route table in check mode
-      oracle.oci.oci_network_route_table: &oci_route_table_update_module_options
+      ansible.oci.oci_network_route_table: &oci_route_table_update_module_options
         state: "{{ oci_route_table_update_params.state }}"
         route_table_id: "{{ oci_route_table_update_params.route_table_id }}"
         name: "{{ oci_route_table_update_params.name }}"
@@ -178,7 +178,7 @@
           - oci_route_table_update_check.changed | bool
 
     - name: Read route table after update check mode
-      oracle.oci.oci_network_route_table_info:
+      ansible.oci.oci_network_route_table_info:
         route_table_id: "{{ oci_route_table_id }}"
       register: oci_route_table_update_check_probe
 
@@ -190,7 +190,7 @@
           - oci_route_table_update_check_probe.route_tables[0].route_rules[0].destination == "0.0.0.0/0"
 
     - name: Update route table
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         <<: *oci_route_table_update_module_options
       register: oci_route_table_update
 
@@ -200,7 +200,7 @@
           - oci_route_table_update.changed | bool
 
     - name: Read updated route table by id
-      oracle.oci.oci_network_route_table_info:
+      ansible.oci.oci_network_route_table_info:
         route_table_id: "{{ oci_route_table_id }}"
       register: oci_route_table_info_updated
 
@@ -213,7 +213,7 @@
           - oci_route_table_info_updated.route_tables[0].freeform_tags.phase == "update"
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         <<: *oci_route_table_update_module_options
       register: oci_route_table_update_rerun
 
@@ -223,7 +223,7 @@
           - not oci_route_table_update_rerun.changed | bool
 
     - name: Delete route table in check mode
-      oracle.oci.oci_network_route_table: &oci_route_table_delete_module_options
+      ansible.oci.oci_network_route_table: &oci_route_table_delete_module_options
         state: "{{ oci_route_table_delete_params.state }}"
         route_table_id: "{{ oci_route_table_delete_params.route_table_id }}"
       check_mode: true
@@ -235,7 +235,7 @@
           - oci_route_table_delete_check.changed | bool
 
     - name: Read route table after delete check mode
-      oracle.oci.oci_network_route_table_info:
+      ansible.oci.oci_network_route_table_info:
         route_table_id: "{{ oci_route_table_id }}"
       register: oci_route_table_delete_check_probe
 
@@ -245,7 +245,7 @@
           - oci_route_table_delete_check_probe.route_tables | length == 1
 
     - name: Delete route table
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         <<: *oci_route_table_delete_module_options
       register: oci_route_table_delete
 
@@ -255,7 +255,7 @@
           - oci_route_table_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_route_table:
+      ansible.oci.oci_network_route_table:
         <<: *oci_route_table_delete_module_options
       register: oci_route_table_delete_rerun
 

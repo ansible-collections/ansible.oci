@@ -1,30 +1,30 @@
 ---
 - name: Run console connection cleanup with shared OCI auth defaults
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Delete leaked console connection during cleanup
-      oracle.oci.oci_instance_console_connection:
+      ansible.oci.oci_instance_console_connection:
         state: absent
         instance_console_connection_id: "{{ oci_console_connection_id }}"
       when: oci_console_connection_id | default('') | length > 0
 
     - name: Delete leaked instance during cleanup
-      oracle.oci.oci_instance:
+      ansible.oci.oci_instance:
         state: absent
         instance_id: "{{ oci_console_connection_instance_create.resource.id }}"
       when: oci_console_connection_instance_create.resource.id | default('') | length > 0
 
     - name: Delete leaked subnet during cleanup
-      oracle.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_console_connection_subnet_create.resource.id }}"
       when: oci_console_connection_subnet_create.resource.id | default('') | length > 0
 
     - name: Delete leaked VCN during cleanup
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_console_connection_vcn_create.resource.id }}"
       when: oci_console_connection_vcn_create.resource.id | default('') | length > 0

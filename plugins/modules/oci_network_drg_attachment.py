@@ -27,10 +27,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -92,7 +92,7 @@ options:
 
 EXAMPLES = r"""
 - name: Attach a DRG to a VCN
-  oracle.oci.oci_network_drg_attachment:
+  ansible.oci.oci_network_drg_attachment:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     drg_id: ocid1.drg.oc1..example
@@ -101,14 +101,14 @@ EXAMPLES = r"""
   register: created_drg_attachment
 
 - name: Update the route tables used by a DRG attachment
-  oracle.oci.oci_network_drg_attachment:
+  ansible.oci.oci_network_drg_attachment:
     state: present
     drg_attachment_id: "{{ created_drg_attachment.resource.id }}"
     route_table_id: ocid1.routetable.oc1..updated
     drg_route_table_id: ocid1.drgroutetable.oc1..updated
 
 - name: Reconcile a uniquely named DRG attachment by name
-  oracle.oci.oci_network_drg_attachment:
+  ansible.oci.oci_network_drg_attachment:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     drg_id: ocid1.drg.oc1..example
@@ -117,12 +117,12 @@ EXAMPLES = r"""
     route_table_id: ocid1.routetable.oc1..updated
 
 - name: Detach the DRG from the VCN
-  oracle.oci.oci_network_drg_attachment:
+  ansible.oci.oci_network_drg_attachment:
     state: absent
     drg_attachment_id: "{{ created_drg_attachment.resource.id }}"
 
 - name: Detach a uniquely named DRG attachment without providing drg_attachment_id
-  oracle.oci.oci_network_drg_attachment:
+  ansible.oci.oci_network_drg_attachment:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     drg_id: ocid1.drg.oc1..example
@@ -225,12 +225,12 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

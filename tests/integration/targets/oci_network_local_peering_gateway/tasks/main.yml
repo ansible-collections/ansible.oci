@@ -20,12 +20,12 @@
 
 - name: Exercise local peering gateway module lifecycle
   module_defaults:
-    group/oracle.oci.oci:
+    group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Create test VCN for the local peering gateway
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_lpg_integration_vcn_name }}"
@@ -35,7 +35,7 @@
       register: oci_lpg_vcn_create
 
     - name: Create a second test VCN to peer with
-      oracle.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_lpg_integration_peer_vcn_name }}"
@@ -54,7 +54,7 @@
           freeform_tags: "{{ oci_lpg_integration_create_tags }}"
 
     - name: Create local peering gateway in check mode
-      oracle.oci.oci_network_local_peering_gateway: &oci_lpg_create_module_options
+      ansible.oci.oci_network_local_peering_gateway: &oci_lpg_create_module_options
         state: "{{ oci_lpg_create_params.state }}"
         compartment_id: "{{ oci_lpg_create_params.compartment_id }}"
         vcn_id: "{{ oci_lpg_create_params.vcn_id }}"
@@ -69,7 +69,7 @@
           - oci_lpg_create_check.changed | bool
 
     - name: Read local peering gateway after create check mode
-      oracle.oci.oci_network_local_peering_gateway_info:
+      ansible.oci.oci_network_local_peering_gateway_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_lpg_create_params.vcn_id }}"
         name: "{{ oci_lpg_integration_lpg_name }}"
@@ -81,12 +81,12 @@
           - oci_lpg_create_check_probe.local_peering_gateways | length == 0
 
     - name: Create local peering gateway
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         <<: *oci_lpg_create_module_options
       register: oci_lpg_create
 
     - name: Create the peer local peering gateway on the second VCN
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         state: present
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_lpg_peer_vcn_create.resource.id }}"
@@ -111,7 +111,7 @@
           - oci_lpg_create.changed | bool
 
     - name: Read local peering gateway by id
-      oracle.oci.oci_network_local_peering_gateway_info:
+      ansible.oci.oci_network_local_peering_gateway_info:
         local_peering_gateway_id: "{{ oci_lpg_id }}"
       register: oci_lpg_info_by_id
 
@@ -124,7 +124,7 @@
           - oci_lpg_info_by_id.local_peering_gateways[0].lifecycle_state == "AVAILABLE"
 
     - name: Assert created local peering gateway is a no-op on rerun with unique name
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         <<: *oci_lpg_create_module_options
       register: oci_lpg_create_rerun_by_name
 
@@ -135,7 +135,7 @@
           - oci_lpg_create_rerun_by_name.resource.id == oci_lpg_id
 
     - name: Intentionally create a second local peering gateway with the same display name
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         <<: *oci_lpg_create_module_options
         allow_duplicate_name: true
       register: oci_lpg_duplicate_create
@@ -151,7 +151,7 @@
           - oci_lpg_duplicate_id != oci_lpg_id
 
     - name: Delete the duplicate local peering gateway
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         state: absent
         local_peering_gateway_id: "{{ oci_lpg_duplicate_id }}"
 
@@ -160,7 +160,7 @@
         oci_lpg_duplicate_id: ""
 
     - name: Peer the two local peering gateways
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         state: present
         local_peering_gateway_id: "{{ oci_lpg_id }}"
         peer_id: "{{ oci_lpg_peer_create.resource.id }}"
@@ -172,7 +172,7 @@
           - oci_lpg_peer_connect.changed | bool
 
     - name: Read local peering gateway after peering
-      oracle.oci.oci_network_local_peering_gateway_info:
+      ansible.oci.oci_network_local_peering_gateway_info:
         local_peering_gateway_id: "{{ oci_lpg_id }}"
       register: oci_lpg_info_after_peering
 
@@ -182,7 +182,7 @@
           - oci_lpg_info_after_peering.local_peering_gateways[0].peer_id == oci_lpg_peer_create.resource.id
 
     - name: Assert peering is idempotent on rerun
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         state: present
         local_peering_gateway_id: "{{ oci_lpg_id }}"
         peer_id: "{{ oci_lpg_peer_create.resource.id }}"
@@ -194,7 +194,7 @@
           - not oci_lpg_peer_connect_rerun.changed | bool
 
     - name: Update local peering gateway name and tags in check mode
-      oracle.oci.oci_network_local_peering_gateway: &oci_lpg_update_module_options
+      ansible.oci.oci_network_local_peering_gateway: &oci_lpg_update_module_options
         state: "{{ oci_lpg_update_params.state }}"
         local_peering_gateway_id: "{{ oci_lpg_update_params.local_peering_gateway_id }}"
         name: "{{ oci_lpg_update_params.name }}"
@@ -208,7 +208,7 @@
           - oci_lpg_update_check.changed | bool
 
     - name: Update local peering gateway name and tags
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         <<: *oci_lpg_update_module_options
       register: oci_lpg_update
 
@@ -218,7 +218,7 @@
           - oci_lpg_update.changed | bool
 
     - name: Read updated local peering gateway by id
-      oracle.oci.oci_network_local_peering_gateway_info:
+      ansible.oci.oci_network_local_peering_gateway_info:
         local_peering_gateway_id: "{{ oci_lpg_id }}"
       register: oci_lpg_info_updated
 
@@ -230,7 +230,7 @@
           - oci_lpg_info_updated.local_peering_gateways[0].peer_id == oci_lpg_peer_create.resource.id
 
     - name: Assert update is idempotent on rerun
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         <<: *oci_lpg_update_module_options
       register: oci_lpg_update_rerun
 
@@ -240,7 +240,7 @@
           - not oci_lpg_update_rerun.changed | bool
 
     - name: Delete local peering gateway in check mode
-      oracle.oci.oci_network_local_peering_gateway: &oci_lpg_delete_module_options
+      ansible.oci.oci_network_local_peering_gateway: &oci_lpg_delete_module_options
         state: "{{ oci_lpg_delete_params.state }}"
         local_peering_gateway_id: "{{ oci_lpg_delete_params.local_peering_gateway_id }}"
       check_mode: true
@@ -252,7 +252,7 @@
           - oci_lpg_delete_check.changed | bool
 
     - name: Delete local peering gateway
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         <<: *oci_lpg_delete_module_options
       register: oci_lpg_delete
 
@@ -262,7 +262,7 @@
           - oci_lpg_delete.changed | bool
 
     - name: Assert delete is idempotent on rerun
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         <<: *oci_lpg_delete_module_options
       register: oci_lpg_delete_rerun
 
@@ -272,7 +272,7 @@
           - not oci_lpg_delete_rerun.changed | bool
 
     - name: Delete the peer local peering gateway
-      oracle.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway:
         state: absent
         local_peering_gateway_id: "{{ oci_lpg_peer_create.resource.id }}"
 

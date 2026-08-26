@@ -20,10 +20,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -83,7 +83,7 @@ options:
         route table as usual.
       - Because a route table's own rules may need to reference this
         gateway's OCID (see C(network_entity_id) on
-        C(oracle.oci.oci_network_route_table)), create the gateway first without
+        C(ansible.oci.oci_network_route_table)), create the gateway first without
         C(route_table_id), create the route table referencing the gateway,
         then update the gateway with C(route_table_id) if transit routing is
         required. See the examples below.
@@ -99,7 +99,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create a NAT gateway with only the required parameters
-  oracle.oci.oci_network_nat_gateway:
+  ansible.oci.oci_network_nat_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -107,7 +107,7 @@ EXAMPLES = r"""
   register: created_nat_gateway
 
 - name: Create a route table with a rule pointing at that NAT gateway
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -118,13 +118,13 @@ EXAMPLES = r"""
   register: created_route_table
 
 - name: Enable transit routing by pointing the gateway back at that route table
-  oracle.oci.oci_network_nat_gateway:
+  ansible.oci.oci_network_nat_gateway:
     state: present
     nat_gateway_id: "{{ created_nat_gateway.resource.id }}"
     route_table_id: "{{ created_route_table.resource.id }}"
 
 - name: Reconcile a uniquely named NAT gateway by name
-  oracle.oci.oci_network_nat_gateway:
+  ansible.oci.oci_network_nat_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -132,12 +132,12 @@ EXAMPLES = r"""
     block_traffic: true
 
 - name: Delete the created NAT gateway
-  oracle.oci.oci_network_nat_gateway:
+  ansible.oci.oci_network_nat_gateway:
     state: absent
     nat_gateway_id: "{{ created_nat_gateway.resource.id }}"
 
 - name: Delete a uniquely named NAT gateway without providing nat_gateway_id
-  oracle.oci.oci_network_nat_gateway:
+  ansible.oci.oci_network_nat_gateway:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -227,13 +227,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 

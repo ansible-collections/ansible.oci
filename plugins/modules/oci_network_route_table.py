@@ -22,10 +22,10 @@ version_added: "1.0.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_name_lookup_options
-  - oracle.oci.oci_wait_options
-  - oracle.oci.oci_tags_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_name_lookup_options
+  - ansible.oci.oci_wait_options
+  - ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -111,7 +111,7 @@ options:
 
 EXAMPLES = r"""
 - name: Create an internet gateway to use as a route rule target
-  oracle.oci.oci_network_internet_gateway:
+  ansible.oci.oci_network_internet_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -120,7 +120,7 @@ EXAMPLES = r"""
   register: created_internet_gateway
 
 - name: Create a route table with a route to that internet gateway
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -132,7 +132,7 @@ EXAMPLES = r"""
   register: created_route_table
 
 - name: Create a NAT gateway to use as a different route rule target
-  oracle.oci.oci_network_nat_gateway:
+  ansible.oci.oci_network_nat_gateway:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -140,7 +140,7 @@ EXAMPLES = r"""
   register: created_nat_gateway
 
 - name: Replace the route rules on an existing route table
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: present
     route_table_id: "{{ created_route_table.resource.id }}"
     route_rules:
@@ -148,7 +148,7 @@ EXAMPLES = r"""
         network_entity_id: "{{ created_nat_gateway.resource.id }}"
 
 - name: Reconcile a uniquely named route table by name
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: present
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -158,7 +158,7 @@ EXAMPLES = r"""
         network_entity_id: "{{ created_nat_gateway.resource.id }}"
 
 - name: Intentionally create a second route table with the same display name
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: present
     allow_duplicate_name: true
     compartment_id: ocid1.compartment.oc1..example
@@ -166,12 +166,12 @@ EXAMPLES = r"""
     name: example-route-table
 
 - name: Delete the created route table
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: absent
     route_table_id: "{{ created_route_table.resource.id }}"
 
 - name: Delete a uniquely named route table without providing route_table_id
-  oracle.oci.oci_network_route_table:
+  ansible.oci.oci_network_route_table:
     state: absent
     compartment_id: ocid1.compartment.oc1..example
     vcn_id: ocid1.vcn.oc1..example
@@ -254,13 +254,13 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_resource import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
 
