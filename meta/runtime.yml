@@ -38,6 +38,8 @@ action_groups:
     - oci_instance_console_connection_info
     - oci_volume_group
     - oci_volume_group_info
+    - oci_volume_group_backup
+    - oci_volume_group_backup_info
     - oci_volume_backup
     - oci_volume_backup_info
     - oci_boot_volume_backup

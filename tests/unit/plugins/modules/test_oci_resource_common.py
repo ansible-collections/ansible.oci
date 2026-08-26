@@ -470,6 +470,41 @@ RESOURCE_CASES = (
             "name": "example-boot-backup",
         },
     },
+    {
+        "module_name": "oci_volume_group_backup",
+        "class_name": "OciVolumeGroupBackupModule",
+        "id_param": "volume_group_backup_id",
+        "id_value": "ocid1.volumegroupbackup.oc1..example",
+        "missing_id": "ocid1.volumegroupbackup.oc1..missing",
+        "get_method": "get_volume_group_backup",
+        "list_method": "list_volume_group_backups",
+        "delete_method": "delete_volume_group_backup",
+        "not_found_label": "volume group backup",
+        "delete_required_msg": (
+            "Deleting a volume group backup requires either "
+            "volume_group_backup_id or name (with compartment_id, volume_group_id)"
+        ),
+        "create_missing_msg": "Creating a volume group backup requires",
+        "name_lookup_params": {
+            "name": "example-group-backup",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "volume_group_id": "ocid1.volumegroup.oc1..example",
+        },
+        "expected_name_lookup_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "volume_group_id": "ocid1.volumegroup.oc1..example",
+        },
+        "create_missing_params": {
+            "state": "present",
+            "name": "example-group-backup",
+        },
+        "create_complete_params": {
+            "state": "present",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "volume_group_id": "ocid1.volumegroup.oc1..example",
+            "name": "example-group-backup",
+        },
+    },
 )
 
 
