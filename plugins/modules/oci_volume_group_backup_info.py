@@ -18,18 +18,20 @@ version_added: "1.1.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - oracle.oci.oci_auth_options
-  - oracle.oci.oci_info_filter_options
+  - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 options:
   compartment_id:
     description:
       - The OCID of the compartment to list volume group backups from.
       - Required when listing resources.
+      - Either C(volume_group_backup_id) or C(compartment_id) is required.
     type: str
   volume_group_backup_id:
     description:
       - The OCID of a specific volume group backup to retrieve.
       - When specified, returns a single resource instead of a list.
+      - Either C(volume_group_backup_id) or C(compartment_id) is required.
     type: str
   volume_group_id:
     description:
@@ -40,21 +42,21 @@ options:
 
 EXAMPLES = r"""
 - name: List all volume group backups in a compartment
-  oracle.oci.oci_volume_group_backup_info:
+  ansible.oci.oci_volume_group_backup_info:
     compartment_id: ocid1.compartment.oc1..example
 
 - name: List volume group backups for a specific volume group
-  oracle.oci.oci_volume_group_backup_info:
+  ansible.oci.oci_volume_group_backup_info:
     compartment_id: ocid1.compartment.oc1..example
     volume_group_id: ocid1.volumegroup.oc1..example
 
 - name: List volume group backups in a compartment by name
-  oracle.oci.oci_volume_group_backup_info:
+  ansible.oci.oci_volume_group_backup_info:
     compartment_id: ocid1.compartment.oc1..example
     name: pre-maintenance-group-backup
 
 - name: Get a specific volume group backup
-  oracle.oci.oci_volume_group_backup_info:
+  ansible.oci.oci_volume_group_backup_info:
     volume_group_backup_id: ocid1.volumegroupbackup.oc1..example
 """
 
@@ -228,11 +230,11 @@ volume_group_backups:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.oracle.oci.plugins.module_utils.oci_common import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
-from ansible_collections.oracle.oci.plugins.module_utils.oci_info import (
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 
