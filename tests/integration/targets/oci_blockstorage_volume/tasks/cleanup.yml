@@ -5,6 +5,18 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: Delete leaked restored block volume during cleanup
+      ansible.oci.oci_blockstorage_volume:
+        state: absent
+        volume_id: "{{ oci_blockstorage_volume_restore_id }}"
+      when: oci_blockstorage_volume_restore_id | default('') | length > 0
+
+    - name: Delete leaked volume backup during cleanup
+      ansible.oci.oci_volume_backup:
+        state: absent
+        volume_backup_id: "{{ oci_blockstorage_volume_backup_id }}"
+      when: oci_blockstorage_volume_backup_id | default('') | length > 0
+
     - name: Delete leaked block volume during cleanup
       ansible.oci.oci_blockstorage_volume:
         state: absent

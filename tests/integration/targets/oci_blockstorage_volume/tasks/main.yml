@@ -10,6 +10,8 @@
   ansible.builtin.set_fact:
     oci_blockstorage_volume_integration_volume_name: "{{ oci_blockstorage_volume_integration_volume_name }}-{{ oci_integration_rpfx }}"
     oci_blockstorage_volume_integration_updated_volume_name: "{{ oci_blockstorage_volume_integration_updated_volume_name }}-{{ oci_integration_rpfx }}"
+    oci_blockstorage_volume_integration_restore_volume_name: "{{ oci_blockstorage_volume_integration_restore_volume_name }}-{{ oci_integration_rpfx }}"
+    oci_blockstorage_volume_integration_backup_name: "{{ oci_blockstorage_volume_integration_backup_name }}-{{ oci_integration_rpfx }}"
 
 - name: Exercise block volume module lifecycle
   module_defaults:
@@ -326,6 +328,114 @@
       ansible.builtin.assert:
         that:
           - not oci_blockstorage_volume_autotune_max_only_rerun.changed | bool
+
+    - name: Create volume backup for restore
+      ansible.oci.oci_volume_backup:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_blockstorage_volume_integration_backup_name }}"
+        volume_id: "{{ oci_blockstorage_volume_id }}"
+        type: full
+      register: oci_blockstorage_volume_backup_create
+
+    - name: Capture volume backup id and define restore parameters
+      ansible.builtin.set_fact:
+        oci_blockstorage_volume_backup_id: "{{ oci_blockstorage_volume_backup_create.resource.id }}"
+        oci_blockstorage_volume_restore_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          availability_domain: "{{ oci_blockstorage_volume_integration_availability_domain }}"
+          name: "{{ oci_blockstorage_volume_integration_restore_volume_name }}"
+          source_details:
+            type: volumeBackup
+            id: "{{ oci_blockstorage_volume_backup_create.resource.id }}"
+
+    - name: Assert volume backup create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_backup_create.changed | bool
+          - oci_blockstorage_volume_backup_create.resource.lifecycle_state == "AVAILABLE"
+
+    - name: Restore block volume from backup in check mode
+      ansible.oci.oci_blockstorage_volume: &oci_blockstorage_volume_restore_module_options
+        state: "{{ oci_blockstorage_volume_restore_params.state }}"
+        compartment_id: "{{ oci_blockstorage_volume_restore_params.compartment_id }}"
+        availability_domain: "{{ oci_blockstorage_volume_restore_params.availability_domain }}"
+        name: "{{ oci_blockstorage_volume_restore_params.name }}"
+        source_details: "{{ oci_blockstorage_volume_restore_params.source_details }}"
+      check_mode: true
+      register: oci_blockstorage_volume_restore_check
+
+    - name: Assert restore check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_restore_check.changed | bool
+
+    - name: Read restored block volume after restore check mode
+      ansible.oci.oci_blockstorage_volume_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_blockstorage_volume_integration_restore_volume_name }}"
+      register: oci_blockstorage_volume_restore_check_probe
+
+    - name: Assert restored volume is still absent after restore check mode
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_restore_check_probe.volumes | length == 0
+
+    - name: Restore block volume from backup
+      ansible.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_restore_module_options
+      register: oci_blockstorage_volume_restore
+
+    - name: Capture restored volume id
+      ansible.builtin.set_fact:
+        oci_blockstorage_volume_restore_id: "{{ oci_blockstorage_volume_restore.resource.id }}"
+
+    - name: Assert restore reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_restore.changed | bool
+          - oci_blockstorage_volume_restore.resource.lifecycle_state == "AVAILABLE"
+          - oci_blockstorage_volume_restore.resource.is_hydrated | bool
+          - oci_blockstorage_volume_restore.resource.source_details.type == "volumeBackup"
+          - oci_blockstorage_volume_restore.resource.source_details.id == oci_blockstorage_volume_backup_id
+
+    - name: Read restored block volume by id
+      ansible.oci.oci_blockstorage_volume_info:
+        volume_id: "{{ oci_blockstorage_volume_restore_id }}"
+      register: oci_blockstorage_volume_restore_info_by_id
+
+    - name: Assert restored volume info returned source_details
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_restore_info_by_id.volumes | length == 1
+          - oci_blockstorage_volume_restore_info_by_id.volumes[0].id == oci_blockstorage_volume_restore_id
+          - oci_blockstorage_volume_restore_info_by_id.volumes[0].name == oci_blockstorage_volume_integration_restore_volume_name
+          - oci_blockstorage_volume_restore_info_by_id.volumes[0].lifecycle_state == "AVAILABLE"
+          - oci_blockstorage_volume_restore_info_by_id.volumes[0].is_hydrated | bool
+          - oci_blockstorage_volume_restore_info_by_id.volumes[0].source_details.type == "volumeBackup"
+          - oci_blockstorage_volume_restore_info_by_id.volumes[0].source_details.id == oci_blockstorage_volume_backup_id
+
+    - name: Assert restore is a no-op in check mode
+      ansible.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_restore_module_options
+      check_mode: true
+      register: oci_blockstorage_volume_restore_check_rerun
+
+    - name: Verify restore check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_restore_check_rerun.changed | bool
+
+    - name: Assert restore is idempotent on rerun
+      ansible.oci.oci_blockstorage_volume:
+        <<: *oci_blockstorage_volume_restore_module_options
+      register: oci_blockstorage_volume_restore_rerun
+
+    - name: Verify restore rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_restore_rerun.changed | bool
 
     - name: Delete block volume in check mode
       ansible.oci.oci_blockstorage_volume: &oci_blockstorage_volume_delete_module_options
