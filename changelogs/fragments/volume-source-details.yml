@@ -1,0 +1,3 @@
+---
+minor_changes:
+  - oci_blockstorage_volume - add create-time source_details to restore from a volume backup or clone from an existing volume.

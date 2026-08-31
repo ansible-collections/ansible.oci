@@ -22,14 +22,47 @@ VOLUME_MODEL_NAMES = (
     "UpdateVolumeDetails",
     "PerformanceBasedAutotunePolicy",
     "DetachedVolumeAutotunePolicy",
+    "VolumeSourceFromVolumeBackupDetails",
+    "VolumeSourceFromVolumeDetails",
 )
+
+SOURCE_TYPE_MODELS = {
+    "VolumeSourceFromVolumeBackupDetails": "volumeBackup",
+    "VolumeSourceFromVolumeDetails": "volume",
+}
+
+SOURCE_DETAILS_ARGUMENT_SPEC = {
+    "type": "dict",
+    "options": {
+        "type": {
+            "type": "str",
+            "required": True,
+            "choices": ["volumeBackup", "volume"],
+        },
+        "id": {"type": "str", "required": True},
+    },
+}
+
+
+def _fake_source_model(source_type):
+    class FakeSourceModel(FakeModel):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            if "type" not in kwargs:
+                self.type = source_type
+
+    return FakeSourceModel
 
 
 def install_fake_oci(monkeypatch):
-    return shared_install_fake_oci(
+    oci_module, service_error = shared_install_fake_oci(
         monkeypatch,
         model_names=VOLUME_MODEL_NAMES,
     )
+    models = oci_module.core.models
+    for name, source_type in SOURCE_TYPE_MODELS.items():
+        setattr(models, name, _fake_source_model(source_type))
+    return oci_module, service_error
 
 
 def make_volume_module(module_obj, params, client=None):
@@ -90,7 +123,7 @@ def test_main_exposes_expected_arguments(monkeypatch):
     assert "is_reservations_enabled" not in captured["argument_spec"]
     assert "auto_tune_enabled" not in captured["argument_spec"]
     assert "autotune_policies" not in captured["argument_spec"]
-    assert "source_details" not in captured["argument_spec"]
+    assert captured["argument_spec"]["source_details"] == SOURCE_DETAILS_ARGUMENT_SPEC
     assert "block_volume_replicas" not in captured["argument_spec"]
     assert "xrc_kms_key_id" not in captured["argument_spec"]
     assert "display_name" not in captured["argument_spec"]
@@ -182,6 +215,83 @@ def test_build_create_volume_details_includes_cluster_placement_group(monkeypatc
     assert details.cluster_placement_group_id == "ocid1.clusterplacementgroup.oc1..example"
     assert not hasattr(details, "source_details")
     assert not hasattr(details, "block_volume_replicas")
+
+
+def test_build_volume_source_details_from_backup(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    details = volume_module.build_volume_source_details(
+        {"type": "volumeBackup", "id": "ocid1.volumebackup.oc1..example"}
+    )
+
+    assert isinstance(details, FakeModel)
+    assert details.type == "volumeBackup"
+    assert details.id == "ocid1.volumebackup.oc1..example"
+
+
+def test_build_volume_source_details_from_volume(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    details = volume_module.build_volume_source_details(
+        {"type": "volume", "id": "ocid1.volume.oc1..source"}
+    )
+
+    assert isinstance(details, FakeModel)
+    assert details.type == "volume"
+    assert details.id == "ocid1.volume.oc1..source"
+
+
+def test_build_volume_source_details_omits_unset_source(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+
+    assert volume_module.build_volume_source_details(None) is None
+    assert volume_module.build_volume_source_details({}) is None
+
+
+def test_build_create_volume_details_includes_source_details_from_backup(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    details = volume_module.build_create_volume_details(
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
+            "name": "restored-volume",
+            "source_details": {
+                "type": "volumeBackup",
+                "id": "ocid1.volumebackup.oc1..example",
+            },
+        }
+    )
+
+    assert isinstance(details.source_details, FakeModel)
+    assert details.source_details.type == "volumeBackup"
+    assert details.source_details.id == "ocid1.volumebackup.oc1..example"
+
+
+def test_build_create_volume_details_includes_source_details_from_volume(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    details = volume_module.build_create_volume_details(
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
+            "name": "cloned-volume",
+            "source_details": {
+                "type": "volume",
+                "id": "ocid1.volume.oc1..source",
+            },
+        }
+    )
+
+    assert isinstance(details.source_details, FakeModel)
+    assert details.source_details.type == "volume"
+    assert details.source_details.id == "ocid1.volume.oc1..source"
 
 
 def test_build_create_volume_details_builds_autotune_from_ui_flags(monkeypatch):
@@ -672,6 +782,79 @@ def test_needs_update_rejects_availability_domain_drift(monkeypatch):
     assert "availability_domain" in exc_info.value.payload["msg"]
 
 
+def test_needs_update_is_noop_when_source_details_match(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    instance = make_volume_module(
+        volume_module,
+        {
+            "name": "restored-volume",
+            "source_details": {
+                "type": "volumeBackup",
+                "id": "ocid1.volumebackup.oc1..example",
+            },
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.volume.oc1..example",
+        display_name="restored-volume",
+        source_details=FakeModel(
+            type="volumeBackup",
+            id="ocid1.volumebackup.oc1..example",
+        ),
+    )
+
+    assert instance.needs_update(resource) is False
+
+
+def test_needs_update_rejects_source_details_drift(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    instance = make_volume_module(
+        volume_module,
+        {
+            "source_details": {
+                "type": "volumeBackup",
+                "id": "ocid1.volumebackup.oc1..desired",
+            },
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.volume.oc1..example",
+        source_details=FakeModel(
+            type="volumeBackup",
+            id="ocid1.volumebackup.oc1..current",
+        ),
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.needs_update(resource)
+
+    assert "source_details" in exc_info.value.payload["msg"]
+
+
+def test_needs_update_skips_source_details_when_omitted(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    instance = make_volume_module(
+        volume_module,
+        {"name": "current-volume"},
+    )
+    resource = FakeModel(
+        id="ocid1.volume.oc1..example",
+        display_name="current-volume",
+        source_details=FakeModel(
+            type="volumeBackup",
+            id="ocid1.volumebackup.oc1..example",
+        ),
+    )
+
+    assert instance.needs_update(resource) is False
+
+
 def test_create_resource_uses_create_volume_and_waits(monkeypatch):
     install_fake_oci(monkeypatch)
 
@@ -709,6 +892,55 @@ def test_create_resource_uses_create_volume_and_waits(monkeypatch):
     assert create_calls[0].display_name == "example-volume"
     assert resource.id == "ocid1.volume.oc1..example"
     assert resource.lifecycle_state == "AVAILABLE"
+
+
+def test_create_resource_passes_source_details_and_waits(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    volume_module = load_collection_module("oci_blockstorage_volume")
+    create_calls = []
+    response = FakeResponse(data=FakeModel(id="ocid1.volume.oc1..restored"))
+
+    def create_volume(create_volume_details):
+        create_calls.append(create_volume_details)
+        return response
+
+    instance = make_volume_module(
+        volume_module,
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
+            "name": "restored-volume",
+            "source_details": {
+                "type": "volumeBackup",
+                "id": "ocid1.volumebackup.oc1..example",
+            },
+            "wait": True,
+        },
+        client=types.SimpleNamespace(create_volume=create_volume),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+    monkeypatch.setattr(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, target_states, **kwargs: FakeModel(
+            id=resource_id,
+            lifecycle_state="AVAILABLE",
+            is_hydrated=True,
+            source_details=FakeModel(
+                type="volumeBackup",
+                id="ocid1.volumebackup.oc1..example",
+            ),
+        ),
+    )
+
+    resource = instance.create_resource()
+
+    assert create_calls[0].source_details.type == "volumeBackup"
+    assert create_calls[0].source_details.id == "ocid1.volumebackup.oc1..example"
+    assert resource.id == "ocid1.volume.oc1..restored"
+    assert resource.lifecycle_state == "AVAILABLE"
+    assert resource.is_hydrated is True
 
 
 def test_update_resource_uses_update_volume_details_and_waits(monkeypatch):

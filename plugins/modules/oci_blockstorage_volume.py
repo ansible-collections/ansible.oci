@@ -77,6 +77,9 @@ options:
       - Set this to choose a custom size (the Console "Custom" option).
       - OCI only supports increasing the size of an existing volume; requesting
         a smaller size fails at the service.
+      - When C(source_details) is set, omit C(size_in_gbs) to inherit the
+        source volume or backup size, or set a size greater than or equal
+        to that source.
     type: int
   vpus_per_gb:
     description:
@@ -147,11 +150,40 @@ options:
         volume.
       - Returned by OCI as C(is_reservations_enabled).
     type: bool
+  source_details:
+    description:
+      - The source used to provision the volume at create time.
+      - Set C(type) to C(volumeBackup) and C(id) to a volume backup OCID to
+        restore from a backup.
+      - Set C(type) to C(volume) and C(id) to a volume OCID to clone an
+        existing volume.
+      - Applied only at create time. Changing the source of an existing
+        volume is not supported, so a change is rejected.
+      - Replica restore is not supported.
+    type: dict
+    version_added: "1.1.0"
+    suboptions:
+      type:
+        description:
+          - The source type.
+          - C(volumeBackup) restores from a block volume backup.
+          - C(volume) clones from an existing block volume.
+        type: str
+        required: true
+        choices: [volumeBackup, volume]
+      id:
+        description:
+          - The OCID of the source volume backup or volume.
+        type: str
+        required: true
 notes:
   - Cross-availability-domain and cross-region replication are not supported.
     Replication can be added later.
-  - Cloning a volume or restoring from a backup or replica is not supported.
-    Created volumes are empty.
+  - Restore from a backup or clone from an existing volume by setting
+    C(source_details) at create time. Restoring from a replica is not
+    supported.
+  - C(source_details) is applied only at create time. Changing the source
+    of an existing volume is not supported.
   - Omit C(kms_key_id) to encrypt with Oracle-managed keys. Set C(kms_key_id)
     to the OCID of a Vault master encryption key for customer-managed keys.
   - Changing the encryption key of an existing volume is not supported.
@@ -221,6 +253,27 @@ EXAMPLES = r"""
     size_in_gbs: 100
     kms_key_id: ocid1.key.oc1..example
     backup_policy_id: ocid1.volumebackuppolicy.oc1..example
+
+- name: Restore a block volume from a volume backup
+  ansible.oci.oci_blockstorage_volume:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    name: restored-volume
+    source_details:
+      type: volumeBackup
+      id: ocid1.volumebackup.oc1..example
+  register: restored_volume
+
+- name: Clone a block volume
+  ansible.oci.oci_blockstorage_volume:
+    state: present
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    name: cloned-volume
+    source_details:
+      type: volume
+      id: "{{ created_volume.resource.id }}"
 
 - name: Grow the volume and change its performance level
   ansible.oci.oci_blockstorage_volume:
@@ -631,6 +684,19 @@ NESTED_UPDATE_BUILDERS = {
     "autotune_policies": build_autotune_policies,
 }
 
+SOURCE_DETAILS_MODELS = {
+    "volumeBackup": "VolumeSourceFromVolumeBackupDetails",
+    "volume": "VolumeSourceFromVolumeDetails",
+}
+
+
+def build_volume_source_details(source_details):
+    if not source_details:
+        return None
+    model_name = SOURCE_DETAILS_MODELS[source_details["type"]]
+    model_class = getattr(oci.core.models, model_name)
+    return model_class(**filter_none_values({"id": source_details.get("id")}))
+
 
 def build_create_volume_details(params):
     policy_dicts = desired_autotune_policy_dicts(params)
@@ -647,6 +713,9 @@ def build_create_volume_details(params):
             "is_reservations_enabled": params.get("reservations_enabled"),
             "autotune_policies": (
                 build_autotune_policies(policy_dicts) if policy_dicts else None
+            ),
+            "source_details": build_volume_source_details(
+                params.get("source_details")
             ),
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
@@ -718,6 +787,16 @@ class OciBlockstorageVolumeModule(OciResourceBase):
             "param_name": "cluster_placement_group_id",
             "resource_field": "cluster_placement_group_id",
             "is_mutable": False,
+        },
+        {
+            "param_name": "source_details",
+            "resource_field": "source_details",
+            "is_mutable": False,
+            "compare": "subset_dict",
+            "immutable_reason": (
+                "source_details is applied only at create time; restoring or "
+                "cloning into an existing volume is not supported"
+            ),
         },
     ]
 
@@ -853,6 +932,17 @@ def main():
         backup_policy_id=dict(type="str"),
         cluster_placement_group_id=dict(type="str"),
         reservations_enabled=dict(type="bool"),
+        source_details=dict(
+            type="dict",
+            options=dict(
+                type=dict(
+                    type="str",
+                    required=True,
+                    choices=["volumeBackup", "volume"],
+                ),
+                id=dict(type="str", required=True),
+            ),
+        ),
     )
 
     module = AnsibleModule(

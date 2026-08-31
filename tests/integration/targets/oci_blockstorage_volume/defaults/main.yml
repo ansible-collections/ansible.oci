@@ -1,6 +1,8 @@
 ---
 oci_blockstorage_volume_integration_volume_name: "oci-blockstorage-volume-integration-volume"
 oci_blockstorage_volume_integration_updated_volume_name: "oci-blockstorage-volume-integration-volume-updated"
+oci_blockstorage_volume_integration_restore_volume_name: "oci-blockstorage-volume-integration-restore"
+oci_blockstorage_volume_integration_backup_name: "oci-blockstorage-volume-integration-backup"
 oci_blockstorage_volume_integration_size_in_gbs: 50
 oci_blockstorage_volume_integration_updated_size_in_gbs: 100
 oci_blockstorage_volume_integration_vpus_per_gb: 10
