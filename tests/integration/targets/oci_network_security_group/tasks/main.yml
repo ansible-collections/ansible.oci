@@ -13,7 +13,7 @@
     oci_network_security_group_integration_vcn_name: "{{ oci_network_security_group_integration_vcn_name }}-{{ oci_integration_rpfx }}"
     oci_network_security_group_integration_name: "{{ oci_network_security_group_integration_name }}-{{ oci_integration_rpfx }}"
     oci_network_security_group_integration_updated_name: "{{ oci_network_security_group_integration_updated_name }}-{{ oci_integration_rpfx }}"
-    oci_network_security_group_integration_vcn_dns_label: "nsgvcn{{ oci_integration_rpfx }}"
+    oci_network_security_group_integration_vcn_dns_label: "nsg{{ oci_integration_rpfx }}"
 
 - name: Exercise Network Security Group module lifecycle
   module_defaults:
