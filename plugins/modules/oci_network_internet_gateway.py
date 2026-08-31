@@ -221,6 +221,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -275,36 +276,29 @@ class OciNetworkInternetGatewayModule(OciResourceBase):
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "internet gateway"
     update_wait_states = WAIT_FOR_IG_STATES
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "is_enabled",
-            "resource_field": "is_enabled",
-            "update_field": "is_enabled",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "route_table_id",
-            "resource_field": "route_table_id",
-            "update_field": "route_table_id",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "vcn_id",
-            "resource_field": "vcn_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compartment_id",
-            "resource_field": "compartment_id",
-            "is_mutable": False,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="is_enabled",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="route_table_id",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="vcn_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compartment_id",
+            is_mutable=False,
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(

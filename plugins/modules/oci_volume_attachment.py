@@ -274,6 +274,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -380,48 +381,45 @@ class OciVolumeAttachmentModule(OciResourceBase):
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "volume attachment"
     redacted_result_keys = REDACTED_RESULT_KEYS
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "instance_id",
-            "resource_field": "instance_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "volume_id",
-            "resource_field": "volume_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "type",
-            "resource_field": "attachment_type",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "device",
-            "resource_field": "device",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "read_only",
-            "resource_field": "is_read_only",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "shareable",
-            "resource_field": "is_shareable",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "pv_encryption_in_transit_enabled",
-            "resource_field": "is_pv_encryption_in_transit_enabled",
-            "is_mutable": False,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="instance_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="volume_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="type",
+            resource_field="attachment_type",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="device",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="read_only",
+            resource_field="is_read_only",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="shareable",
+            resource_field="is_shareable",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="pv_encryption_in_transit_enabled",
+            resource_field="is_pv_encryption_in_transit_enabled",
+            is_mutable=False,
+        ),
+    )
 
     def validate_create_request(self):
         super().validate_create_request()

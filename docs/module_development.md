@@ -81,6 +81,7 @@ Set these on your `OciResourceBase` subclass:
 | `resource_id_param` | Tells the base class which module parameter is the explicit OCI ID. |
 | `create_resource_name` | Used in validation and error messages. |
 | `create_required_fields` | Fields that must exist before create is allowed. |
+| `update_field_specs` | Required by the abstract base class. Set it to a tuple of `UpdateFieldSpec` instances, or to `()` when only the common tag fields apply. |
 
 ### Commonly needed class attributes
 
@@ -90,7 +91,6 @@ These are not always mandatory, but most standard modules need them:
 | --- | --- |
 | `list_resource_method` | Enables scoped name lookup against a list API. |
 | `list_filter_params` | Adds extra list filters beyond `compartment_id` and becomes part of the required scope for name-based lookup. |
-| `update_field_specs` | Declares which module parameters can trigger updates. |
 | `update_method_name` | OCI SDK update method for the standard update flow. |
 | `update_details_name` | Keyword name for the OCI update details object. |
 | `update_wait_states` | Lifecycle states that mark the resource as settled after update. |
@@ -275,6 +275,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 oci, HAS_OCI_SDK = import_oci_sdk()
@@ -312,12 +313,11 @@ class OciExampleResourceModule(OciResourceBase):
     update_details_name = "update_example_resource_details"
     update_wait_states = WAIT_FOR_EXAMPLE_STATES
     update_field_specs = (
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
     )
 
     def get_resource_response(self, resource_id):
@@ -396,13 +396,16 @@ Read the skeleton from top to bottom in this order:
 7. `create_required_fields`
    - include every field that must exist before create is valid
 8. `update_field_specs`
-   - describe the mutable and immutable fields
+   - explicitly set a tuple of `UpdateFieldSpec` instances; the abstract base
+     class prevents instantiation when the attribute is omitted
+   - use `()` when the module has no resource-specific update fields
+   - describe both mutable and immutable fields
    - do not re-add `freeform_tags` and `defined_tags` unless you are replacing
      the base behavior, because `OciResourceBase` already injects tag update
      handling through `common_update_field_specs`
    - use `resource_field` when the OCI model field differs from the module
      parameter name
-   - use `compare: "sorted_list"` for list fields where order should not matter
+   - use `compare="sorted_list"` for list fields where order should not matter
 9. `get_resource_response()`
    - return the raw SDK response, not only `response.data`
 10. `create_resource()`
@@ -582,17 +585,24 @@ The most important design choice in a resource module is how updates work.
 This is the preferred pattern for most resources. Each entry describes one
 module parameter and how it maps to the current OCI model and update payload.
 
-Common keys:
+`param_name` and `is_mutable` are required. The remaining dataclass fields are
+optional:
 
-| Key | Meaning |
+| Field | Meaning |
 | --- | --- |
 | `param_name` | Module parameter name. |
-| `resource_field` | Current OCI model field to compare against. |
-| `update_field` | Field name used in the OCI update details model. |
 | `is_mutable` | Whether updates are allowed after create. |
+| `resource_field` | Current OCI model field to compare against; defaults to `param_name`. |
+| `update_field` | Field name used in the OCI update details model; defaults to the resolved `resource_field`. |
 | `immutable_reason` | Extra detail when an update must fail. |
 | `compare` | Comparison strategy such as `sorted_list`. |
 | `strategy` | Custom planner method for complex update behavior. |
+| `desired_key_map` | Renames nested desired-value keys before comparison. |
+
+`UpdateFieldSpec` is frozen so update declarations cannot be modified at
+runtime. `OciResourceBase` prepends the shared `freeform_tags` and
+`defined_tags` specifications automatically; module tuples contain only their
+resource-specific fields.
 
 ### Override `update_resource()` for advanced flows
 

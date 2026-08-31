@@ -4,6 +4,8 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Mapping, Optional
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_base import (
     OciModuleBase,
@@ -57,6 +59,20 @@ def _is_dead_resource(resource):
 _RETRYABLE_WAIT_STATUSES = frozenset({429, 500, 503})
 
 
+@dataclass(frozen=True)
+class UpdateFieldSpec:
+    """Describe how one module parameter participates in resource updates."""
+
+    param_name: str
+    is_mutable: bool
+    resource_field: Optional[str] = None
+    update_field: Optional[str] = None
+    immutable_reason: Optional[str] = None
+    compare: Optional[str] = None
+    strategy: Optional[str] = None
+    desired_key_map: Optional[Mapping[str, str]] = None
+
+
 def _is_retryable_wait_error(exc):
     """Return True when a waiter poll failed with a transient throttle or outage.
 
@@ -104,20 +120,9 @@ class OciResourceBase(OciModuleBase, ABC):
     create_resource_name = "resource"
     enum_keys = frozenset()
     common_update_field_specs = (
-        {
-            "param_name": "freeform_tags",
-            "resource_field": "freeform_tags",
-            "update_field": "freeform_tags",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "defined_tags",
-            "resource_field": "defined_tags",
-            "update_field": "defined_tags",
-            "is_mutable": True,
-        },
+        UpdateFieldSpec(param_name="freeform_tags", is_mutable=True),
+        UpdateFieldSpec(param_name="defined_tags", is_mutable=True),
     )
-    update_field_specs = ()
     update_method_name = None
     update_details_name = None
     update_wait_states = ()
@@ -132,6 +137,17 @@ class OciResourceBase(OciModuleBase, ABC):
         super(OciResourceBase, self).__init__(module)
         self.check_mode = module.check_mode
         self._update_plan_cache = None
+
+    @property
+    @abstractmethod
+    def update_field_specs(self):
+        """Return resource-specific update field declarations.
+
+        Concrete resource modules must override this property, normally with
+        a class-level tuple of :class:`UpdateFieldSpec` instances. An empty
+        tuple explicitly declares that only common update fields apply.
+        """
+        pass
 
     def resolve_target_resource(self):
         """Return the current resource selected by ID or scoped name lookup.
@@ -288,12 +304,12 @@ class OciResourceBase(OciModuleBase, ABC):
             "strategy_operations": [],
         }
         for spec in self.get_update_field_specs():
-            param_name = spec["param_name"]
+            param_name = spec.param_name
             desired_value = self.module.params.get(param_name)
             if desired_value is None:
                 continue
 
-            strategy = spec.get("strategy")
+            strategy = spec.strategy
             if strategy is not None:
                 strategy_operations = self.execute_update_field_strategy(
                     strategy,
@@ -312,26 +328,30 @@ class OciResourceBase(OciModuleBase, ABC):
                     )
                 continue
 
-            resource_field = spec.get("resource_field", param_name)
+            resource_field = spec.resource_field
+            if resource_field is None:
+                resource_field = param_name
             current_value = resource_dict.get(resource_field)
             compare_desired_value = rename_aliased_fields(
-                desired_value, spec.get("desired_key_map")
+                desired_value, spec.desired_key_map
             )
             if not self.compare_update_field_values(
                 current_value,
                 compare_desired_value,
-                compare=spec.get("compare"),
+                compare=spec.compare,
             ):
                 continue
 
-            if spec.get("is_mutable") is False:
+            if spec.is_mutable is False:
                 self.fail_immutable_field_change(
                     param_name,
-                    reason=spec.get("immutable_reason"),
+                    reason=spec.immutable_reason,
                 )
 
             update_plan["update_needed"] = True
-            update_field = spec.get("update_field", resource_field)
+            update_field = spec.update_field
+            if update_field is None:
+                update_field = resource_field
             update_plan["update_model_fields"][update_field] = desired_value
 
         return update_plan

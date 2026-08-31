@@ -262,6 +262,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -330,30 +331,26 @@ class OciNetworkRouteTableModule(OciResourceBase):
     list_filter_params = ("vcn_id",)
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "route table"
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "route_rules",
-            "resource_field": "route_rules",
-            "is_mutable": True,
-            "strategy": "plan_route_rules_strategy",
-        },
-        {
-            "param_name": "vcn_id",
-            "resource_field": "vcn_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compartment_id",
-            "resource_field": "compartment_id",
-            "is_mutable": False,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="route_rules",
+            is_mutable=True,
+            strategy="plan_route_rules_strategy",
+        ),
+        UpdateFieldSpec(
+            param_name="vcn_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compartment_id",
+            is_mutable=False,
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(

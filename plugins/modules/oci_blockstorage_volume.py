@@ -493,6 +493,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -739,66 +740,55 @@ class OciBlockstorageVolumeModule(OciResourceBase):
     update_details_name = "update_volume_details"
     update_wait_states = WAIT_FOR_VOLUME_STATES
     enum_keys = ENUM_KEYS
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "size_in_gbs",
-            "resource_field": "size_in_gbs",
-            "update_field": "size_in_gbs",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "vpus_per_gb",
-            "resource_field": "vpus_per_gb",
-            "update_field": "vpus_per_gb",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "reservations_enabled",
-            "resource_field": "is_reservations_enabled",
-            "update_field": "is_reservations_enabled",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "availability_domain",
-            "resource_field": "availability_domain",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compartment_id",
-            "resource_field": "compartment_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "kms_key_id",
-            "resource_field": "kms_key_id",
-            "is_mutable": False,
-            "immutable_reason": (
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="size_in_gbs",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="vpus_per_gb",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="reservations_enabled",
+            resource_field="is_reservations_enabled",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="availability_domain",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compartment_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="kms_key_id",
+            is_mutable=False,
+            immutable_reason=(
                 "OCI changes a volume's encryption key through a separate "
                 "operation this module does not manage"
             ),
-        },
-        {
-            "param_name": "cluster_placement_group_id",
-            "resource_field": "cluster_placement_group_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "source_details",
-            "resource_field": "source_details",
-            "is_mutable": False,
-            "compare": "subset_dict",
-            "immutable_reason": (
+        ),
+        UpdateFieldSpec(
+            param_name="cluster_placement_group_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="source_details",
+            is_mutable=False,
+            compare="subset_dict",
+            immutable_reason=(
                 "source_details is applied only at create time; restoring or "
                 "cloning into an existing volume is not supported"
             ),
-        },
-    ]
+        ),
+    )
 
     def validate_create_request(self):
         super().validate_create_request()

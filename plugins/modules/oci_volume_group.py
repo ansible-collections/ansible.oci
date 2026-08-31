@@ -298,6 +298,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -348,31 +349,26 @@ class OciVolumeGroupModule(OciResourceBase):
     update_method_name = "update_volume_group"
     update_details_name = "update_volume_group_details"
     update_wait_states = WAIT_FOR_VOLUME_GROUP_STATES
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "volume_ids",
-            "resource_field": "volume_ids",
-            "update_field": "volume_ids",
-            "is_mutable": True,
-            "compare": "sorted_list",
-        },
-        {
-            "param_name": "availability_domain",
-            "resource_field": "availability_domain",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compartment_id",
-            "resource_field": "compartment_id",
-            "is_mutable": False,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="volume_ids",
+            is_mutable=True,
+            compare="sorted_list",
+        ),
+        UpdateFieldSpec(
+            param_name="availability_domain",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compartment_id",
+            is_mutable=False,
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(

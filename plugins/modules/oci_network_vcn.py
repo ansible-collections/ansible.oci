@@ -146,6 +146,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -228,26 +229,23 @@ class OciNetworkVcnModule(OciResourceBase):
     list_resource_method = "list_vcns"
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "VCN"
-    update_field_specs = [
-        {
-            "param_name": "cidr_blocks",
-            "resource_field": "cidr_blocks",
-            "is_mutable": True,
-            "strategy": "plan_cidr_blocks_strategy",
-        },
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "dns_label",
-            "resource_field": "dns_label",
-            "is_mutable": False,
-            "immutable_reason": "OCI treats dns_label as immutable after create",
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="cidr_blocks",
+            is_mutable=True,
+            strategy="plan_cidr_blocks_strategy",
+        ),
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="dns_label",
+            is_mutable=False,
+            immutable_reason="OCI treats dns_label as immutable after create",
+        ),
+    )
 
     def __init__(self, module):
         super().__init__(module)

@@ -361,6 +361,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -475,14 +476,13 @@ class OciImageModule(OciResourceBase):
     # create-only source parameters with no counterpart on the Image resource,
     # so they must not participate in drift detection: rerunning the create
     # task against an existing image must stay idempotent.
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(
