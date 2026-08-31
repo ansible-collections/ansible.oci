@@ -30,10 +30,6 @@ classify_file() {
         oci_image_info|oci_shape_info|oci_availability_domain_info)
           add_target "oci_instance"
           ;;
-        oci_boot_volume_info)
-          # No oci_boot_volume resource module; coverage lives in the backup target.
-          add_target "oci_boot_volume_backup"
-          ;;
         *)
           add_target "${file_name%_info}"
           ;;
