@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+from dataclasses import FrozenInstanceError
 import sys
 import types
 
@@ -46,6 +47,40 @@ def patch_serialize_oci_model(monkeypatch, module_obj, serializer):
         "serialize_oci_model",
         serializer,
     )
+
+
+def test_update_field_spec_is_immutable_and_uses_planner_defaults(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+    spec = oci_resource.UpdateFieldSpec(param_name="name", is_mutable=True)
+
+    with pytest.raises(FrozenInstanceError):
+        spec.param_name = "display_name"
+
+    class ExampleResource(oci_resource.OciResourceBase):
+        client_class = object
+        update_field_specs = (spec,)
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    resource = ExampleResource(DummyModule({"name": "updated-name"}))
+
+    update_plan = resource.build_update_plan(
+        types.SimpleNamespace(name="current-name")
+    )
+
+    assert update_plan["update_model_fields"] == {"name": "updated-name"}
 
 
 def install_fake_oci_sdk(monkeypatch, *, pagination=None, retry=None, wait_until=None):
@@ -101,6 +136,7 @@ def test_oci_resource_base_uses_shared_serializer(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def resolve_target_resource(self):
@@ -138,6 +174,7 @@ def test_oci_resource_base_renames_aliased_fields_in_results(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         field_param_aliases = {"resource_label": "label"}
 
@@ -182,6 +219,7 @@ def test_oci_resource_base_does_not_expose_generic_attribute_update_hook(monkeyp
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def resolve_target_resource(self):
@@ -215,12 +253,11 @@ def test_oci_resource_base_build_update_plan_maps_aliased_mutable_fields(monkeyp
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
         update_field_specs = (
-            {
-                "param_name": "name",
-                "resource_field": "display_name",
-                "update_field": "display_name",
-                "is_mutable": True,
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="name",
+                resource_field="display_name",
+                is_mutable=True,
+            ),
         )
 
         def resolve_target_resource(self):
@@ -260,12 +297,11 @@ def test_oci_resource_base_build_update_plan_skips_matching_name_alias(monkeypat
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
         update_field_specs = (
-            {
-                "param_name": "name",
-                "resource_field": "display_name",
-                "update_field": "display_name",
-                "is_mutable": True,
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="name",
+                resource_field="display_name",
+                is_mutable=True,
+            ),
         )
 
         def get_resource_response(self, resource_id):
@@ -303,12 +339,11 @@ def test_oci_resource_base_build_update_plan_rejects_immutable_field_drift(monke
         client_class = object
         create_resource_name = "example resource"
         update_field_specs = (
-            {
-                "param_name": "dns_label",
-                "resource_field": "dns_label",
-                "is_mutable": False,
-                "immutable_reason": "OCI treats dns_label as immutable after create",
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="dns_label",
+                is_mutable=False,
+                immutable_reason="OCI treats dns_label as immutable after create",
+            ),
         )
 
         def resolve_target_resource(self):
@@ -346,19 +381,15 @@ def test_oci_resource_base_build_update_plan_supports_sorted_list_compare_and_sk
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
         update_field_specs = (
-            {
-                "param_name": "security_list_ids",
-                "resource_field": "security_list_ids",
-                "update_field": "security_list_ids",
-                "is_mutable": True,
-                "compare": "sorted_list",
-            },
-            {
-                "param_name": "cidr_block",
-                "resource_field": "cidr_block",
-                "update_field": "cidr_block",
-                "is_mutable": True,
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="security_list_ids",
+                is_mutable=True,
+                compare="sorted_list",
+            ),
+            oci_resource.UpdateFieldSpec(
+                param_name="cidr_block",
+                is_mutable=True,
+            ),
         )
 
         def resolve_target_resource(self):
@@ -414,13 +445,11 @@ def test_oci_resource_base_build_update_plan_subset_dict_recurses_into_nested_di
         client_class = object
         enum_keys = {"mode"}
         update_field_specs = (
-            {
-                "param_name": "network_config",
-                "resource_field": "network_config",
-                "update_field": "network_config",
-                "is_mutable": True,
-                "compare": "subset_dict",
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="network_config",
+                is_mutable=True,
+                compare="subset_dict",
+            ),
         )
 
         def resolve_target_resource(self):
@@ -496,13 +525,11 @@ def test_oci_resource_base_build_update_plan_subset_dict_compares_nested_lists_a
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
         update_field_specs = (
-            {
-                "param_name": "agent_config",
-                "resource_field": "agent_config",
-                "update_field": "agent_config",
-                "is_mutable": True,
-                "compare": "subset_dict",
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="agent_config",
+                is_mutable=True,
+                compare="subset_dict",
+            ),
         )
 
         def resolve_target_resource(self):
@@ -596,14 +623,12 @@ def test_oci_resource_base_build_update_plan_applies_desired_key_map_before_comp
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
         update_field_specs = (
-            {
-                "param_name": "agent_config",
-                "resource_field": "agent_config",
-                "update_field": "agent_config",
-                "is_mutable": True,
-                "compare": "subset_dict",
-                "desired_key_map": {"all_plugins_disabled": "are_all_plugins_disabled"},
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="agent_config",
+                is_mutable=True,
+                compare="subset_dict",
+                desired_key_map={"all_plugins_disabled": "are_all_plugins_disabled"},
+            ),
         )
 
         def resolve_target_resource(self):
@@ -652,12 +677,11 @@ def test_oci_resource_base_needs_update_uses_shared_update_plan(monkeypatch):
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
         update_field_specs = (
-            {
-                "param_name": "name",
-                "resource_field": "display_name",
-                "update_field": "display_name",
-                "is_mutable": True,
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="name",
+                resource_field="display_name",
+                is_mutable=True,
+            ),
         )
 
         def resolve_target_resource(self):
@@ -689,6 +713,7 @@ def test_oci_resource_base_build_update_plan_includes_common_tag_fields(monkeypa
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def resolve_target_resource(self):
@@ -727,12 +752,11 @@ def test_oci_resource_base_caches_shared_update_plan_per_resource_instance(monke
     class ExampleResource(oci_resource.OciResourceBase):
         client_class = object
         update_field_specs = (
-            {
-                "param_name": "cidr_blocks",
-                "resource_field": "cidr_blocks",
-                "is_mutable": True,
-                "strategy": "plan_cidr_blocks",
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="cidr_blocks",
+                is_mutable=True,
+                strategy="plan_cidr_blocks",
+            ),
         )
 
         def __init__(self, module):
@@ -794,12 +818,11 @@ def test_oci_resource_base_default_update_resource_uses_class_metadata(monkeypat
         update_details_name = "update_example_details"
         update_wait_states = ("AVAILABLE",)
         update_field_specs = (
-            {
-                "param_name": "name",
-                "resource_field": "display_name",
-                "update_field": "display_name",
-                "is_mutable": True,
-            },
+            oci_resource.UpdateFieldSpec(
+                param_name="name",
+                resource_field="display_name",
+                is_mutable=True,
+            ),
         )
 
         def resolve_target_resource(self):
@@ -848,6 +871,30 @@ def test_incomplete_oci_resource_subclass_cannot_be_instantiated(monkeypatch):
         IncompleteResource(DummyModule())
 
 
+def test_oci_resource_base_requires_update_field_specs(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: "client",
+    )
+
+    class MissingUpdateFieldSpecsResource(oci_resource.OciResourceBase):
+        client_class = object
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    with pytest.raises(TypeError, match="update_field_specs"):
+        MissingUpdateFieldSpecsResource(DummyModule())
+
+
 def test_oci_resource_base_requires_client_class_before_creating_client(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(
@@ -857,6 +904,8 @@ def test_oci_resource_base_requires_client_class_before_creating_client(monkeypa
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
+
         def resolve_target_resource(self):
             return None
 
@@ -972,6 +1021,7 @@ def test_oci_resource_base_treats_dead_state_as_absent(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def resolve_target_resource(self):
@@ -1007,6 +1057,7 @@ def test_oci_resource_base_treats_terminated_id_as_not_found(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
 
@@ -1047,6 +1098,7 @@ def test_oci_resource_base_find_resources_by_name_excludes_terminated_matches(
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         list_resource_method = "list_examples"
@@ -1100,6 +1152,7 @@ def test_oci_resource_base_fails_present_when_explicit_id_is_terminated(monkeypa
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         create_resource_name = "example resource"
@@ -1150,6 +1203,7 @@ def test_oci_resource_base_present_recreates_when_name_match_is_terminated(
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         list_resource_method = "list_examples"
@@ -1206,6 +1260,7 @@ def test_oci_resource_base_validates_create_request_in_check_mode(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def resolve_target_resource(self):
@@ -1245,6 +1300,7 @@ def test_oci_resource_base_default_create_field_validation_uses_class_metadata(m
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         create_required_fields = ("compartment_id", "name")
         create_resource_name = "example resource"
@@ -1285,6 +1341,7 @@ def test_oci_resource_base_fails_present_when_explicit_resource_id_is_missing(mo
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         create_resource_name = "example resource"
@@ -1339,6 +1396,7 @@ def test_oci_resource_base_uses_unique_name_match_as_update_target(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         list_resource_method = "list_examples"
@@ -1415,6 +1473,7 @@ def test_oci_resource_base_requires_scope_fields_for_name_lookup(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         list_resource_method = "list_examples"
@@ -1455,6 +1514,7 @@ def test_oci_resource_base_deletes_unique_name_match_without_explicit_id(monkeyp
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         list_resource_method = "list_examples"
@@ -1510,6 +1570,7 @@ def test_oci_resource_base_fails_when_name_lookup_is_ambiguous(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         list_resource_method = "list_examples"
@@ -1569,6 +1630,7 @@ def test_oci_resource_base_creates_duplicate_when_unique_match_opted_in(monkeypa
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         list_resource_method = "list_examples"
@@ -1628,6 +1690,7 @@ def test_oci_resource_base_fails_absent_without_resource_id_before_lookup(monkey
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         create_resource_name = "example resource"
@@ -1667,6 +1730,7 @@ def test_oci_resource_base_fails_absent_without_identifier_when_name_lookup_supp
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
         create_resource_name = "example resource"
@@ -1787,6 +1851,7 @@ def test_oci_resource_base_uses_response_helper_for_id_lookup(monkeypatch):
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         resource_id_param = "example_id"
 
@@ -1823,6 +1888,7 @@ def test_oci_resource_base_delete_helper_fails_on_dependency_conflict(monkeypatc
             self.status = status
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
         create_resource_name = "example resource"
 
@@ -2026,6 +2092,7 @@ def _capture_resource_wait_fetch_func(monkeypatch, get_resource_fn):
     lookups = {"count": 0}
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def get_resource_response(self, resource_id):
@@ -2126,6 +2193,7 @@ def test_oci_resource_base_wait_for_resource_id_uses_oci_wait_until(monkeypatch)
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def get_resource_response(self, resource_id):
@@ -2181,6 +2249,7 @@ def test_oci_resource_base_wait_for_work_request_accepts_getter_callback(monkeyp
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def get_resource_response(self, resource_id):
@@ -2248,6 +2317,7 @@ def test_oci_resource_base_wait_for_work_request_retries_transient_connection_er
     )
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def get_resource_response(self, resource_id):
@@ -2320,6 +2390,7 @@ def test_oci_resource_base_wait_for_resource_id_uses_dead_states_for_not_found_h
         raise ServiceError(404)
 
     class ExampleResource(oci_resource.OciResourceBase):
+        update_field_specs = ()
         client_class = object
 
         def get_resource_response(self, resource_id):

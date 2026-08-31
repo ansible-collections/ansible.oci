@@ -853,6 +853,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -1129,144 +1130,109 @@ class OciInstanceModule(OciResourceBase):
     update_details_name = "update_instance_details"
     update_wait_states = WAIT_FOR_SETTLED_STATES
     enum_keys = ENUM_KEYS
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "shape",
-            "resource_field": "shape",
-            "update_field": "shape",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "shape_config",
-            "resource_field": "shape_config",
-            "update_field": "shape_config",
-            "is_mutable": True,
-            "compare": "subset_dict",
-        },
-        {
-            "param_name": "metadata",
-            "resource_field": "metadata",
-            "update_field": "metadata",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "extended_metadata",
-            "resource_field": "extended_metadata",
-            "update_field": "extended_metadata",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "security_attributes",
-            "resource_field": "security_attributes",
-            "update_field": "security_attributes",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "capacity_reservation_id",
-            "resource_field": "capacity_reservation_id",
-            "update_field": "capacity_reservation_id",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "dedicated_vm_host_id",
-            "resource_field": "dedicated_vm_host_id",
-            "update_field": "dedicated_vm_host_id",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "is_ai_enterprise_enabled",
-            "resource_field": "is_ai_enterprise_enabled",
-            "update_field": "is_ai_enterprise_enabled",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "launch_options",
-            "resource_field": "launch_options",
-            "update_field": "launch_options",
-            "is_mutable": True,
-            "compare": "subset_dict",
-        },
-        {
-            "param_name": "instance_options",
-            "resource_field": "instance_options",
-            "update_field": "instance_options",
-            "is_mutable": True,
-            "compare": "subset_dict",
-        },
-        {
-            "param_name": "availability_config",
-            "resource_field": "availability_config",
-            "update_field": "availability_config",
-            "is_mutable": True,
-            "compare": "subset_dict",
-        },
-        {
-            "param_name": "agent_config",
-            "resource_field": "agent_config",
-            "update_field": "agent_config",
-            "is_mutable": True,
-            "compare": "subset_dict",
-            "desired_key_map": AGENT_CONFIG_PARAM_TO_OCI,
-        },
-        {
-            "param_name": "platform_config",
-            "resource_field": "platform_config",
-            "update_field": "platform_config",
-            "is_mutable": True,
-            "compare": "subset_dict",
-        },
-        {
-            "param_name": "power_state",
-            "is_mutable": True,
-            "strategy": "plan_power_state_strategy",
-        },
-        {
-            "param_name": "availability_domain",
-            "resource_field": "availability_domain",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compartment_id",
-            "resource_field": "compartment_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "image_id",
-            "resource_field": "image_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "fault_domain",
-            "resource_field": "fault_domain",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "cluster_placement_group_id",
-            "resource_field": "cluster_placement_group_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compute_cluster_id",
-            "resource_field": "compute_cluster_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "instance_configuration_id",
-            "resource_field": "instance_configuration_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "ipxe_script",
-            "resource_field": "ipxe_script",
-            "is_mutable": False,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="shape",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="shape_config",
+            is_mutable=True,
+            compare="subset_dict",
+        ),
+        UpdateFieldSpec(
+            param_name="metadata",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="extended_metadata",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="security_attributes",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="capacity_reservation_id",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="dedicated_vm_host_id",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="is_ai_enterprise_enabled",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="launch_options",
+            is_mutable=True,
+            compare="subset_dict",
+        ),
+        UpdateFieldSpec(
+            param_name="instance_options",
+            is_mutable=True,
+            compare="subset_dict",
+        ),
+        UpdateFieldSpec(
+            param_name="availability_config",
+            is_mutable=True,
+            compare="subset_dict",
+        ),
+        UpdateFieldSpec(
+            param_name="agent_config",
+            is_mutable=True,
+            compare="subset_dict",
+            desired_key_map=AGENT_CONFIG_PARAM_TO_OCI,
+        ),
+        UpdateFieldSpec(
+            param_name="platform_config",
+            is_mutable=True,
+            compare="subset_dict",
+        ),
+        UpdateFieldSpec(
+            param_name="power_state",
+            is_mutable=True,
+            strategy="plan_power_state_strategy",
+        ),
+        UpdateFieldSpec(
+            param_name="availability_domain",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compartment_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="image_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="fault_domain",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="cluster_placement_group_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compute_cluster_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="instance_configuration_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="ipxe_script",
+            is_mutable=False,
+        ),
+    )
 
     def plan_power_state_strategy(self, resource, resource_dict, spec, desired_value):
         current_state = resource_dict.get("lifecycle_state")

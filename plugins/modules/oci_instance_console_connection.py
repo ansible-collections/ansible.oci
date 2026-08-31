@@ -189,6 +189,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -235,13 +236,12 @@ class OciInstanceConsoleConnectionModule(OciResourceBase):
     update_method_name = "update_instance_console_connection"
     update_details_name = "update_instance_console_connection_details"
     update_wait_states = WAIT_FOR_CONSOLE_CONNECTION_STATES
-    update_field_specs = [
-        {
-            "param_name": "instance_id",
-            "resource_field": "instance_id",
-            "is_mutable": False,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="instance_id",
+            is_mutable=False,
+        ),
+    )
 
     def resolve_target_resource(self):
         if self.resource_id:

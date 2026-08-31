@@ -235,6 +235,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -280,42 +281,34 @@ class OciNetworkNatGatewayModule(OciResourceBase):
     update_method_name = "update_nat_gateway"
     update_details_name = "update_nat_gateway_details"
     update_wait_states = WAIT_FOR_NAT_GATEWAY_STATES
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "block_traffic",
-            "resource_field": "block_traffic",
-            "update_field": "block_traffic",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "route_table_id",
-            "resource_field": "route_table_id",
-            "update_field": "route_table_id",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "public_ip_id",
-            "resource_field": "public_ip_id",
-            "is_mutable": False,
-            "immutable_reason": "OCI treats public_ip_id as immutable after create",
-        },
-        {
-            "param_name": "vcn_id",
-            "resource_field": "vcn_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compartment_id",
-            "resource_field": "compartment_id",
-            "is_mutable": False,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="block_traffic",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="route_table_id",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="public_ip_id",
+            is_mutable=False,
+            immutable_reason="OCI treats public_ip_id as immutable after create",
+        ),
+        UpdateFieldSpec(
+            param_name="vcn_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compartment_id",
+            is_mutable=False,
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(

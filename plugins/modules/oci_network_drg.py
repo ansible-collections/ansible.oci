@@ -194,6 +194,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -233,14 +234,13 @@ class OciNetworkDrgModule(OciResourceBase):
     update_method_name = "update_drg"
     update_details_name = "update_drg_details"
     update_wait_states = WAIT_FOR_DRG_STATES
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "update_field": "display_name",
-            "is_mutable": True,
-        },
-    ]
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(
