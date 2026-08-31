@@ -1,0 +1,14 @@
+---
+# Source volume availability domain is discovered at run time (tasks/main.yml).
+oci_volume_group_backup_integration_volume_name: "oci-volume-group-backup-integration-volume"
+oci_volume_group_backup_integration_size_in_gbs: 50
+oci_volume_group_backup_integration_group_name: "oci-volume-group-backup-integration-group"
+oci_volume_group_backup_integration_backup_name: "oci-volume-group-backup-integration-backup"
+oci_volume_group_backup_integration_updated_backup_name: "oci-volume-group-backup-integration-backup-updated"
+oci_volume_group_backup_integration_backup_type: "incremental"
+oci_volume_group_backup_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_group_backup_integration_update_tags:
+  phase: update
+  role: integration

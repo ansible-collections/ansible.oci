@@ -1,0 +1,347 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI volume group backup integration tests require oci_integration_compartment_id
+      to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_volume_group_backup_integration_volume_name: "{{ oci_volume_group_backup_integration_volume_name }}-{{ oci_integration_rpfx }}"
+    oci_volume_group_backup_integration_group_name: "{{ oci_volume_group_backup_integration_group_name }}-{{ oci_integration_rpfx }}"
+    oci_volume_group_backup_integration_backup_name: "{{ oci_volume_group_backup_integration_backup_name }}-{{ oci_integration_rpfx }}"
+    oci_volume_group_backup_integration_updated_backup_name: "{{ oci_volume_group_backup_integration_updated_backup_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise volume group backup module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Discover an availability domain in the compartment
+      ansible.oci.oci_availability_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_volume_group_backup_ad_info
+
+    - name: Assert at least one availability domain was discovered
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_ad_info.availability_domains | length > 0
+
+    - name: Set the working availability domain
+      ansible.builtin.set_fact:
+        oci_volume_group_backup_integration_availability_domain: "{{ oci_volume_group_backup_ad_info.availability_domains[0].name }}"
+
+    - name: Create test block volume for volume group backup integration
+      ansible.oci.oci_blockstorage_volume:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_volume_group_backup_integration_availability_domain }}"
+        name: "{{ oci_volume_group_backup_integration_volume_name }}"
+        size_in_gbs: "{{ oci_volume_group_backup_integration_size_in_gbs }}"
+      register: oci_volume_group_backup_volume_create
+
+    - name: Capture created volume id
+      ansible.builtin.set_fact:
+        oci_volume_group_backup_integration_volume_id: "{{ oci_volume_group_backup_volume_create.resource.id }}"
+
+    - name: Create test volume group for volume group backup integration
+      ansible.oci.oci_volume_group:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_volume_group_backup_integration_availability_domain }}"
+        name: "{{ oci_volume_group_backup_integration_group_name }}"
+        volume_ids:
+          - "{{ oci_volume_group_backup_integration_volume_id }}"
+      register: oci_volume_group_backup_group_create
+
+    - name: Capture created volume group id
+      ansible.builtin.set_fact:
+        oci_volume_group_backup_integration_volume_group_id: "{{ oci_volume_group_backup_group_create.resource.id }}"
+
+    - name: Define volume group backup create parameters
+      ansible.builtin.set_fact:
+        oci_volume_group_backup_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_volume_group_backup_integration_backup_name }}"
+          volume_group_id: "{{ oci_volume_group_backup_integration_volume_group_id }}"
+          type: "{{ oci_volume_group_backup_integration_backup_type }}"
+          freeform_tags: "{{ oci_volume_group_backup_integration_create_tags }}"
+
+    - name: Create volume group backup in check mode
+      ansible.oci.oci_volume_group_backup: &oci_volume_group_backup_create_module_options
+        state: "{{ oci_volume_group_backup_create_params.state }}"
+        compartment_id: "{{ oci_volume_group_backup_create_params.compartment_id }}"
+        name: "{{ oci_volume_group_backup_create_params.name }}"
+        volume_group_id: "{{ oci_volume_group_backup_create_params.volume_group_id }}"
+        type: "{{ oci_volume_group_backup_create_params.type }}"
+        freeform_tags: "{{ oci_volume_group_backup_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_volume_group_backup_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_create_check.changed | bool
+
+    - name: Read volume group backup after create check mode
+      ansible.oci.oci_volume_group_backup_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_volume_group_backup_integration_backup_name }}"
+      register: oci_volume_group_backup_create_check_probe
+
+    - name: Assert volume group backup is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_create_check_probe.volume_group_backups
+            | selectattr('name', 'equalto', oci_volume_group_backup_integration_backup_name)
+            | list | length == 0
+
+    - name: Create volume group backup
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_create_module_options
+      register: oci_volume_group_backup_create
+
+    - name: Capture volume group backup id and define update parameters
+      ansible.builtin.set_fact:
+        oci_volume_group_backup_id: "{{ oci_volume_group_backup_create.resource.id }}"
+        oci_volume_group_backup_update_params:
+          state: present
+          volume_group_backup_id: "{{ oci_volume_group_backup_create.resource.id }}"
+          name: "{{ oci_volume_group_backup_integration_updated_backup_name }}"
+          freeform_tags: "{{ oci_volume_group_backup_integration_update_tags }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_create.changed | bool
+          - oci_volume_group_backup_create.resource.lifecycle_state == "AVAILABLE"
+          - oci_volume_group_backup_create.resource.volume_group_id == oci_volume_group_backup_integration_volume_group_id
+
+    - name: Read volume group backup by id
+      ansible.oci.oci_volume_group_backup_info:
+        volume_group_backup_id: "{{ oci_volume_group_backup_id }}"
+      register: oci_volume_group_backup_info_by_id
+
+    - name: Assert volume group backup info by id returned the created backup
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_info_by_id.volume_group_backups | length == 1
+          - oci_volume_group_backup_info_by_id.volume_group_backups[0].id == oci_volume_group_backup_id
+          - oci_volume_group_backup_info_by_id.volume_group_backups[0].name == oci_volume_group_backup_integration_backup_name
+
+    - name: List volume group backups by source volume group
+      ansible.oci.oci_volume_group_backup_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        volume_group_id: "{{ oci_volume_group_backup_integration_volume_group_id }}"
+      register: oci_volume_group_backup_info_by_group
+
+    - name: Assert volume group backup info by volume group returned the created backup
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_info_by_group.volume_group_backups
+            | selectattr('id', 'equalto', oci_volume_group_backup_id)
+            | list | length == 1
+
+    - name: Assert created backup is a no-op in check mode with unique name
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_create_module_options
+      check_mode: true
+      register: oci_volume_group_backup_create_check_rerun_by_name
+
+    - name: Verify backup check-mode rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_create_check_rerun_by_name.changed | bool
+
+    - name: Assert created backup is a no-op on rerun with unique name
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_create_module_options
+      register: oci_volume_group_backup_create_rerun_by_name
+
+    - name: Verify backup rerun with unique name is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_create_rerun_by_name.changed | bool
+          - oci_volume_group_backup_create_rerun_by_name.resource.id == oci_volume_group_backup_id
+
+    - name: Assert created backup is a no-op in check mode with returned id
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_create_module_options
+        volume_group_backup_id: "{{ oci_volume_group_backup_id }}"
+      check_mode: true
+      register: oci_volume_group_backup_create_check_rerun
+
+    - name: Verify check-mode rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_create_check_rerun.changed | bool
+
+    - name: Assert created backup is a no-op on rerun with returned id
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_create_module_options
+        volume_group_backup_id: "{{ oci_volume_group_backup_id }}"
+      register: oci_volume_group_backup_create_rerun
+
+    - name: Verify rerun with returned id is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_create_rerun.changed | bool
+
+    - name: Update volume group backup in check mode
+      ansible.oci.oci_volume_group_backup: &oci_volume_group_backup_update_module_options
+        state: "{{ oci_volume_group_backup_update_params.state }}"
+        volume_group_backup_id: "{{ oci_volume_group_backup_update_params.volume_group_backup_id }}"
+        name: "{{ oci_volume_group_backup_update_params.name }}"
+        freeform_tags: "{{ oci_volume_group_backup_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_volume_group_backup_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_update_check.changed | bool
+
+    - name: Read volume group backup after update check mode
+      ansible.oci.oci_volume_group_backup_info:
+        volume_group_backup_id: "{{ oci_volume_group_backup_id }}"
+      register: oci_volume_group_backup_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_update_check_probe.volume_group_backups[0].name == oci_volume_group_backup_integration_backup_name
+          - oci_volume_group_backup_update_check_probe.volume_group_backups[0].freeform_tags.phase == "create"
+
+    - name: Update volume group backup
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_update_module_options
+      register: oci_volume_group_backup_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_update.changed | bool
+
+    - name: Read updated volume group backup by name
+      ansible.oci.oci_volume_group_backup_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_volume_group_backup_integration_updated_backup_name }}"
+      register: oci_volume_group_backup_info_updated
+
+    - name: Assert volume group backup info reflects the updated backup
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_info_updated.volume_group_backups
+            | selectattr('id', 'equalto', oci_volume_group_backup_id)
+            | list | length == 1
+          - oci_volume_group_backup_info_updated.volume_group_backups[0].freeform_tags.phase == "update"
+
+    - name: Assert update is a no-op in check mode
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_update_module_options
+      check_mode: true
+      register: oci_volume_group_backup_update_check_rerun
+
+    - name: Verify update check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_update_check_rerun.changed | bool
+
+    - name: Assert update is idempotent on rerun
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_update_module_options
+      register: oci_volume_group_backup_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_update_rerun.changed | bool
+
+    - name: Delete volume group backup in check mode
+      ansible.oci.oci_volume_group_backup: &oci_volume_group_backup_delete_module_options
+        state: absent
+        volume_group_backup_id: "{{ oci_volume_group_backup_id }}"
+      check_mode: true
+      register: oci_volume_group_backup_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_delete_check.changed | bool
+
+    - name: Read volume group backup after delete check mode
+      ansible.oci.oci_volume_group_backup_info:
+        volume_group_backup_id: "{{ oci_volume_group_backup_id }}"
+      register: oci_volume_group_backup_delete_check_probe
+
+    - name: Assert volume group backup still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_delete_check_probe.volume_group_backups | length == 1
+
+    - name: Delete volume group backup
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_delete_module_options
+      register: oci_volume_group_backup_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_delete.changed | bool
+
+    - name: Read volume group backup after delete
+      ansible.oci.oci_volume_group_backup_info:
+        volume_group_backup_id: "{{ oci_volume_group_backup_id }}"
+      register: oci_volume_group_backup_delete_probe
+
+    - name: Assert volume group backup is terminated after delete
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_delete_probe.volume_group_backups | length == 1
+          - oci_volume_group_backup_delete_probe.volume_group_backups[0].id == oci_volume_group_backup_id
+          - oci_volume_group_backup_delete_probe.volume_group_backups[0].lifecycle_state == "TERMINATED"
+
+    - name: List available volume group backups by name after delete
+      ansible.oci.oci_volume_group_backup_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_volume_group_backup_integration_updated_backup_name }}"
+        lifecycle_state: AVAILABLE
+      register: oci_volume_group_backup_info_available_after_delete
+
+    - name: Assert no available volume group backup remains after delete
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_backup_info_available_after_delete.volume_group_backups | length == 0
+
+    - name: Assert delete is a no-op in check mode
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_delete_module_options
+      check_mode: true
+      register: oci_volume_group_backup_delete_check_rerun
+
+    - name: Verify delete check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_delete_check_rerun.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_volume_group_backup:
+        <<: *oci_volume_group_backup_delete_module_options
+      register: oci_volume_group_backup_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_backup_delete_rerun.changed | bool
+
+    - name: Clear volume group backup id after successful delete
+      ansible.builtin.set_fact:
+        oci_volume_group_backup_id: ""
+
+  always:
+    - name: Run volume group backup cleanup
+      ansible.builtin.include_tasks: cleanup.yml

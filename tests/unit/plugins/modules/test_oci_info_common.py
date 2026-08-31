@@ -481,6 +481,38 @@ INFO_CASES = (
             "boot_volume_id": "ocid1.bootvolume.oc1..example",
         },
     },
+    {
+        "module_name": "oci_volume_group_backup_info",
+        "class_name": "OciVolumeGroupBackupInfoModule",
+        "results_key": "volume_group_backups",
+        "id_param": "volume_group_backup_id",
+        "id_value": "ocid1.volumegroupbackup.oc1..example",
+        "missing_id": "ocid1.volumegroupbackup.oc1..missing",
+        "get_method": "get_volume_group_backup",
+        "list_method": "list_volume_group_backups",
+        "list_params": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "volume_group_id": "ocid1.volumegroup.oc1..example",
+            "name": "example-group-backup",
+            "lifecycle_state": "AVAILABLE",
+        },
+        "expected_list_kwargs": {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "volume_group_id": "ocid1.volumegroup.oc1..example",
+        },
+        "run_resource": FakeModel(
+            id="ocid1.volumegroupbackup.oc1..example",
+            display_name="example-group-backup",
+            lifecycle_state="AVAILABLE",
+            volume_group_id="ocid1.volumegroup.oc1..example",
+        ),
+        "expected_run_payload": {
+            "id": "ocid1.volumegroupbackup.oc1..example",
+            "name": "example-group-backup",
+            "lifecycle_state": "AVAILABLE",
+            "volume_group_id": "ocid1.volumegroup.oc1..example",
+        },
+    },
 )
 
 
