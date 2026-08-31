@@ -216,7 +216,7 @@ Use [repository issues](https://github.com/ansible-collections/ansible.oci/issue
 
 ## Support
 
-This collection is maintained by the Oracle OCI Ansible collection maintainers.
+This collection is maintained by the Red Hat Ansible Eco Engineering team.
 
 As Red Hat Ansible Certified Content, this collection is entitled to support through Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner of Automation Hub. If a support case cannot be opened with Red Hat and the collection has been obtained either from Galaxy or GitHub, community help may also be available on the [Ansible Forum](https://forum.ansible.com/) and through [GitHub issues](https://github.com/ansible-collections/ansible.oci/issues).
 
