@@ -381,6 +381,7 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_backup import (
     build_backup_update_field_specs,
+    build_retention_period,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
@@ -409,20 +410,6 @@ WAIT_FOR_BACKUP_STATES = [LIFECYCLE_AVAILABLE]
 # comparator (see oci_resource.py) normalizes retention_period the same way
 # the create builder does.
 ENUM_KEYS = frozenset({"type", "retention_time_unit"})
-
-
-def build_retention_period(retention_period):
-    if not retention_period:
-        return None
-    normalized = normalize_enum_values(retention_period, ENUM_KEYS)
-    return oci.core.models.RetentionDuration(
-        **filter_none_values(
-            {
-                "retention_time_amount": normalized.get("retention_time_amount"),
-                "retention_time_unit": normalized.get("retention_time_unit"),
-            }
-        )
-    )
 
 
 def build_create_boot_volume_backup_details(params):
