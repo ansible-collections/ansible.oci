@@ -16,6 +16,7 @@ description:
   - Boot volume backups use a separate OCI API from block (data) volume backups;
     use M(ansible.oci.oci_volume_backup) for block volumes.
   - Use M(ansible.oci.oci_boot_volume_info) to look up boot volume OCIDs.
+  - Use M(ansible.oci.oci_boot_volume) to restore a backup to a new boot volume.
   - Use M(ansible.oci.oci_boot_volume_backup_info) to list or fetch boot volume
     backups.
   - Uses the shared OCI helper layer for authentication, waiting, retry

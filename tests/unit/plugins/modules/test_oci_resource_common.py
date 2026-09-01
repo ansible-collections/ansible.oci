@@ -471,38 +471,42 @@ RESOURCE_CASES = (
         },
     },
     {
-        "module_name": "oci_volume_group_backup",
-        "class_name": "OciVolumeGroupBackupModule",
-        "id_param": "volume_group_backup_id",
-        "id_value": "ocid1.volumegroupbackup.oc1..example",
-        "missing_id": "ocid1.volumegroupbackup.oc1..missing",
-        "get_method": "get_volume_group_backup",
-        "list_method": "list_volume_group_backups",
-        "delete_method": "delete_volume_group_backup",
-        "not_found_label": "volume group backup",
+        "module_name": "oci_boot_volume",
+        "class_name": "OciBootVolumeModule",
+        "id_param": "boot_volume_id",
+        "id_value": "ocid1.bootvolume.oc1..example",
+        "missing_id": "ocid1.bootvolume.oc1..missing",
+        "get_method": "get_boot_volume",
+        "list_method": "list_boot_volumes",
+        "delete_method": "delete_boot_volume",
+        "not_found_label": "boot volume",
         "delete_required_msg": (
-            "Deleting a volume group backup requires either "
-            "volume_group_backup_id or name (with compartment_id, volume_group_id)"
+            "Deleting a boot volume requires either "
+            "boot_volume_id or name (with compartment_id, availability_domain)"
         ),
-        "create_missing_msg": "Creating a volume group backup requires",
+        "create_missing_msg": "Creating a boot volume requires",
         "name_lookup_params": {
-            "name": "example-group-backup",
+            "name": "example-boot-volume",
             "compartment_id": "ocid1.compartment.oc1..example",
-            "volume_group_id": "ocid1.volumegroup.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
         },
         "expected_name_lookup_kwargs": {
             "compartment_id": "ocid1.compartment.oc1..example",
-            "volume_group_id": "ocid1.volumegroup.oc1..example",
+            "availability_domain": "Uocm:PHX-AD-1",
         },
         "create_missing_params": {
             "state": "present",
-            "name": "example-group-backup",
+            "name": "example-boot-volume",
         },
         "create_complete_params": {
             "state": "present",
             "compartment_id": "ocid1.compartment.oc1..example",
-            "volume_group_id": "ocid1.volumegroup.oc1..example",
-            "name": "example-group-backup",
+            "availability_domain": "Uocm:PHX-AD-1",
+            "name": "example-boot-volume",
+            "source_details": {
+                "type": "bootVolumeBackup",
+                "id": "ocid1.bootvolumebackup.oc1..example",
+            },
         },
     },
 )
