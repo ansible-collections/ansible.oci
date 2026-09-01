@@ -1,0 +1,5 @@
+---
+oci_network_security_group_rule_vcn_name: "oci-network-security-group-rule-vcn"
+oci_network_security_group_rule_nsg_name: "oci-network-security-group-rule-nsg"
+oci_network_security_group_rule_peer_nsg_name: "oci-network-security-group-rule-peer-nsg"
+oci_network_security_group_rule_vcn_cidr: "10.252.0.0/16"
