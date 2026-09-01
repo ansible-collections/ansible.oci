@@ -317,6 +317,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
+    UpdateFieldSpec,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -377,38 +378,38 @@ class OciBootVolumeModule(OciResourceBase):
     update_method_name = "update_boot_volume"
     update_details_name = "update_boot_volume_details"
     update_wait_states = WAIT_FOR_BOOT_VOLUME_STATES
-    update_field_specs = [
-        {
-            "param_name": "name",
-            "resource_field": "display_name",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "size_in_gbs",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "vpus_per_gb",
-            "is_mutable": True,
-        },
-        {
-            "param_name": "availability_domain",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "compartment_id",
-            "is_mutable": False,
-        },
-        {
-            "param_name": "source_details",
-            "is_mutable": False,
-            "compare": "subset_dict",
-            "immutable_reason": (
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="name",
+            resource_field="display_name",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="size_in_gbs",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="vpus_per_gb",
+            is_mutable=True,
+        ),
+        UpdateFieldSpec(
+            param_name="availability_domain",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="compartment_id",
+            is_mutable=False,
+        ),
+        UpdateFieldSpec(
+            param_name="source_details",
+            is_mutable=False,
+            compare="subset_dict",
+            immutable_reason=(
                 "source_details is applied only at create time; restoring "
                 "into an existing boot volume is not supported"
             ),
-        },
-    ]
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(
