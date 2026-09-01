@@ -311,13 +311,14 @@ def test_delete_resource_waits_for_detached_state(monkeypatch):
     )
     monkeypatch.setattr(
         instance,
-        "_wait_for_drg_attachment_detached",
-        lambda drg_attachment_id: None,
+        "wait_for_resource_id",
+        lambda resource_id, target_states: None,
     )
 
     instance.delete_resource(resource)
 
     assert delete_calls == ["ocid1.drgattachment.oc1..example"]
+    assert instance.dead_states == frozenset({"DETACHED"})
 
 
 def test_delete_resource_treats_404_as_already_detached(monkeypatch):
