@@ -1,0 +1,240 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI Network Security Group integration tests require
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_network_security_group_integration_vcn_name: "{{ oci_network_security_group_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_network_security_group_integration_name: "{{ oci_network_security_group_integration_name }}-{{ oci_integration_rpfx }}"
+    oci_network_security_group_integration_updated_name: "{{ oci_network_security_group_integration_updated_name }}-{{ oci_integration_rpfx }}"
+    oci_network_security_group_integration_vcn_dns_label: "nsg{{ oci_integration_rpfx }}"
+
+- name: Exercise Network Security Group module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN for Network Security Group integration
+      ansible.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_network_security_group_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_network_security_group_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_network_security_group_integration_vcn_dns_label }}"
+      register: oci_network_security_group_vcn_create
+
+    - name: Define Network Security Group create parameters
+      ansible.builtin.set_fact:
+        oci_network_security_group_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          vcn_id: "{{ oci_network_security_group_vcn_create.resource.id }}"
+          name: "{{ oci_network_security_group_integration_name }}"
+          freeform_tags: "{{ oci_network_security_group_integration_create_tags }}"
+
+    - name: Create Network Security Group in check mode
+      ansible.oci.oci_network_security_group: &oci_network_security_group_create_options
+        state: "{{ oci_network_security_group_create_params.state }}"
+        compartment_id: "{{ oci_network_security_group_create_params.compartment_id }}"
+        vcn_id: "{{ oci_network_security_group_create_params.vcn_id }}"
+        name: "{{ oci_network_security_group_create_params.name }}"
+        freeform_tags: "{{ oci_network_security_group_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_network_security_group_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_create_check.changed | bool
+
+    - name: Read Network Security Group after create check mode
+      ansible.oci.oci_network_security_group_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_network_security_group_create_params.vcn_id }}"
+        name: "{{ oci_network_security_group_integration_name }}"
+      register: oci_network_security_group_create_check_probe
+
+    - name: Assert Network Security Group is absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_create_check_probe.network_security_groups | length == 0
+
+    - name: Create Network Security Group
+      ansible.oci.oci_network_security_group:
+        <<: *oci_network_security_group_create_options
+      register: oci_network_security_group_create
+
+    - name: Capture Network Security Group identifiers and update parameters
+      ansible.builtin.set_fact:
+        oci_network_security_group_id: "{{ oci_network_security_group_create.resource.id }}"
+        oci_network_security_group_update_params:
+          state: present
+          network_security_group_id: "{{ oci_network_security_group_create.resource.id }}"
+          name: "{{ oci_network_security_group_integration_updated_name }}"
+          freeform_tags: "{{ oci_network_security_group_integration_update_tags }}"
+
+    - name: Assert create returned the expected resource
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_create.changed | bool
+          - oci_network_security_group_create.resource.id | length > 0
+          - oci_network_security_group_create.resource.vcn_id == oci_network_security_group_create_params.vcn_id
+
+    - name: Read Network Security Group by ID
+      ansible.oci.oci_network_security_group_info:
+        network_security_group_id: "{{ oci_network_security_group_id }}"
+      register: oci_network_security_group_info_by_id
+
+    - name: Assert info by ID returned the created Network Security Group
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_info_by_id.network_security_groups | length == 1
+          - oci_network_security_group_info_by_id.network_security_groups[0].id == oci_network_security_group_id
+          - oci_network_security_group_info_by_id.network_security_groups[0].name == oci_network_security_group_integration_name
+          - oci_network_security_group_info_by_id.network_security_groups[0].lifecycle_state == "AVAILABLE"
+
+    - name: Reconcile the created Network Security Group by unique name
+      ansible.oci.oci_network_security_group:
+        <<: *oci_network_security_group_create_options
+      register: oci_network_security_group_create_rerun
+
+    - name: Assert name-based reconciliation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_create_rerun.changed | bool
+          - oci_network_security_group_create_rerun.resource.id == oci_network_security_group_id
+
+    - name: Create a duplicate Network Security Group intentionally
+      ansible.oci.oci_network_security_group:
+        <<: *oci_network_security_group_create_options
+        allow_duplicate_name: true
+      register: oci_network_security_group_duplicate_create
+
+    - name: Capture duplicate Network Security Group ID
+      ansible.builtin.set_fact:
+        oci_network_security_group_duplicate_id: "{{ oci_network_security_group_duplicate_create.resource.id }}"
+
+    - name: Assert duplicate creation returned a distinct resource
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_duplicate_create.changed | bool
+          - oci_network_security_group_duplicate_id != oci_network_security_group_id
+
+    - name: Delete duplicate Network Security Group
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_duplicate_id }}"
+
+    - name: Clear duplicate Network Security Group ID
+      ansible.builtin.set_fact:
+        oci_network_security_group_duplicate_id: ""
+
+    - name: Update Network Security Group in check mode
+      ansible.oci.oci_network_security_group: &oci_network_security_group_update_options
+        state: "{{ oci_network_security_group_update_params.state }}"
+        network_security_group_id: "{{ oci_network_security_group_update_params.network_security_group_id }}"
+        name: "{{ oci_network_security_group_update_params.name }}"
+        freeform_tags: "{{ oci_network_security_group_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_network_security_group_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_update_check.changed | bool
+
+    - name: Read Network Security Group after update check mode
+      ansible.oci.oci_network_security_group_info:
+        network_security_group_id: "{{ oci_network_security_group_id }}"
+      register: oci_network_security_group_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_update_check_probe.network_security_groups[0].name == oci_network_security_group_integration_name
+          - oci_network_security_group_update_check_probe.network_security_groups[0].freeform_tags.phase == "create"
+
+    - name: Update Network Security Group
+      ansible.oci.oci_network_security_group:
+        <<: *oci_network_security_group_update_options
+      register: oci_network_security_group_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_update.changed | bool
+
+    - name: Read updated Network Security Group
+      ansible.oci.oci_network_security_group_info:
+        network_security_group_id: "{{ oci_network_security_group_id }}"
+      register: oci_network_security_group_info_updated
+
+    - name: Assert info reflects the update
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_info_updated.network_security_groups[0].name == oci_network_security_group_integration_updated_name
+          - oci_network_security_group_info_updated.network_security_groups[0].freeform_tags.phase == "update"
+
+    - name: Reapply Network Security Group update
+      ansible.oci.oci_network_security_group:
+        <<: *oci_network_security_group_update_options
+      register: oci_network_security_group_update_rerun
+
+    - name: Assert update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_update_rerun.changed | bool
+
+    - name: Delete Network Security Group in check mode
+      ansible.oci.oci_network_security_group: &oci_network_security_group_delete_options
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_id }}"
+      check_mode: true
+      register: oci_network_security_group_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_delete_check.changed | bool
+
+    - name: Read Network Security Group after delete check mode
+      ansible.oci.oci_network_security_group_info:
+        network_security_group_id: "{{ oci_network_security_group_id }}"
+      register: oci_network_security_group_delete_check_probe
+
+    - name: Assert Network Security Group still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_delete_check_probe.network_security_groups | length == 1
+
+    - name: Delete Network Security Group
+      ansible.oci.oci_network_security_group:
+        <<: *oci_network_security_group_delete_options
+      register: oci_network_security_group_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_delete.changed | bool
+
+    - name: Delete Network Security Group again
+      ansible.oci.oci_network_security_group:
+        <<: *oci_network_security_group_delete_options
+      register: oci_network_security_group_delete_rerun
+
+    - name: Assert repeated delete is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_delete_rerun.changed | bool
+
+  always:
+    - name: Run Network Security Group cleanup
+      ansible.builtin.include_tasks: cleanup.yml

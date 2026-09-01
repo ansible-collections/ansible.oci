@@ -20,6 +20,8 @@ action_groups:
     - oci_network_nat_gateway_info
     - oci_network_security_list
     - oci_network_security_list_info
+    - oci_network_security_group
+    - oci_network_security_group_info
     - oci_network_internet_gateway
     - oci_network_internet_gateway_info
     - oci_network_service_gateway

@@ -1,0 +1,24 @@
+---
+- name: Run Network Security Group cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked duplicate Network Security Group during cleanup
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_duplicate_id }}"
+      when: oci_network_security_group_duplicate_id | default('') | length > 0
+
+    - name: Delete leaked Network Security Group during cleanup
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_id }}"
+      when: oci_network_security_group_id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      ansible.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_network_security_group_vcn_create.resource.id }}"
+      when: oci_network_security_group_vcn_create.resource.id | default('') | length > 0
