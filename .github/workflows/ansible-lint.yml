@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   ansible-lint:
-    uses: ansible/ansible-content-actions/.github/workflows/ansible_lint.yaml@d3ed2271d196e9963585a3be3fc23729b6d166c5 # main
+    uses: ansible/ansible-content-actions/.github/workflows/ansible_lint.yaml@fbf0452809057bf50d9e263f49de13ac789a747c # main
 
   ansible-lint-check:
     if: always()
