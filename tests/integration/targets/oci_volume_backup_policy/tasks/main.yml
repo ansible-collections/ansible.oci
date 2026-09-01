@@ -1,0 +1,274 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI volume backup policy integration tests require
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Compute unique policy names for this run
+  ansible.builtin.set_fact:
+    oci_volume_backup_policy_integration_name: >-
+      {{ oci_volume_backup_policy_integration_name
+         ~ '-' ~ oci_integration_rpfx }}
+    oci_volume_backup_policy_integration_updated_name: >-
+      {{ oci_volume_backup_policy_integration_updated_name
+         ~ '-' ~ oci_integration_rpfx }}
+
+- name: Exercise volume backup policy lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Define volume backup policy create parameters
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_volume_backup_policy_integration_name }}"
+          schedules: >-
+            {{ oci_volume_backup_policy_integration_create_schedule }}
+          freeform_tags: >-
+            {{ oci_volume_backup_policy_integration_create_tags }}
+
+    - name: Create volume backup policy in check mode
+      ansible.oci.oci_volume_backup_policy: &policy_create
+        state: "{{ oci_volume_backup_policy_create_params.state }}"
+        compartment_id: >-
+          {{ oci_volume_backup_policy_create_params.compartment_id }}
+        name: "{{ oci_volume_backup_policy_create_params.name }}"
+        schedules: "{{ oci_volume_backup_policy_create_params.schedules }}"
+        freeform_tags: >-
+          {{ oci_volume_backup_policy_create_params.freeform_tags }}
+      check_mode: true
+      register: oci_volume_backup_policy_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_create_check.changed | bool
+
+    - name: Probe policy absence after create check mode
+      ansible.oci.oci_volume_backup_policy:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_volume_backup_policy_integration_name }}"
+      check_mode: true
+      register: oci_volume_backup_policy_create_check_probe
+
+    - name: Assert create check mode did not create the policy
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_create_check_probe.changed | bool
+
+    - name: Create volume backup policy
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_create
+      register: oci_volume_backup_policy_create
+
+    - name: Capture created policy id
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_id: >-
+          {{ oci_volume_backup_policy_create.resource.id }}
+
+    - name: Assert policy creation result
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_create.changed | bool
+          - >-
+            oci_volume_backup_policy_create.resource.name ==
+            oci_volume_backup_policy_integration_name
+          - >-
+            oci_volume_backup_policy_create.resource.compartment_id ==
+            oci_integration_compartment_id
+          - >-
+            oci_volume_backup_policy_create.resource.schedules | length == 1
+          - >-
+            oci_volume_backup_policy_create.resource.schedules[0].backup_type ==
+            "INCREMENTAL"
+          - >-
+            oci_volume_backup_policy_create.resource.freeform_tags.phase ==
+            "create"
+
+    - name: Reconcile created policy by name in check mode
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_create
+      check_mode: true
+      register: oci_volume_backup_policy_create_check_rerun
+
+    - name: Assert name-based check-mode rerun is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_create_check_rerun.changed | bool
+
+    - name: Reconcile created policy by name
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_create
+      register: oci_volume_backup_policy_create_rerun
+
+    - name: Assert name-based rerun is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_create_rerun.changed | bool
+          - >-
+            oci_volume_backup_policy_create_rerun.resource.id ==
+            oci_volume_backup_policy_id
+
+    - name: Define volume backup policy update parameters
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_update_params:
+          state: present
+          volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
+          name: "{{ oci_volume_backup_policy_integration_updated_name }}"
+          schedules: >-
+            {{ oci_volume_backup_policy_integration_update_schedule }}
+          freeform_tags: >-
+            {{ oci_volume_backup_policy_integration_update_tags }}
+
+    - name: Update volume backup policy in check mode
+      ansible.oci.oci_volume_backup_policy: &policy_update
+        state: "{{ oci_volume_backup_policy_update_params.state }}"
+        volume_backup_policy_id: >-
+          {{ oci_volume_backup_policy_update_params.volume_backup_policy_id }}
+        name: "{{ oci_volume_backup_policy_update_params.name }}"
+        schedules: "{{ oci_volume_backup_policy_update_params.schedules }}"
+        freeform_tags: >-
+          {{ oci_volume_backup_policy_update_params.freeform_tags }}
+      check_mode: true
+      register: oci_volume_backup_policy_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_update_check.changed | bool
+
+    - name: Read policy after update check mode
+      ansible.oci.oci_volume_backup_policy:
+        state: present
+        volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
+      register: oci_volume_backup_policy_update_check_probe
+
+    - name: Assert update check mode did not mutate the policy
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_update_check_probe.changed | bool
+          - >-
+            oci_volume_backup_policy_update_check_probe.resource.name ==
+            oci_volume_backup_policy_integration_name
+          - >-
+            (
+              oci_volume_backup_policy_update_check_probe.resource
+            ).freeform_tags.phase == "create"
+
+    - name: Update volume backup policy
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_update
+      register: oci_volume_backup_policy_update
+
+    - name: Assert policy update result
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_update.changed | bool
+          - >-
+            oci_volume_backup_policy_update.resource.name ==
+            oci_volume_backup_policy_integration_updated_name
+          - >-
+            oci_volume_backup_policy_update.resource.schedules | length == 1
+          - >-
+            oci_volume_backup_policy_update.resource.schedules[0].backup_type ==
+            "FULL"
+          - >-
+            oci_volume_backup_policy_update.resource.schedules[0].period ==
+            "ONE_WEEK"
+          - >-
+            oci_volume_backup_policy_update.resource.freeform_tags.phase ==
+            "update"
+
+    - name: Reconcile updated policy in check mode
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_update
+      check_mode: true
+      register: oci_volume_backup_policy_update_check_rerun
+
+    - name: Assert update check-mode rerun is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_update_check_rerun.changed | bool
+
+    - name: Reconcile updated policy
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_update
+      register: oci_volume_backup_policy_update_rerun
+
+    - name: Assert update rerun is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_update_rerun.changed | bool
+
+    - name: Delete volume backup policy in check mode
+      ansible.oci.oci_volume_backup_policy: &policy_delete
+        state: absent
+        volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
+      check_mode: true
+      register: oci_volume_backup_policy_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_delete_check.changed | bool
+
+    - name: Read policy after delete check mode
+      ansible.oci.oci_volume_backup_policy:
+        state: present
+        volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
+      register: oci_volume_backup_policy_delete_check_probe
+
+    - name: Assert delete check mode did not remove the policy
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_delete_check_probe.changed | bool
+          - >-
+            oci_volume_backup_policy_delete_check_probe.resource.id ==
+            oci_volume_backup_policy_id
+
+    - name: Delete volume backup policy
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_delete
+      register: oci_volume_backup_policy_delete
+
+    - name: Assert policy deletion reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_delete.changed | bool
+
+    - name: Delete volume backup policy again in check mode
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_delete
+      check_mode: true
+      register: oci_volume_backup_policy_delete_check_rerun
+
+    - name: Assert delete check-mode rerun is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_delete_check_rerun.changed | bool
+
+    - name: Delete volume backup policy again
+      ansible.oci.oci_volume_backup_policy:
+        <<: *policy_delete
+      register: oci_volume_backup_policy_delete_rerun
+
+    - name: Assert delete rerun is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_delete_rerun.changed | bool
+
+    - name: Clear policy id after successful delete
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_id: ""
+
+  always:
+    - name: Run volume backup policy cleanup
+      ansible.builtin.include_tasks: cleanup.yml

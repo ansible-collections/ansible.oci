@@ -1,7 +1,41 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+import types
+
 from conftest import load_collection_module
+
+
+class FakeRetentionDuration:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+def test_build_retention_period_normalizes_enum_and_omits_none(monkeypatch):
+    oci_backup = load_collection_module("oci_backup")
+    fake_oci = types.SimpleNamespace(
+        core=types.SimpleNamespace(
+            models=types.SimpleNamespace(
+                RetentionDuration=FakeRetentionDuration,
+            )
+        )
+    )
+    monkeypatch.setattr(oci_backup, "import_oci_sdk", lambda: (fake_oci, True))
+
+    assert oci_backup.build_retention_period(None) is None
+    assert oci_backup.build_retention_period({}) is None
+
+    retention_period = oci_backup.build_retention_period(
+        {
+            "retention_time_amount": 30,
+            "retention_time_unit": "days",
+            "ignored": None,
+        }
+    )
+
+    assert retention_period.retention_time_amount == 30
+    assert retention_period.retention_time_unit == "DAYS"
+    assert not hasattr(retention_period, "ignored")
 
 
 def test_build_backup_update_field_specs_inserts_source_identity_field():

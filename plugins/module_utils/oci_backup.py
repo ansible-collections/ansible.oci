@@ -3,9 +3,36 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
+    filter_none_values,
+    import_oci_sdk,
+    normalize_enum_values,
+)
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     UpdateFieldSpec,
 )
+
+RETENTION_PERIOD_ENUM_KEYS = frozenset({"retention_time_unit"})
+
+
+def build_retention_period(retention_period):
+    """Build the retention duration model shared by OCI backup resources."""
+    if not retention_period:
+        return None
+
+    normalized = normalize_enum_values(
+        retention_period,
+        RETENTION_PERIOD_ENUM_KEYS,
+    )
+    oci = import_oci_sdk()[0]
+    return oci.core.models.RetentionDuration(
+        **filter_none_values(
+            {
+                "retention_time_amount": normalized.get("retention_time_amount"),
+                "retention_time_unit": normalized.get("retention_time_unit"),
+            }
+        )
+    )
 
 
 def build_backup_update_field_specs(
