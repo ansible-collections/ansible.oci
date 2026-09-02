@@ -188,7 +188,7 @@ def test_ephemeral_name_lookup_uses_private_ip(monkeypatch):
 
 
 def test_ephemeral_name_lookup_handles_not_found(monkeypatch):
-    _, service_error = install_fake_oci(monkeypatch)
+    service_error = install_fake_oci(monkeypatch)[1]
     module_obj = load_collection_module("oci_network_public_ip")
 
     def get_public_ip_by_private_ip_id(**kwargs):
