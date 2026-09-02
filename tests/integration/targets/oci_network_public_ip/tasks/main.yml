@@ -1,0 +1,187 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI public IP integration tests require oci_integration_compartment_id
+      to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique public IP names for this run
+  ansible.builtin.set_fact:
+    oci_network_public_ip_integration_name: >-
+      {{ oci_network_public_ip_integration_name }}-{{ oci_integration_rpfx }}
+    oci_network_public_ip_integration_updated_name: >-
+      {{ oci_network_public_ip_integration_updated_name }}-{{ oci_integration_rpfx }}
+
+- name: Exercise public IP module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Define public IP create parameters
+      ansible.builtin.set_fact:
+        oci_network_public_ip_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_network_public_ip_integration_name }}"
+          lifetime: reserved
+          freeform_tags: "{{ oci_network_public_ip_integration_create_tags }}"
+
+    - name: Create reserved public IP in check mode
+      ansible.oci.oci_network_public_ip: &public_ip_create_options
+        state: "{{ oci_network_public_ip_create_params.state }}"
+        compartment_id: "{{ oci_network_public_ip_create_params.compartment_id }}"
+        name: "{{ oci_network_public_ip_create_params.name }}"
+        lifetime: "{{ oci_network_public_ip_create_params.lifetime }}"
+        freeform_tags: "{{ oci_network_public_ip_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_network_public_ip_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_public_ip_create_check.changed | bool
+
+    - name: Create reserved public IP
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_create_options
+      register: oci_network_public_ip_create
+
+    - name: Capture public IP ID and update parameters
+      ansible.builtin.set_fact:
+        oci_network_public_ip_id: "{{ oci_network_public_ip_create.resource.id }}"
+        oci_network_public_ip_update_params:
+          state: present
+          public_ip_id: "{{ oci_network_public_ip_create.resource.id }}"
+          name: "{{ oci_network_public_ip_integration_updated_name }}"
+          freeform_tags: "{{ oci_network_public_ip_integration_update_tags }}"
+
+    - name: Assert create returned the reserved public IP
+      ansible.builtin.assert:
+        that:
+          - oci_network_public_ip_create.changed | bool
+          - oci_network_public_ip_create.resource.name == oci_network_public_ip_integration_name
+          - oci_network_public_ip_create.resource.lifetime == "RESERVED"
+          - oci_network_public_ip_create.resource.scope == "REGION"
+          - oci_network_public_ip_create.resource.lifecycle_state == "AVAILABLE"
+          - oci_network_public_ip_create.resource.ip_address | length > 0
+          - oci_network_public_ip_create.resource.freeform_tags.phase == "create"
+
+    - name: Reconcile reserved public IP by name
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_create_options
+      register: oci_network_public_ip_create_rerun_by_name
+
+    - name: Assert name-based create reconciliation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_public_ip_create_rerun_by_name.changed | bool
+          - oci_network_public_ip_create_rerun_by_name.resource.id == oci_network_public_ip_id
+
+    - name: Reconcile reserved public IP by ID
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_create_options
+        public_ip_id: "{{ oci_network_public_ip_id }}"
+      register: oci_network_public_ip_create_rerun_by_id
+
+    - name: Assert ID-based create reconciliation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_public_ip_create_rerun_by_id.changed | bool
+
+    - name: Update reserved public IP in check mode
+      ansible.oci.oci_network_public_ip: &public_ip_update_options
+        state: "{{ oci_network_public_ip_update_params.state }}"
+        public_ip_id: "{{ oci_network_public_ip_update_params.public_ip_id }}"
+        name: "{{ oci_network_public_ip_update_params.name }}"
+        freeform_tags: "{{ oci_network_public_ip_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_network_public_ip_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_public_ip_update_check.changed | bool
+
+    - name: Verify update check mode did not mutate the public IP
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_create_options
+        public_ip_id: "{{ oci_network_public_ip_id }}"
+      register: oci_network_public_ip_update_check_probe
+
+    - name: Assert public IP is unchanged after update check mode
+      ansible.builtin.assert:
+        that:
+          - not oci_network_public_ip_update_check_probe.changed | bool
+
+    - name: Update reserved public IP
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_update_options
+      register: oci_network_public_ip_update
+
+    - name: Assert update returned the expected public IP
+      ansible.builtin.assert:
+        that:
+          - oci_network_public_ip_update.changed | bool
+          - oci_network_public_ip_update.resource.name == oci_network_public_ip_integration_updated_name
+          - oci_network_public_ip_update.resource.freeform_tags.phase == "update"
+          - oci_network_public_ip_update.resource.lifetime == "RESERVED"
+          - oci_network_public_ip_update.resource.scope == "REGION"
+
+    - name: Reapply public IP update
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_update_options
+      register: oci_network_public_ip_update_rerun
+
+    - name: Assert update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_public_ip_update_rerun.changed | bool
+
+    - name: Delete public IP in check mode
+      ansible.oci.oci_network_public_ip: &public_ip_delete_options
+        state: absent
+        public_ip_id: "{{ oci_network_public_ip_id }}"
+      check_mode: true
+      register: oci_network_public_ip_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_public_ip_delete_check.changed | bool
+
+    - name: Verify delete check mode did not remove the public IP
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_update_options
+      register: oci_network_public_ip_delete_check_probe
+
+    - name: Assert public IP remains after delete check mode
+      ansible.builtin.assert:
+        that:
+          - not oci_network_public_ip_delete_check_probe.changed | bool
+
+    - name: Delete public IP
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_delete_options
+      register: oci_network_public_ip_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_public_ip_delete.changed | bool
+
+    - name: Delete public IP again
+      ansible.oci.oci_network_public_ip:
+        <<: *public_ip_delete_options
+      register: oci_network_public_ip_delete_rerun
+
+    - name: Assert repeated delete is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_public_ip_delete_rerun.changed | bool
+
+  always:
+    - name: Run public IP cleanup
+      ansible.builtin.include_tasks: cleanup.yml

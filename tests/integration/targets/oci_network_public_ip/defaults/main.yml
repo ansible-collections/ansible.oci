@@ -1,0 +1,9 @@
+---
+oci_network_public_ip_integration_name: "oci-network-public-ip-integration"
+oci_network_public_ip_integration_updated_name: "oci-network-public-ip-integration-updated"
+oci_network_public_ip_integration_create_tags:
+  phase: create
+  role: integration
+oci_network_public_ip_integration_update_tags:
+  phase: update
+  role: integration
