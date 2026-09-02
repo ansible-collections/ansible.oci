@@ -6,6 +6,7 @@ action_groups:
     - oci_network_vcn_info
     - oci_network_subnet
     - oci_network_subnet_info
+    - oci_network_private_ip
     - oci_network_dhcp_options
     - oci_network_dhcp_options_info
     - oci_network_drg
