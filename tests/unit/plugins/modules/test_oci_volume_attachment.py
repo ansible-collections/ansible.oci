@@ -490,13 +490,14 @@ def test_delete_resource_detaches_and_waits_for_detached_state(monkeypatch):
     monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
     monkeypatch.setattr(
         instance,
-        "_wait_for_volume_attachment_detached",
-        lambda volume_attachment_id: None,
+        "wait_for_resource_id",
+        lambda resource_id, target_states: None,
     )
 
     instance.delete_resource(resource)
 
     assert detach_calls == ["ocid1.volumeattachment.oc1..example"]
+    assert instance.dead_states == frozenset({"DETACHED"})
 
 
 def test_delete_resource_treats_404_as_already_detached(monkeypatch):

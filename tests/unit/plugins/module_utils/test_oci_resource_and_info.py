@@ -1013,16 +1013,11 @@ def test_oci_resource_base_treats_dead_state_as_absent(monkeypatch):
         oci_resource,
         lambda module, client_class: "client",
     )
-    monkeypatch.setattr(
-        oci_resource,
-        "DEAD_STATES",
-        frozenset({"REMOVED"}),
-        raising=False,
-    )
 
     class ExampleResource(oci_resource.OciResourceBase):
         update_field_specs = ()
         client_class = object
+        dead_states = frozenset({"REMOVED"})
 
         def resolve_target_resource(self):
             return types.SimpleNamespace(lifecycle_state="REMOVED")
@@ -2379,12 +2374,6 @@ def test_oci_resource_base_wait_for_resource_id_uses_dead_states_for_not_found_h
         oci_resource,
         lambda module, client_class: types.SimpleNamespace(),
     )
-    monkeypatch.setattr(
-        oci_resource,
-        "DEAD_STATES",
-        frozenset({"REMOVED"}),
-        raising=False,
-    )
 
     def get_resource(resource_id):
         raise ServiceError(404)
@@ -2392,6 +2381,7 @@ def test_oci_resource_base_wait_for_resource_id_uses_dead_states_for_not_found_h
     class ExampleResource(oci_resource.OciResourceBase):
         update_field_specs = ()
         client_class = object
+        dead_states = frozenset({"REMOVED"})
 
         def get_resource_response(self, resource_id):
             return get_resource(resource_id)

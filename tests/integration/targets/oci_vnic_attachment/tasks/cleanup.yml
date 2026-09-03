@@ -1,0 +1,30 @@
+---
+- name: Run VNIC attachment cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Detach leaked secondary VNIC during cleanup
+      ansible.oci.oci_vnic_attachment:
+        state: absent
+        vnic_attachment_id: "{{ oci_vnic_attachment_id }}"
+      when: oci_vnic_attachment_id | default('') | length > 0
+
+    - name: Delete leaked compute instance during cleanup
+      ansible.oci.oci_instance:
+        state: absent
+        instance_id: "{{ oci_vnic_attachment_instance_id }}"
+      when: oci_vnic_attachment_instance_id | default('') | length > 0
+
+    - name: Delete leaked subnet during cleanup
+      ansible.oci.oci_network_subnet:
+        state: absent
+        subnet_id: "{{ oci_vnic_attachment_subnet_create.resource.id }}"
+      when: oci_vnic_attachment_subnet_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      ansible.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_vnic_attachment_vcn_create.resource.id }}"
+      when: oci_vnic_attachment_vcn_create.resource.id | default('') | length > 0

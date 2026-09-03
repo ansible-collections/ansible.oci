@@ -245,11 +245,8 @@ CREATE_REQUIRED_FIELDS = [
     "vcn_id",
     "name",
 ]
-# A DRG attachment uses its own lifecycle vocabulary
-# (ATTACHING/ATTACHED/DETACHING/DETACHED). It does not use the
-# AVAILABLE/TERMINATED vocabulary that the shared DEAD_STATES constant
-# assumes, so the terminal "detached" state is handled explicitly in
-# delete_resource() below instead of relying on delete_resource_and_wait().
+# A DRG attachment uses DETACHED as its terminal lifecycle state instead of
+# the collection default TERMINATED state.
 WAIT_FOR_DRG_ATTACHMENT_STATES = ["ATTACHED"]
 DETACHED_STATE = "DETACHED"
 
@@ -286,6 +283,7 @@ class OciNetworkDrgAttachmentModule(OciResourceBase):
     list_filter_params = ("drg_id", "vcn_id")
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "DRG attachment"
+    dead_states = frozenset({DETACHED_STATE})
     update_method_name = "update_drg_attachment"
     update_details_name = "update_drg_attachment_details"
     update_wait_states = WAIT_FOR_DRG_ATTACHMENT_STATES
@@ -319,35 +317,6 @@ class OciNetworkDrgAttachmentModule(OciResourceBase):
             drg_attachment_id=resource_id,
         )
 
-    def resolve_target_resource(self):
-        """Treat an already-DETACHED attachment the same as "not found".
-
-        The shared base class only recognizes the collection-wide
-        ``DEAD_STATES`` vocabulary (``DELETED``/``TERMINATED``) as terminal.
-        A DRG attachment becomes terminal via ``DETACHED`` instead, so this
-        normalizes that case here rather than in the shared framework, which
-        keeps present/absent idempotency correct without special-casing this
-        one resource type in ``oci_resource.py``.
-        """
-        resource = super().resolve_target_resource()
-        if resource is not None and getattr(resource, "lifecycle_state", None) == DETACHED_STATE:
-            return None
-        return resource
-
-    def find_resources_by_name(self):
-        """Exclude DETACHED attachments from scoped name-lookup matches.
-
-        Without this, a stale DETACHED attachment sharing a display name with
-        a live (or freshly recreated) attachment would count toward the
-        ambiguous-match check in the shared ``resolve_resource_by_name()``
-        before ``resolve_target_resource()`` gets a chance to filter it out.
-        """
-        return [
-            resource
-            for resource in super().find_resources_by_name()
-            if getattr(resource, "lifecycle_state", None) != DETACHED_STATE
-        ]
-
     def create_resource(self):
         create_drg_attachment_details = build_create_drg_attachment_details(
             self.module.params
@@ -366,59 +335,11 @@ class OciNetworkDrgAttachmentModule(OciResourceBase):
         return oci.core.models.UpdateDrgAttachmentDetails(**update_model_fields)
 
     def delete_resource(self, resource):
-        try:
-            response = self.call_with_retry(
-                self.client.delete_drg_attachment,
-                drg_attachment_id=resource.id,
-            )
-        except Exception as exc:
-            if getattr(exc, "status", None) == 409:
-                self.module.fail_json(
-                    msg=(
-                        f"Cannot delete {self.create_resource_name} {resource.id} while "
-                        f"dependent resources exist: {exc}"
-                    )
-                )
-            raise
-
-        if not self.module.params.get("wait", True):
-            return response.data
-        return self._wait_for_drg_attachment_detached(resource.id)
-
-    def _wait_for_drg_attachment_detached(self, drg_attachment_id):
-        """Wait for a DRG attachment to reach DETACHED or disappear.
-
-        The shared ``delete_resource_and_wait()`` helper assumes resources
-        become terminal via the collection-wide ``DEAD_STATES`` vocabulary
-        (``DELETED``/``TERMINATED``). A DRG attachment instead becomes
-        terminal via ``DETACHED``, so this mirrors the shared wait helper
-        with the correct target state and treats a 404 as already deleted
-        at any point in the wait.
-        """
-        timeout = self.module.params.get("wait_timeout", 1200)
-        interval = self.module.params.get("wait_interval", 30)
-
-        try:
-            initial_response = self.get_resource_response(drg_attachment_id)
-        except Exception as exc:
-            if getattr(exc, "status", None) == 404:
-                return None
-            raise
-
-        waiter_result = oci.wait_until(
-            self.client,
-            initial_response,
-            max_interval_seconds=interval,
-            max_wait_seconds=timeout,
-            succeed_on_not_found=True,
-            evaluate_response=lambda response: (
-                getattr(response.data, "lifecycle_state", None) == DETACHED_STATE
-            ),
-            fetch_func=lambda response=None: self.get_resource_response(
-                drg_attachment_id
-            ),
+        return self.delete_resource_and_wait(
+            resource,
+            self.client.delete_drg_attachment,
+            drg_attachment_id=resource.id,
         )
-        return getattr(waiter_result, "data", None)
 
 
 def main():

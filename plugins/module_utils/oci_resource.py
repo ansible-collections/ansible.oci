@@ -44,15 +44,15 @@ def _work_request_wait_complete(
     return state in target_states
 
 
-def _target_states_include_dead_states(target_states):
-    return any(state in DEAD_STATES for state in target_states)
+def _target_states_include_dead_states(target_states, dead_states=DEAD_STATES):
+    return any(state in dead_states for state in target_states)
 
 
-def _is_dead_resource(resource):
+def _is_dead_resource(resource, dead_states=DEAD_STATES):
     """Return True when ``resource`` is in a terminal deleted/terminated state."""
     return (
         resource is not None
-        and getattr(resource, "lifecycle_state", None) in DEAD_STATES
+        and getattr(resource, "lifecycle_state", None) in dead_states
     )
 
 
@@ -126,6 +126,7 @@ class OciResourceBase(OciModuleBase, ABC):
     update_method_name = None
     update_details_name = None
     update_wait_states = ()
+    dead_states = DEAD_STATES
 
     def __init__(self, module):
         """Initialize the shared OCI resource helper for one module invocation.
@@ -164,7 +165,7 @@ class OciResourceBase(OciModuleBase, ABC):
             resource = self.get_resource_by_id(resource_id)
         else:
             resource = self.resolve_resource_by_name()
-        if _is_dead_resource(resource):
+        if _is_dead_resource(resource, self.dead_states):
             return None
         return resource
 
@@ -514,8 +515,9 @@ class OciResourceBase(OciModuleBase, ABC):
         This helper returns every matching live resource because name collisions
         can be legal for some OCI resource types and must be resolved by the
         caller or by ``allow_duplicate_name`` handling. Matches in
-        ``DEAD_STATES`` are omitted so a leftover tombstone does not collide
-        with a live resource of the same name.
+        States declared by the concrete adapter in ``dead_states`` are omitted
+        so a leftover tombstone does not collide with a live resource of the
+        same name.
         """
         if not self.supports_name_lookup or not self.has_name_lookup_request:
             return []
@@ -534,7 +536,7 @@ class OciResourceBase(OciModuleBase, ABC):
         return [
             resource
             for resource in matches
-            if not _is_dead_resource(resource)
+            if not _is_dead_resource(resource, self.dead_states)
         ]
 
     def validate_name_lookup_scope(self) -> None:
@@ -621,7 +623,9 @@ class OciResourceBase(OciModuleBase, ABC):
         try:
             initial_response = self.get_resource_response(resource_id)
         except Exception as exc:
-            if getattr(exc, "status", None) == 404 and _target_states_include_dead_states(target_states):
+            if getattr(exc, "status", None) == 404 and _target_states_include_dead_states(
+                target_states, self.dead_states
+            ):
                 return None
             raise
 
@@ -630,7 +634,9 @@ class OciResourceBase(OciModuleBase, ABC):
             initial_response,
             max_interval_seconds=interval,
             max_wait_seconds=timeout,
-            succeed_on_not_found=_target_states_include_dead_states(target_states),
+            succeed_on_not_found=_target_states_include_dead_states(
+                target_states, self.dead_states
+            ),
             evaluate_response=lambda response: _resource_wait_complete(
                 self.module,
                 response,
@@ -712,12 +718,14 @@ class OciResourceBase(OciModuleBase, ABC):
             return response_data
         return self.wait_for_resource_id(resource_id, target_states)
 
-    def delete_resource_and_wait(self, resource, delete_fn, **delete_kwargs):
-        """Delete ``resource`` and optionally wait for a dead lifecycle state.
+    def delete_resource_and_wait(
+        self, resource, delete_fn, action_verb="delete", **delete_kwargs
+    ):
+        """Delete or detach ``resource`` and optionally wait for a dead state.
 
-        ``delete_fn`` is the concrete OCI delete method. A 409 response is
-        translated into a clearer module failure when dependent resources block
-        deletion.
+        ``delete_fn`` is the concrete OCI lifecycle method and ``action_verb``
+        describes it in errors. A 409 response is translated into a clearer
+        module failure when dependent resources block the operation.
         """
         try:
             response = self.call_with_retry(delete_fn, **delete_kwargs)
@@ -725,7 +733,7 @@ class OciResourceBase(OciModuleBase, ABC):
             if getattr(exc, "status", None) == 409:
                 self.module.fail_json(
                     msg=(
-                        f"Cannot delete {self.create_resource_name} {resource.id} while "
+                        f"Cannot {action_verb} {self.create_resource_name} {resource.id} while "
                         f"dependent resources exist: {exc}"
                     )
                 )
@@ -734,7 +742,7 @@ class OciResourceBase(OciModuleBase, ABC):
         return self.get_mutation_result(
             response.data,
             resource.id,
-            tuple(DEAD_STATES),
+            tuple(self.dead_states),
         )
 
     def validate_delete_request(self) -> None:
@@ -792,7 +800,7 @@ class OciResourceBase(OciModuleBase, ABC):
         if state == "absent":
             self.validate_delete_request()
             resource = self.resolve_target_resource()
-            if resource is None or _is_dead_resource(resource):
+            if resource is None or _is_dead_resource(resource, self.dead_states):
                 self.module.exit_json(changed=False)
             if self.check_mode:
                 self.module.exit_json(changed=True)
