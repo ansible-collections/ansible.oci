@@ -1,0 +1,51 @@
+---
+- name: Run Network Security Group rule cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked peer Network Security Group rule during cleanup
+      ansible.oci.oci_network_security_group_rule:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        security_rule_id: "{{ oci_network_security_group_rule_peer_nsg_rule_id }}"
+      when:
+        - oci_network_security_group_rule_nsg_id | default('') | length > 0
+        - oci_network_security_group_rule_peer_nsg_rule_id | default('') | length > 0
+
+    - name: Delete leaked egress rule during cleanup
+      ansible.oci.oci_network_security_group_rule:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        security_rule_id: "{{ oci_network_security_group_rule_egress_id }}"
+      when:
+        - oci_network_security_group_rule_nsg_id | default('') | length > 0
+        - oci_network_security_group_rule_egress_id | default('') | length > 0
+
+    - name: Delete leaked ingress rule during cleanup
+      ansible.oci.oci_network_security_group_rule:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        security_rule_id: "{{ oci_network_security_group_rule_ingress_id }}"
+      when:
+        - oci_network_security_group_rule_nsg_id | default('') | length > 0
+        - oci_network_security_group_rule_ingress_id | default('') | length > 0
+
+    - name: Delete leaked Network Security Group during cleanup
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+      when: oci_network_security_group_rule_nsg_id | default('') | length > 0
+
+    - name: Delete leaked peer Network Security Group during cleanup
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_peer_nsg_id }}"
+      when: oci_network_security_group_rule_peer_nsg_id | default('') | length > 0
+
+    - name: Delete leaked VCN during cleanup
+      ansible.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_network_security_group_rule_vcn_id }}"
+      when: oci_network_security_group_rule_vcn_id | default('') | length > 0
