@@ -1,0 +1,23 @@
+---
+oci_network_private_ip_integration_operating_system: "Oracle Linux"
+oci_network_private_ip_integration_operating_system_version: "9"
+oci_network_private_ip_integration_shape: "VM.Standard.E4.Flex"
+oci_network_private_ip_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_network_private_ip_integration_vcn_name: "oci-private-ip-integration-vcn"
+oci_network_private_ip_integration_subnet_name: "oci-private-ip-integration-subnet"
+oci_network_private_ip_integration_instance_name: "oci-private-ip-integration-instance"
+oci_network_private_ip_integration_attachment_name: "oci-private-ip-integration-attachment"
+oci_network_private_ip_integration_vnic_name: "oci-private-ip-integration-vnic"
+oci_network_private_ip_integration_name: "oci-private-ip-integration"
+oci_network_private_ip_integration_updated_name: "oci-private-ip-integration-updated"
+oci_network_private_ip_integration_vcn_cidr_block: "10.248.0.0/16"
+oci_network_private_ip_integration_subnet_cidr_block: "10.248.1.0/24"
+oci_network_private_ip_integration_ip_address: "10.248.1.20"
+oci_network_private_ip_integration_create_tags:
+  phase: create
+  role: integration
+oci_network_private_ip_integration_update_tags:
+  phase: update
+  role: integration
