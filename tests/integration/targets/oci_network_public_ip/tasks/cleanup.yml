@@ -1,0 +1,10 @@
+---
+- name: Delete leaked public IP during cleanup
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  ansible.oci.oci_network_public_ip:
+    state: absent
+    public_ip_id: "{{ oci_network_public_ip_id }}"
+  when: oci_network_public_ip_id | default('') | length > 0
