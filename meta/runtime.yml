@@ -53,3 +53,5 @@ action_groups:
     - oci_boot_volume_backup
     - oci_boot_volume_backup_info
     - oci_boot_volume_info
+    - oci_bastion
+    - oci_bastion_info
