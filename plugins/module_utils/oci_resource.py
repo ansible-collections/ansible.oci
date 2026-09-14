@@ -165,8 +165,26 @@ class OciResourceBase(OciModuleBase, ABC):
             resource = self.get_resource_by_id(resource_id)
         else:
             resource = self.resolve_resource_by_name()
+            if resource is not None:
+                resource = self.hydrate_named_resource(resource)
         if _is_dead_resource(resource, self.dead_states):
             return None
+        return resource
+
+    def hydrate_named_resource(self, resource):
+        """Return the full resource model for a scoped name-lookup match.
+
+        ``resource`` is the match returned by ``resolve_resource_by_name()``,
+        which comes from a list operation. For some OCI resource types the list
+        model is a summary that omits fields required by the update planner
+        (for example a bastion summary omits ``max_session_ttl_in_seconds`` and
+        ``client_cidr_block_allow_list``), which would make an otherwise
+        unchanged resource look like it needs an update. Subclasses whose list
+        summary is a strict subset of the full model should override this to
+        re-fetch the resource by ID. The default returns the match unchanged so
+        resources whose list model is already complete keep their existing
+        behavior and identity.
+        """
         return resource
 
     @abstractmethod

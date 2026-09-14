@@ -263,6 +263,14 @@ class OciBastionModule(OciResourceBase):
             bastion_id=resource_id,
         )
 
+    def hydrate_named_resource(self, resource):
+        # list_bastions returns a BastionSummary that omits mutable fields such
+        # as max_session_ttl_in_seconds and client_cidr_block_allow_list, so a
+        # name-resolved match must be re-fetched with get_bastion before the
+        # update planner compares desired values against it.
+        full_resource = self.get_resource_by_id(resource.id)
+        return full_resource if full_resource is not None else resource
+
     def create_resource(self):
         create_bastion_details = build_create_bastion_details(self.module.params)
         response = self.call_with_retry(

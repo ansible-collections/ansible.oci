@@ -3,7 +3,7 @@ __metaclass__ = type
 
 import types
 
-from conftest import (
+from .conftest import (
     ExitJsonCalled,
     FakeModel,
     install_fake_oci as shared_install_fake_oci,
