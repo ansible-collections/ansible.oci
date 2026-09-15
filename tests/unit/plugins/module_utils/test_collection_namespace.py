@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-from conftest import load_collection_module
+from .conftest import load_collection_module
 
 
 def test_collection_namespace_smoke_imports():

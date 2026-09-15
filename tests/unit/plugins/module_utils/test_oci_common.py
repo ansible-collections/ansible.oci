@@ -3,7 +3,7 @@ __metaclass__ = type
 
 from ansible.module_utils.common.parameters import env_fallback
 
-from conftest import load_collection_module
+from .conftest import load_collection_module
 
 
 def test_filter_none_values_only_removes_none_entries():

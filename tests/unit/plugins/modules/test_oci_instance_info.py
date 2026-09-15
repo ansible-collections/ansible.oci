@@ -3,7 +3,7 @@ __metaclass__ = type
 
 import types
 
-from conftest import (
+from .conftest import (
     DummyModule,
     ExitJsonCalled,
     FakeModel,

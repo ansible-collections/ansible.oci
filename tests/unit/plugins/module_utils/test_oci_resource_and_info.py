@@ -8,7 +8,7 @@ import types
 import pytest
 from ansible.module_utils.basic import missing_required_lib
 
-from conftest import load_collection_module, raising
+from .conftest import load_collection_module, raising
 
 
 class ExitJsonCalled(Exception):

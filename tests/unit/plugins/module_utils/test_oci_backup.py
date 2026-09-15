@@ -3,7 +3,7 @@ __metaclass__ = type
 
 import types
 
-from conftest import load_collection_module
+from .conftest import load_collection_module
 
 
 class FakeRetentionDuration:

@@ -3,7 +3,7 @@ __metaclass__ = type
 
 import types
 
-from conftest import DummyModule, install_fake_oci, load_collection_module
+from .conftest import DummyModule, install_fake_oci, load_collection_module
 
 
 def test_main_exposes_expected_arguments(monkeypatch):
