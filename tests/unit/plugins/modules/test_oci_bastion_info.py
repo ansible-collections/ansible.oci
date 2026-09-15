@@ -105,6 +105,7 @@ def test_execute_info_module_exits_with_serialized_bastions(monkeypatch):
         lambda: [FakeModel(id="ocid1.bastion.oc1..example", name="example-bastion")],
     )
 
+    payload = None
     try:
         instance.execute_info_module()
     except ExitJsonCalled as exc_info:
