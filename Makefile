@@ -2,6 +2,8 @@
 SHELL := /bin/bash
 
 PYTHON_BIN ?= python3
+UNIT_PYTHON_VERSION ?= 3.12
+UNIT_TARGETS ?=
 INTEGRATION_TARGETS ?=
 COLLECTION_ROOT ?= $(HOME)/.ansible/collections/ansible_collections/ansible/oci
 
@@ -12,7 +14,7 @@ install-integration-reqs:
 
 .PHONY: install-collection
 install-collection:
-	ansible-galaxy collection install --upgrade -p ~/.ansible/collections .
+	ansible-galaxy collection install --force --upgrade -p ~/.ansible/collections .
 
 .PHONY: generate-integration-runtime
 generate-integration-runtime: install-collection
@@ -28,3 +30,22 @@ integration-ci: upgrade-collections
 	ansible --version; \
 	ansible-test --version; \
 	ansible-test integration --allow-destructive $(INTEGRATION_TARGETS)
+
+.PHONY: units
+units: install-collection
+		cd $(COLLECTION_ROOT); \
+		ansible-test units --docker --python $(UNIT_PYTHON_VERSION) --coverage $(UNIT_TARGETS); \
+		ansible-test coverage combine --requirements --export tests/output/coverage/; \
+		ansible-test coverage report --requirements --docker --omit 'tests/*' --show-missing;
+
+.PHONY: units-coverage
+units-coverage: units
+		cd $(COLLECTION_ROOT); \
+		ansible-test coverage xml --requirements; \
+		cp tests/output/reports/coverage.xml $(CURDIR)/coverage-units.xml;
+
+.PHONY: sanity
+sanity: install-collection
+		cd $(COLLECTION_ROOT); \
+		ansible-test sanity -v --color --coverage --junit \
+				--docker default; \

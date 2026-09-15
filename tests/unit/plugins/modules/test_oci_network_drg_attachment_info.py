@@ -3,7 +3,7 @@ __metaclass__ = type
 
 import types
 
-from conftest import install_fake_oci, load_collection_module
+from .conftest import install_fake_oci, load_collection_module
 
 
 def test_main_requires_compartment_id_or_drg_attachment_id(monkeypatch):

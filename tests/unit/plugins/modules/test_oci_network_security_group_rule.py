@@ -5,7 +5,7 @@ import types
 
 import pytest
 
-from conftest import (
+from .conftest import (
     DummyModule,
     ExitJsonCalled,
     FakeModel,

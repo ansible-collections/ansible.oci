@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-from conftest import load_collection_module
+from .conftest import load_collection_module
 
 
 class FailJsonCalled(Exception):
