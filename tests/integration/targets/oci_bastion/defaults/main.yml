@@ -1,0 +1,18 @@
+---
+oci_bastion_integration_vcn_name: "oci-bastion-integration-vcn"
+oci_bastion_integration_subnet_name: "oci-bastion-integration-subnet"
+oci_bastion_integration_bastion_name: "oci-bastion-integration-bastion"
+oci_bastion_integration_vcn_cidr_block: "10.253.0.0/16"
+oci_bastion_integration_subnet_cidr_block: "10.253.1.0/24"
+oci_bastion_integration_vcn_dns_label: "ocibastionv"
+oci_bastion_integration_subnet_dns_label: "ocibastions"
+oci_bastion_integration_client_cidr_block_allow_list:
+  - "0.0.0.0/0"
+oci_bastion_integration_create_max_session_ttl_in_seconds: 1800
+oci_bastion_integration_update_max_session_ttl_in_seconds: 3600
+oci_bastion_integration_create_tags:
+  phase: create
+  role: integration
+oci_bastion_integration_update_tags:
+  phase: update
+  role: integration
