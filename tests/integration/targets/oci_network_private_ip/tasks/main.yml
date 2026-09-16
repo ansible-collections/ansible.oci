@@ -18,6 +18,8 @@
     oci_network_private_ip_integration_updated_name: "{{ oci_network_private_ip_integration_updated_name }}-{{ oci_integration_rpfx }}"
     oci_network_private_ip_integration_hostname: "pip{{ oci_integration_rpfx }}"
     oci_network_private_ip_integration_updated_hostname: "pipupdated{{ oci_integration_rpfx }}"
+    oci_network_private_ip_integration_vcn_dns_label: "pipv{{ oci_integration_rpfx }}"
+    oci_network_private_ip_integration_subnet_dns_label: "pips{{ oci_integration_rpfx }}"
 
 - name: Exercise private IP module lifecycle
   module_defaults:
@@ -55,6 +57,7 @@
         name: "{{ oci_network_private_ip_integration_vcn_name }}"
         cidr_blocks:
           - "{{ oci_network_private_ip_integration_vcn_cidr_block }}"
+        dns_label: "{{ oci_network_private_ip_integration_vcn_dns_label }}"
       register: oci_network_private_ip_vcn_create
 
     - name: Create test subnet
@@ -64,6 +67,7 @@
         vcn_id: "{{ oci_network_private_ip_vcn_create.resource.id }}"
         cidr_block: "{{ oci_network_private_ip_integration_subnet_cidr_block }}"
         name: "{{ oci_network_private_ip_integration_subnet_name }}"
+        dns_label: "{{ oci_network_private_ip_integration_subnet_dns_label }}"
       register: oci_network_private_ip_subnet_create
 
     - name: Create test compute instance

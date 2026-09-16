@@ -341,3 +341,83 @@ def test_synchronous_crud_calls_use_private_ip_sdk_models(monkeypatch):
         "delete",
         {"private_ip_id": "ocid1.privateip.oc1..example"},
     )
+
+
+def _make_delete_client(calls):
+    def update_private_ip(**kwargs):
+        calls.append(("update", kwargs))
+        return FakeResponse(
+            data=FakeModel(
+                id=kwargs["private_ip_id"],
+                lifetime=kwargs["update_private_ip_details"].lifetime,
+            )
+        )
+
+    def delete_private_ip(**kwargs):
+        calls.append(("delete", kwargs))
+        return FakeResponse(data=None)
+
+    return types.SimpleNamespace(
+        update_private_ip=update_private_ip,
+        delete_private_ip=delete_private_ip,
+    )
+
+
+def test_delete_converts_reserved_attached_private_ip_to_ephemeral(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_network_private_ip")
+    calls = []
+    instance = make_private_ip_module(
+        module_obj,
+        {"private_ip_id": "ocid1.privateip.oc1..example", "state": "absent"},
+        client=_make_delete_client(calls),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+
+    deleted = instance.delete_resource(
+        FakeModel(
+            id="ocid1.privateip.oc1..example",
+            vnic_id="ocid1.vnic.oc1..example",
+            lifetime="RESERVED",
+        )
+    )
+
+    assert deleted is None
+    assert calls[0][0] == "update"
+    assert calls[0][1]["private_ip_id"] == "ocid1.privateip.oc1..example"
+    assert calls[0][1]["update_private_ip_details"].lifetime == "EPHEMERAL"
+    assert calls[1] == (
+        "delete",
+        {"private_ip_id": "ocid1.privateip.oc1..example"},
+    )
+
+
+@pytest.mark.parametrize(
+    "resource_kwargs",
+    [
+        {"lifetime": "EPHEMERAL", "vnic_id": "ocid1.vnic.oc1..example"},
+        {"lifetime": "RESERVED", "vnic_id": None},
+        {"lifetime": "RESERVED"},
+    ],
+)
+def test_delete_skips_ephemeral_conversion_when_not_reserved_and_attached(
+    monkeypatch, resource_kwargs
+):
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_network_private_ip")
+    calls = []
+    instance = make_private_ip_module(
+        module_obj,
+        {"private_ip_id": "ocid1.privateip.oc1..example", "state": "absent"},
+        client=_make_delete_client(calls),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+
+    deleted = instance.delete_resource(
+        FakeModel(id="ocid1.privateip.oc1..example", **resource_kwargs)
+    )
+
+    assert deleted is None
+    assert calls == [
+        ("delete", {"private_ip_id": "ocid1.privateip.oc1..example"}),
+    ]

@@ -13,6 +13,8 @@ description:
   - Create, update, and delete secondary OCI private IP resources.
   - A private IP can be assigned to a VNIC, allocated from an Oracle Cloud
     VMware Solution VLAN, or reserved in a subnet.
+  - Reserved private IPs that are still assigned to a VNIC are converted
+    to ephemeral before deletion.
   - The OCI private IP APIs are synchronous, so this module does not expose
     waiter options.
   - Primary private IPs are managed through instance and VNIC operations and
@@ -391,10 +393,27 @@ class OciNetworkPrivateIpModule(OciResourceBase):
         return response.data
 
     def delete_resource(self, resource):
+        if self._needs_unassign_before_delete(resource):
+            self.call_with_retry(
+                self.client.update_private_ip,
+                private_ip_id=resource.id,
+                update_private_ip_details=self.build_update_details(
+                    {"lifetime": "EPHEMERAL"}
+                ),
+            )
         return self.call_with_retry(
             self.client.delete_private_ip,
             private_ip_id=resource.id,
         ).data
+
+    @staticmethod
+    def _needs_unassign_before_delete(resource):
+        if not getattr(resource, "vnic_id", None):
+            return False
+        lifetime = getattr(resource, "lifetime", None)
+        if lifetime is None:
+            return False
+        return str(lifetime).upper() == "RESERVED"
 
 
 def main():
