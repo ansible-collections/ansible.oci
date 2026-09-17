@@ -245,7 +245,14 @@ class OciCompartmentModule(OciResourceBase):
         target_is_deleted = any(state in self.dead_states for state in target_states)
 
         def fetch_response(response=None):
-            return SimpleNamespace(data=self.get_resource_by_id(resource_id))
+            try:
+                return self.get_resource_response(resource_id)
+            except Exception as exc:
+                if getattr(exc, "status", None) != 404:
+                    raise
+                # OCI can report ACTIVE before inherited permissions make the
+                # new compartment available through GetCompartment.
+                return SimpleNamespace(data=None)
 
         def wait_complete(response):
             resource = response.data

@@ -163,31 +163,31 @@ def test_get_resource_by_id_uses_parent_scoped_list(monkeypatch):
 def test_parent_scoped_wait_returns_active_compartment(monkeypatch):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_compartment")
-    creating = FakeModel(
-        id="ocid1.compartment.oc1..child",
-        lifecycle_state="CREATING",
-    )
     active = FakeModel(
         id="ocid1.compartment.oc1..child",
         lifecycle_state="ACTIVE",
     )
-    resources = iter(([creating], [active]))
+    not_found = RuntimeError("compartment is not ready")
+    not_found.status = 404
+    responses = iter((not_found, FakeResponse(data=active)))
     instance = make_compartment_module(
         module_obj,
         {
             "parent_compartment_id": "ocid1.compartment.oc1..parent",
             "wait": True,
         },
-        client=types.SimpleNamespace(list_compartments="list_compartments_method"),
-    )
-    monkeypatch.setattr(
-        instance,
-        "list_all_resources",
-        lambda *args, **kwargs: next(resources),
     )
 
+    def get_resource_response(_resource_id):
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(instance, "get_resource_response", get_resource_response)
+
     def wait_until(client, initial_response, **kwargs):
-        assert initial_response.data == creating
+        assert initial_response.data is None
         final_response = kwargs["fetch_func"]()
         assert kwargs["evaluate_response"](final_response)
         return final_response
@@ -207,20 +207,24 @@ def test_parent_scoped_wait_returns_none_after_deletion(monkeypatch):
         id="ocid1.compartment.oc1..child",
         lifecycle_state="DELETING",
     )
-    resources = iter(([deleting], []))
+    not_found = RuntimeError("compartment was deleted")
+    not_found.status = 404
+    responses = iter((FakeResponse(data=deleting), not_found))
     instance = make_compartment_module(
         module_obj,
         {
             "parent_compartment_id": "ocid1.compartment.oc1..parent",
             "wait": True,
         },
-        client=types.SimpleNamespace(list_compartments="list_compartments_method"),
     )
-    monkeypatch.setattr(
-        instance,
-        "list_all_resources",
-        lambda *args, **kwargs: next(resources),
-    )
+
+    def get_resource_response(_resource_id):
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(instance, "get_resource_response", get_resource_response)
 
     def wait_until(client, initial_response, **kwargs):
         assert initial_response.data == deleting
