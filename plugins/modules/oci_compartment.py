@@ -41,6 +41,8 @@ options:
       - Required when creating a compartment. Use the tenancy OCID to create a
         top-level compartment, or a compartment OCID to create a nested one.
       - Also scopes name-based lookup when C(compartment_id) is omitted.
+      - When used with C(compartment_id), resolves that compartment from the
+        parent's direct children instead of calling C(GetCompartment).
       - The module does not move an existing compartment to another parent.
     type: str
   name:
@@ -129,6 +131,8 @@ resource:
       sample: {"Operations": {"CostCenter": "42"}}
 """
 
+from types import SimpleNamespace
+
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
@@ -203,6 +207,65 @@ class OciCompartmentModule(OciResourceBase):
             self.client.get_compartment,
             compartment_id=resource_id,
         )
+
+    def get_resource_by_id(self, resource_id):
+        parent_compartment_id = self.module.params.get("parent_compartment_id")
+        if not parent_compartment_id:
+            return super(OciCompartmentModule, self).get_resource_by_id(resource_id)
+
+        resources = self.list_all_resources(
+            self.client.list_compartments,
+            compartment_id=parent_compartment_id,
+        )
+        return next(
+            (
+                resource
+                for resource in resources
+                if getattr(resource, "id", None) == resource_id
+            ),
+            None,
+        )
+
+    def wait_for_resource_id(self, resource_id, target_states, failure_states=None):
+        if not self.module.params.get("parent_compartment_id"):
+            return super(OciCompartmentModule, self).wait_for_resource_id(
+                resource_id,
+                target_states,
+                failure_states,
+            )
+
+        if not self.module.params.get("wait", True):
+            return self.get_resource_by_id(resource_id)
+
+        if failure_states is None:
+            failure_states = frozenset({"FAILED"})
+
+        target_is_deleted = any(state in self.dead_states for state in target_states)
+
+        def fetch_response(response=None):
+            return SimpleNamespace(data=self.get_resource_by_id(resource_id))
+
+        def wait_complete(response):
+            resource = response.data
+            if resource is None:
+                return target_is_deleted
+
+            state = getattr(resource, "lifecycle_state", None)
+            if state in failure_states:
+                self.module.fail_json(
+                    msg=f"Resource {resource_id} entered failure state: {state}",
+                )
+            return state in target_states
+
+        waiter_result = oci.wait_until(
+            self.client,
+            fetch_response(),
+            max_interval_seconds=self.module.params.get("wait_interval", 30),
+            max_wait_seconds=self.module.params.get("wait_timeout", 1200),
+            evaluate_response=wait_complete,
+            fetch_func=fetch_response,
+        )
+        return getattr(waiter_result, "data", None)
 
     def create_resource(self):
         response = self.call_with_retry(

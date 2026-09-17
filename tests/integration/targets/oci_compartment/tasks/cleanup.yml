@@ -8,5 +8,7 @@
     - name: Delete leaked nested compartment during cleanup
       ansible.oci.oci_compartment:
         state: absent
-        compartment_id: "{{ oci_compartment_id }}"
-      when: oci_compartment_id | default('') | length > 0
+        parent_compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_compartment_cleanup_name }}"
+        wait: false
+      when: oci_compartment_cleanup_name | default('') | length > 0
