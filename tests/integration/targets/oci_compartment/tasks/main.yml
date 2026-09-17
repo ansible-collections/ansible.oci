@@ -1,0 +1,140 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI compartment integration tests require oci_integration_compartment_id
+      to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique compartment names for this run
+  ansible.builtin.set_fact:
+    oci_compartment_integration_name: >-
+      {{ oci_compartment_integration_name }}-{{ oci_integration_rpfx }}
+    oci_compartment_cleanup_name: >-
+      {{ oci_compartment_integration_name }}-{{ oci_integration_rpfx }}
+
+- name: Exercise nested compartment module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Define nested compartment create parameters
+      ansible.builtin.set_fact:
+        oci_compartment_create_params:
+          state: present
+          parent_compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_compartment_integration_name }}"
+          description: "{{ oci_compartment_integration_description }}"
+          freeform_tags: "{{ oci_compartment_integration_create_tags }}"
+
+    - name: Create nested compartment in check mode
+      ansible.oci.oci_compartment: &oci_compartment_create_options
+        state: "{{ oci_compartment_create_params.state }}"
+        parent_compartment_id: "{{ oci_compartment_create_params.parent_compartment_id }}"
+        name: "{{ oci_compartment_create_params.name }}"
+        description: "{{ oci_compartment_create_params.description }}"
+        freeform_tags: "{{ oci_compartment_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_compartment_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_compartment_create_check.changed | bool
+
+    - name: List nested compartment after create check mode
+      ansible.oci.oci_compartment_info:
+        parent_compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_compartment_integration_name }}"
+      register: oci_compartment_create_check_probe
+
+    - name: Assert nested compartment is absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_compartment_create_check_probe.compartments | length == 0
+
+    - name: Create nested compartment
+      ansible.oci.oci_compartment:
+        <<: *oci_compartment_create_options
+      register: oci_compartment_create
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_compartment_create.changed | bool
+
+    - name: Wait for nested compartment to become active
+      ansible.oci.oci_compartment_info:
+        parent_compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_compartment_integration_name }}"
+        lifecycle_state: ACTIVE
+      register: oci_compartment_info_list
+      until: oci_compartment_info_list.compartments | length == 1
+      retries: 30
+      delay: 10
+
+    - name: Capture and assert active nested compartment
+      ansible.builtin.assert:
+        that:
+          - oci_compartment_info_list.compartments[0].compartment_id == oci_integration_compartment_id
+          - oci_compartment_info_list.compartments[0].name == oci_compartment_integration_name
+          - oci_compartment_info_list.compartments[0].description == oci_compartment_integration_description
+          - oci_compartment_info_list.compartments[0].lifecycle_state == "ACTIVE"
+          - oci_compartment_info_list.compartments[0].freeform_tags.phase == "create"
+
+    - name: Reconcile nested compartment by parent and name
+      ansible.oci.oci_compartment:
+        <<: *oci_compartment_create_options
+      register: oci_compartment_create_rerun
+
+    - name: Assert parent and name reconciliation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_compartment_create_rerun.changed | bool
+          - oci_compartment_create_rerun.resource.name == oci_compartment_integration_name
+
+    - name: Delete nested compartment in check mode
+      ansible.oci.oci_compartment: &oci_compartment_delete_options
+        state: absent
+        parent_compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_compartment_integration_name }}"
+        wait: false
+      check_mode: true
+      register: oci_compartment_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_compartment_delete_check.changed | bool
+
+    - name: List nested compartment after delete check mode
+      ansible.oci.oci_compartment_info:
+        parent_compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_compartment_integration_name }}"
+        lifecycle_state: ACTIVE
+      register: oci_compartment_delete_check_probe
+
+    - name: Assert nested compartment still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_compartment_delete_check_probe.compartments | length == 1
+
+    - name: Delete nested compartment
+      ansible.oci.oci_compartment:
+        <<: *oci_compartment_delete_options
+      register: oci_compartment_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_compartment_delete.changed | bool
+
+    - name: Clear cleanup name after deletion request
+      ansible.builtin.set_fact:
+        oci_compartment_cleanup_name: ""
+
+  always:
+    - name: Run compartment cleanup
+      ansible.builtin.include_tasks: cleanup.yml
