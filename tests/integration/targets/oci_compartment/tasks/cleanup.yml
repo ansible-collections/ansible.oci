@@ -1,0 +1,12 @@
+---
+- name: Run compartment cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked nested compartment during cleanup
+      ansible.oci.oci_compartment:
+        state: absent
+        compartment_id: "{{ oci_compartment_id }}"
+      when: oci_compartment_id | default('') | length > 0

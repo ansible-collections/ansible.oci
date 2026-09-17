@@ -1,0 +1,11 @@
+---
+oci_compartment_integration_name: "oci-compartment-integration"
+oci_compartment_integration_updated_name: "oci-compartment-integration-updated"
+oci_compartment_integration_description: "OCI compartment integration test"
+oci_compartment_integration_updated_description: "Updated OCI compartment integration test"
+oci_compartment_integration_create_tags:
+  phase: create
+  role: integration
+oci_compartment_integration_update_tags:
+  phase: update
+  role: integration
