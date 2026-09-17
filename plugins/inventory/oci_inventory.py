@@ -5,12 +5,9 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-import hashlib
-
 DOCUMENTATION = r"""
 ---
 name: oci_inventory
-plugin_type: inventory
 short_description: Oracle Cloud Infrastructure Compute inventory source
 description:
   - Builds an inventory from running OCI Compute instances in explicit compartments.
@@ -94,7 +91,6 @@ options:
   api_user_fingerprint:
     description: API key fingerprint overriding the configuration profile.
     type: str
-    no_log: true
     env:
       - name: OCI_USER_FINGERPRINT
   api_user_key_file:
@@ -105,7 +101,6 @@ options:
   api_user_key_pass_phrase:
     description: Pass phrase for C(api_user_key_file).
     type: str
-    no_log: true
     env:
       - name: OCI_USER_KEY_PASS_PHRASE
 """
@@ -128,6 +123,8 @@ cache: true
 cache_plugin: jsonfile
 cache_connection: /tmp/oci-inventory-cache
 """
+
+import hashlib
 
 from ansible.errors import AnsibleParserError
 from ansible.module_utils.basic import missing_required_lib
