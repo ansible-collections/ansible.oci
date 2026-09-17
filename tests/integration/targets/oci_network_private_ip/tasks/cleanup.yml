@@ -1,0 +1,36 @@
+---
+- name: Run private IP cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked secondary private IP
+      ansible.oci.oci_network_private_ip:
+        state: absent
+        private_ip_id: "{{ oci_network_private_ip_id }}"
+      when: oci_network_private_ip_id | default('') | length > 0
+
+    - name: Detach leaked secondary VNIC
+      ansible.oci.oci_vnic_attachment:
+        state: absent
+        vnic_attachment_id: "{{ oci_network_private_ip_vnic_attachment_id }}"
+      when: oci_network_private_ip_vnic_attachment_id | default('') | length > 0
+
+    - name: Delete leaked compute instance
+      ansible.oci.oci_instance:
+        state: absent
+        instance_id: "{{ oci_network_private_ip_instance_id }}"
+      when: oci_network_private_ip_instance_id | default('') | length > 0
+
+    - name: Delete leaked subnet
+      ansible.oci.oci_network_subnet:
+        state: absent
+        subnet_id: "{{ oci_network_private_ip_subnet_create.resource.id }}"
+      when: oci_network_private_ip_subnet_create.resource.id | default('') | length > 0
+
+    - name: Delete leaked VCN
+      ansible.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_network_private_ip_vcn_create.resource.id }}"
+      when: oci_network_private_ip_vcn_create.resource.id | default('') | length > 0

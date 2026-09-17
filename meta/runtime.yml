@@ -6,6 +6,7 @@ action_groups:
     - oci_network_vcn_info
     - oci_network_subnet
     - oci_network_subnet_info
+    - oci_network_private_ip
     - oci_network_public_ip
     - oci_network_dhcp_options
     - oci_network_dhcp_options_info
@@ -53,3 +54,5 @@ action_groups:
     - oci_boot_volume_backup
     - oci_boot_volume_backup_info
     - oci_boot_volume_info
+    - oci_bastion
+    - oci_bastion_info
