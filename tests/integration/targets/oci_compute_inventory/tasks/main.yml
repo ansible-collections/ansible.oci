@@ -107,6 +107,12 @@
         suffix: .oci_compute.yml
       register: oci_compute_inventory_source
 
+    - name: Create a temporary inventory output file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .json
+      register: oci_compute_inventory_output
+
     - name: Render the oci_compute inventory source
       ansible.builtin.template:
         src: "{{ role_path }}/files/oci_compute_inventory.yml"
@@ -120,7 +126,8 @@
           - --inventory
           - "{{ oci_compute_inventory_source.path }}"
           - --list
-          - --yaml
+          - --output
+          - "{{ oci_compute_inventory_output.path }}"
       changed_when: false
       failed_when: false
       register: oci_compute_inventory_command
@@ -129,13 +136,16 @@
       ansible.builtin.assert:
         that:
           - oci_compute_inventory_command.rc == 0
-          - oci_compute_inventory_command.stdout | length > 0
           - "'found variable using reserved name' not in (oci_compute_inventory_command.stderr | lower)"
           - "'reserved variable' not in (oci_compute_inventory_command.stderr | lower)"
 
-    - name: Parse inventory output and expected group names
+    - name: Load inventory output
+      ansible.builtin.include_vars:
+        file: "{{ oci_compute_inventory_output.path }}"
+        name: oci_compute_inventory_data
+
+    - name: Compute expected group names
       ansible.builtin.set_fact:
-        oci_compute_inventory_data: "{{ oci_compute_inventory_command.stdout | from_yaml }}"
         oci_compute_inventory_region_group: >-
           oci_region_{{ oci_integration_region | replace('-', '_') }}
         oci_compute_inventory_compartment_group: >-
@@ -147,15 +157,15 @@
     - name: Assert instance and expected inventory groups are present
       ansible.builtin.assert:
         that:
-          - oci_compute_inventory_instance_id in oci_compute_inventory_data['all']['children'][oci_compute_inventory_region_group]['hosts']
-          - oci_compute_inventory_instance_id in oci_compute_inventory_data['all']['children'][oci_compute_inventory_compartment_group]['hosts']
-          - oci_compute_inventory_instance_id in oci_compute_inventory_data['all']['children'][oci_compute_inventory_lifecycle_group]['hosts']
-          - oci_compute_inventory_instance_id in oci_compute_inventory_data['all']['children'][oci_compute_inventory_tag_group]['hosts']
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_region_group]['hosts']
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_compartment_group]['hosts']
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_lifecycle_group]['hosts']
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_tag_group]['hosts']
 
     - name: Capture the discovered instance host variables
       ansible.builtin.set_fact:
         oci_compute_inventory_host_vars: >-
-          {{ oci_compute_inventory_data['all']['children'][oci_compute_inventory_region_group]['hosts'][oci_compute_inventory_instance_id] }}
+          {{ oci_compute_inventory_data['_meta']['hostvars'][oci_compute_inventory_instance_id] }}
 
     - name: Assert inventory host variables identify the OCI instance
       ansible.builtin.assert:
@@ -169,6 +179,12 @@
           - "'name' not in oci_compute_inventory_host_vars"
 
   always:
+    - name: Remove the temporary inventory output
+      ansible.builtin.file:
+        path: "{{ oci_compute_inventory_output.path }}"
+        state: absent
+      when: oci_compute_inventory_output.path | default('') | length > 0
+
     - name: Remove the temporary inventory source
       ansible.builtin.file:
         path: "{{ oci_compute_inventory_source.path }}"
