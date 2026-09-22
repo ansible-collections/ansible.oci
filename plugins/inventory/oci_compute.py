@@ -7,19 +7,15 @@ __metaclass__ = type
 
 DOCUMENTATION = r"""
 ---
-name: oci_inventory
+name: oci_compute
 short_description: Oracle Cloud Infrastructure Compute inventory source
 description:
   - Builds an inventory from running OCI Compute instances in explicit compartments.
-  - Uses a YAML configuration file ending in C(.oci_inventory.yml) or C(.oci_inventory.yaml).
+  - Uses a YAML configuration file ending in C(.oci_compute.yml) or C(.oci_compute.yaml).
 extends_documentation_fragment:
   - inventory_cache
   - constructed
 options:
-  plugin:
-    description: Token that ensures this is a source file for this plugin.
-    required: true
-    choices: [ansible.oci.oci_inventory]
   compartments:
     description: OCI compartment OCIDs to query.
     type: list
@@ -106,8 +102,8 @@ options:
 """
 
 EXAMPLES = r"""
-# inventory.oci_inventory.yml
-plugin: ansible.oci.oci_inventory
+# inventory.oci_compute.yml
+plugin: ansible.oci.oci_compute
 compartments:
   - ocid1.compartment.oc1..example
 regions:
@@ -130,7 +126,7 @@ from ansible.errors import AnsibleParserError
 from ansible.module_utils.basic import missing_required_lib
 from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructable
 
-from ansible_collections.ansible.oci.plugins.module_utils.oci_auth import (
+from ansible_collections.ansible.oci.plugins.module_utils.inventory_utils.oci_inventory import (
     create_service_client_from_options,
     get_oci_config_from_options,
 )
@@ -145,7 +141,7 @@ HAS_OCI_SDK = _oci_sdk[1]
 
 
 class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
-    NAME = "ansible.oci.oci_inventory"
+    NAME = "ansible.oci.oci_compute"
     _hostname_fields = frozenset(
         (
             "name_with_id", "id", "display_name", "private_ip", "public_ip",
@@ -155,7 +151,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
     def verify_file(self, path):
         return super(InventoryModule, self).verify_file(path) and path.endswith(
-            (".oci_inventory.yml", ".oci_inventory.yaml")
+            (".oci_compute.yml", ".oci_compute.yaml")
         )
 
     def parse(self, inventory, loader, path, cache=True):

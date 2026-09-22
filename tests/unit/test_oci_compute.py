@@ -7,14 +7,16 @@ from unittest.mock import Mock, call
 import pytest
 
 
-PLUGIN_PATH = Path(__file__).parents[2] / "plugins/inventory/oci_inventory.py"
+PLUGIN_PATH = Path(__file__).parents[2] / "plugins/inventory/oci_compute.py"
 
 
 @pytest.fixture
 def inventory_module(monkeypatch):
-    auth = ModuleType("oci_auth")
-    auth.create_service_client_from_options = Mock()
-    auth.get_oci_config_from_options = lambda options: {"region": "us-ashburn-1"}
+    inventory_utils = ModuleType("inventory_utils")
+    inventory_utils.create_service_client_from_options = Mock()
+    inventory_utils.get_oci_config_from_options = lambda options: {
+        "region": "us-ashburn-1"
+    }
     common = ModuleType("oci_common")
     common.import_oci_sdk = lambda: (
         SimpleNamespace(
@@ -26,15 +28,15 @@ def inventory_module(monkeypatch):
 
     monkeypatch.setitem(
         __import__("sys").modules,
-        "ansible_collections.ansible.oci.plugins.module_utils.oci_auth",
-        auth,
+        "ansible_collections.ansible.oci.plugins.module_utils.inventory_utils.oci_inventory",
+        inventory_utils,
     )
     monkeypatch.setitem(
         __import__("sys").modules,
         "ansible_collections.ansible.oci.plugins.module_utils.oci_common",
         common,
     )
-    spec = spec_from_file_location("oci_inventory_under_test", PLUGIN_PATH)
+    spec = spec_from_file_location("oci_compute_under_test", PLUGIN_PATH)
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -113,8 +115,8 @@ def test_cache_and_readable_hostname_precedence(inventory_module):
     plugin._cache = {}
     plugin._discover_records = Mock(return_value=[{"id": "instance-a"}])
 
-    assert plugin._get_records("inventory.oci_inventory.yml", True) == [{"id": "instance-a"}]
-    assert plugin._get_records("inventory.oci_inventory.yml", True) == [{"id": "instance-a"}]
+    assert plugin._get_records("inventory.oci_compute.yml", True) == [{"id": "instance-a"}]
+    assert plugin._get_records("inventory.oci_compute.yml", True) == [{"id": "instance-a"}]
     plugin._discover_records.assert_called_once()
     assert plugin._hostname(
         {"id": "instance-a", "name_with_id": "web-a_63c6a1a2"}
@@ -173,7 +175,7 @@ def test_verify_file_and_region_fallbacks(inventory_module, monkeypatch):
     monkeypatch.setattr(
         inventory_module.BaseInventoryPlugin, "verify_file", lambda self, path: True
     )
-    assert plugin.verify_file("inventory.oci_inventory.yml") is True
+    assert plugin.verify_file("inventory.oci_compute.yml") is True
     assert plugin.verify_file("inventory.yml") is False
 
     options = {"regions": [], "region": None}
@@ -277,10 +279,10 @@ def test_cache_disabled_and_add_record_paths(inventory_module):
     }
     plugin.get_option = options.__getitem__
     plugin._discover_records = Mock(return_value=[{"id": "instance-a"}])
-    assert plugin._get_records("inventory.oci_inventory.yml", True) == [
+    assert plugin._get_records("inventory.oci_compute.yml", True) == [
         {"id": "instance-a"}
     ]
-    assert plugin._get_records("inventory.oci_inventory.yml", True) == [
+    assert plugin._get_records("inventory.oci_compute.yml", True) == [
         {"id": "instance-a"}
     ]
     assert plugin._discover_records.call_count == 2
