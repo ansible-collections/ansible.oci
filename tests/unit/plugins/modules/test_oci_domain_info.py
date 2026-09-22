@@ -3,6 +3,8 @@ __metaclass__ = type
 
 import types
 
+import pytest
+
 from .conftest import (
     ExitJsonCalled,
     FakeModel,
@@ -89,14 +91,10 @@ def test_execute_info_module_serializes_domains(monkeypatch):
         lambda: [FakeModel(id="ocid1.domain.oc1..example", display_name="example-domain")],
     )
 
-    try:
+    with pytest.raises(ExitJsonCalled) as exc_info:
         instance.execute_info_module()
-    except ExitJsonCalled as exc_info:
-        payload = exc_info.payload
-    else:
-        raise AssertionError("execute_info_module did not call exit_json")
 
-    assert payload == {
+    assert exc_info.value.payload == {
         "changed": False,
         "domains": [{"id": "ocid1.domain.oc1..example", "name": "example-domain"}],
     }
