@@ -63,7 +63,9 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
 
-oci, HAS_OCI_SDK = import_oci_sdk()
+imported_oci_sdk = import_oci_sdk()
+oci = imported_oci_sdk[0]
+HAS_OCI_SDK = imported_oci_sdk[1]
 
 
 class OciDomainInfoModule(OciInfoBase):
