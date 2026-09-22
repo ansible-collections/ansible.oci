@@ -132,14 +132,112 @@ resource:
       description: The OCID of the identity domain.
       type: str
       returned: always
+      sample: ocid1.domain.oc1..example
+    compartment_id:
+      description: The OCID of the compartment containing the identity domain.
+      type: str
+      returned: always
+      sample: ocid1.compartment.oc1..example
     name:
       description: The display name of the identity domain.
       type: str
       returned: always
+      sample: example-domain
+    description:
+      description: The description of the identity domain.
+      type: str
+      returned: always
+      sample: Example identity domain
+    url:
+      description: The URL of the identity domain.
+      type: str
+      returned: always
+      sample: https://idcs.example.identity.oraclecloud.com:443
+    home_region_url:
+      description: The identity domain URL in its home region.
+      type: str
+      returned: always
+      sample: https://idcs.example.us-sanjose-idcs-1.identity.us-sanjose-1.oci.oraclecloud.com:443
+    home_region:
+      description: The OCI region where the identity domain is homed.
+      type: str
+      returned: always
+      sample: us-sanjose-1
+    replica_regions:
+      description: The regions where the identity domain is replicated.
+      type: list
+      elements: dict
+      returned: always
+      contains:
+        region:
+          description: The replicated region name.
+          type: str
+          returned: always
+          sample: us-phoenix-1
+        url:
+          description: The identity domain URL for the replicated region.
+          type: str
+          returned: always
+          sample: https://idcs.example.us-phoenix-idcs-1.identity.us-phoenix-1.oci.oraclecloud.com:443
+        regional_url:
+          description: The regional URL for the replicated identity domain.
+          type: str
+          returned: always
+          sample: https://idcs.example.identity.oraclecloud.com:443
+        state:
+          description: The lifecycle state of the replicated region.
+          type: str
+          returned: always
+          sample: ACTIVE
+    type:
+      description: The type of the identity domain.
+      type: str
+      returned: always
+      sample: SECONDARY
+    license_type:
+      description: The license type of the identity domain.
+      type: str
+      returned: always
+      sample: free
+    is_hidden_on_login:
+      description: Whether the identity domain is hidden on the sign-in screen.
+      type: bool
+      returned: always
+      sample: false
     lifecycle_state:
       description: The current lifecycle state of the identity domain.
       type: str
       returned: always
+      sample: ACTIVE
+    lifecycle_details:
+      description: Details about the current identity domain lifecycle state.
+      type: str
+      returned: always
+      sample: null
+    freeform_tags:
+      description: Free-form tags applied to the identity domain.
+      type: dict
+      returned: always
+      sample: {environment: production}
+    defined_tags:
+      description: Defined tags applied to the identity domain.
+      type: dict
+      returned: always
+      sample: {Operations: {CostCenter: "42"}}
+    time_created:
+      description: The date and time the identity domain was created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+  sample:
+    id: ocid1.domain.oc1..example
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-domain
+    description: Example identity domain
+    home_region: us-sanjose-1
+    license_type: free
+    is_hidden_on_login: false
+    lifecycle_state: ACTIVE
 """
 
 from ansible.module_utils.basic import AnsibleModule
