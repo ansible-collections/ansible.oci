@@ -13,8 +13,10 @@ description:
   - Create, update, and delete OCI identity domains.
   - Identity domains are compartment-scoped resources. Use the compartment
     OCID as C(compartment_id).
-  - Domain creation, update, and deletion are asynchronous operations.
-version_added: "1.0.0"
+  - OCI performs domain creation, update, and deletion asynchronously. By
+    default, the module waits for each work request and the resulting lifecycle
+    operation to finish before returning.
+version_added: "1.1.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:

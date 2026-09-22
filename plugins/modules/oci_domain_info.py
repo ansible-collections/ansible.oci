@@ -13,7 +13,7 @@ description:
   - Retrieve details about one or more OCI identity domains.
   - Use C(domain_id) to retrieve one domain, or C(compartment_id) to list domains.
   - This is a read-only module and does not modify resources.
-version_added: "1.0.0"
+version_added: "1.1.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
