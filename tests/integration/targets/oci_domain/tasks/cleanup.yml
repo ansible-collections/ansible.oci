@@ -1,0 +1,12 @@
+---
+- name: Run identity domain cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked identity domain during cleanup
+      ansible.oci.oci_domain:
+        state: absent
+        domain_id: "{{ oci_domain_id }}"
+      when: oci_domain_id | default('') | length > 0

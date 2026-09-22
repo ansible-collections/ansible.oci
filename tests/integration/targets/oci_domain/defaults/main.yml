@@ -1,0 +1,13 @@
+---
+# The integration tenancy used by this collection is homed in US San Jose.
+oci_domain_integration_home_region: "us-sanjose-1"
+oci_domain_integration_name: "oci-identity-domain-integration"
+oci_domain_integration_updated_name: "oci-identity-domain-integration-updated"
+oci_domain_integration_description: "OCI identity domain integration test"
+oci_domain_integration_updated_description: "Updated OCI identity domain integration test"
+oci_domain_integration_create_tags:
+  phase: create
+  role: integration
+oci_domain_integration_update_tags:
+  phase: update
+  role: integration

@@ -56,3 +56,5 @@ action_groups:
     - oci_boot_volume_info
     - oci_bastion
     - oci_bastion_info
+    - oci_domain
+    - oci_domain_info
