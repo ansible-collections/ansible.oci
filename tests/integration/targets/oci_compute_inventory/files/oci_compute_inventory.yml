@@ -1,0 +1,13 @@
+plugin: ansible.oci.oci_compute
+compartments:
+  - "{{ oci_integration_compartment_id }}"
+regions:
+  - "{{ oci_integration_region }}"
+lifecycle_states:
+  - RUNNING
+freeform_tags:
+  role: "{{ oci_compute_inventory_integration_tags.role }}"
+hostnames:
+  - id
+config_file_location: "{{ oci_integration_config_file_location }}"
+config_profile_name: "{{ oci_integration_config_profile_name }}"

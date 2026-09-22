@@ -1,0 +1,16 @@
+---
+oci_integration_region: "us-sanjose-1"
+oci_compute_inventory_integration_vcn_name: "oci-compute-inventory-vcn"
+oci_compute_inventory_integration_subnet_name: "oci-compute-inventory-subnet"
+oci_compute_inventory_integration_instance_name: "oci-compute-inventory-instance"
+oci_compute_inventory_integration_vcn_cidr_block: "10.254.0.0/16"
+oci_compute_inventory_integration_subnet_cidr_block: "10.254.1.0/24"
+oci_compute_inventory_integration_operating_system: "Oracle Linux"
+oci_compute_inventory_integration_operating_system_version: "9"
+oci_compute_inventory_integration_shape: "VM.Standard.E4.Flex"
+oci_compute_inventory_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_compute_inventory_integration_tags:
+  role: oci-compute-inventory
+  purpose: inventory-test

@@ -3,6 +3,7 @@ __metaclass__ = type
 
 import sys
 import types
+from unittest.mock import Mock
 
 import pytest
 
@@ -27,6 +28,12 @@ class DummyClient:
     def __init__(self, config=None, signer=None):
         self.config = config
         self.signer = signer
+
+
+class InventoryClient(DummyClient):
+    def __init__(self, config=None, signer=None):
+        super(InventoryClient, self).__init__(config=config, signer=signer)
+        self.base_client = types.SimpleNamespace(set_region=Mock())
 
 
 def make_fake_oci(config_from_file):

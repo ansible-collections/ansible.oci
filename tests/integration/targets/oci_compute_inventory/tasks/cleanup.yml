@@ -1,0 +1,36 @@
+---
+- name: Run OCI compute inventory cleanup with shared auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Terminate leaked inventory test instance
+      ansible.oci.oci_instance:
+        state: absent
+        instance_id: "{{ oci_compute_inventory_instance_id }}"
+      when: oci_compute_inventory_instance_id | default('') | length > 0
+
+    - name: Clear inventory test instance id after termination
+      ansible.builtin.set_fact:
+        oci_compute_inventory_instance_id: ""
+
+    - name: Delete leaked inventory test subnet
+      ansible.oci.oci_network_subnet:
+        state: absent
+        subnet_id: "{{ oci_compute_inventory_subnet_id }}"
+      when: oci_compute_inventory_subnet_id | default('') | length > 0
+
+    - name: Clear inventory test subnet id after deletion
+      ansible.builtin.set_fact:
+        oci_compute_inventory_subnet_id: ""
+
+    - name: Delete leaked inventory test VCN
+      ansible.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_compute_inventory_vcn_id }}"
+      when: oci_compute_inventory_vcn_id | default('') | length > 0
+
+    - name: Clear inventory test VCN id after deletion
+      ansible.builtin.set_fact:
+        oci_compute_inventory_vcn_id: ""

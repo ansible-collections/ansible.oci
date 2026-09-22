@@ -1,0 +1,195 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_integration_region | default('', true) | length > 0
+    fail_msg: >-
+      OCI compute inventory integration tests require
+      oci_integration_compartment_id and oci_integration_region to be defined
+      in tests/integration/integration_config.yml.
+
+- name: Exercise OCI compute inventory
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Compute unique resource names for this run
+      ansible.builtin.set_fact:
+        oci_compute_inventory_vcn_name: >-
+          {{ oci_compute_inventory_integration_vcn_name }}-{{ oci_integration_rpfx }}
+        oci_compute_inventory_subnet_name: >-
+          {{ oci_compute_inventory_integration_subnet_name }}-{{ oci_integration_rpfx }}
+        oci_compute_inventory_instance_name: >-
+          {{ oci_compute_inventory_integration_instance_name }}-{{ oci_integration_rpfx }}
+
+    - name: Discover an availability domain for the configured region
+      ansible.oci.oci_availability_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_compute_inventory_availability_domains
+
+    - name: Assert an availability domain is available
+      ansible.builtin.assert:
+        that:
+          - oci_compute_inventory_availability_domains.availability_domains | length > 0
+
+    - name: Capture the availability domain
+      ansible.builtin.set_fact:
+        oci_compute_inventory_availability_domain: >-
+          {{ oci_compute_inventory_availability_domains.availability_domains[0].name }}
+
+    - name: Discover a compatible Oracle Linux image
+      ansible.oci.oci_image_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        operating_system: "{{ oci_compute_inventory_integration_operating_system }}"
+        operating_system_version: "{{ oci_compute_inventory_integration_operating_system_version }}"
+        shape: "{{ oci_compute_inventory_integration_shape }}"
+      register: oci_compute_inventory_images
+
+    - name: Assert a compatible image is available
+      ansible.builtin.assert:
+        that:
+          - oci_compute_inventory_images.images | length > 0
+
+    - name: Capture the image id
+      ansible.builtin.set_fact:
+        oci_compute_inventory_image_id: "{{ oci_compute_inventory_images.images[0].id }}"
+
+    - name: Create an isolated VCN
+      ansible.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_compute_inventory_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_compute_inventory_integration_vcn_cidr_block }}"
+      register: oci_compute_inventory_vcn
+
+    - name: Capture the VCN id
+      ansible.builtin.set_fact:
+        oci_compute_inventory_vcn_id: "{{ oci_compute_inventory_vcn.resource.id }}"
+
+    - name: Create an isolated subnet
+      ansible.oci.oci_network_subnet:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_compute_inventory_vcn_id }}"
+        cidr_block: "{{ oci_compute_inventory_integration_subnet_cidr_block }}"
+        name: "{{ oci_compute_inventory_subnet_name }}"
+        prohibit_public_ip_on_vnic: true
+      register: oci_compute_inventory_subnet
+
+    - name: Capture the subnet id
+      ansible.builtin.set_fact:
+        oci_compute_inventory_subnet_id: "{{ oci_compute_inventory_subnet.resource.id }}"
+
+    - name: Create a tagged minimal Compute instance
+      ansible.oci.oci_instance:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        availability_domain: "{{ oci_compute_inventory_availability_domain }}"
+        name: "{{ oci_compute_inventory_instance_name }}"
+        shape: "{{ oci_compute_inventory_integration_shape }}"
+        shape_config: "{{ oci_compute_inventory_integration_shape_config }}"
+        image_id: "{{ oci_compute_inventory_image_id }}"
+        subnet_id: "{{ oci_compute_inventory_subnet_id }}"
+        assign_public_ip: false
+        freeform_tags: "{{ oci_compute_inventory_integration_tags }}"
+      register: oci_compute_inventory_instance
+
+    - name: Capture the instance id
+      ansible.builtin.set_fact:
+        oci_compute_inventory_instance_id: "{{ oci_compute_inventory_instance.resource.id }}"
+
+    - name: Create a temporary oci_compute inventory source
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .oci_compute.yml
+      register: oci_compute_inventory_source
+
+    - name: Create a temporary inventory output file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .json
+      register: oci_compute_inventory_output
+
+    - name: Render the oci_compute inventory source
+      ansible.builtin.template:
+        src: "{{ role_path }}/files/oci_compute_inventory.yml"
+        dest: "{{ oci_compute_inventory_source.path }}"
+        mode: "0600"
+
+    - name: Run ansible-inventory against the temporary source
+      ansible.builtin.command:
+        argv:
+          - ansible-inventory
+          - --inventory
+          - "{{ oci_compute_inventory_source.path }}"
+          - --list
+          - --output
+          - "{{ oci_compute_inventory_output.path }}"
+      changed_when: false
+      failed_when: false
+      register: oci_compute_inventory_command
+
+    - name: Assert inventory execution succeeded without reserved-variable warnings
+      ansible.builtin.assert:
+        that:
+          - oci_compute_inventory_command.rc == 0
+          - "'found variable using reserved name' not in (oci_compute_inventory_command.stderr | lower)"
+          - "'reserved variable' not in (oci_compute_inventory_command.stderr | lower)"
+
+    - name: Load inventory output
+      ansible.builtin.include_vars:
+        file: "{{ oci_compute_inventory_output.path }}"
+        name: oci_compute_inventory_data
+
+    - name: Compute expected group names
+      ansible.builtin.set_fact:
+        oci_compute_inventory_region_group: >-
+          oci_region_{{ oci_integration_region | replace('-', '_') }}
+        oci_compute_inventory_compartment_group: >-
+          oci_compartment_{{ oci_integration_compartment_id | regex_replace('[^A-Za-z0-9_]', '_') }}
+        oci_compute_inventory_lifecycle_group: "oci_lifecycle_state_RUNNING"
+        oci_compute_inventory_tag_group: >-
+          oci_tag_role_{{ oci_compute_inventory_integration_tags.role | replace('-', '_') }}
+
+    - name: Assert instance and expected inventory groups are present
+      ansible.builtin.assert:
+        that:
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_region_group]['hosts']
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_compartment_group]['hosts']
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_lifecycle_group]['hosts']
+          - oci_compute_inventory_instance_id in oci_compute_inventory_data[oci_compute_inventory_tag_group]['hosts']
+
+    - name: Capture the discovered instance host variables
+      ansible.builtin.set_fact:
+        oci_compute_inventory_host_vars: >-
+          {{ oci_compute_inventory_data['_meta']['hostvars'][oci_compute_inventory_instance_id] }}
+
+    - name: Assert inventory host variables identify the OCI instance
+      ansible.builtin.assert:
+        that:
+          - oci_compute_inventory_host_vars.ansible_host | default('') | length > 0
+          - oci_compute_inventory_host_vars.instance_id == oci_compute_inventory_instance_id
+          - oci_compute_inventory_host_vars.region == oci_integration_region
+          - oci_compute_inventory_host_vars.compartment_id == oci_integration_compartment_id
+          - oci_compute_inventory_host_vars.lifecycle_state == "RUNNING"
+          - oci_compute_inventory_host_vars.freeform_tags.role == oci_compute_inventory_integration_tags.role
+          - "'name' not in oci_compute_inventory_host_vars"
+
+  always:
+    - name: Remove the temporary inventory output
+      ansible.builtin.file:
+        path: "{{ oci_compute_inventory_output.path }}"
+        state: absent
+      when: oci_compute_inventory_output.path | default('') | length > 0
+
+    - name: Remove the temporary inventory source
+      ansible.builtin.file:
+        path: "{{ oci_compute_inventory_source.path }}"
+        state: absent
+      when: oci_compute_inventory_source.path | default('') | length > 0
+
+    - name: Clean up OCI compute inventory resources
+      ansible.builtin.include_tasks: cleanup.yml
