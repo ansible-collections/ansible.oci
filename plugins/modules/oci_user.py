@@ -285,6 +285,10 @@ class OciUserModule(OciIdentityDomainsMixin, OciResourceBase):
         }
         for param_name, (path, model) in tag_values.items():
             desired = params.get(param_name)
+            if param_name == "defined_tags" and desired is not None:
+                oracle_tags = current["defined_tags"].get("Oracle-Tags")
+                if oracle_tags and "Oracle-Tags" not in desired:
+                    desired = {**desired, "Oracle-Tags": oracle_tags}
             if desired is None or desired == current[param_name]:
                 continue
             if param_name == "freeform_tags":

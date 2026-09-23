@@ -1,6 +1,4 @@
 ---
-oci_integration_domain_id: ""
-oci_integration_domain_url: ""
 oci_user_integration_home_region: "us-sanjose-1"
 oci_user_integration_domain_name: "oci-user-integration-domain"
 oci_user_integration_domain_description: "OCI user integration test domain"

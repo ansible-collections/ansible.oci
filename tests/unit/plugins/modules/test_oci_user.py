@@ -277,6 +277,37 @@ def test_update_builds_scim_patch_for_fields_email_and_tags(monkeypatch):
     assert email_op.op == "REPLACE"
 
 
+def test_defined_tags_preserve_oci_tags_and_converge(monkeypatch):
+    module_obj = load_user_module(monkeypatch)
+    current = FakeModel(
+        urn_ietf_params_scim_schemas_oracle_idcs_extension_oci_tags=FakeModel(
+            defined_tags=[
+                FakeModel(namespace="Oracle-Tags", key="CreatedBy", value="admin"),
+                FakeModel(namespace="Oracle-Tags", key="CreatedOn", value="2026-09-23"),
+                FakeModel(namespace="Operations", key="CostCenter", value="42"),
+            ]
+        )
+    )
+    unchanged = make_user(
+        module_obj, {"defined_tags": {"Operations": {"CostCenter": "42"}}}
+    )
+    assert unchanged.needs_update(current) is False
+
+    changed = make_user(
+        module_obj, {"defined_tags": {"Operations": {"CostCenter": "43"}}}
+    )
+    operations = changed.build_update_plan(current)["operations"]
+    assert len(operations) == 1
+    assert operations[0].path == module_obj.OCI_TAGS_SCHEMA + ":definedTags"
+    assert {
+        (tag.namespace, tag.key): tag.value for tag in operations[0].value
+    } == {
+        ("Oracle-Tags", "CreatedBy"): "admin",
+        ("Oracle-Tags", "CreatedOn"): "2026-09-23",
+        ("Operations", "CostCenter"): "43",
+    }
+
+
 def test_add_work_email_preserves_existing_primary_email(monkeypatch):
     module_obj = load_user_module(monkeypatch)
     instance = make_user(module_obj, {"email": "work@example.com"})
@@ -303,10 +334,15 @@ def test_get_404_check_mode_idempotency_delete_and_serialization(monkeypatch):
     )
     error = RuntimeError("missing")
     error.status = 404
+
+    def raise_not_found(resource_id):
+        assert resource_id == "missing"
+        raise error
+
     monkeypatch.setattr(
         instance,
         "get_resource_response",
-        lambda resource_id: (_ for _ in ()).throw(error),
+        raise_not_found,
     )
     assert instance.get_resource_by_id("missing") is None
 
