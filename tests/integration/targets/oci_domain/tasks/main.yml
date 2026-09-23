@@ -1,0 +1,230 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_domain_integration_home_region | default('', true) | length > 0
+    fail_msg: >-
+      OCI identity domain integration tests require a compartment and
+      oci_domain_integration_home_region.
+
+- name: Compute unique identity domain names for this run
+  ansible.builtin.set_fact:
+    oci_domain_integration_name: >-
+      {{ oci_domain_integration_name }}-{{ oci_integration_rpfx }}
+    oci_domain_integration_updated_name: >-
+      {{ oci_domain_integration_updated_name }}-{{ oci_integration_rpfx }}
+
+- name: Exercise identity domain module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Define identity domain create parameters
+      ansible.builtin.set_fact:
+        oci_domain_create_params:
+          state: present
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_domain_integration_name }}"
+          description: "{{ oci_domain_integration_description }}"
+          home_region: "{{ oci_domain_integration_home_region }}"
+          license_type: free
+          freeform_tags: "{{ oci_domain_integration_create_tags }}"
+
+    - name: Create identity domain in check mode
+      ansible.oci.oci_domain: &oci_domain_create_options
+        state: "{{ oci_domain_create_params.state }}"
+        compartment_id: "{{ oci_domain_create_params.compartment_id }}"
+        name: "{{ oci_domain_create_params.name }}"
+        description: "{{ oci_domain_create_params.description }}"
+        home_region: "{{ oci_domain_create_params.home_region }}"
+        license_type: "{{ oci_domain_create_params.license_type }}"
+        freeform_tags: "{{ oci_domain_create_params.freeform_tags }}"
+      check_mode: true
+      register: oci_domain_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_domain_create_check.changed | bool
+
+    - name: List identity domain after create check mode
+      ansible.oci.oci_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_domain_integration_name }}"
+      register: oci_domain_create_check_probe
+
+    - name: Assert identity domain is absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_domain_create_check_probe.domains | length == 0
+
+    - name: Create identity domain
+      ansible.oci.oci_domain:
+        <<: *oci_domain_create_options
+      register: oci_domain_create
+
+    - name: Capture identity domain ID and define update parameters
+      ansible.builtin.set_fact:
+        oci_domain_id: "{{ oci_domain_create.resource.id }}"
+        oci_domain_update_params:
+          state: present
+          domain_id: "{{ oci_domain_create.resource.id }}"
+          name: "{{ oci_domain_integration_updated_name }}"
+          description: "{{ oci_domain_integration_updated_description }}"
+          is_hidden_on_login: true
+          freeform_tags: "{{ oci_domain_integration_update_tags }}"
+
+    - name: Assert create reported an active identity domain
+      ansible.builtin.assert:
+        that:
+          - oci_domain_create.changed | bool
+          - oci_domain_create.resource.lifecycle_state == 'ACTIVE'
+
+    - name: Read identity domain by ID
+      ansible.oci.oci_domain_info:
+        domain_id: "{{ oci_domain_id }}"
+      register: oci_domain_info_by_id
+
+    - name: Assert identity domain info by ID returned the created domain
+      ansible.builtin.assert:
+        that:
+          - oci_domain_info_by_id.domains | length == 1
+          - oci_domain_info_by_id.domains[0].id == oci_domain_id
+          - oci_domain_info_by_id.domains[0].name == oci_domain_integration_name
+
+    - name: List identity domain by name
+      ansible.oci.oci_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_domain_integration_name }}"
+      register: oci_domain_info_by_name
+
+    - name: Assert identity domain info list returned the created domain
+      ansible.builtin.assert:
+        that:
+          - >-
+            oci_domain_info_by_name.domains |
+            selectattr('id', 'equalto', oci_domain_id) |
+            list | length == 1
+
+    - name: Assert create is idempotent by name
+      ansible.oci.oci_domain:
+        <<: *oci_domain_create_options
+      register: oci_domain_create_rerun
+
+    - name: Verify create rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_domain_create_rerun.changed | bool
+
+    - name: Update identity domain in check mode
+      ansible.oci.oci_domain: &oci_domain_update_options
+        state: "{{ oci_domain_update_params.state }}"
+        domain_id: "{{ oci_domain_update_params.domain_id }}"
+        name: "{{ oci_domain_update_params.name }}"
+        description: "{{ oci_domain_update_params.description }}"
+        is_hidden_on_login: "{{ oci_domain_update_params.is_hidden_on_login }}"
+        freeform_tags: "{{ oci_domain_update_params.freeform_tags }}"
+      check_mode: true
+      register: oci_domain_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_domain_update_check.changed | bool
+
+    - name: Read identity domain after update check mode
+      ansible.oci.oci_domain_info:
+        domain_id: "{{ oci_domain_id }}"
+      register: oci_domain_update_check_probe
+
+    - name: Assert update check mode did not mutate cloud state
+      ansible.builtin.assert:
+        that:
+          - oci_domain_update_check_probe.domains[0].name == oci_domain_integration_name
+          - oci_domain_update_check_probe.domains[0].description == oci_domain_integration_description
+          - not oci_domain_update_check_probe.domains[0].is_hidden_on_login | bool
+
+    - name: Update identity domain
+      ansible.oci.oci_domain:
+        <<: *oci_domain_update_options
+      register: oci_domain_update
+
+    - name: Assert update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_domain_update.changed | bool
+
+    - name: Read updated identity domain
+      ansible.oci.oci_domain_info:
+        domain_id: "{{ oci_domain_id }}"
+      register: oci_domain_info_updated
+
+    - name: Assert identity domain info reflects update
+      ansible.builtin.assert:
+        that:
+          - oci_domain_info_updated.domains[0].name == oci_domain_integration_updated_name
+          - oci_domain_info_updated.domains[0].description == oci_domain_integration_updated_description
+          - oci_domain_info_updated.domains[0].is_hidden_on_login | bool
+          - oci_domain_info_updated.domains[0].freeform_tags.phase == 'update'
+
+    - name: Assert update is idempotent on rerun
+      ansible.oci.oci_domain:
+        <<: *oci_domain_update_options
+      register: oci_domain_update_rerun
+
+    - name: Verify update rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_domain_update_rerun.changed | bool
+
+    - name: Delete identity domain in check mode
+      ansible.oci.oci_domain: &oci_domain_delete_options
+        state: absent
+        domain_id: "{{ oci_domain_id }}"
+      check_mode: true
+      register: oci_domain_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_domain_delete_check.changed | bool
+
+    - name: Read identity domain after delete check mode
+      ansible.oci.oci_domain_info:
+        domain_id: "{{ oci_domain_id }}"
+      register: oci_domain_delete_check_probe
+
+    - name: Assert identity domain still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_domain_delete_check_probe.domains | length == 1
+
+    - name: Delete identity domain
+      ansible.oci.oci_domain:
+        <<: *oci_domain_delete_options
+      register: oci_domain_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_domain_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_domain:
+        <<: *oci_domain_delete_options
+      register: oci_domain_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_domain_delete_rerun.changed | bool
+
+    - name: Clear identity domain ID after delete idempotency check
+      ansible.builtin.set_fact:
+        oci_domain_id: ""
+
+  always:
+    - name: Run identity domain cleanup
+      ansible.builtin.include_tasks: cleanup.yml
