@@ -145,23 +145,15 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains import (
     CORE_USER_SCHEMA,
     OCI_IDENTITY_DOMAIN_ARGS,
-    OCI_TAGS_SCHEMA,
-    OciIdentityDomainsMixin,
+    OciIdentityDomainResourceBase,
     build_operation,
-    build_patch_op,
     build_schemas,
     build_tags_extension,
     escape_scim_filter_value,
-    normalize_defined_tags,
-    normalize_freeform_tags,
-    work_email,
     serialize_user,
 )
-from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import OciResourceBase
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
 
 
 def build_user(params):
@@ -193,7 +185,7 @@ def build_user(params):
     )
 
 
-class OciUserModule(OciIdentityDomainsMixin, OciResourceBase):
+class OciUserModule(OciIdentityDomainResourceBase):
     resource_id_param = "user_id"
     list_resource_method = "list_users"
     name_lookup_param = "user_name"
@@ -201,8 +193,15 @@ class OciUserModule(OciIdentityDomainsMixin, OciResourceBase):
     common_list_filter_params = ()
     create_required_fields = ("user_name", "family_name")
     create_resource_name = "user"
-    common_update_field_specs = ()
-    update_field_specs = ()
+    patch_method_name = "patch_user"
+    scim_update_paths = (
+        ("user_name", "userName"),
+        ("name", "displayName"),
+        ("given_name", "name.givenName"),
+        ("family_name", "name.familyName"),
+        ("description", "description"),
+        ("active", "active"),
+    )
 
     def serialize_result_resource(self, resource):
         return serialize_user(resource)
@@ -237,38 +236,10 @@ class OciUserModule(OciIdentityDomainsMixin, OciResourceBase):
             self.client.create_user, user=build_user(self.module.params)
         ).data
 
-    def build_update_plan(self, resource):
+    def build_extra_patch_operations(self, resource, current):
+        """Patch work email without replacing other email addresses."""
         params = self.module.params
-        name = getattr(resource, "name", None)
-        tags = getattr(
-            resource,
-            "urn_ietf_params_scim_schemas_oracle_idcs_extension_oci_tags",
-            None,
-        )
-        current = {
-            "user_name": getattr(resource, "user_name", None),
-            "name": getattr(resource, "display_name", None),
-            "given_name": getattr(name, "given_name", None),
-            "family_name": getattr(name, "family_name", None),
-            "email": work_email(resource),
-            "description": getattr(resource, "description", None),
-            "active": getattr(resource, "active", None),
-            "freeform_tags": normalize_freeform_tags(tags),
-            "defined_tags": normalize_defined_tags(tags),
-        }
-        paths = {
-            "user_name": "userName",
-            "name": "displayName",
-            "given_name": "name.givenName",
-            "family_name": "name.familyName",
-            "description": "description",
-            "active": "active",
-        }
         operations = []
-        for param_name, path in paths.items():
-            desired = params.get(param_name)
-            if desired is not None and desired != current[param_name]:
-                operations.append(build_operation("REPLACE", path, desired))
         self.validate_email()
         if params.get("email") is not None and params["email"] != current["email"]:
             emails = getattr(resource, "emails", None) or []
@@ -287,38 +258,7 @@ class OciUserModule(OciIdentityDomainsMixin, OciResourceBase):
                     ),
                 )
                 operations.append(build_operation("ADD", "emails", [work]))
-        tag_values = {
-            "freeform_tags": ("freeformTags", oci.identity_domains.models.FreeformTags),
-            "defined_tags": ("definedTags", oci.identity_domains.models.DefinedTags),
-        }
-        for param_name, (path, model) in tag_values.items():
-            desired = params.get(param_name)
-            if param_name == "defined_tags" and desired is not None:
-                oracle_tags = current["defined_tags"].get("Oracle-Tags")
-                if oracle_tags and "Oracle-Tags" not in desired:
-                    desired = {**desired, "Oracle-Tags": oracle_tags}
-            if desired is None or desired == current[param_name]:
-                continue
-            if param_name == "freeform_tags":
-                value = [model(key=key, value=val) for key, val in sorted(desired.items())]
-            else:
-                value = [
-                    model(namespace=namespace, key=key, value=val)
-                    for namespace, values in sorted(desired.items())
-                    for key, val in sorted(values.items())
-                ]
-            operations.append(
-                build_operation("REPLACE", f"{OCI_TAGS_SCHEMA}:{path}", value)
-            )
-        return {"update_needed": bool(operations), "operations": operations}
-
-    def update_resource(self, resource):
-        operations = self.get_update_plan(resource)["operations"]
-        return self.call_with_retry(
-            self.client.patch_user,
-            user_id=resource.id,
-            patch_op=build_patch_op(operations),
-        ).data
+        return operations
 
     def delete_resource(self, resource):
         self.call_with_retry(self.client.delete_user, user_id=resource.id)

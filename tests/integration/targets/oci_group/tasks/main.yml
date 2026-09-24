@@ -1,0 +1,219 @@
+---
+- name: Validate domain creation inputs
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_group_integration_home_region | length > 0
+
+- name: Compute unique domain and group names
+  ansible.builtin.set_fact:
+    oci_group_domain_id: ""
+    oci_group_domain_url: ""
+    oci_group_cleanup_id: ""
+    oci_group_integration_domain_name: >-
+      {{ oci_group_integration_domain_name }}-{{ oci_integration_rpfx }}
+    oci_group_integration_name: >-
+      {{ oci_group_integration_name }}-{{ oci_integration_rpfx }}
+    oci_group_cleanup_name: >-
+      {{ oci_group_integration_name }}-{{ oci_integration_rpfx }}
+
+- name: Exercise identity-domain group lifecycle in a temporary domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create a temporary identity domain
+      ansible.oci.oci_domain:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_group_integration_domain_name }}"
+        description: "{{ oci_group_integration_domain_description }}"
+        home_region: "{{ oci_group_integration_home_region }}"
+        license_type: free
+      register: group_domain_create
+
+    - name: Capture temporary identity domain endpoint
+      ansible.builtin.set_fact:
+        oci_group_domain_id: "{{ group_domain_create.resource.id }}"
+        oci_group_domain_url: "{{ group_domain_create.resource.url }}"
+
+    - name: Verify temporary identity domain endpoint
+      ansible.builtin.assert:
+        that:
+          - oci_group_domain_id | length > 0
+          - oci_group_domain_url | length > 0
+
+    - name: Create group in check mode
+      ansible.oci.oci_group: &group_create
+        domain_id: "{{ oci_group_domain_id }}"
+        display_name: "{{ oci_group_integration_name }}"
+        freeform_tags:
+          phase: create
+      check_mode: true
+      register: group_check
+
+    - name: Verify check mode left group absent
+      ansible.oci.oci_group_info:
+        domain_id: "{{ oci_group_domain_id }}"
+        display_name: "{{ oci_group_integration_name }}"
+      register: group_check_info
+      failed_when: >-
+        not group_check.changed or group_check_info.groups | length != 0
+
+    - name: Create group
+      ansible.oci.oci_group:
+        <<: *group_create
+      register: group_create_result
+
+    - name: Track group for cleanup
+      ansible.builtin.set_fact:
+        oci_group_cleanup_id: "{{ group_create_result.resource.id }}"
+
+    - name: Verify create result identifies the new group
+      ansible.builtin.assert:
+        that:
+          - group_create_result.changed
+          - group_create_result.resource.id | length > 0
+          - group_create_result.resource.domain_id == oci_group_domain_id
+          - >-
+            group_create_result.resource.display_name ==
+            oci_group_integration_name
+          - group_create_result.resource.freeform_tags.phase == 'create'
+
+    - name: Wait until group is visible by name
+      ansible.oci.oci_group_info:
+        domain_id: "{{ oci_group_domain_id }}"
+        display_name: "{{ oci_group_integration_name }}"
+      register: group_by_name
+      until: group_by_name.groups | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Verify create is idempotent by name
+      ansible.oci.oci_group:
+        <<: *group_create
+      register: group_create_rerun
+      failed_when: group_create_rerun.changed
+
+    - name: Retrieve group by ID through its domain URL
+      ansible.oci.oci_group_info:
+        domain_url: "{{ oci_group_domain_url }}"
+        group_id: "{{ group_create_result.resource.id }}"
+      register: group_by_id
+
+    - name: Verify info result identifies the same group
+      ansible.builtin.assert:
+        that:
+          - group_by_id.groups | length == 1
+          - group_by_id.groups[0].id == group_create_result.resource.id
+          - group_by_id.groups[0].domain_id == oci_group_domain_id
+          - group_by_id.groups[0].display_name == oci_group_integration_name
+
+    - name: Update group in check mode
+      ansible.oci.oci_group: &group_updated
+        domain_id: "{{ oci_group_domain_id }}"
+        group_id: "{{ group_create_result.resource.id }}"
+        display_name: "{{ oci_group_integration_name }}-updated"
+        freeform_tags:
+          phase: update
+      check_mode: true
+      register: group_update_check
+      failed_when: not group_update_check.changed
+
+    - name: Verify update check mode left group unchanged
+      ansible.oci.oci_group_info:
+        domain_url: "{{ oci_group_domain_url }}"
+        group_id: "{{ group_create_result.resource.id }}"
+      register: group_update_check_info
+      failed_when: >-
+        group_update_check_info.groups | length != 1 or
+        group_update_check_info.groups[0].display_name !=
+        oci_group_integration_name
+
+    - name: Update group
+      ansible.oci.oci_group:
+        <<: *group_updated
+      register: group_update
+
+    - name: Verify update
+      ansible.builtin.assert:
+        that:
+          - group_update.changed
+          - >-
+            group_update.resource.display_name ==
+            oci_group_integration_name + '-updated'
+          - group_update.resource.freeform_tags.phase == 'update'
+
+    - name: Wait until updated group is visible
+      ansible.oci.oci_group_info:
+        domain_id: "{{ oci_group_domain_id }}"
+        group_id: "{{ group_create_result.resource.id }}"
+      register: group_after_update
+      until: >-
+        group_after_update.groups | length == 1 and
+        group_after_update.groups[0].display_name ==
+        oci_group_integration_name + '-updated' and
+        group_after_update.groups[0].freeform_tags.get('phase') == 'update'
+      retries: 12
+      delay: 5
+
+    - name: Rerun updated group configuration
+      ansible.oci.oci_group:
+        <<: *group_updated
+      register: group_update_rerun
+
+    - name: Assert update is idempotent on rerun
+      ansible.builtin.assert:
+        that:
+          - not group_update_rerun.changed | bool
+          - group_update_rerun.resource.id == group_create_result.resource.id
+
+    - name: Delete group in check mode
+      ansible.oci.oci_group:
+        domain_id: "{{ oci_group_domain_id }}"
+        state: absent
+        group_id: "{{ group_create_result.resource.id }}"
+      check_mode: true
+      register: group_delete_check
+      failed_when: not group_delete_check.changed
+
+    - name: Verify delete check mode left group present
+      ansible.oci.oci_group_info:
+        domain_id: "{{ oci_group_domain_id }}"
+        group_id: "{{ group_create_result.resource.id }}"
+      register: group_delete_check_info
+      failed_when: group_delete_check_info.groups | length != 1
+
+    - name: Delete group
+      ansible.oci.oci_group:
+        domain_id: "{{ oci_group_domain_id }}"
+        state: absent
+        group_id: "{{ group_create_result.resource.id }}"
+      register: group_delete
+      failed_when: not group_delete.changed
+
+    - name: Wait until deleted group is absent
+      ansible.oci.oci_group_info:
+        domain_id: "{{ oci_group_domain_id }}"
+        group_id: "{{ group_create_result.resource.id }}"
+      register: group_after_delete
+      until: group_after_delete.groups | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify group deletion is idempotent
+      ansible.oci.oci_group:
+        domain_id: "{{ oci_group_domain_id }}"
+        state: absent
+        group_id: "{{ group_create_result.resource.id }}"
+      register: group_delete_rerun
+      failed_when: group_delete_rerun.changed
+
+    - name: Clear group cleanup marker
+      ansible.builtin.set_fact:
+        oci_group_cleanup_id: ""
+        oci_group_cleanup_name: ""
+
+  always:
+    - name: Clean up temporary group and identity domain
+      ansible.builtin.include_tasks: cleanup.yml

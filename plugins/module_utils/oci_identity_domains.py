@@ -13,12 +13,16 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_auth import (
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
 )
+from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
+    OciResourceBase,
+)
 
 imported_oci_sdk = import_oci_sdk()
 oci = imported_oci_sdk[0]
 HAS_OCI_SDK = imported_oci_sdk[1]
 
 CORE_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
+CORE_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group"
 PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 OCI_TAGS_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:extension:OCITags"
 
@@ -164,6 +168,25 @@ def serialize_user(user):
     }
 
 
+def serialize_group(group):
+    tags = getattr(
+        group,
+        "urn_ietf_params_scim_schemas_oracle_idcs_extension_oci_tags",
+        None,
+    )
+    meta = getattr(group, "meta", None)
+    return {
+        "id": getattr(group, "id", None),
+        "ocid": getattr(group, "ocid", None),
+        "domain_id": getattr(group, "domain_ocid", None),
+        "display_name": getattr(group, "display_name", None),
+        "freeform_tags": normalize_freeform_tags(tags),
+        "defined_tags": normalize_defined_tags(tags),
+        "time_created": getattr(meta, "created", None),
+        "time_modified": getattr(meta, "last_modified", None),
+    }
+
+
 def build_patch_op(operations):
     return oci.identity_domains.models.PatchOp(
         schemas=[PATCH_SCHEMA],
@@ -173,3 +196,65 @@ def build_patch_op(operations):
 
 def build_operation(op, path, value=None):
     return oci.identity_domains.models.Operations(op=op, path=path, value=value)
+
+
+def build_tag_patch_operations(params, current):
+    """Build SCIM operations for changed OCI tags on a domain resource."""
+    operations = []
+    for param_name, path in (
+        ("freeform_tags", "freeformTags"),
+        ("defined_tags", "definedTags"),
+    ):
+        desired = params.get(param_name)
+        if param_name == "defined_tags" and desired is not None:
+            oracle_tags = current["defined_tags"].get("Oracle-Tags")
+            if oracle_tags and "Oracle-Tags" not in desired:
+                desired = {**desired, "Oracle-Tags": oracle_tags}
+        if desired is None or desired == current[param_name]:
+            continue
+        extension = build_tags_extension(**{param_name: desired})
+        operations.append(
+            build_operation(
+                "REPLACE",
+                f"{OCI_TAGS_SCHEMA}:{path}",
+                getattr(extension, param_name),
+            )
+        )
+    return operations
+
+
+class OciIdentityDomainResourceBase(OciIdentityDomainsMixin, OciResourceBase):
+    """Plan and apply SCIM PATCH updates for identity-domain resources."""
+
+    common_update_field_specs = ()
+    update_field_specs = ()
+    scim_update_paths = ()
+    patch_method_name = None
+
+    def build_extra_patch_operations(self, resource, current):
+        """Return resource-specific operations after scalar field changes."""
+        return []
+
+    def build_update_plan(self, resource):
+        params = self.module.params
+        current = self.serialize_result_resource(resource)
+        operations = []
+        for param_name, path in self.scim_update_paths:
+            desired = params.get(param_name)
+            if desired is not None and desired != current[param_name]:
+                operations.append(build_operation("REPLACE", path, desired))
+        operations.extend(self.build_extra_patch_operations(resource, current))
+        operations.extend(build_tag_patch_operations(params, current))
+        return {"update_needed": bool(operations), "operations": operations}
+
+    def update_resource(self, resource):
+        operations = self.get_update_plan(resource)["operations"]
+        if not operations:
+            return resource
+        return self.call_with_retry(
+            getattr(self.client, self.patch_method_name),
+            **{
+                self.resource_id_param: resource.id,
+                "patch_op": build_patch_op(operations),
+            },
+        ).data

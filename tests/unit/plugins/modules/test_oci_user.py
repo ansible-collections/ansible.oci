@@ -86,7 +86,7 @@ def test_identity_domains_client_is_bound_to_domain_endpoint(monkeypatch):
 
 def test_domain_id_is_resolved_through_control_plane(monkeypatch):
     module_obj = load_user_module(monkeypatch)
-    helper = sys.modules[module_obj.OciIdentityDomainsMixin.__module__]
+    helper = sys.modules[module_obj.OciIdentityDomainResourceBase.__module__]
     calls = []
     identity_client = types.SimpleNamespace(
         get_domain=lambda **kwargs: calls.append(kwargs)
@@ -103,7 +103,7 @@ def test_domain_id_is_resolved_through_control_plane(monkeypatch):
 
 def test_missing_sdk_fails_before_domain_id_resolution(monkeypatch):
     module_obj = load_user_module(monkeypatch)
-    helper = sys.modules[module_obj.OciIdentityDomainsMixin.__module__]
+    helper = sys.modules[module_obj.OciIdentityDomainResourceBase.__module__]
     monkeypatch.setattr(helper, "HAS_OCI_SDK", False)
     monkeypatch.setattr(
         helper,
@@ -163,7 +163,8 @@ def test_create_builds_scim_user_and_calls_identity_domains_api(monkeypatch):
     assert user.emails[0].value == "alice@example.com"
     assert user.active is True
     assert module_obj.CORE_USER_SCHEMA in user.schemas
-    assert module_obj.OCI_TAGS_SCHEMA in user.schemas
+    helper = sys.modules[module_obj.OciIdentityDomainResourceBase.__module__]
+    assert helper.OCI_TAGS_SCHEMA in user.schemas
 
 
 def test_serialized_user_matches_create_and_info_result_shape(monkeypatch):
@@ -263,15 +264,20 @@ def test_update_builds_scim_patch_for_fields_email_and_tags(monkeypatch):
 
     assert instance.needs_update(current) is True
     assert instance.update_resource(current) is updated
+    assert len(calls) == 1
+    assert set(calls[0]) == {"user_id", "patch_op"}
+    assert calls[0]["user_id"] == "user1"
     patch_op = calls[0]["patch_op"]
-    assert patch_op.schemas == [module_obj.build_patch_op([]).schemas[0]]
-    assert {operation.path for operation in patch_op.operations} == {
+    helper = sys.modules[module_obj.OciIdentityDomainResourceBase.__module__]
+    assert patch_op.schemas == [helper.PATCH_SCHEMA]
+    assert [operation.path for operation in patch_op.operations] == [
         "displayName",
         "name.givenName",
-        'emails[type eq "work"].value',
         "active",
-        module_obj.OCI_TAGS_SCHEMA + ":freeformTags",
-    }
+        'emails[type eq "work"].value',
+        helper.OCI_TAGS_SCHEMA + ":freeformTags",
+    ]
+    assert patch_op.operations[2].value is False
     email_op = next(op for op in patch_op.operations if op.path.startswith("emails"))
     assert email_op.value == "new@example.com"
     assert email_op.op == "REPLACE"
@@ -298,7 +304,8 @@ def test_defined_tags_preserve_oci_tags_and_converge(monkeypatch):
     )
     operations = changed.build_update_plan(current)["operations"]
     assert len(operations) == 1
-    assert operations[0].path == module_obj.OCI_TAGS_SCHEMA + ":definedTags"
+    helper = sys.modules[module_obj.OciIdentityDomainResourceBase.__module__]
+    assert operations[0].path == helper.OCI_TAGS_SCHEMA + ":definedTags"
     assert {
         (tag.namespace, tag.key): tag.value for tag in operations[0].value
     } == {
@@ -323,6 +330,32 @@ def test_add_work_email_preserves_existing_primary_email(monkeypatch):
     assert email_op.value[0].value == "work@example.com"
     assert email_op.value[0].primary is False
     assert module_obj.serialize_user(current)["email"] is None
+
+
+def test_unchanged_user_email_and_fields_do_not_send_patch(monkeypatch):
+    module_obj = load_user_module(monkeypatch)
+    current = FakeModel(
+        id="user1",
+        active=False,
+        emails=[FakeModel(type="work", value="work@example.com", primary=True)],
+        urn_ietf_params_scim_schemas_oracle_idcs_extension_oci_tags=FakeModel(
+            freeform_tags=[FakeModel(key="phase", value="update")]
+        ),
+    )
+    instance = make_user(
+        module_obj,
+        {
+            "active": False,
+            "email": "work@example.com",
+            "freeform_tags": {"phase": "update"},
+        },
+        types.SimpleNamespace(
+            patch_user=lambda **kwargs: pytest.fail("unexpected patch")
+        ),
+    )
+
+    assert instance.needs_update(current) is False
+    assert instance.update_resource(current) is current
 
 
 def test_get_404_check_mode_idempotency_delete_and_serialization(monkeypatch):

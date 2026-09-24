@@ -1,0 +1,38 @@
+---
+- name: Clean up the temporary identity domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked group by ID
+      ansible.oci.oci_group:
+        state: absent
+        domain_id: "{{ oci_group_domain_id }}"
+        group_id: "{{ oci_group_cleanup_id }}"
+      when:
+        - oci_group_domain_id | length > 0
+        - oci_group_cleanup_id | default('') | length > 0
+
+    - name: Delete leaked group by name when no ID was captured
+      ansible.oci.oci_group:
+        state: absent
+        domain_id: "{{ oci_group_domain_id }}"
+        display_name: "{{ oci_group_cleanup_name }}"
+      when:
+        - oci_group_domain_id | length > 0
+        - oci_group_cleanup_id | default('') | length == 0
+        - oci_group_cleanup_name | default('') | length > 0
+
+    - name: Delete temporary identity domain by ID
+      ansible.oci.oci_domain:
+        state: absent
+        domain_id: "{{ oci_group_domain_id }}"
+      when: oci_group_domain_id | length > 0
+
+    - name: Delete temporary identity domain by name when no ID was captured
+      ansible.oci.oci_domain:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_group_integration_domain_name }}"
+      when: oci_group_domain_id | length == 0
