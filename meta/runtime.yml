@@ -4,6 +4,8 @@ action_groups:
   oci:
     - oci_compartment
     - oci_compartment_info
+    - oci_group
+    - oci_group_info
     - oci_user
     - oci_user_info
     - oci_network_vcn

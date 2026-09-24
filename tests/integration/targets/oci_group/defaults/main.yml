@@ -1,0 +1,5 @@
+---
+oci_group_integration_home_region: "us-sanjose-1"
+oci_group_integration_domain_name: "oci-group-integration-domain"
+oci_group_integration_domain_description: "OCI group integration test domain"
+oci_group_integration_name: "oci-group-integration"
