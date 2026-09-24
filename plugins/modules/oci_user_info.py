@@ -18,10 +18,10 @@ extends_documentation_fragment:
   - ansible.oci.oci_auth_options
 options:
   domain_id:
-    description: OCID of the identity domain.
+    description: OCID of the identity domain. Mutually exclusive with C(domain_url).
     type: str
   domain_url:
-    description: Service endpoint of the identity domain.
+    description: Service endpoint of the identity domain. Mutually exclusive with C(domain_id).
     type: str
   user_id:
     description: SCIM identifier of a specific user.

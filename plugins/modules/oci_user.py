@@ -32,10 +32,12 @@ options:
     description: Service endpoint of the identity domain. Mutually exclusive with C(domain_id).
     type: str
   user_id:
-    description: SCIM identifier of the user.
+    description: SCIM identifier used to select an existing user for update or deletion.
     type: str
   user_name:
-    description: Unique login name. Required for creation.
+    description:
+      - Unique login name. Required for creation.
+      - Used for exact lookup when C(user_id) is omitted; can be updated when C(user_id) is supplied.
     type: str
   name:
     description: Display name of the user.
@@ -75,6 +77,12 @@ EXAMPLES = r"""
     domain_url: https://idcs-example.identity.oraclecloud.com
     user_id: 0123456789abcdef
     active: false
+
+- name: Delete a user by login name
+  ansible.oci.oci_user:
+    domain_id: ocid1.domain.oc1..example
+    user_name: application@example.com
+    state: absent
 """
 
 RETURN = r"""

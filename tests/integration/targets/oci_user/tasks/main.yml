@@ -69,6 +69,14 @@
         <<: *user_create
       register: user_create_result
 
+    - name: Verify user creation is idempotent
+      ansible.oci.oci_user:
+        <<: *user_create
+      register: user_create_rerun
+      failed_when: >-
+        user_create_rerun.changed or
+        user_create_rerun.resource.id != user_create_result.resource.id
+
     - name: Verify create result identifies the new user
       ansible.builtin.assert:
         that:
