@@ -1,0 +1,30 @@
+---
+- name: Clean up volume backup policy assignment integration resources
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Remove policy assignment during cleanup
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: absent
+        asset_id: "{{ oci_volume_backup_policy_assignment_volume_id }}"
+      when: oci_volume_backup_policy_assignment_volume_id | default('') | length > 0
+
+    - name: Remove block volume during cleanup
+      ansible.oci.oci_blockstorage_volume:
+        state: absent
+        volume_id: "{{ oci_volume_backup_policy_assignment_volume_id }}"
+      when: oci_volume_backup_policy_assignment_volume_id | default('') | length > 0
+
+    - name: Remove second backup policy during cleanup
+      ansible.oci.oci_volume_backup_policy:
+        state: absent
+        volume_backup_policy_id: "{{ oci_volume_backup_policy_assignment_second_policy_id }}"
+      when: oci_volume_backup_policy_assignment_second_policy_id | default('') | length > 0
+
+    - name: Remove first backup policy during cleanup
+      ansible.oci.oci_volume_backup_policy:
+        state: absent
+        volume_backup_policy_id: "{{ oci_volume_backup_policy_assignment_first_policy_id }}"
+      when: oci_volume_backup_policy_assignment_first_policy_id | default('') | length > 0
