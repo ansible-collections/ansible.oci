@@ -23,6 +23,16 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: List Oracle-defined volume backup policies
+      ansible.oci.oci_volume_backup_policy_info: {}
+      register: oci_volume_backup_policy_oracle_info
+
+    - name: Assert unscoped policy query returned a read-only list
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_oracle_info.changed | bool
+          - oci_volume_backup_policy_oracle_info.volume_backup_policies is sequence
+
     - name: Define volume backup policy create parameters
       ansible.builtin.set_fact:
         oci_volume_backup_policy_create_params:
@@ -52,17 +62,18 @@
           - oci_volume_backup_policy_create_check.changed | bool
 
     - name: Probe policy absence after create check mode
-      ansible.oci.oci_volume_backup_policy:
-        state: absent
+      ansible.oci.oci_volume_backup_policy_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_volume_backup_policy_integration_name }}"
-      check_mode: true
       register: oci_volume_backup_policy_create_check_probe
 
     - name: Assert create check mode did not create the policy
       ansible.builtin.assert:
         that:
           - not oci_volume_backup_policy_create_check_probe.changed | bool
+          - >-
+            oci_volume_backup_policy_create_check_probe.volume_backup_policies
+            | length == 0
 
     - name: Create volume backup policy
       ansible.oci.oci_volume_backup_policy:
@@ -92,6 +103,38 @@
           - >-
             oci_volume_backup_policy_create.resource.freeform_tags.phase ==
             "create"
+
+    - name: Read created policy by id
+      ansible.oci.oci_volume_backup_policy_info:
+        volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
+      register: oci_volume_backup_policy_info_by_id
+
+    - name: Assert id query returned the created policy
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_info_by_id.changed | bool
+          - oci_volume_backup_policy_info_by_id.volume_backup_policies | length == 1
+          - >-
+            oci_volume_backup_policy_info_by_id.volume_backup_policies[0].id ==
+            oci_volume_backup_policy_id
+          - >-
+            oci_volume_backup_policy_info_by_id.volume_backup_policies[0]
+            .schedules[0].backup_type == "INCREMENTAL"
+
+    - name: List created policy by compartment and name
+      ansible.oci.oci_volume_backup_policy_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_volume_backup_policy_integration_name }}"
+      register: oci_volume_backup_policy_info_by_name
+
+    - name: Assert name query returned the created policy
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_info_by_name.changed | bool
+          - oci_volume_backup_policy_info_by_name.volume_backup_policies | length == 1
+          - >-
+            oci_volume_backup_policy_info_by_name.volume_backup_policies[0].id ==
+            oci_volume_backup_policy_id
 
     - name: Reconcile created policy by name in check mode
       ansible.oci.oci_volume_backup_policy:
@@ -146,8 +189,7 @@
           - oci_volume_backup_policy_update_check.changed | bool
 
     - name: Read policy after update check mode
-      ansible.oci.oci_volume_backup_policy:
-        state: present
+      ansible.oci.oci_volume_backup_policy_info:
         volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
       register: oci_volume_backup_policy_update_check_probe
 
@@ -156,11 +198,16 @@
         that:
           - not oci_volume_backup_policy_update_check_probe.changed | bool
           - >-
-            oci_volume_backup_policy_update_check_probe.resource.name ==
+            oci_volume_backup_policy_update_check_probe.volume_backup_policies
+            | length == 1
+          - >-
+            oci_volume_backup_policy_update_check_probe
+            .volume_backup_policies[0].name ==
             oci_volume_backup_policy_integration_name
           - >-
             (
-              oci_volume_backup_policy_update_check_probe.resource
+              oci_volume_backup_policy_update_check_probe
+              .volume_backup_policies[0]
             ).freeform_tags.phase == "create"
 
     - name: Update volume backup policy
@@ -186,6 +233,27 @@
           - >-
             oci_volume_backup_policy_update.resource.freeform_tags.phase ==
             "update"
+
+    - name: List updated policy by its new name
+      ansible.oci.oci_volume_backup_policy_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_volume_backup_policy_integration_updated_name }}"
+      register: oci_volume_backup_policy_info_updated
+
+    - name: Assert info reflects the updated policy
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_info_updated.changed | bool
+          - oci_volume_backup_policy_info_updated.volume_backup_policies | length == 1
+          - >-
+            oci_volume_backup_policy_info_updated.volume_backup_policies[0].id ==
+            oci_volume_backup_policy_id
+          - >-
+            oci_volume_backup_policy_info_updated.volume_backup_policies[0]
+            .schedules[0].period == "ONE_WEEK"
+          - >-
+            oci_volume_backup_policy_info_updated.volume_backup_policies[0]
+            .freeform_tags.phase == "update"
 
     - name: Reconcile updated policy in check mode
       ansible.oci.oci_volume_backup_policy:
@@ -221,8 +289,7 @@
           - oci_volume_backup_policy_delete_check.changed | bool
 
     - name: Read policy after delete check mode
-      ansible.oci.oci_volume_backup_policy:
-        state: present
+      ansible.oci.oci_volume_backup_policy_info:
         volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
       register: oci_volume_backup_policy_delete_check_probe
 
@@ -231,7 +298,11 @@
         that:
           - not oci_volume_backup_policy_delete_check_probe.changed | bool
           - >-
-            oci_volume_backup_policy_delete_check_probe.resource.id ==
+            oci_volume_backup_policy_delete_check_probe.volume_backup_policies
+            | length == 1
+          - >-
+            oci_volume_backup_policy_delete_check_probe
+            .volume_backup_policies[0].id ==
             oci_volume_backup_policy_id
 
     - name: Delete volume backup policy
@@ -243,6 +314,17 @@
       ansible.builtin.assert:
         that:
           - oci_volume_backup_policy_delete.changed | bool
+
+    - name: Read deleted policy by id
+      ansible.oci.oci_volume_backup_policy_info:
+        volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
+      register: oci_volume_backup_policy_info_deleted
+
+    - name: Assert deleted policy is absent from info
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_info_deleted.changed | bool
+          - oci_volume_backup_policy_info_deleted.volume_backup_policies | length == 0
 
     - name: Delete volume backup policy again in check mode
       ansible.oci.oci_volume_backup_policy:
