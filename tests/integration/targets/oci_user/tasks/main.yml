@@ -1,0 +1,180 @@
+---
+- name: Validate domain creation inputs
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_user_integration_home_region | length > 0
+
+- name: Compute unique domain and user names
+  ansible.builtin.set_fact:
+    oci_integration_domain_id: ""
+    oci_integration_domain_url: ""
+    oci_user_integration_domain_name: >-
+      {{ oci_user_integration_domain_name }}-{{ oci_integration_rpfx }}
+    oci_user_integration_name: >-
+      {{ oci_user_integration_name }}-{{ oci_integration_rpfx }}@example.com
+    oci_user_cleanup_name: >-
+      {{ oci_user_integration_name }}-{{ oci_integration_rpfx }}@example.com
+
+- name: Exercise identity-domain user lifecycle in a temporary domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create a temporary identity domain
+      ansible.oci.oci_domain:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_user_integration_domain_name }}"
+        description: "{{ oci_user_integration_domain_description }}"
+        home_region: "{{ oci_user_integration_home_region }}"
+        license_type: free
+      register: oci_user_domain_create
+
+    - name: Capture temporary identity domain endpoint
+      ansible.builtin.set_fact:
+        oci_integration_domain_id: "{{ oci_user_domain_create.resource.id }}"
+        oci_integration_domain_url: "{{ oci_user_domain_create.resource.url }}"
+
+    - name: Verify temporary identity domain endpoint
+      ansible.builtin.assert:
+        that:
+          - oci_integration_domain_id | length > 0
+          - oci_integration_domain_url | length > 0
+
+    - name: Create user in check mode
+      ansible.oci.oci_user: &user_create
+        domain_id: "{{ oci_integration_domain_id }}"
+        user_name: "{{ oci_user_integration_name }}"
+        name: OCI User Integration
+        given_name: OCI
+        family_name: Integration
+        email: "{{ oci_user_integration_name }}"
+        description: "{{ oci_user_integration_description }}"
+        active: true
+        freeform_tags:
+          phase: create
+      check_mode: true
+      register: user_check
+
+    - name: Verify check mode left user absent
+      ansible.oci.oci_user_info:
+        domain_id: "{{ oci_integration_domain_id }}"
+        user_name: "{{ oci_user_integration_name }}"
+      register: user_check_info
+      failed_when: not user_check.changed or user_check_info.users | length != 0
+
+    - name: Create user
+      ansible.oci.oci_user:
+        <<: *user_create
+      register: user_create_result
+
+    - name: Verify user creation is idempotent
+      ansible.oci.oci_user:
+        <<: *user_create
+      register: user_create_rerun
+      failed_when: >-
+        user_create_rerun.changed or
+        user_create_rerun.resource.id != user_create_result.resource.id
+
+    - name: Verify create result identifies the new user
+      ansible.builtin.assert:
+        that:
+          - user_create_result.resource.id | length > 0
+          - user_create_result.resource.ocid | length > 0
+          - user_create_result.resource.domain_id == oci_integration_domain_id
+          - user_create_result.resource.user_name == oci_user_integration_name
+          - user_create_result.resource.name == 'OCI User Integration'
+          - user_create_result.resource.given_name == 'OCI'
+          - user_create_result.resource.family_name == 'Integration'
+          - user_create_result.resource.email == oci_user_integration_name
+          - user_create_result.resource.description == oci_user_integration_description
+          - user_create_result.resource.active == true
+          - user_create_result.resource.freeform_tags.phase == 'create'
+          - user_create_result.resource.defined_tags is mapping
+          - user_create_result.resource.time_created | length > 0
+          - user_create_result.resource.time_modified | length > 0
+
+    - name: Retrieve user by ID
+      ansible.oci.oci_user_info:
+        domain_url: "{{ oci_integration_domain_url }}"
+        user_id: "{{ user_create_result.resource.id }}"
+      register: user_by_id
+      failed_when: user_by_id.users | length != 1
+
+    - name: Verify info result uses the same identifiers and field names
+      ansible.builtin.assert:
+        that:
+          - user_by_id.users[0].id == user_create_result.resource.id
+          - user_by_id.users[0].ocid == user_create_result.resource.ocid
+          - user_by_id.users[0].domain_id == oci_integration_domain_id
+          - user_by_id.users[0].name == 'OCI User Integration'
+          - user_by_id.users[0].email == oci_user_integration_name
+
+    - name: Update user
+      ansible.oci.oci_user: &user_updated
+        domain_id: "{{ oci_integration_domain_id }}"
+        user_id: "{{ user_create_result.resource.id }}"
+        name: OCI User Integration Updated
+        email: "updated-{{ oci_user_integration_name }}"
+        description: "{{ oci_user_integration_description }} updated"
+        active: false
+        freeform_tags:
+          phase: update
+      register: user_update
+
+    - name: Verify update
+      ansible.builtin.assert:
+        that:
+          - user_update.changed
+          - user_update.resource.name == 'OCI User Integration Updated'
+          - user_update.resource.active == false
+          - user_update.resource.freeform_tags.phase == 'update'
+
+    - name: Reconcile updated user
+      ansible.oci.oci_user:
+        <<: *user_updated
+      register: user_rerun
+      failed_when: user_rerun.changed
+
+    - name: Delete user in check mode
+      ansible.oci.oci_user:
+        domain_id: "{{ oci_integration_domain_id }}"
+        state: absent
+        user_id: "{{ user_create_result.resource.id }}"
+      check_mode: true
+      register: user_delete_check
+      failed_when: not user_delete_check.changed
+
+    - name: Delete user
+      ansible.oci.oci_user:
+        domain_id: "{{ oci_integration_domain_id }}"
+        state: absent
+        user_id: "{{ user_create_result.resource.id }}"
+      register: user_delete
+      failed_when: not user_delete.changed
+
+    - name: Wait until deleted user is absent
+      ansible.oci.oci_user_info:
+        domain_id: "{{ oci_integration_domain_id }}"
+        user_id: "{{ user_create_result.resource.id }}"
+      register: user_after_delete
+      until: user_after_delete.users | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify user deletion is idempotent
+      ansible.oci.oci_user:
+        domain_id: "{{ oci_integration_domain_id }}"
+        state: absent
+        user_id: "{{ user_create_result.resource.id }}"
+      register: user_delete_rerun
+      failed_when: user_delete_rerun.changed
+
+    - name: Clear user cleanup marker
+      ansible.builtin.set_fact:
+        oci_user_cleanup_name: ""
+
+  always:
+    - name: Clean up temporary user and identity domain
+      ansible.builtin.include_tasks: cleanup.yml
