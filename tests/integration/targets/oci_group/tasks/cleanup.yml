@@ -18,7 +18,7 @@
       ansible.oci.oci_group:
         state: absent
         domain_id: "{{ oci_group_domain_id }}"
-        display_name: "{{ oci_group_cleanup_name }}"
+        name: "{{ oci_group_cleanup_name }}"
       when:
         - oci_group_domain_id | length > 0
         - oci_group_cleanup_id | default('') | length == 0

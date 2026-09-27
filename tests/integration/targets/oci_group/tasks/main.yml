@@ -46,7 +46,7 @@
     - name: Create group in check mode
       ansible.oci.oci_group: &group_create
         domain_id: "{{ oci_group_domain_id }}"
-        display_name: "{{ oci_group_integration_name }}"
+        name: "{{ oci_group_integration_name }}"
         freeform_tags:
           phase: create
       check_mode: true
@@ -55,7 +55,7 @@
     - name: Verify check mode left group absent
       ansible.oci.oci_group_info:
         domain_id: "{{ oci_group_domain_id }}"
-        display_name: "{{ oci_group_integration_name }}"
+        name: "{{ oci_group_integration_name }}"
       register: group_check_info
       failed_when: >-
         not group_check.changed or group_check_info.groups | length != 0
@@ -76,14 +76,14 @@
           - group_create_result.resource.id | length > 0
           - group_create_result.resource.domain_id == oci_group_domain_id
           - >-
-            group_create_result.resource.display_name ==
+            group_create_result.resource.name ==
             oci_group_integration_name
           - group_create_result.resource.freeform_tags.phase == 'create'
 
     - name: Wait until group is visible by name
       ansible.oci.oci_group_info:
         domain_id: "{{ oci_group_domain_id }}"
-        display_name: "{{ oci_group_integration_name }}"
+        name: "{{ oci_group_integration_name }}"
       register: group_by_name
       until: group_by_name.groups | length == 1
       retries: 12
@@ -107,13 +107,13 @@
           - group_by_id.groups | length == 1
           - group_by_id.groups[0].id == group_create_result.resource.id
           - group_by_id.groups[0].domain_id == oci_group_domain_id
-          - group_by_id.groups[0].display_name == oci_group_integration_name
+          - group_by_id.groups[0].name == oci_group_integration_name
 
     - name: Update group in check mode
       ansible.oci.oci_group: &group_updated
         domain_id: "{{ oci_group_domain_id }}"
         group_id: "{{ group_create_result.resource.id }}"
-        display_name: "{{ oci_group_integration_name }}-updated"
+        name: "{{ oci_group_integration_name }}-updated"
         freeform_tags:
           phase: update
       check_mode: true
@@ -127,7 +127,7 @@
       register: group_update_check_info
       failed_when: >-
         group_update_check_info.groups | length != 1 or
-        group_update_check_info.groups[0].display_name !=
+        group_update_check_info.groups[0].name !=
         oci_group_integration_name
 
     - name: Update group
@@ -140,7 +140,7 @@
         that:
           - group_update.changed
           - >-
-            group_update.resource.display_name ==
+            group_update.resource.name ==
             oci_group_integration_name + '-updated'
           - group_update.resource.freeform_tags.phase == 'update'
 
@@ -151,7 +151,7 @@
       register: group_after_update
       until: >-
         group_after_update.groups | length == 1 and
-        group_after_update.groups[0].display_name ==
+        group_after_update.groups[0].name ==
         oci_group_integration_name + '-updated' and
         group_after_update.groups[0].freeform_tags.get('phase') == 'update'
       retries: 12

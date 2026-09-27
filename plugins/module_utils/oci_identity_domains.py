@@ -179,7 +179,7 @@ def serialize_group(group):
         "id": getattr(group, "id", None),
         "ocid": getattr(group, "ocid", None),
         "domain_id": getattr(group, "domain_ocid", None),
-        "display_name": getattr(group, "display_name", None),
+        "name": getattr(group, "display_name", None),
         "freeform_tags": normalize_freeform_tags(tags),
         "defined_tags": normalize_defined_tags(tags),
         "time_created": getattr(meta, "created", None),

@@ -34,6 +34,8 @@ def test_main_contract_and_get_list_behaviour(monkeypatch):
     )
     module_obj.main()
     assert captured["required_one_of"] == [["domain_id", "domain_url"]]
+    assert captured["argument_spec"]["name"] == {"type": "str"}
+    assert "display_name" not in captured["argument_spec"]
     monkeypatch.setattr(module_obj, "OciGroupInfoModule", module_class)
 
     group = FakeModel(
@@ -67,14 +69,14 @@ def test_main_contract_and_get_list_behaviour(monkeypatch):
         "id": "group1",
         "ocid": "ocid1.group.example",
         "domain_id": "ocid1.domain.example",
-        "display_name": "admins",
+        "name": "admins",
         "freeform_tags": {"team": "iam"},
         "defined_tags": {"Operations": {"CostCenter": "42"}},
         "time_created": "created",
         "time_modified": "modified",
     }
 
-    instance.module.params = {"display_name": 'admin"ops'}
+    instance.module.params = {"name": 'admin"ops'}
     calls = []
     monkeypatch.setattr(
         instance,

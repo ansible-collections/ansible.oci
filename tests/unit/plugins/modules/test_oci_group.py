@@ -57,7 +57,8 @@ def test_main_exposes_domain_scim_contract(monkeypatch):
     assert captured["required_one_of"] == [["domain_id", "domain_url"]]
     assert captured["mutually_exclusive"] == [["domain_id", "domain_url"]]
     assert captured["argument_spec"]["group_id"] == {"type": "str"}
-    assert captured["argument_spec"]["display_name"] == {"type": "str"}
+    assert captured["argument_spec"]["name"] == {"type": "str"}
+    assert "display_name" not in captured["argument_spec"]
     assert "compartment_id" not in captured["argument_spec"]
     assert "description" not in captured["argument_spec"]
 
@@ -69,7 +70,7 @@ def test_create_uses_identity_domains_group_model(monkeypatch):
     instance = make_group(
         module_obj,
         {
-            "display_name": "admins",
+            "name": "admins",
             "freeform_tags": {"team": "iam"},
             "defined_tags": {"Operations": {"CostCenter": "42"}},
         },
@@ -86,13 +87,13 @@ def test_create_uses_identity_domains_group_model(monkeypatch):
     assert helper.OCI_TAGS_SCHEMA in group.schemas
 
 
-@pytest.mark.parametrize("display_name", [None, "", "   "])
-def test_create_requires_nonempty_display_name(monkeypatch, display_name):
+@pytest.mark.parametrize("name", [None, "", "   "])
+def test_create_requires_nonempty_name(monkeypatch, name):
     module_obj = load_group_module(monkeypatch)
-    instance = make_group(module_obj, {"display_name": display_name})
+    instance = make_group(module_obj, {"name": name})
     with pytest.raises(FailJsonCalled) as result:
         instance.validate_create_request()
-    assert "display_name" in result.value.payload["msg"]
+    assert "name" in result.value.payload["msg"]
 
 
 def test_identity_domains_helper_preserves_user_contract(monkeypatch):
@@ -135,12 +136,12 @@ def test_domain_id_resolution_and_identity_domains_client(monkeypatch):
     )
 
 
-def test_exact_display_name_lookup_escapes_scim_filter(monkeypatch):
+def test_exact_name_lookup_escapes_scim_filter(monkeypatch):
     module_obj = load_group_module(monkeypatch)
     list_groups = object()
     instance = make_group(
         module_obj,
-        {"display_name": 'admin"ops'},
+        {"name": 'admin"ops'},
         types.SimpleNamespace(list_groups=list_groups),
     )
     calls = []
@@ -155,14 +156,14 @@ def test_exact_display_name_lookup_escapes_scim_filter(monkeypatch):
     ]
 
 
-def test_update_builds_patch_for_display_name_and_tags(monkeypatch):
+def test_update_builds_patch_for_name_and_tags(monkeypatch):
     module_obj = load_group_module(monkeypatch)
     calls = []
     updated = FakeModel(id="group1", display_name="operators")
     instance = make_group(
         module_obj,
         {
-            "display_name": "operators",
+            "name": "operators",
             "freeform_tags": {"phase": "updated"},
         },
         types.SimpleNamespace(
@@ -259,7 +260,7 @@ def test_unchanged_group_does_not_send_empty_patch(monkeypatch):
     current = FakeModel(id="group1", display_name="admins")
     instance = make_group(
         module_obj,
-        {"display_name": "admins"},
+        {"name": "admins"},
         types.SimpleNamespace(
             patch_group=lambda **kwargs: pytest.fail("unexpected patch")
         ),
@@ -271,7 +272,7 @@ def test_unchanged_group_does_not_send_empty_patch(monkeypatch):
 
 def test_404_check_mode_idempotency_delete_and_serialization(monkeypatch):
     module_obj = load_group_module(monkeypatch)
-    instance = make_group(module_obj, {"display_name": "admins"}, check_mode=True)
+    instance = make_group(module_obj, {"name": "admins"}, check_mode=True)
     error = RuntimeError("missing")
     error.status = 404
     monkeypatch.setattr(

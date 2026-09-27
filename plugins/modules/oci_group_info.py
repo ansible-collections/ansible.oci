@@ -18,15 +18,19 @@ extends_documentation_fragment:
   - ansible.oci.oci_auth_options
 options:
   domain_id:
-    description: OCID of the identity domain. Mutually exclusive with C(domain_url).
+    description:
+      - OCID of the identity domain.
+      - Exactly one of C(domain_id) or C(domain_url) is required.
     type: str
   domain_url:
-    description: Service endpoint of the identity domain. Mutually exclusive with C(domain_id).
+    description:
+      - Service endpoint of the identity domain.
+      - Exactly one of C(domain_id) or C(domain_url) is required.
     type: str
   group_id:
     description: SCIM identifier of a specific group.
     type: str
-  display_name:
+  name:
     description: Exact display-name filter.
     type: str
 """
@@ -35,7 +39,7 @@ EXAMPLES = r"""
 - name: List groups by display name
   ansible.oci.oci_group_info:
     domain_id: ocid1.domain.oc1..example
-    display_name: application-admins
+    name: application-admins
 
 - name: Get one group
   ansible.oci.oci_group_info:
@@ -59,7 +63,7 @@ groups:
     domain_id:
       description: OCID of the identity domain containing the group.
       type: str
-    display_name:
+    name:
       description: Display name.
       type: str
     freeform_tags:
@@ -100,10 +104,10 @@ class OciGroupInfoModule(OciIdentityDomainsMixin, OciInfoBase):
             return self.get_resource_by_id(
                 group_id, self.client.get_group, group_id=group_id
             )
-        display_name = self.module.params.get("display_name")
+        name = self.module.params.get("name")
         kwargs = {}
-        if display_name is not None:
-            value = escape_scim_filter_value(display_name)
+        if name is not None:
+            value = escape_scim_filter_value(name)
             kwargs["filter"] = f'displayName eq "{value}"'
         return self.list_all_resources(self.client.list_groups, **kwargs)
 
@@ -113,7 +117,7 @@ def main():
         OCI_AUTH_ARGS,
         **OCI_IDENTITY_DOMAIN_ARGS,
         group_id=dict(type="str"),
-        display_name=dict(type="str"),
+        name=dict(type="str"),
     )
     module = AnsibleModule(
         argument_spec=argument_spec,
