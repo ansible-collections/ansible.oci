@@ -8,6 +8,8 @@ action_groups:
     - oci_group_info
     - oci_user
     - oci_user_info
+    - oci_user_group_membership
+    - oci_user_group_membership_info
     - oci_network_vcn
     - oci_network_vcn_info
     - oci_network_subnet

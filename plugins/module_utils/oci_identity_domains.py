@@ -187,6 +187,18 @@ def serialize_group(group):
     }
 
 
+def serialize_membership(member, group_id, user_id=None):
+    return {
+        "group_id": group_id,
+        "user_id": user_id or getattr(member, "value", None),
+        "user_ocid": getattr(member, "ocid", None),
+        "membership_ocid": getattr(member, "membership_ocid", None),
+        "display_name": getattr(member, "display", None),
+        "type": getattr(member, "type", None),
+        "date_added": getattr(member, "date_added", None),
+    }
+
+
 def build_patch_op(operations):
     return oci.identity_domains.models.PatchOp(
         schemas=[PATCH_SCHEMA],

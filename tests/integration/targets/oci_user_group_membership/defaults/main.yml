@@ -1,0 +1,8 @@
+---
+oci_membership_home_region: "us-sanjose-1"
+oci_membership_domain_name: "oci-membership-integration-domain"
+oci_membership_domain_description: "OCI membership integration test domain"
+oci_membership_domain_id: ""
+oci_membership_domain_url: ""
+oci_membership_user_name: "oci-membership-user"
+oci_membership_group_name: "oci-membership-group"
