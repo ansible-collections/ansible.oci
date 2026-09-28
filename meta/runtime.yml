@@ -60,6 +60,8 @@ action_groups:
     - oci_boot_volume
     - oci_volume_backup_policy
     - oci_volume_backup_policy_info
+    - oci_object_storage_bucket
+    - oci_object_storage_bucket_info
     - oci_volume_backup_policy_assignment
     - oci_volume_backup_policy_assignment_info
     - oci_boot_volume_backup
