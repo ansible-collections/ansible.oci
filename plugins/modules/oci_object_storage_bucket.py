@@ -137,10 +137,6 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_TAG_ARGS,
     filter_none_values,
     import_oci_sdk,
-    threaded_map,
-)
-from ansible_collections.ansible.oci.plugins.module_utils.oci_object_storage import (
-    OciObjectStorageNamespaceMixin,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -150,10 +146,9 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
 oci = import_oci_sdk()[0]
 
 
-class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBase):
+class OciObjectStorageBucketModule(OciResourceBase):
     @property
     def client_class(self):
-        """Return the SDK client class for Object Storage."""
         return oci.object_storage.ObjectStorageClient
 
     resource_id_param = None
@@ -171,15 +166,21 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
         UpdateFieldSpec(param_name="is_bucket_key_enabled", is_mutable=True),
     )
 
+    @property
+    def namespace_name(self):
+        namespace = getattr(self, "_namespace_name", None)
+        if namespace is None:
+            namespace = self.module.params.get("namespace_name")
+            if not namespace:
+                compartment_id = self.module.params.get("compartment_id")
+                kwargs = {"compartment_id": compartment_id} if compartment_id else {}
+                namespace = self.call_with_retry(
+                    self.client.get_namespace, **kwargs
+                ).data
+            self._namespace_name = namespace
+        return namespace
+
     def get_resource_response(self, resource_id):
-        """Retrieve a bucket, including its auto-tiering setting.
-
-        Args:
-            resource_id: Bucket name within the namespace.
-
-        Returns:
-            OCI response containing the bucket.
-        """
         return self.call_with_retry(
             self.client.get_bucket,
             namespace_name=self.namespace_name,
@@ -188,18 +189,15 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
         )
 
     def resolve_target_resource(self):
-        """Return the bucket identified by name, or None if absent."""
         return self.get_resource_by_id(self.module.params["name"])
 
     def validate_kms_key_id(self):
-        """Reject an empty KMS key ID, which would remove the existing key."""
         if self.module.params.get("kms_key_id") == "":
             self.module.fail_json(
                 msg="kms_key_id must be a nonempty key OCID; removing a key is not supported"
             )
 
     def validate_create_request(self):
-        """Validate required fields, the KMS key, and initial versioning state."""
         super().validate_create_request()
         self.validate_kms_key_id()
         if self.module.params.get("versioning") == "Suspended":
@@ -208,14 +206,6 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
             )
 
     def build_update_plan(self, resource):
-        """Validate requested settings and determine the bucket update.
-
-        Args:
-            resource: Current OCI bucket.
-
-        Returns:
-            Update plan for the supplied bucket settings.
-        """
         self.validate_kms_key_id()
         desired_versioning = self.module.params.get("versioning")
         current_versioning = getattr(resource, "versioning", None)
@@ -230,11 +220,6 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
         return super().build_update_plan(resource)
 
     def create_resource(self):
-        """Create a bucket using the supplied settings.
-
-        Returns:
-            Created OCI bucket.
-        """
         params = self.module.params
         details = oci.object_storage.models.CreateBucketDetails(
             **filter_none_values(
@@ -261,14 +246,6 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
         ).data
 
     def update_resource(self, resource):
-        """Apply the planned changes to an existing bucket.
-
-        Args:
-            resource: Current OCI bucket.
-
-        Returns:
-            Updated OCI bucket.
-        """
         details = oci.object_storage.models.UpdateBucketDetails(
             **self.get_update_plan(resource)["update_model_fields"]
         )
@@ -279,132 +256,49 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
             update_bucket_details=details,
         ).data
 
-    def _call_bucket_operation(self, method, mutation=False, **kwargs):
-        """Call an OCI operation and record successful bucket changes.
-
-        Args:
-            method: OCI client operation to call with retry handling.
-            mutation: Whether a successful operation changes the bucket.
-            **kwargs: Additional operation arguments.
-
-        Returns:
-            OCI response from the operation.
-        """
-        response = self.call_with_retry(
-            method,
-            namespace_name=self.namespace_name,
-            bucket_name=self.module.params["name"],
-            **kwargs,
-        )
+    def _bucket_request(self, method, mutation=False, **kwargs):
+        try:
+            response = self.call_with_retry(
+                method,
+                namespace_name=self.namespace_name,
+                bucket_name=self.module.params["name"],
+                **kwargs,
+            )
+        except oci.exceptions.ServiceError as exc:
+            self.module.fail_json(
+                changed=self._force_delete_changed,
+                msg=(
+                    f"Cannot delete Object Storage bucket {self.module.params['name']} "
+                    f"during {method.__name__}: {exc}"
+                ),
+            )
         if mutation:
             self._force_delete_changed = True
         return response
 
-    def _fail_bucket_request(self, method, error):
-        """Report a cleanup failure from the main thread.
-
-        Args:
-            method: OCI operation that failed.
-            error: Exception or message describing the failure.
-        """
-        self.module.fail_json(
-            changed=self._force_delete_changed,
-            msg=(
-                f"Cannot delete Object Storage bucket {self.module.params['name']} "
-                f"during {method.__name__}: {error}"
-            ),
-        )
-
-    def _bucket_request(self, method, mutation=False, **kwargs):
-        """Call a cleanup operation and report OCI errors on the main thread.
-
-        Args:
-            method: OCI client operation.
-            mutation: Whether a successful operation changes the bucket.
-            **kwargs: Additional operation arguments.
-
-        Returns:
-            OCI response from the operation.
-        """
-        try:
-            return self._call_bucket_operation(method, mutation=mutation, **kwargs)
-        except oci.exceptions.ServiceError as exc:
-            self._fail_bucket_request(method, exc)
-
     def _list_bucket_records(self, method):
-        """Collect all listing pages, rejecting repeated pagination markers.
-
-        Args:
-            method: OCI list operation for bucket entities.
-
-        Returns:
-            Records from all pages, collected before deletion begins.
-        """
         records = []
-        seen_markers = set()
-
-        def list_page(**kwargs):
-            """Fetch one listing page with cleanup retry and error handling.
-
-            Args:
-                **kwargs: Pagination arguments supplied by the SDK.
-
-            Returns:
-                OCI response containing a page of bucket entities.
-            """
-            return self._bucket_request(method, **kwargs)
-
-        for response in oci.pagination.list_call_get_all_results_generator(
-            list_page, "response"
-        ):
+        page = None
+        while True:
+            kwargs = {"page": page} if page else {}
+            response = self._bucket_request(method, **kwargs)
             data = response.data
-            if hasattr(data, "objects"):
-                page_records = data.objects
-                marker = data.next_start_with
-            else:
-                page_records = data.items if hasattr(data, "items") else data
-                marker = response.headers.get("opc-next-page")
-            if marker is not None:
-                if marker in seen_markers:
-                    self._fail_bucket_request(method, f"repeated pagination marker {marker!r}")
-                seen_markers.add(marker)
-            records.extend(page_records)
-        return records
+            records.extend(data.items if hasattr(data, "items") else data)
+            page = response.headers.get("opc-next-page")
+            if not page:
+                return records
 
-    def _delete_bucket_records(self, method, requests):
-        """Finish a stage's deletion queue before reporting a worker failure.
+    def _delete_bucket_contents(self, resource):
+        if getattr(resource, "is_read_only", False):
+            self._bucket_request(self.client.make_bucket_writable, mutation=True)
 
-        Args:
-            method: OCI delete or abort operation.
-            requests: Operation arguments for each collected entry.
-        """
-        def delete_record(kwargs):
-            """Delete one collected entry and record a successful mutation.
+        for policy in self._list_bucket_records(self.client.list_replication_policies):
+            self._bucket_request(
+                self.client.delete_replication_policy,
+                mutation=True,
+                replication_id=policy.id,
+            )
 
-            Args:
-                kwargs: Arguments identifying the entry to delete.
-
-            Returns:
-                OCI response from the deletion.
-            """
-            return self._call_bucket_operation(method, mutation=True, **kwargs)
-
-        try:
-            threaded_map(delete_record, requests)
-        except oci.exceptions.ServiceError as exc:
-            self._fail_bucket_request(method, exc)
-
-    def _delete_replication_policies(self):
-        """Delete replication policies before removing bucket contents."""
-        requests = [
-            {"replication_id": policy.id}
-            for policy in self._list_bucket_records(self.client.list_replication_policies)
-        ]
-        self._delete_bucket_records(self.client.delete_replication_policy, requests)
-
-    def _delete_retention_rules(self):
-        """Remove retention rules whose lock time has not taken effect."""
-        requests = []
         for rule in self._list_bucket_records(self.client.list_retention_rules):
             locked_at = rule.time_rule_locked
             if locked_at is not None:
@@ -412,85 +306,73 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
                     locked_at = locked_at.replace(tzinfo=timezone.utc)
                 if locked_at <= datetime.now(timezone.utc):
                     continue
-            requests.append({"retention_rule_id": rule.id})
-        self._delete_bucket_records(self.client.delete_retention_rule, requests)
+            self._bucket_request(
+                self.client.delete_retention_rule,
+                mutation=True,
+                retention_rule_id=rule.id,
+            )
 
-    def _delete_preauthenticated_requests(self):
-        """Delete all preauthenticated requests associated with the bucket."""
-        requests = [
-            {"par_id": request.id}
-            for request in self._list_bucket_records(self.client.list_preauthenticated_requests)
-        ]
-        self._delete_bucket_records(self.client.delete_preauthenticated_request, requests)
+        for request in self._list_bucket_records(
+            self.client.list_preauthenticated_requests
+        ):
+            self._bucket_request(
+                self.client.delete_preauthenticated_request,
+                mutation=True,
+                par_id=request.id,
+            )
 
-    def _abort_multipart_uploads(self):
-        """Collect and abort unfinished multipart uploads."""
-        requests = [
-            {"object_name": upload.object, "upload_id": upload.upload_id}
-            for upload in self._list_bucket_records(self.client.list_multipart_uploads)
-        ]
-        self._delete_bucket_records(self.client.abort_multipart_upload, requests)
-
-    def _delete_object_versions(self, resource):
-        """Permanently delete collected object versions and delete markers.
-
-        Args:
-            resource: Current bucket, including its versioning state.
-        """
-        requests = []
-        for version in self._list_bucket_records(self.client.list_object_versions):
-            if not version.version_id and resource.versioning == "Enabled":
-                self.module.fail_json(
-                    changed=self._force_delete_changed,
-                    msg=(
-                        f"Cannot delete Object Storage bucket {resource.name}: "
-                        f"object {version.name} has no version ID while "
-                        "versioning is enabled"
-                    ),
+        while True:
+            uploads = self._bucket_request(self.client.list_multipart_uploads).data
+            if not uploads:
+                break
+            for upload in uploads:
+                self._bucket_request(
+                    self.client.abort_multipart_upload,
+                    mutation=True,
+                    object_name=upload.object,
+                    upload_id=upload.upload_id,
                 )
-            kwargs = {"object_name": version.name}
-            if version.version_id:
-                kwargs["version_id"] = version.version_id
-            requests.append(kwargs)
-        self._delete_bucket_records(self.client.delete_object, requests)
 
-    def _delete_objects(self):
-        """Collect and delete the remaining unversioned objects."""
-        requests = [
-            {"object_name": obj.name}
-            for obj in self._list_bucket_records(self.client.list_objects)
-        ]
-        self._delete_bucket_records(self.client.delete_object, requests)
+        if getattr(resource, "versioning", None) in ("Enabled", "Suspended"):
+            while True:
+                versions = self._bucket_request(
+                    self.client.list_object_versions
+                ).data.items
+                if not versions:
+                    break
+                for version in versions:
+                    if not version.version_id and resource.versioning == "Enabled":
+                        self.module.fail_json(
+                            changed=self._force_delete_changed,
+                            msg=(
+                                f"Cannot delete Object Storage bucket {resource.name}: "
+                                f"object {version.name} has no version ID while "
+                                "versioning is enabled"
+                            ),
+                        )
+                    kwargs = (
+                        {"version_id": version.version_id} if version.version_id else {}
+                    )
+                    self._bucket_request(
+                        self.client.delete_object,
+                        mutation=True,
+                        object_name=version.name,
+                        **kwargs,
+                    )
 
-    def _delete_bucket_contents(self, resource):
-        """Remove deletion blockers and contents in dependency order.
-
-        Args:
-            resource: Current bucket, including read-only and versioning state.
-        """
-        if getattr(resource, "is_read_only", False):
-            self._bucket_request(self.client.make_bucket_writable, mutation=True)
-
-        self._delete_replication_policies()
-        self._delete_retention_rules()
-        self._delete_preauthenticated_requests()
-        self._abort_multipart_uploads()
-
-        versioning = getattr(resource, "versioning", None)
-        if versioning in ("Enabled", "Suspended"):
-            self._delete_object_versions(resource)
-        if versioning != "Enabled":
-            self._delete_objects()
+        if getattr(resource, "versioning", None) != "Enabled":
+            while True:
+                objects = self._bucket_request(self.client.list_objects).data.objects
+                if not objects:
+                    break
+                for obj in objects:
+                    self._bucket_request(
+                        self.client.delete_object,
+                        mutation=True,
+                        object_name=obj.name,
+                    )
 
     def delete_resource(self, resource):
-        """Delete the bucket, cleaning up its contents when force is enabled.
-
-        Args:
-            resource: Current OCI bucket.
-
-        Returns:
-            Response data from the bucket deletion.
-        """
         self._force_delete_changed = False
         if self.module.params.get("force"):
             self._delete_bucket_contents(resource)
@@ -498,7 +380,6 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
 
 
 def main():
-    """Build the Ansible module and execute the requested bucket lifecycle."""
     argument_spec = dict(
         OCI_AUTH_ARGS,
         **OCI_TAG_ARGS,
