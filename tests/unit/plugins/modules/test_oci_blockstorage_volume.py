@@ -125,7 +125,6 @@ def test_main_exposes_expected_arguments(monkeypatch):
     assert "autotune_policies" not in captured["argument_spec"]
     assert captured["argument_spec"]["source_details"] == SOURCE_DETAILS_ARGUMENT_SPEC
     assert "block_volume_replicas" not in captured["argument_spec"]
-    assert "xrc_kms_key_id" not in captured["argument_spec"]
     assert "display_name" not in captured["argument_spec"]
 
 
@@ -195,7 +194,6 @@ def test_build_create_volume_details_includes_encryption_and_reservations(monkey
     assert details.kms_key_id == "ocid1.key.oc1..example"
     assert details.backup_policy_id == "ocid1.volumebackuppolicy.oc1..example"
     assert details.is_reservations_enabled is False
-    assert not hasattr(details, "xrc_kms_key_id")
     assert not hasattr(details, "is_auto_tune_enabled")
 
 

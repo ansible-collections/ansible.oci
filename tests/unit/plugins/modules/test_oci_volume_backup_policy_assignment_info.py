@@ -46,7 +46,6 @@ def assignment():
         asset_id=ASSET_ID,
         policy_id="ocid1.volumebackuppolicy.oc1..example",
         time_created="2026-09-27T00:00:00Z",
-        xrc_kms_key_id="ocid1.key.oc1..example",
     )
 
 
@@ -70,7 +69,6 @@ def test_info_by_asset_returns_assignment_fields(monkeypatch):
                 "asset_id": ASSET_ID,
                 "policy_id": "ocid1.volumebackuppolicy.oc1..example",
                 "time_created": "2026-09-27T00:00:00Z",
-                "xrc_kms_key_id": "ocid1.key.oc1..example",
             }
         ],
     }
