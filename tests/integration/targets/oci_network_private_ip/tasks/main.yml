@@ -80,6 +80,7 @@
         shape_config: "{{ oci_network_private_ip_integration_shape_config }}"
         image_id: "{{ oci_network_private_ip_image_info.images[0].id }}"
         subnet_id: "{{ oci_network_private_ip_subnet_create.resource.id }}"
+        private_ip: "{{ oci_network_private_ip_integration_primary_vnic_ip_address }}"
       register: oci_network_private_ip_instance_create
 
     - name: Capture test instance ID
@@ -95,6 +96,7 @@
         create_vnic_details:
           subnet_id: "{{ oci_network_private_ip_subnet_create.resource.id }}"
           display_name: "{{ oci_network_private_ip_integration_vnic_name }}"
+          private_ip: "{{ oci_network_private_ip_integration_secondary_vnic_ip_address }}"
           assign_public_ip: false
       register: oci_network_private_ip_vnic_attachment_create
 

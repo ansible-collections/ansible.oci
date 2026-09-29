@@ -14,6 +14,8 @@ oci_network_private_ip_integration_name: "oci-private-ip-integration"
 oci_network_private_ip_integration_updated_name: "oci-private-ip-integration-updated"
 oci_network_private_ip_integration_vcn_cidr_block: "10.248.0.0/16"
 oci_network_private_ip_integration_subnet_cidr_block: "10.248.1.0/24"
+oci_network_private_ip_integration_primary_vnic_ip_address: "10.248.1.10"
+oci_network_private_ip_integration_secondary_vnic_ip_address: "10.248.1.11"
 oci_network_private_ip_integration_ip_address: "10.248.1.20"
 oci_network_private_ip_integration_create_tags:
   phase: create
