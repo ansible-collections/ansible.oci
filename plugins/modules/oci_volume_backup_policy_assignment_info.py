@@ -71,11 +71,6 @@ volume_backup_policy_assignments:
       type: str
       returned: always
       sample: "2026-09-27T00:00:00Z"
-    xrc_kms_key_id:
-      description: Vault key for cross-region backup encryption, if set.
-      type: str
-      returned: always
-      sample: ocid1.key.oc1..example
 """
 
 from ansible.module_utils.basic import AnsibleModule

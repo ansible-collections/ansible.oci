@@ -14,18 +14,16 @@ from .conftest import (
     make_module_instance,
 )
 
-
 ASSET_ID = "ocid1.volume.oc1..example"
 POLICY_ID = "ocid1.volumebackuppolicy.oc1..first"
 OTHER_POLICY_ID = "ocid1.volumebackuppolicy.oc1..second"
 
 
-def assignment(policy_id=POLICY_ID, key=None, asset_id=ASSET_ID):
+def assignment(policy_id=POLICY_ID, asset_id=ASSET_ID):
     return FakeModel(
         id="ocid1.volumebackuppolicyassignment.oc1..old",
         asset_id=asset_id,
         policy_id=policy_id,
-        xrc_kms_key_id=key,
         time_created="2026-09-26T00:00:00Z",
     )
 
@@ -36,7 +34,6 @@ class AssignmentClient:
         self.create_calls = []
         self.delete_calls = []
         self.next_id = 1
-        self.error_on_key = None
         self.create_error = None
 
     def get_volume_backup_policy_asset_assignment(self, asset_id):
@@ -49,13 +46,12 @@ class AssignmentClient:
     ):
         details = create_volume_backup_policy_assignment_details
         self.create_calls.append(details)
-        if self.create_error and getattr(details, "xrc_kms_key_id", None) == self.error_on_key:
+        if self.create_error:
             raise self.create_error
         self.assignment = FakeModel(
             id=f"ocid1.volumebackuppolicyassignment.oc1..{self.next_id}",
             asset_id=details.asset_id,
             policy_id=details.policy_id,
-            xrc_kms_key_id=getattr(details, "xrc_kms_key_id", None),
             time_created="2026-09-27T00:00:00Z",
         )
         self.next_id += 1
@@ -91,6 +87,23 @@ def run_assignment(module_obj, client, params, check_mode=False):
     return result.value.payload
 
 
+def test_replacing_policy_and_repeat_is_idempotent(monkeypatch):
+    module_obj = load_assignment_module(monkeypatch)[0]
+    client = AssignmentClient(assignment())
+    params = {"state": "present", "asset_id": ASSET_ID, "policy_id": OTHER_POLICY_ID}
+
+    replaced = run_assignment(module_obj, client, params)
+    repeated = run_assignment(module_obj, client, params)
+
+    assert replaced["changed"] is True
+    assert replaced["resource"]["policy_id"] == OTHER_POLICY_ID
+    assert repeated["changed"] is False
+    assert len(client.create_calls) == 1
+    assert client.create_calls[0].asset_id == ASSET_ID
+    assert client.create_calls[0].policy_id == OTHER_POLICY_ID
+    assert client.delete_calls == []
+
+
 @pytest.mark.parametrize("asset_type", ["volume", "bootvolume", "volumegroup"])
 def test_create_assignment_and_repeat_is_idempotent(monkeypatch, asset_type):
     module_obj = load_assignment_module(monkeypatch)[0]
@@ -106,100 +119,11 @@ def test_create_assignment_and_repeat_is_idempotent(monkeypatch, asset_type):
         "id": "ocid1.volumebackuppolicyassignment.oc1..1",
         "asset_id": asset_id,
         "policy_id": POLICY_ID,
-        "xrc_kms_key_id": None,
         "time_created": "2026-09-27T00:00:00Z",
     }
     assert repeated == {"changed": False, "resource": created["resource"]}
     assert len(client.create_calls) == 1
     assert client.delete_calls == []
-
-
-def test_replacing_policy_preserves_unspecified_kms_key(monkeypatch):
-    module_obj = load_assignment_module(monkeypatch)[0]
-    client = AssignmentClient(assignment(key="ocid1.key.oc1..old"))
-    params = {"state": "present", "asset_id": ASSET_ID, "policy_id": OTHER_POLICY_ID}
-
-    replaced = run_assignment(module_obj, client, params)
-    repeated = run_assignment(module_obj, client, params)
-
-    assert replaced["changed"] is True
-    assert replaced["resource"]["policy_id"] == OTHER_POLICY_ID
-    assert replaced["resource"]["xrc_kms_key_id"] == "ocid1.key.oc1..old"
-    assert repeated["changed"] is False
-    assert len(client.create_calls) == 1
-    assert client.delete_calls == []
-
-
-def test_changing_only_kms_key_recreates_assignment(monkeypatch):
-    module_obj = load_assignment_module(monkeypatch)[0]
-    current = assignment(key="ocid1.key.oc1..old")
-    client = AssignmentClient(current)
-    params = {
-        "state": "present",
-        "asset_id": ASSET_ID,
-        "policy_id": POLICY_ID,
-        "xrc_kms_key_id": "ocid1.key.oc1..new",
-    }
-
-    changed = run_assignment(module_obj, client, params)
-    repeated = run_assignment(module_obj, client, params)
-
-    assert changed["changed"] is True
-    assert changed["resource"]["xrc_kms_key_id"] == "ocid1.key.oc1..new"
-    assert repeated["changed"] is False
-    assert client.delete_calls == [current.id]
-    assert len(client.create_calls) == 1
-
-
-def test_failed_kms_recreation_restores_original_assignment(monkeypatch):
-    module_obj, ServiceError = load_assignment_module(monkeypatch)
-    current = assignment(key="ocid1.key.oc1..old")
-    client = AssignmentClient(current)
-    client.error_on_key = "ocid1.key.oc1..invalid"
-    client.create_error = ServiceError(400, "invalid destination key")
-    params = {
-        "state": "present",
-        "asset_id": ASSET_ID,
-        "policy_id": POLICY_ID,
-        "xrc_kms_key_id": client.error_on_key,
-    }
-
-    with pytest.raises(FailJsonCalled) as result:
-        run_assignment(module_obj, client, params)
-
-    assert "invalid destination key" in result.value.payload["msg"]
-    assert "prior assignment was restored" in result.value.payload["msg"]
-    assert client.delete_calls == [current.id]
-    assert [details.xrc_kms_key_id for details in client.create_calls] == [
-        "ocid1.key.oc1..invalid",
-        "ocid1.key.oc1..old",
-    ]
-    assert client.assignment.policy_id == POLICY_ID
-    assert client.assignment.xrc_kms_key_id == "ocid1.key.oc1..old"
-
-
-def test_transport_failure_during_kms_recreation_restores_assignment(monkeypatch):
-    module_obj = load_assignment_module(monkeypatch)[0]
-    current = assignment(key="ocid1.key.oc1..old")
-    client = AssignmentClient(current)
-    client.error_on_key = "ocid1.key.oc1..new"
-    client.create_error = RuntimeError("connection lost")
-
-    with pytest.raises(FailJsonCalled) as result:
-        run_assignment(
-            module_obj,
-            client,
-            {
-                "state": "present",
-                "asset_id": ASSET_ID,
-                "policy_id": POLICY_ID,
-                "xrc_kms_key_id": client.error_on_key,
-            },
-        )
-
-    assert "connection lost" in result.value.payload["msg"]
-    assert client.assignment.policy_id == POLICY_ID
-    assert client.assignment.xrc_kms_key_id == "ocid1.key.oc1..old"
 
 
 def test_delete_assignment_and_repeat_is_idempotent(monkeypatch):
@@ -220,15 +144,9 @@ def test_delete_assignment_and_repeat_is_idempotent(monkeypatch):
     "initial,params",
     [
         (None, {"state": "present", "asset_id": ASSET_ID, "policy_id": POLICY_ID}),
-        (assignment(), {"state": "present", "asset_id": ASSET_ID, "policy_id": OTHER_POLICY_ID}),
         (
-            assignment(key="ocid1.key.oc1..old"),
-            {
-                "state": "present",
-                "asset_id": ASSET_ID,
-                "policy_id": POLICY_ID,
-                "xrc_kms_key_id": "ocid1.key.oc1..new",
-            },
+            assignment(),
+            {"state": "present", "asset_id": ASSET_ID, "policy_id": OTHER_POLICY_ID},
         ),
         (assignment(), {"state": "absent", "asset_id": ASSET_ID}),
     ],
@@ -264,7 +182,6 @@ def test_group_owned_assignment_is_not_deleted_from_member_volume(monkeypatch):
 def test_oci_rejection_includes_asset_and_group_guidance(monkeypatch):
     module_obj, ServiceError = load_assignment_module(monkeypatch)
     client = AssignmentClient()
-    client.error_on_key = None
     client.create_error = ServiceError(409, "assignment controlled by volume group")
 
     with pytest.raises(FailJsonCalled) as result:

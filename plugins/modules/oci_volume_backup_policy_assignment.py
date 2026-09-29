@@ -37,18 +37,8 @@ options:
       - Each asset has one assignment. Setting a different policy replaces
         the current assignment.
     type: str
-  xrc_kms_key_id:
-    description:
-      - OCID of a Vault key in the destination region for encrypting
-        cross-region backup copies.
-      - When omitted, the current key is preserved. OCI validates that the
-        policy supports cross-region copies and the key can be used.
-    type: str
 notes:
-  - Changing only C(xrc_kms_key_id) briefly removes the assignment before
-    recreating it. If recreation fails, the module attempts to restore the prior
-    assignment.
-  - OCI controls which policies and keys are valid for each asset.
+  - OCI controls which policies are valid for each asset.
   - A volume whose policy is managed by its volume group cannot be changed
     separately. Manage the volume group's assignment instead.
 """
@@ -65,11 +55,10 @@ EXAMPLES = r"""
     asset_id: ocid1.bootvolume.oc1..example
     policy_id: ocid1.volumebackuppolicy.oc1..other
 
-- name: Assign a cross-region backup policy to a volume group
+- name: Assign a backup policy to a volume group
   ansible.oci.oci_volume_backup_policy_assignment:
     asset_id: ocid1.volumegroup.oc1..example
     policy_id: ocid1.volumebackuppolicy.oc1..example
-    xrc_kms_key_id: ocid1.key.oc1..example
 
 - name: Remove the backup policy assignment
   ansible.oci.oci_volume_backup_policy_assignment:
@@ -103,11 +92,6 @@ resource:
       type: str
       returned: always
       sample: "2026-09-27T00:00:00Z"
-    xrc_kms_key_id:
-      description: Vault key for cross-region backup encryption, if set.
-      type: str
-      returned: always
-      sample: ocid1.key.oc1..example
 """
 
 from ansible.module_utils.basic import AnsibleModule
@@ -136,10 +120,7 @@ class OciVolumeBackupPolicyAssignmentModule(OciResourceBase):
     name_lookup_param = None
     create_resource_name = "volume backup policy assignment"
     common_update_field_specs = ()
-    update_field_specs = (
-        UpdateFieldSpec(param_name="policy_id", is_mutable=True),
-        UpdateFieldSpec(param_name="xrc_kms_key_id", is_mutable=True),
-    )
+    update_field_specs = (UpdateFieldSpec(param_name="policy_id", is_mutable=True),)
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(
@@ -169,22 +150,17 @@ class OciVolumeBackupPolicyAssignmentModule(OciResourceBase):
             )
         return current
 
-    def create_assignment(self, policy_id, xrc_kms_key_id=None):
-        details_args = {
-            "asset_id": self.module.params["asset_id"],
-            "policy_id": policy_id,
-        }
-        if xrc_kms_key_id is not None:
-            details_args["xrc_kms_key_id"] = xrc_kms_key_id
+    def create_assignment(self, policy_id):
         details = oci.core.models.CreateVolumeBackupPolicyAssignmentDetails(
-            **details_args
+            asset_id=self.module.params["asset_id"],
+            policy_id=policy_id,
         )
         return self.call_with_retry(
             self.client.create_volume_backup_policy_assignment,
             create_volume_backup_policy_assignment_details=details,
         ).data
 
-    def fail_oci_change(self, action, exc, rollback_error=None, restored=False):
+    def fail_oci_change(self, action, exc):
         message = (
             f"OCI could not {action} the backup policy assignment for "
             f"asset_id={self.module.params['asset_id']}: {exc}"
@@ -194,46 +170,19 @@ class OciVolumeBackupPolicyAssignmentModule(OciResourceBase):
                 ". If this volume's policy is controlled by a volume group, "
                 "change the volume group's assignment instead"
             )
-        if rollback_error is not None:
-            message += f". Restoring the prior assignment also failed: {rollback_error}"
-        elif restored:
-            message += ". The prior assignment was restored"
         self.module.fail_json(msg=message)
 
     def create_resource(self):
-        params = self.module.params
         try:
-            return self.create_assignment(
-                params["policy_id"], params.get("xrc_kms_key_id")
-            )
+            return self.create_assignment(self.module.params["policy_id"])
         except oci.exceptions.ServiceError as exc:
             self.fail_oci_change("create", exc)
 
     def update_resource(self, resource):
-        params = self.module.params
-        policy_changed = (
-            "policy_id" in self.get_update_plan(resource)["update_model_fields"]
-        )
-        desired_key = params.get("xrc_kms_key_id")
-        replacement_key = (
-            desired_key
-            if desired_key is not None
-            else getattr(resource, "xrc_kms_key_id", None)
-        )
-        if not policy_changed:
-            self.delete_resource(resource)
+        policy_id = self.get_update_plan(resource)["update_model_fields"]["policy_id"]
         try:
-            return self.create_assignment(params["policy_id"], replacement_key)
-        except Exception as exc:
-            if not policy_changed:
-                try:
-                    self.create_assignment(
-                        resource.policy_id,
-                        getattr(resource, "xrc_kms_key_id", None),
-                    )
-                except Exception as rollback_error:
-                    self.fail_oci_change("replace", exc, rollback_error)
-                self.fail_oci_change("replace", exc, restored=True)
+            return self.create_assignment(policy_id)
+        except oci.exceptions.ServiceError as exc:
             self.fail_oci_change("replace", exc)
 
     def delete_resource(self, resource):
@@ -252,7 +201,6 @@ def main():
         state=dict(type="str", choices=["present", "absent"], default="present"),
         asset_id=dict(type="str", required=True),
         policy_id=dict(type="str"),
-        xrc_kms_key_id=dict(type="str"),
     )
     module = AnsibleModule(
         argument_spec=argument_spec,
