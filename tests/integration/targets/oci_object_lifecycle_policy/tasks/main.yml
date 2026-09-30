@@ -1,0 +1,260 @@
+---
+- name: Validate OCI integration configuration
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      Object Lifecycle Policy integration tests require
+      oci_integration_compartment_id in the integration configuration.
+
+- name: Choose a unique empty bucket for this run
+  ansible.builtin.set_fact:
+    oci_object_lifecycle_policy_bucket_name: >-
+      {{ oci_object_lifecycle_policy_bucket_prefix
+         ~ '-' ~ oci_integration_rpfx }}
+    oci_object_lifecycle_policy_bucket_created: false
+
+- name: Exercise Object Lifecycle Policy lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create an empty bucket for policy testing
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_object_lifecycle_policy_bucket_create
+
+    - name: Mark bucket for cleanup
+      ansible.builtin.set_fact:
+        oci_object_lifecycle_policy_bucket_created: true
+
+    - name: Verify test bucket exists
+      ansible.builtin.assert:
+        that:
+          - oci_object_lifecycle_policy_bucket_create.changed | bool
+          - >-
+            oci_object_lifecycle_policy_bucket_create.resource.name ==
+            oci_object_lifecycle_policy_bucket_name
+
+    - name: Predict policy creation
+      ansible.oci.oci_object_lifecycle_policy: &policy_create
+        state: present
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        items:
+          - name: expire-logs
+            target: objects
+            action: delete
+            time_amount: 90
+            time_unit: days
+            is_enabled: false
+            object_name_filter:
+              inclusion_patterns:
+                - logs/*
+      check_mode: true
+      register: policy_create_check
+
+    - name: Probe policy after create check mode
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      register: policy_create_probe
+
+    - name: Verify create check mode left policy absent
+      ansible.builtin.assert:
+        that:
+          - policy_create_check.changed | bool
+          - policy_create_probe.object_lifecycle_policies | length == 0
+
+    - name: Create lifecycle policy
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_create
+      register: policy_create
+
+    - name: Read created policy
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      register: policy_created_info
+
+    - name: Verify created policy rules
+      ansible.builtin.assert:
+        that:
+          - policy_create.changed | bool
+          - policy_create.resource['items'] | length == 1
+          - policy_created_info.object_lifecycle_policies | length == 1
+          - >-
+            policy_created_info.object_lifecycle_policies[0]['items']
+            | length == 1
+          - >-
+            policy_created_info.object_lifecycle_policies[0]['items'][0].name
+            == 'expire-logs'
+          - >-
+            policy_created_info.object_lifecycle_policies[0]['items'][0].time_amount
+            == 90
+          - >-
+            not policy_created_info.object_lifecycle_policies[0]['items'][0]
+            .is_enabled | bool
+
+    - name: Reapply created policy
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_create
+      register: policy_create_rerun
+
+    - name: Recheck created policy
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_create
+      check_mode: true
+      register: policy_create_check_rerun
+
+    - name: Verify create state is idempotent
+      ansible.builtin.assert:
+        that:
+          - not policy_create_rerun.changed | bool
+          - not policy_create_check_rerun.changed | bool
+
+    - name: Predict full policy replacement
+      ansible.oci.oci_object_lifecycle_policy: &policy_update
+        state: present
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        items:
+          - name: expire-logs
+            target: objects
+            action: delete
+            time_amount: 120
+            time_unit: days
+            is_enabled: false
+            object_name_filter:
+              inclusion_patterns:
+                - logs/*
+          - name: archive-data
+            target: objects
+            action: archive
+            time_amount: 30
+            time_unit: days
+            is_enabled: false
+            object_name_filter:
+              inclusion_patterns:
+                - data/*
+      check_mode: true
+      register: policy_update_check
+
+    - name: Probe policy after update check mode
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      register: policy_update_probe
+
+    - name: Verify update check mode retained original rules
+      ansible.builtin.assert:
+        that:
+          - policy_update_check.changed | bool
+          - policy_update_probe.object_lifecycle_policies | length == 1
+          - >-
+            policy_update_probe.object_lifecycle_policies[0]['items']
+            | length == 1
+          - >-
+            policy_update_probe.object_lifecycle_policies[0]['items'][0].time_amount
+            == 90
+
+    - name: Replace policy rules
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_update
+      register: policy_update
+
+    - name: Read replaced policy
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      register: policy_updated_info
+
+    - name: Verify replacement contains both desired rules
+      ansible.builtin.assert:
+        that:
+          - policy_update.changed | bool
+          - policy_update.resource['items'] | length == 2
+          - policy_updated_info.object_lifecycle_policies | length == 1
+          - >-
+            policy_updated_info.object_lifecycle_policies[0]['items']
+            | length == 2
+          - >-
+            policy_updated_info.object_lifecycle_policies[0]['items']
+            | selectattr('name', 'equalto', 'expire-logs')
+            | map(attribute='time_amount') | list == [120]
+          - >-
+            policy_updated_info.object_lifecycle_policies[0]['items']
+            | map(attribute='name') | list | sort
+            == ['archive-data', 'expire-logs']
+
+    - name: Reapply replaced policy
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_update
+      register: policy_update_rerun
+
+    - name: Recheck replaced policy
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_update
+      check_mode: true
+      register: policy_update_check_rerun
+
+    - name: Verify update state is idempotent
+      ansible.builtin.assert:
+        that:
+          - not policy_update_rerun.changed | bool
+          - not policy_update_check_rerun.changed | bool
+
+    - name: Predict policy deletion
+      ansible.oci.oci_object_lifecycle_policy: &policy_delete
+        state: absent
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      check_mode: true
+      register: policy_delete_check
+
+    - name: Probe policy after delete check mode
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      register: policy_delete_probe
+
+    - name: Verify delete check mode left policy present
+      ansible.builtin.assert:
+        that:
+          - policy_delete_check.changed | bool
+          - policy_delete_probe.object_lifecycle_policies | length == 1
+          - >-
+            policy_delete_probe.object_lifecycle_policies[0]['items']
+            | length == 2
+
+    - name: Delete lifecycle policy
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_delete
+      register: policy_delete
+
+    - name: Read policy after deletion
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      register: policy_deleted_info
+
+    - name: Verify policy is absent
+      ansible.builtin.assert:
+        that:
+          - policy_delete.changed | bool
+          - policy_deleted_info.object_lifecycle_policies | length == 0
+
+    - name: Repeat policy deletion
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_delete
+      register: policy_delete_rerun
+
+    - name: Recheck policy deletion
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_delete
+      check_mode: true
+      register: policy_delete_check_rerun
+
+    - name: Verify delete state is idempotent
+      ansible.builtin.assert:
+        that:
+          - not policy_delete_rerun.changed | bool
+          - not policy_delete_check_rerun.changed | bool
+
+  always:
+    - name: Clean up integration resources
+      ansible.builtin.include_tasks: cleanup.yml

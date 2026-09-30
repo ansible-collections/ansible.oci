@@ -1,0 +1,12 @@
+---
+- name: Remove lifecycle policy left by integration test
+  ansible.oci.oci_object_lifecycle_policy:
+    state: absent
+    bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+  when: oci_object_lifecycle_policy_bucket_created | default(false)
+
+- name: Remove integration bucket
+  ansible.oci.oci_object_storage_bucket:
+    state: absent
+    name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+  when: oci_object_lifecycle_policy_bucket_created | default(false)
