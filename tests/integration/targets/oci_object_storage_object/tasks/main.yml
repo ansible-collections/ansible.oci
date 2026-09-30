@@ -1,0 +1,203 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that: oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Create local object test directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: oci-object-
+  register: oci_object_storage_object_temp_dir
+
+- name: Set object test names
+  ansible.builtin.set_fact:
+    oci_object_storage_object_bucket_name: >-
+      {{ oci_object_storage_object_integration_name }}-{{ oci_integration_rpfx }}
+    oci_object_storage_object_name: sample.txt
+    oci_object_storage_object_source: "{{ oci_object_storage_object_temp_dir.path }}/source.txt"
+    oci_object_storage_object_destination: >-
+      {{ oci_object_storage_object_temp_dir.path }}/destination.txt
+
+- name: Exercise Object Storage object lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create bucket
+      ansible.oci.oci_object_storage_bucket:
+        name: "{{ oci_object_storage_object_bucket_name }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+
+    - name: Write source file
+      ansible.builtin.copy:
+        content: object integration content
+        dest: "{{ oci_object_storage_object_source }}"
+
+    - name: Check upload
+      ansible.oci.oci_object_storage_object: &upload
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+        src: "{{ oci_object_storage_object_source }}"
+      check_mode: true
+      register: upload_check
+
+    - name: Probe object after upload check
+      ansible.oci.oci_object_storage_object_info:
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+      register: upload_check_probe
+
+    - name: Assert upload check made no change
+      ansible.builtin.assert:
+        that:
+          - upload_check.changed
+          - upload_check_probe.objects | length == 0
+
+    - name: Upload object
+      ansible.oci.oci_object_storage_object:
+        <<: *upload
+
+    - name: Reconcile upload normally
+      ansible.oci.oci_object_storage_object:
+        <<: *upload
+      register: upload_rerun
+
+    - name: Reconcile upload in check mode
+      ansible.oci.oci_object_storage_object:
+        <<: *upload
+      check_mode: true
+      register: upload_check_rerun
+
+    - name: Reconcile matching upload with force
+      ansible.oci.oci_object_storage_object:
+        <<: *upload
+        force: true
+      register: upload_force_rerun
+
+    - name: Get exact object info
+      ansible.oci.oci_object_storage_object_info:
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+      register: exact_info
+
+    - name: List objects by prefix
+      ansible.oci.oci_object_storage_object_info:
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        prefix: sample
+      register: prefix_info
+
+    - name: Assert upload and info behavior
+      ansible.builtin.assert:
+        that:
+          - not upload_rerun.changed
+          - not upload_check_rerun.changed
+          - not upload_force_rerun.changed
+          - exact_info.objects | length == 1
+          - prefix_info.objects | length == 1
+          - exact_info.objects[0].name == oci_object_storage_object_name
+          - exact_info.objects[0].size == ('object integration content' | length)
+          - exact_info.objects[0].headers['content-length'] | int == exact_info.objects[0].size
+
+    - name: Check download
+      ansible.oci.oci_object_storage_object: &download
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+        dest: "{{ oci_object_storage_object_destination }}"
+      check_mode: true
+      register: download_check
+
+    - name: Probe local destination after download check
+      ansible.builtin.stat:
+        path: "{{ oci_object_storage_object_destination }}"
+      register: download_check_probe
+
+    - name: Assert download check made no change
+      ansible.builtin.assert:
+        that:
+          - download_check.changed
+          - not download_check_probe.stat.exists
+
+    - name: Download object
+      ansible.oci.oci_object_storage_object:
+        <<: *download
+
+    - name: Reconcile download normally
+      ansible.oci.oci_object_storage_object:
+        <<: *download
+      register: download_rerun
+
+    - name: Reconcile download in check mode
+      ansible.oci.oci_object_storage_object:
+        <<: *download
+      check_mode: true
+      register: download_check_rerun
+
+    - name: Reconcile matching download with force
+      ansible.oci.oci_object_storage_object:
+        <<: *download
+        force: true
+      register: download_force_rerun
+
+    - name: Verify downloaded content and idempotency
+      ansible.builtin.slurp:
+        src: "{{ oci_object_storage_object_destination }}"
+      register: downloaded_content
+
+    - name: Assert downloaded content and idempotency
+      ansible.builtin.assert:
+        that:
+          - downloaded_content.content | b64decode == 'object integration content'
+          - not download_rerun.changed
+          - not download_check_rerun.changed
+          - not download_force_rerun.changed
+
+    - name: Check delete
+      ansible.oci.oci_object_storage_object: &delete
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+        state: absent
+      check_mode: true
+      register: delete_check
+
+    - name: Probe object after delete check
+      ansible.oci.oci_object_storage_object_info:
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+      register: delete_check_probe
+
+    - name: Assert delete check made no change
+      ansible.builtin.assert:
+        that:
+          - delete_check.changed
+          - delete_check_probe.objects | length == 1
+
+    - name: Delete object
+      ansible.oci.oci_object_storage_object:
+        <<: *delete
+
+    - name: Probe object after delete
+      ansible.oci.oci_object_storage_object_info:
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+      register: deleted_info
+
+    - name: Repeat delete in check mode
+      ansible.oci.oci_object_storage_object:
+        <<: *delete
+      check_mode: true
+      register: delete_check_rerun
+
+    - name: Repeat delete normally
+      ansible.oci.oci_object_storage_object:
+        <<: *delete
+      register: delete_rerun
+
+    - name: Assert delete behavior
+      ansible.builtin.assert:
+        that:
+          - deleted_info.objects | length == 0
+          - not delete_check_rerun.changed
+          - not delete_rerun.changed
+  always:
+    - ansible.builtin.include_tasks: cleanup.yml
