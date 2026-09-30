@@ -1,0 +1,22 @@
+---
+- name: Remove test object
+  ansible.oci.oci_object_storage_object:
+    bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+    object_name: "{{ oci_object_storage_object_name }}"
+    state: absent
+  when: oci_object_storage_object_bucket_name | default('') | length > 0
+  ignore_errors: true
+
+- name: Remove test bucket
+  ansible.oci.oci_object_storage_bucket:
+    name: "{{ oci_object_storage_object_bucket_name }}"
+    state: absent
+    force: true
+  when: oci_object_storage_object_bucket_name | default('') | length > 0
+  ignore_errors: true
+
+- name: Remove local test directory
+  ansible.builtin.file:
+    path: "{{ oci_object_storage_object_temp_dir.path }}"
+    state: absent
+  when: oci_object_storage_object_temp_dir is defined
