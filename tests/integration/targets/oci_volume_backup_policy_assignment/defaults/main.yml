@@ -1,0 +1,11 @@
+---
+oci_volume_backup_policy_assignment_volume_name: oci-policy-assignment-volume
+oci_volume_backup_policy_assignment_first_policy_name: oci-policy-assignment-first
+oci_volume_backup_policy_assignment_second_policy_name: oci-policy-assignment-second
+oci_volume_backup_policy_assignment_schedule:
+  - backup_type: incremental
+    period: one_day
+    offset_type: structured
+    hour_of_day: 2
+    retention_seconds: 604800
+    time_zone: utc
