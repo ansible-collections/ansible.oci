@@ -104,6 +104,8 @@ options:
       - Whether to overwrite an existing object or destination file.
       - When false, an existing target is left unchanged regardless of content.
       - When true, an existing target is overwritten unless its MD5 checksum matches the local file.
+      - Multipart downloads are compared with the existing destination after transfer; identical content leaves the destination unchanged.
+      - In check mode, multipart downloads may report a change because their content is not fetched for comparison.
     type: bool
     default: false
 """
@@ -165,6 +167,7 @@ resource:
     etag: f86a64ce-48b1-4794-a3b4-392aab8f4360
 """
 
+import filecmp
 import os
 import stat
 import tempfile
@@ -377,7 +380,7 @@ class OciObjectStorageObjectModule(OciModuleBase):
         return upload_manager.upload_file(file_path=source, **request_kwargs)
 
     def _download(self, destination):
-        """Download through the SDK, then publish the completed destination file."""
+        """Download through the SDK, then publish the completed file only if needed."""
         from oci.object_storage.transfer.internal.download.DownloadConfiguration import (
             DownloadConfiguration,
         )
@@ -404,6 +407,9 @@ class OciObjectStorageObjectModule(OciModuleBase):
             if self.module.params.get("force", False):
                 # Preserve an existing file's mode and replace it only after a successful download.
                 if os.path.isfile(destination):
+                    # Multipart MD5 depends on upload part boundaries; compare the actual bytes.
+                    if filecmp.cmp(temporary, destination, shallow=False):
+                        return response, False
                     os.chmod(temporary, stat.S_IMODE(os.stat(destination).st_mode))
                 os.replace(temporary, destination)
             else:

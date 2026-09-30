@@ -24,10 +24,11 @@ def encoded_md5(content):
 
 
 class ObjectClient:
-    def __init__(self, service_error, exists=False, body=b"payload"):
+    def __init__(self, service_error, exists=False, body=b"payload", headers=None):
         self.service_error = service_error
         self.exists = exists
         self.body = body
+        self.headers = headers
         self.puts = []
         self.deletes = []
         self.gets = []
@@ -44,7 +45,7 @@ class ObjectClient:
             raise self.service_error(404)
         return FakeResponse(
             None,
-            {
+            self.headers if self.headers is not None else {
                 "content-length": str(len(self.body)),
                 "content-md5": encoded_md5(self.body),
                 "etag": "etag",
@@ -74,7 +75,8 @@ class ObjectClient:
             def close(self):
                 self.closed = True
 
-        return FakeResponse(Body(self.body), {"content-length": str(len(self.body))})
+        headers = self.headers if self.headers is not None else {"content-length": str(len(self.body))}
+        return FakeResponse(Body(self.body), headers)
 
     def delete_object(self, **kwargs):
         self.deletes.append(kwargs)
@@ -408,6 +410,54 @@ def test_force_download_skips_matching_content(monkeypatch, tmp_path, check_mode
     assert result["changed"] is False
     assert destination.read_bytes() == b"matching content"
     assert not client.gets
+
+
+@pytest.mark.parametrize("parts", [
+    [b"multipart", b" object contents"],
+    [b"m", b"ultipart object", b" contents"],
+])
+@pytest.mark.parametrize("destination_state", ["missing", "matching", "different"])
+def test_force_multipart_download_is_idempotent(monkeypatch, tmp_path, parts, destination_state):
+    module_obj, service_error = load_object(monkeypatch)
+    content = b"".join(parts)
+    part_hashes = b"".join(hashlib.md5(part).digest() for part in parts)
+    headers = {
+        "content-length": str(len(content)),
+        "opc-multipart-md5": encoded_md5(part_hashes) + f"-{len(parts)}",
+    }
+    assert headers["opc-multipart-md5"] != encoded_md5(content)
+    client = ObjectClient(service_error, exists=True, body=content, headers=headers)
+    destination = tmp_path / "download"
+    if destination_state != "missing":
+        destination.write_bytes(content if destination_state == "matching" else b"x" * len(content))
+
+    before = destination.stat() if destination.exists() else None
+    checked = run(
+        module_obj, monkeypatch, client,
+        base_params(dest=str(destination), force=True), check_mode=True,
+    )
+
+    # Multipart headers alone cannot prove equality, and check mode must not fetch the content.
+    assert checked["changed"] is True
+    assert not client.gets
+    assert destination.exists() is (destination_state != "missing")
+
+    result = run(module_obj, monkeypatch, client, base_params(dest=str(destination), force=True))
+
+    assert result["changed"] is (destination_state != "matching")
+    assert destination.read_bytes() == content
+    if destination_state == "matching":
+        assert destination.stat().st_ino == before.st_ino
+        assert destination.stat().st_mtime_ns == before.st_mtime_ns
+
+    after = destination.stat()
+    rerun = run(module_obj, monkeypatch, client, base_params(dest=str(destination), force=True))
+
+    assert rerun["changed"] is False
+    assert destination.stat().st_ino == after.st_ino
+    assert destination.stat().st_mtime_ns == after.st_mtime_ns
+    assert len(client.gets) == 2
+    assert not list(tmp_path.glob(".ansible-oci-*"))
 
 
 def test_force_download_preserves_existing_file_mode(monkeypatch, tmp_path):
