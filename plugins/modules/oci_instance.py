@@ -70,7 +70,7 @@ options:
       - Required when creating an instance.
       - The module does not update this field after create.
       - Availability domain names are tenancy-specific; use
-        M(ansible.oci.oci_availability_domain_info) to discover the valid
+        M(ansible.oci.oci_iam_availability_domain_info) to discover the valid
         names for your tenancy and region instead of hardcoding them.
     type: str
   fault_domain:

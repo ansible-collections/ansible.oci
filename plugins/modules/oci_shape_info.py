@@ -48,7 +48,7 @@ notes:
   - Use an unfiltered C(oci_shape_info) query first if you need to discover the
     current shape names available in your region, compartment, and availability
     domain.
-  - Use M(ansible.oci.oci_availability_domain_info) to discover valid
+  - Use M(ansible.oci.oci_iam_availability_domain_info) to discover valid
     C(availability_domain) values instead of hardcoding tenancy-specific names.
 """
 

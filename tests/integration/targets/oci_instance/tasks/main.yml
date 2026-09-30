@@ -95,29 +95,29 @@
             | list | length == 1
 
     - name: List availability domains for the configured compartment
-      ansible.oci.oci_availability_domain_info:
+      ansible.oci.oci_iam_availability_domain_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
-      register: oci_availability_domain_info_list
+      register: oci_iam_availability_domain_info_list
 
     - name: Assert the configured availability domain is discoverable
       ansible.builtin.assert:
         that:
-          - not oci_availability_domain_info_list.changed | bool
-          - oci_availability_domain_info_list.availability_domains
+          - not oci_iam_availability_domain_info_list.changed | bool
+          - oci_iam_availability_domain_info_list.availability_domains
             | selectattr('name', 'equalto', oci_instance_integration_availability_domain)
             | list | length == 1
 
     - name: List availability domains without compartment_id to exercise the tenancy default
-      ansible.oci.oci_availability_domain_info: {}
-      register: oci_availability_domain_info_default
+      ansible.oci.oci_iam_availability_domain_info: {}
+      register: oci_iam_availability_domain_info_default
 
     - name: Assert the tenancy default returns the same availability domains
       ansible.builtin.assert:
         that:
-          - not oci_availability_domain_info_default.changed | bool
-          - oci_availability_domain_info_default.availability_domains
+          - not oci_iam_availability_domain_info_default.changed | bool
+          - oci_iam_availability_domain_info_default.availability_domains
             | map(attribute='name') | sort
-            == oci_availability_domain_info_list.availability_domains
+            == oci_iam_availability_domain_info_list.availability_domains
             | map(attribute='name') | sort
 
     - name: List shapes in the availability domain

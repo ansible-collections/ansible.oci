@@ -15,7 +15,7 @@ Release summary for v1.0.0
 New Modules
 -----------
 
-- ansible.oci.oci_availability_domain_info - Retrieve Availability Domain information from Oracle Cloud Infrastructure.
+- ansible.oci.oci_iam_availability_domain_info - Retrieve Availability Domain information from Oracle Cloud Infrastructure.
 - ansible.oci.oci_blockstorage_volume - Manage a block volume resource in Oracle Cloud Infrastructure.
 - ansible.oci.oci_blockstorage_volume_info - Retrieve block volume information from Oracle Cloud Infrastructure.
 - ansible.oci.oci_boot_volume_backup - Manage a boot volume backup resource in Oracle Cloud Infrastructure.

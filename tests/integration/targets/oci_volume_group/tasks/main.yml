@@ -21,7 +21,7 @@
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     - name: Discover an availability domain in the compartment
-      ansible.oci.oci_availability_domain_info:
+      ansible.oci.oci_iam_availability_domain_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
       register: oci_volume_group_ad_info
 

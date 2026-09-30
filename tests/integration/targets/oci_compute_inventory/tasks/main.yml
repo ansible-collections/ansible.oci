@@ -25,7 +25,7 @@
           {{ oci_compute_inventory_integration_instance_name }}-{{ oci_integration_rpfx }}
 
     - name: Discover an availability domain for the configured region
-      ansible.oci.oci_availability_domain_info:
+      ansible.oci.oci_iam_availability_domain_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
       register: oci_compute_inventory_availability_domains
 
