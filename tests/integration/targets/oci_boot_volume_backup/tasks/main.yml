@@ -27,7 +27,7 @@
     # produce backups that cannot be deleted until the period expires or the
     # hold is cleared, which would leak resources in the CI tenancy.
     - name: Discover an availability domain in the compartment
-      ansible.oci.oci_availability_domain_info:
+      ansible.oci.oci_iam_availability_domain_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
       register: oci_boot_volume_backup_ad_info
 
