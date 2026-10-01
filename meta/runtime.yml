@@ -2,14 +2,14 @@
 requires_ansible: '>=2.16.0'
 action_groups:
   oci:
-    - oci_iam_compartment
-    - oci_iam_compartment_info
-    - oci_iam_group
-    - oci_iam_group_info
-    - oci_iam_user
-    - oci_iam_user_info
-    - oci_iam_user_group_membership
-    - oci_iam_user_group_membership_info
+    - oci_identity_compartment
+    - oci_identity_compartment_info
+    - oci_identity_group
+    - oci_identity_group_info
+    - oci_identity_user
+    - oci_identity_user_info
+    - oci_identity_user_group_membership
+    - oci_identity_user_group_membership_info
     - oci_network_vcn
     - oci_network_vcn_info
     - oci_network_subnet
@@ -48,7 +48,7 @@ action_groups:
     - oci_image
     - oci_image_info
     - oci_shape_info
-    - oci_iam_availability_domain_info
+    - oci_identity_availability_domain_info
     - oci_instance_console_connection
     - oci_instance_console_connection_info
     - oci_volume_group
@@ -67,5 +67,5 @@ action_groups:
     - oci_boot_volume_info
     - oci_bastion
     - oci_bastion_info
-    - oci_iam_domain
-    - oci_iam_domain_info
+    - oci_identity_domain
+    - oci_identity_domain_info
