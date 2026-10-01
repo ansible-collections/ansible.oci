@@ -1,9 +1,87 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+from threading import Barrier, Event, Lock, get_ident
+
+import pytest
+
 from ansible.module_utils.common.parameters import env_fallback
 
 from .conftest import load_collection_module
+
+
+def test_threaded_map_skips_empty_input():
+    oci_common = load_collection_module("oci_common")
+
+    def unused_worker(value):
+        pytest.fail("Empty input must not call a worker")
+
+    assert oci_common.threaded_map(unused_worker, iter(())) == []
+
+
+def test_threaded_map_runs_iterator_concurrently_with_worker_limit():
+    oci_common = load_collection_module("oci_common")
+    barrier = Barrier(2, timeout=5)
+    lock = Lock()
+    running = 0
+    peak = 0
+    thread_ids = set()
+
+    def worker(value):
+        nonlocal running, peak
+        with lock:
+            running += 1
+            peak = max(peak, running)
+            thread_ids.add(get_ident())
+        barrier.wait()
+        with lock:
+            running -= 1
+        return value * 2
+
+    assert oci_common.threaded_map(worker, iter([3, 1, 4, 2]), max_workers=2) == [6, 2, 8, 4]
+    assert peak == 2
+    assert len(thread_ids) == 2
+    assert running == 0
+
+
+def test_threaded_map_returns_results_in_input_order():
+    oci_common = load_collection_module("oci_common")
+    second_finished = Event()
+
+    def worker(value):
+        if value == "first":
+            assert second_finished.wait(5)
+        else:
+            second_finished.set()
+        return value
+
+    assert oci_common.threaded_map(worker, ["first", "second"]) == ["first", "second"]
+
+
+def test_threaded_map_finishes_submitted_work_before_propagating_error():
+    oci_common = load_collection_module("oci_common")
+    second_started = Event()
+    failed = Event()
+    completed = []
+    lock = Lock()
+    error = RuntimeError("cleanup failed")
+
+    def worker(value):
+        if value == 0:
+            assert second_started.wait(5)
+            failed.set()
+            raise error
+        second_started.set()
+        assert failed.wait(5)
+        with lock:
+            completed.append(value)
+        return value
+
+    with pytest.raises(RuntimeError, match="cleanup failed") as result:
+        oci_common.threaded_map(worker, range(6), max_workers=2)
+
+    assert result.value is error
+    assert sorted(completed) == [1, 2, 3, 4, 5]
 
 
 def test_filter_none_values_only_removes_none_entries():
