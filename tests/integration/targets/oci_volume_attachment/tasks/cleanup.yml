@@ -10,27 +10,52 @@
         state: absent
         volume_attachment_id: "{{ oci_volume_attachment_id }}"
       when: oci_volume_attachment_id | default('') | length > 0
+      register: oci_cleanup_volume_attachment
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked block volume during cleanup
       ansible.oci.oci_blockstorage_volume:
         state: absent
         volume_id: "{{ oci_volume_attachment_volume_id }}"
       when: oci_volume_attachment_volume_id | default('') | length > 0
+      register: oci_cleanup_block_volume
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked compute instance during cleanup
       ansible.oci.oci_instance:
         state: absent
         instance_id: "{{ oci_volume_attachment_instance_id }}"
       when: oci_volume_attachment_instance_id | default('') | length > 0
+      register: oci_cleanup_compute_instance
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked subnet during cleanup
       ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_volume_attachment_subnet_create.resource.id }}"
       when: oci_volume_attachment_subnet_create.resource.id | default('') | length > 0
+      register: oci_cleanup_subnet
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_volume_attachment_vcn_create.resource.id }}"
       when: oci_volume_attachment_vcn_create.resource.id | default('') | length > 0
+      register: oci_cleanup_vcn
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_volume_attachment is not failed
+          - oci_cleanup_block_volume is not failed
+          - oci_cleanup_compute_instance is not failed
+          - oci_cleanup_subnet is not failed
+          - oci_cleanup_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
