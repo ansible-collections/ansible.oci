@@ -10,27 +10,47 @@
         state: absent
         instance_id: "{{ oci_compute_inventory_instance_id }}"
       when: oci_compute_inventory_instance_id | default('') | length > 0
+      register: oci_cleanup_inventory_instance
+      retries: 3
+      ignore_errors: true
 
     - name: Clear inventory test instance id after termination
       ansible.builtin.set_fact:
         oci_compute_inventory_instance_id: ""
+      when: oci_cleanup_inventory_instance is succeeded
 
     - name: Delete leaked inventory test subnet
       ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_compute_inventory_subnet_id }}"
       when: oci_compute_inventory_subnet_id | default('') | length > 0
+      register: oci_cleanup_inventory_subnet
+      retries: 3
+      ignore_errors: true
 
     - name: Clear inventory test subnet id after deletion
       ansible.builtin.set_fact:
         oci_compute_inventory_subnet_id: ""
+      when: oci_cleanup_inventory_subnet is succeeded
 
     - name: Delete leaked inventory test VCN
       ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_compute_inventory_vcn_id }}"
       when: oci_compute_inventory_vcn_id | default('') | length > 0
+      register: oci_cleanup_inventory_vcn
+      retries: 3
+      ignore_errors: true
 
     - name: Clear inventory test VCN id after deletion
       ansible.builtin.set_fact:
         oci_compute_inventory_vcn_id: ""
+      when: oci_cleanup_inventory_vcn is succeeded
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_inventory_instance is not failed
+          - oci_cleanup_inventory_subnet is not failed
+          - oci_cleanup_inventory_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

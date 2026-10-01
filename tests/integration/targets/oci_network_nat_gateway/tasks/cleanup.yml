@@ -10,9 +10,22 @@
         state: absent
         nat_gateway_id: "{{ oci_nat_gateway_id }}"
       when: oci_nat_gateway_id | default('') | length > 0
+      register: oci_cleanup_nat_gateway
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_nat_gateway_integration_network.vcn_id }}"
       when: oci_nat_gateway_integration_network.vcn_id | default('') | length > 0
+      register: oci_cleanup_vcn
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_nat_gateway is not failed
+          - oci_cleanup_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

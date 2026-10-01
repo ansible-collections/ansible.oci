@@ -10,21 +10,42 @@
         state: absent
         image_id: "{{ oci_image_id }}"
       when: oci_image_id | default('') | length > 0
+      register: oci_cleanup_custom_image
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked source instance during cleanup
       ansible.oci.oci_instance:
         state: absent
         instance_id: "{{ oci_image_instance_id }}"
       when: oci_image_instance_id | default('') | length > 0
+      register: oci_cleanup_source_instance
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked subnet during cleanup
       ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_image_subnet_create.resource.id }}"
       when: oci_image_subnet_create.resource.id | default('') | length > 0
+      register: oci_cleanup_subnet
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_image_vcn_create.resource.id }}"
       when: oci_image_vcn_create.resource.id | default('') | length > 0
+      register: oci_cleanup_vcn
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_custom_image is not failed
+          - oci_cleanup_source_instance is not failed
+          - oci_cleanup_subnet is not failed
+          - oci_cleanup_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

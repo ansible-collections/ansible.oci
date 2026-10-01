@@ -42,6 +42,24 @@
           - oci_integration_domain_id | length > 0
           - oci_integration_domain_url | length > 0
 
+    - name: Wait for the temporary identity domain API
+      block:
+        - name: Poll temporary identity domain API
+          ansible.oci.oci_identity_user_info:
+            domain_url: "{{ oci_integration_domain_url }}"
+            user_name: "{{ oci_identity_user_integration_name }}"
+          register: oci_identity_domain_readiness
+          until: oci_identity_domain_readiness is succeeded
+          retries: 12
+          delay: 5
+      rescue:
+        - name: Report temporary identity domain readiness failure
+          ansible.builtin.fail:
+            msg: >-
+              Identity domain API readiness retry limit reached
+              (12 retries, 5 seconds apart, excluding API request time).
+              Last API result: {{ ansible_failed_result }}
+
     - name: Create user in check mode
       ansible.oci.oci_identity_user: &user_create
         domain_id: "{{ oci_integration_domain_id }}"

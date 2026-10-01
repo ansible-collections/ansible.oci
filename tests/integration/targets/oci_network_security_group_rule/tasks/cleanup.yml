@@ -13,6 +13,9 @@
       when:
         - oci_network_security_group_rule_nsg_id | default('') | length > 0
         - oci_network_security_group_rule_peer_nsg_rule_id | default('') | length > 0
+      register: oci_cleanup_peer_network_security_group_rule
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked egress rule during cleanup
       ansible.oci.oci_network_security_group_rule:
@@ -22,6 +25,9 @@
       when:
         - oci_network_security_group_rule_nsg_id | default('') | length > 0
         - oci_network_security_group_rule_egress_id | default('') | length > 0
+      register: oci_cleanup_egress_rule
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked ingress rule during cleanup
       ansible.oci.oci_network_security_group_rule:
@@ -31,21 +37,44 @@
       when:
         - oci_network_security_group_rule_nsg_id | default('') | length > 0
         - oci_network_security_group_rule_ingress_id | default('') | length > 0
+      register: oci_cleanup_ingress_rule
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked Network Security Group during cleanup
       ansible.oci.oci_network_security_group:
         state: absent
         network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
       when: oci_network_security_group_rule_nsg_id | default('') | length > 0
+      register: oci_cleanup_network_security_group
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked peer Network Security Group during cleanup
       ansible.oci.oci_network_security_group:
         state: absent
         network_security_group_id: "{{ oci_network_security_group_rule_peer_nsg_id }}"
       when: oci_network_security_group_rule_peer_nsg_id | default('') | length > 0
+      register: oci_cleanup_peer_network_security_group
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_network_security_group_rule_vcn_id }}"
       when: oci_network_security_group_rule_vcn_id | default('') | length > 0
+      register: oci_cleanup_vcn
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_peer_network_security_group_rule is not failed
+          - oci_cleanup_egress_rule is not failed
+          - oci_cleanup_ingress_rule is not failed
+          - oci_cleanup_network_security_group is not failed
+          - oci_cleanup_peer_network_security_group is not failed
+          - oci_cleanup_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

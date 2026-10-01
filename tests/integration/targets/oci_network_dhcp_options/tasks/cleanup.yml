@@ -10,15 +10,32 @@
         state: absent
         dhcp_options_id: "{{ oci_dhcp_options_duplicate_id }}"
       when: oci_dhcp_options_duplicate_id | default('') | length > 0
+      register: oci_cleanup_duplicate_dhcp_options
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked DHCP options during cleanup
       ansible.oci.oci_network_dhcp_options:
         state: absent
         dhcp_options_id: "{{ oci_dhcp_options_id }}"
       when: oci_dhcp_options_id | default('') | length > 0
+      register: oci_cleanup_dhcp_options
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
         vcn_id: "{{ oci_dhcp_options_integration_network.vcn_id }}"
       when: oci_dhcp_options_integration_network.vcn_id | default('') | length > 0
+      register: oci_cleanup_vcn
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_duplicate_dhcp_options is not failed
+          - oci_cleanup_dhcp_options is not failed
+          - oci_cleanup_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

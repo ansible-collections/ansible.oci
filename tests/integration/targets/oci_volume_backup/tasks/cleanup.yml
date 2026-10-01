@@ -10,9 +10,22 @@
         state: absent
         volume_backup_id: "{{ oci_volume_backup_id }}"
       when: oci_volume_backup_id | default('') | length > 0
+      register: oci_cleanup_volume_backup
+      retries: 3
+      ignore_errors: true
 
     - name: Delete leaked block volume during cleanup
       ansible.oci.oci_blockstorage_volume:
         state: absent
         volume_id: "{{ oci_volume_backup_integration_volume_id }}"
       when: oci_volume_backup_integration_volume_id | default('') | length > 0
+      register: oci_cleanup_block_volume
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_volume_backup is not failed
+          - oci_cleanup_block_volume is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
