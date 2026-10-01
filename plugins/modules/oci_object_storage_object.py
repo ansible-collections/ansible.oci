@@ -167,7 +167,6 @@ resource:
     etag: f86a64ce-48b1-4794-a3b4-392aab8f4360
 """
 
-import filecmp
 import os
 import stat
 import tempfile
@@ -210,10 +209,20 @@ STORAGE_TIER_TO_OCI = {
 class OciObjectStorageObjectModule(OciModuleBase):
     @property
     def client_class(self):
+        """Return the SDK client class.
+
+        Returns:
+            type: OCI Object Storage client class.
+        """
         return oci.object_storage.ObjectStorageClient
 
     @property
     def namespace_name(self):
+        """Resolve and cache the supplied or default namespace.
+
+        Returns:
+            str: Object Storage namespace name.
+        """
         namespace = getattr(self, "_namespace_name", None)
         if namespace is None:
             namespace = self.module.params.get("namespace_name")
@@ -223,6 +232,7 @@ class OciObjectStorageObjectModule(OciModuleBase):
         return namespace
 
     def validate_arguments(self):
+        """Validate transfer options and fail the module for invalid inputs."""
         params = self.module.params
         source = params.get("src")
         destination = params.get("dest")
@@ -275,6 +285,11 @@ class OciObjectStorageObjectModule(OciModuleBase):
                 )
 
     def _request_kwargs(self):
+        """Build the object identity for SDK requests.
+
+        Returns:
+            dict: Namespace, bucket, and object names.
+        """
         return {
             "namespace_name": self.namespace_name,
             "bucket_name": self.module.params["bucket_name"],
@@ -282,6 +297,11 @@ class OciObjectStorageObjectModule(OciModuleBase):
         }
 
     def _customer_encryption_kwargs(self):
+        """Translate supplied customer encryption options for the SDK.
+
+        Returns:
+            dict: SSE-C options with the SDK algorithm value.
+        """
         kwargs = {
             name: self.module.params[name]
             for name in CUSTOMER_ENCRYPTION_OPTION_NAMES
@@ -292,6 +312,11 @@ class OciObjectStorageObjectModule(OciModuleBase):
         return kwargs
 
     def _read_kwargs(self):
+        """Build SDK read options, including encryption and object version.
+
+        Returns:
+            dict: Arguments for HEAD and download requests.
+        """
         kwargs = self._request_kwargs()
         kwargs.update(self._customer_encryption_kwargs())
         if self.module.params.get("version_id") is not None:
@@ -299,6 +324,14 @@ class OciObjectStorageObjectModule(OciModuleBase):
         return kwargs
 
     def _head(self):
+        """Read object headers without fetching its content.
+
+        Returns:
+            oci.response.Response or None: HEAD response, or None if absent.
+
+        Raises:
+            oci.exceptions.ServiceError: If the request fails with a status other than 404.
+        """
         try:
             return self.client.head_object(**self._read_kwargs())
         except oci.exceptions.ServiceError as exc:
@@ -307,6 +340,11 @@ class OciObjectStorageObjectModule(OciModuleBase):
             raise
 
     def _current_object(self):
+        """Find the current object by its exact name.
+
+        Returns:
+            ObjectSummary or None: Matching object summary, or None if absent.
+        """
         result = self.list_all_resources(
             self.client.list_objects,
             namespace_name=self.namespace_name,
@@ -320,6 +358,11 @@ class OciObjectStorageObjectModule(OciModuleBase):
         )
 
     def _object_version(self):
+        """Find the requested object version by exact name and version ID.
+
+        Returns:
+            ObjectVersionSummary or None: Matching version summary, or None if absent.
+        """
         result = self.list_all_resources(
             self.client.list_object_versions,
             namespace_name=self.namespace_name,
@@ -337,6 +380,14 @@ class OciObjectStorageObjectModule(OciModuleBase):
         )
 
     def _resource(self, response):
+        """Serialize SDK metadata for the module result.
+
+        Args:
+            response (object or None): SDK response or object summary.
+
+        Returns:
+            dict: Response headers, object summary, or an empty dictionary.
+        """
         if response is None:
             return {}
         if hasattr(response, "headers"):
@@ -344,6 +395,15 @@ class OciObjectStorageObjectModule(OciModuleBase):
         return oci.util.to_dict(response)
 
     def _same_content(self, path, expected_md5):
+        """Compare a local file with OCI's whole-file MD5 checksum.
+
+        Args:
+            path (str): Local file path.
+            expected_md5 (str or None): Base64-encoded checksum from OCI.
+
+        Returns:
+            bool: True if the file exists and its checksum matches.
+        """
         if not expected_md5 or not os.path.isfile(path):
             return False
         return oci.object_storage.MultipartObjectAssembler.calculate_md5(
@@ -351,8 +411,14 @@ class OciObjectStorageObjectModule(OciModuleBase):
         ) == expected_md5
 
     def _upload(self, source):
-        """Upload a local file through the SDK's single or multipart transfer."""
-        # Collect the object identity, encryption options, and upload headers.
+        """Upload a local file through the SDK's single or multipart transfer.
+
+        Args:
+            source (str): Local file to upload.
+
+        Returns:
+            oci.response.Response: Upload response with object headers.
+        """
         request_kwargs = self._request_kwargs()
         request_kwargs.update(self._customer_encryption_kwargs())
         for name in UPLOAD_OPTION_NAMES:
@@ -360,7 +426,6 @@ class OciObjectStorageObjectModule(OciModuleBase):
             if value is not None:
                 request_kwargs[name] = value
 
-        # Translate module parameters to the names and values expected by the SDK.
         if "opc_meta" in request_kwargs:
             request_kwargs["metadata"] = request_kwargs.pop("opc_meta")
         if self.module.params.get("storage_tier"):
@@ -375,12 +440,18 @@ class OciObjectStorageObjectModule(OciModuleBase):
         if not self.module.params.get("force", False):
             request_kwargs["if_none_match"] = "*"
 
-        # The SDK reads the file and selects single or multipart upload.
         upload_manager = oci.object_storage.UploadManager(self.client)
         return upload_manager.upload_file(file_path=source, **request_kwargs)
 
     def _download(self, destination):
-        """Download through the SDK, then publish the completed file only if needed."""
+        """Stage an SDK download and publish it only when needed.
+
+        Args:
+            destination (str): Local path for the downloaded object.
+
+        Returns:
+            tuple: SDK response and whether the destination was written.
+        """
         from oci.object_storage.transfer.internal.download.DownloadConfiguration import (
             DownloadConfiguration,
         )
@@ -390,7 +461,7 @@ class OciObjectStorageObjectModule(OciModuleBase):
         )
         temporary = None
         try:
-            # Stage beside the destination to keep it intact on failure and allow atomic replacement.
+            # Stage beside the destination so replacement stays atomic.
             parent = os.path.dirname(os.path.abspath(destination))
             os.makedirs(parent, exist_ok=True)
             with tempfile.NamedTemporaryFile(
@@ -398,17 +469,16 @@ class OciObjectStorageObjectModule(OciModuleBase):
             ) as output:
                 temporary = output.name
 
-            # The SDK handles transfer and response cleanup. Identity encoding preserves stored bytes.
+            # Identity encoding preserves stored bytes.
             _bytes_downloaded, response = download_manager.get_object_to_path(
                 destination_path=temporary,
                 http_response_content_encoding="identity",
                 **self._read_kwargs(),
             )
             if self.module.params.get("force", False):
-                # Preserve an existing file's mode and replace it only after a successful download.
                 if os.path.isfile(destination):
-                    # Multipart MD5 depends on upload part boundaries; compare the actual bytes.
-                    if filecmp.cmp(temporary, destination, shallow=False):
+                    # Multipart MD5 depends on upload boundaries; compare whole-file SHA256 hashes.
+                    if self.module.sha256(temporary) == self.module.sha256(destination):
                         return response, False
                     os.chmod(temporary, stat.S_IMODE(os.stat(destination).st_mode))
                 os.replace(temporary, destination)
@@ -422,7 +492,6 @@ class OciObjectStorageObjectModule(OciModuleBase):
         except OSError as exc:
             self.module.fail_json(msg=f"Cannot download object to {destination}: {exc}")
         finally:
-            # Remove the staging file after publication or a failed transfer.
             if temporary is not None:
                 try:
                     os.unlink(temporary)
@@ -430,6 +499,7 @@ class OciObjectStorageObjectModule(OciModuleBase):
                     pass
 
     def execute_resource_module(self):
+        """Upload, download, or delete an object, respecting force and check mode."""
         self.validate_arguments()
         params = self.module.params
         state = params.get("state", "present")
@@ -495,6 +565,7 @@ class OciObjectStorageObjectModule(OciModuleBase):
 
 
 def main():
+    """Create the Ansible module and execute the requested object operation."""
     argument_spec = dict(
         OCI_AUTH_ARGS,
         state=dict(type="str", choices=["present", "absent"], default="present"),
