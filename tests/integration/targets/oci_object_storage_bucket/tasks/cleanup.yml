@@ -1,0 +1,12 @@
+---
+- name: Clean up Object Storage bucket integration resources
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete bucket during cleanup
+      ansible.oci.oci_object_storage_bucket:
+        state: absent
+        name: "{{ oci_object_storage_bucket_cleanup_name }}"
+      when: oci_object_storage_bucket_cleanup_name | default('') | length > 0
