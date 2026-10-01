@@ -119,5 +119,23 @@ def test_compartment_list_filters_by_bucket_name(monkeypatch):
         "changed": False,
         "buckets": [{"name": "logs", "compartment_id": "compartment"}],
     }
-    assert client.namespace_requests == [{"compartment_id": "compartment"}]
+    assert client.namespace_requests == [{}]
     assert client.list_requests == [("testns", "compartment")]
+
+
+def test_bucket_lookup_resolves_namespace_once(monkeypatch):
+    module_obj, service_error = load_info(monkeypatch)
+    client = BucketInfoClient(service_error)
+    instance = make_module_instance(
+        module_obj,
+        "OciObjectStorageBucketInfoModule",
+        {"bucket_name": "logs", "compartment_id": "compartment"},
+        client=client,
+    )
+    monkeypatch.setattr(
+        instance, "call_with_retry", lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    )
+
+    assert instance.fetch_resources()[0].name == "logs"
+    assert instance.fetch_resources()[0].name == "logs"
+    assert client.namespace_requests == [{}]

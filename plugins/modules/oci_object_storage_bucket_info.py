@@ -71,32 +71,21 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
+from ansible_collections.ansible.oci.plugins.module_utils.oci_object_storage import (
+    OciObjectStorageNamespaceMixin,
+)
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
 
 oci = import_oci_sdk()[0]
 
 
-class OciObjectStorageBucketInfoModule(OciInfoBase):
+class OciObjectStorageBucketInfoModule(OciObjectStorageNamespaceMixin, OciInfoBase):
     @property
     def client_class(self):
         return oci.object_storage.ObjectStorageClient
 
     results_key = "buckets"
     name_response_field = "name"
-
-    @property
-    def namespace_name(self):
-        namespace = getattr(self, "_namespace_name", None)
-        if namespace is None:
-            namespace = self.module.params.get("namespace_name")
-            if not namespace:
-                compartment_id = self.module.params.get("compartment_id")
-                kwargs = {"compartment_id": compartment_id} if compartment_id else {}
-                namespace = self.call_with_retry(
-                    self.client.get_namespace, **kwargs
-                ).data
-            self._namespace_name = namespace
-        return namespace
 
     def fetch_resources(self):
         bucket_name = self.module.params.get("bucket_name")
