@@ -175,6 +175,8 @@ def run(module_obj, monkeypatch, client, params, check_mode=False):
         client=client,
         check_mode=check_mode,
     )
+    instance.module.sha256 = types.MethodType(module_obj.AnsibleModule.sha256, instance.module)
+    instance.module.digest_from_file = types.MethodType(module_obj.AnsibleModule.digest_from_file, instance.module)
 
     def list_resources(fn, *args, **kwargs):
         data = fn(*args, **kwargs).data
@@ -457,6 +459,32 @@ def test_force_multipart_download_is_idempotent(monkeypatch, tmp_path, parts, de
     assert destination.stat().st_ino == after.st_ino
     assert destination.stat().st_mtime_ns == after.st_mtime_ns
     assert len(client.gets) == 2
+    assert not list(tmp_path.glob(".ansible-oci-*"))
+
+
+@pytest.mark.parametrize("failing_file", ["temporary", "destination"])
+def test_download_hash_failure_preserves_destination(monkeypatch, tmp_path, failing_file):
+    module_obj, service_error = load_object(monkeypatch)
+    destination = tmp_path / "download"
+    destination.write_bytes(b"old")
+    before = destination.stat()
+    client = ObjectClient(service_error, exists=True)
+    original_hash = module_obj.AnsibleModule.sha256
+
+    def fail_hash(module, path):
+        if failing_file == "temporary" or path == str(destination):
+            raise OSError("cannot read file for hashing")
+        return original_hash(module, path)
+
+    monkeypatch.setattr(module_obj.AnsibleModule, "sha256", fail_hash)
+    with pytest.raises(FailJsonCalled) as failed:
+        run(module_obj, monkeypatch, client, base_params(dest=str(destination), force=True))
+
+    assert failed.value.payload["msg"] == f"Cannot download object to {destination}: cannot read file for hashing"
+    assert destination.read_bytes() == b"old"
+    assert destination.stat().st_ino == before.st_ino
+    assert destination.stat().st_mtime_ns == before.st_mtime_ns
+    assert len(client.gets) == 1
     assert not list(tmp_path.glob(".ansible-oci-*"))
 
 
