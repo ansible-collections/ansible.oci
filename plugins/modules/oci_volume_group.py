@@ -68,7 +68,7 @@ options:
       - Required when creating a volume group.
       - The module does not update this field after create.
       - Availability domain names are tenancy-specific; use
-        M(ansible.oci.oci_iam_availability_domain_info) to discover the valid names
+        M(ansible.oci.oci_identity_availability_domain_info) to discover the valid names
         for your tenancy and region.
     type: str
   volume_ids:
