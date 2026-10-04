@@ -48,11 +48,14 @@ object_lifecycle_policies:
     - The lifecycle policy for the requested bucket.
     - The list contains one item when a policy is found and is empty when none is found.
     - Each policy's C(items) field contains its lifecycle rules.
+    - A policy with no rules is returned as one policy with an empty C(items) list.
+    - Rule actions and time units use the uppercase OCI enum values.
+    - C(object_name_filter) and its unspecified fields are null when not configured.
   returned: always
   type: list
   elements: dict
   sample:
-    - time_created: "2026-09-20T12:00:00.000Z"
+    - time_created: "2026-09-20T12:00:00.000000+00:00"
       items:
         - name: expire-logs
           target: objects
@@ -63,6 +66,8 @@ object_lifecycle_policies:
           object_name_filter:
             inclusion_patterns:
               - logs/*
+            exclusion_patterns: null
+            inclusion_prefixes: null
 """
 
 from ansible.module_utils.basic import AnsibleModule

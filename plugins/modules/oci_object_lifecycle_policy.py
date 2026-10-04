@@ -143,7 +143,10 @@ resource:
   description:
     - The Object Storage lifecycle policy returned by OCI.
     - The C(items) field contains the configured lifecycle rules.
-  returned: when state=present and not in check mode
+    - C(items) is empty when the policy has no rules.
+    - Rule actions and time units use the uppercase OCI enum values.
+    - C(object_name_filter) and its unspecified fields are null when not configured.
+  returned: when state=present, except when check mode predicts a change
   type: dict
   sample:
     items:
@@ -156,7 +159,8 @@ resource:
         object_name_filter:
           inclusion_prefixes: ["archived/"]
           exclusion_patterns: ["keep-*.log"]
-    time_created: "2026-09-28T10:00:00.000Z"
+          inclusion_patterns: null
+    time_created: "2026-09-28T10:00:00.000000+00:00"
 """
 
 from ansible.module_utils.basic import AnsibleModule
