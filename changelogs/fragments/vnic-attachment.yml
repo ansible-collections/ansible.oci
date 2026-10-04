@@ -1,4 +1,0 @@
----
-minor_changes:
-  - oci_vnic_attachment - add secondary VNIC attachment lifecycle management.
-  - oci_vnic_attachment_info - add VNIC attachment retrieval and listing.

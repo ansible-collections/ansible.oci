@@ -3,7 +3,7 @@
 
 namespace: ansible
 name: oci
-version: 1.0.0
+version: 1.1.0
 readme: README.md
 authors:
   - Ron Gershburg (github.com/ronger4)
@@ -26,6 +26,7 @@ issues: https://github.com/ansible-collections/ansible.oci/issues
 build_ignore:
   # https://docs.ansible.com/projects/ansible/devel/dev_guide/developing_collections_distributing.html#ignoring-files-and-folders
   - .AGENTS
+  - .agents
   - .ansible-lint
   - .github
   - .gitignore
