@@ -3,6 +3,8 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+from concurrent.futures import ThreadPoolExecutor
+
 from ansible.module_utils.common.parameters import env_fallback
 
 OCI_AUTH_ARGS = dict(
@@ -65,6 +67,27 @@ OCI_COMMON_ARGS = dict(
     **OCI_TAG_ARGS,
     **OCI_NAME_LOOKUP_ARGS,
 )
+
+
+def threaded_map(function, items, max_workers=50):
+    """Apply a function concurrently and wait for all submitted work.
+
+    Worker errors propagate after all submitted tasks finish.
+
+    Args:
+        function: Callable accepting one item.
+        items: Iterable of work items.
+        max_workers: Maximum number of concurrent workers.
+
+    Returns:
+        Results in input order, or an empty list for empty input.
+    """
+    items = list(items)
+    if not items:
+        return []
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(items))) as executor:
+        futures = [executor.submit(function, item) for item in items]
+        return [future.result() for future in futures]
 
 
 def import_oci_sdk():
