@@ -2,19 +2,71 @@
 
 **Topics**
 
-- <a href="#v1-0-0">v1\.0\.0</a>
+- <a href="#v1-1-0">v1\.1\.0</a>
     - <a href="#release-summary">Release Summary</a>
+    - <a href="#minor-changes">Minor Changes</a>
     - <a href="#new-modules">New Modules</a>
+- <a href="#v1-0-0">v1\.0\.0</a>
+    - <a href="#release-summary-1">Release Summary</a>
+    - <a href="#new-modules-1">New Modules</a>
 
-<a id="v1-0-0"></a>
-## v1\.0\.0
+<a id="v1-1-0"></a>
+## v1\.1\.0
 
 <a id="release-summary"></a>
 ### Release Summary
 
-Release summary for v1\.0\.0
+Release summary for v1\.1\.0
+
+<a id="minor-changes"></a>
+### Minor Changes
+
+* oci\_blockstorage\_volume \- add create\-time source\_details to restore from a volume backup or clone from an existing volume\.
+* oci\_vnic\_attachment \- add secondary VNIC attachment lifecycle management\.
+* oci\_vnic\_attachment\_info \- add VNIC attachment retrieval and listing\.
 
 <a id="new-modules"></a>
+### New Modules
+
+* ansible\.oci\.oci\_bastion \- Manage a Bastion resource in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_bastion\_info \- Retrieve bastion information from Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_boot\_volume \- Manage a boot volume resource in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_identity\_compartment \- Manage OCI compartments\.
+* ansible\.oci\.oci\_identity\_compartment\_info \- Retrieve OCI compartment information\.
+* ansible\.oci\.oci\_identity\_domain \- Manage OCI identity domains\.
+* ansible\.oci\.oci\_identity\_domain\_info \- Retrieve OCI identity domain information\.
+* ansible\.oci\.oci\_identity\_group \- Manage a group in an OCI IAM identity domain\.
+* ansible\.oci\.oci\_identity\_group\_info \- Retrieve groups from an OCI IAM identity domain\.
+* ansible\.oci\.oci\_identity\_user \- Manage a user in an OCI IAM identity domain\.
+* ansible\.oci\.oci\_identity\_user\_group\_membership \- Manage a user group membership in an OCI IAM identity domain\.
+* ansible\.oci\.oci\_identity\_user\_group\_membership\_info \- Retrieve user group memberships from an OCI IAM identity domain\.
+* ansible\.oci\.oci\_identity\_user\_info \- Retrieve users from an OCI IAM identity domain\.
+* ansible\.oci\.oci\_network\_private\_ip \- Manage a Private IP resource in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_network\_public\_ip \- Manage a Public IP resource in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_object\_lifecycle\_policy \- Manage an Object Storage bucket lifecycle policy\.
+* ansible\.oci\.oci\_object\_lifecycle\_policy\_info \- Get an Object Storage bucket lifecycle policy from Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_object\_storage\_bucket \- Manage an Object Storage bucket in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_object\_storage\_bucket\_info \- Retrieve Object Storage bucket information from Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_object\_storage\_object \- Upload\, download\, or delete an Object Storage object\.
+* ansible\.oci\.oci\_object\_storage\_object\_info \- Retrieve Object Storage object information\.
+* ansible\.oci\.oci\_vnic\_attachment \- Manage a VNIC attachment resource in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_vnic\_attachment\_info \- Retrieve VNIC attachment information from Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_volume\_backup\_policy \- Manage a volume backup policy in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_volume\_backup\_policy\_assignment \- Manage an OCI volume backup policy assignment\.
+* ansible\.oci\.oci\_volume\_backup\_policy\_assignment\_info \- Retrieve an OCI volume backup policy assignment\.
+* ansible\.oci\.oci\_volume\_backup\_policy\_info \- Retrieve volume backup policy information from Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_volume\_group\_backup \- Manage a volume group backup resource in Oracle Cloud Infrastructure\.
+* ansible\.oci\.oci\_volume\_group\_backup\_info \- Retrieve volume group backup information from Oracle Cloud Infrastructure\.
+
+<a id="v1-0-0"></a>
+## v1\.0\.0
+
+<a id="release-summary-1"></a>
+### Release Summary
+
+Release summary for v1\.0\.0
+
+<a id="new-modules-1"></a>
 ### New Modules
 
 * ansible\.oci\.oci\_availability\_domain\_info \- Retrieve Availability Domain information from Oracle Cloud Infrastructure\.

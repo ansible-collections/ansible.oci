@@ -4,6 +4,54 @@ Oracle OCI Collection Release Notes
 
 .. contents:: Topics
 
+v1.1.0
+======
+
+Release Summary
+---------------
+
+Release summary for v1.1.0
+
+Minor Changes
+-------------
+
+- oci_blockstorage_volume - add create-time source_details to restore from a volume backup or clone from an existing volume.
+- oci_vnic_attachment - add secondary VNIC attachment lifecycle management.
+- oci_vnic_attachment_info - add VNIC attachment retrieval and listing.
+
+New Modules
+-----------
+
+- ansible.oci.oci_bastion - Manage a Bastion resource in Oracle Cloud Infrastructure.
+- ansible.oci.oci_bastion_info - Retrieve bastion information from Oracle Cloud Infrastructure.
+- ansible.oci.oci_boot_volume - Manage a boot volume resource in Oracle Cloud Infrastructure.
+- ansible.oci.oci_identity_compartment - Manage OCI compartments.
+- ansible.oci.oci_identity_compartment_info - Retrieve OCI compartment information.
+- ansible.oci.oci_identity_domain - Manage OCI identity domains.
+- ansible.oci.oci_identity_domain_info - Retrieve OCI identity domain information.
+- ansible.oci.oci_identity_group - Manage a group in an OCI IAM identity domain.
+- ansible.oci.oci_identity_group_info - Retrieve groups from an OCI IAM identity domain.
+- ansible.oci.oci_identity_user - Manage a user in an OCI IAM identity domain.
+- ansible.oci.oci_identity_user_group_membership - Manage a user group membership in an OCI IAM identity domain.
+- ansible.oci.oci_identity_user_group_membership_info - Retrieve user group memberships from an OCI IAM identity domain.
+- ansible.oci.oci_identity_user_info - Retrieve users from an OCI IAM identity domain.
+- ansible.oci.oci_network_private_ip - Manage a Private IP resource in Oracle Cloud Infrastructure.
+- ansible.oci.oci_network_public_ip - Manage a Public IP resource in Oracle Cloud Infrastructure.
+- ansible.oci.oci_object_lifecycle_policy - Manage an Object Storage bucket lifecycle policy.
+- ansible.oci.oci_object_lifecycle_policy_info - Get an Object Storage bucket lifecycle policy from Oracle Cloud Infrastructure.
+- ansible.oci.oci_object_storage_bucket - Manage an Object Storage bucket in Oracle Cloud Infrastructure.
+- ansible.oci.oci_object_storage_bucket_info - Retrieve Object Storage bucket information from Oracle Cloud Infrastructure.
+- ansible.oci.oci_object_storage_object - Upload, download, or delete an Object Storage object.
+- ansible.oci.oci_object_storage_object_info - Retrieve Object Storage object information.
+- ansible.oci.oci_vnic_attachment - Manage a VNIC attachment resource in Oracle Cloud Infrastructure.
+- ansible.oci.oci_vnic_attachment_info - Retrieve VNIC attachment information from Oracle Cloud Infrastructure.
+- ansible.oci.oci_volume_backup_policy - Manage a volume backup policy in Oracle Cloud Infrastructure.
+- ansible.oci.oci_volume_backup_policy_assignment - Manage an OCI volume backup policy assignment.
+- ansible.oci.oci_volume_backup_policy_assignment_info - Retrieve an OCI volume backup policy assignment.
+- ansible.oci.oci_volume_backup_policy_info - Retrieve volume backup policy information from Oracle Cloud Infrastructure.
+- ansible.oci.oci_volume_group_backup - Manage a volume group backup resource in Oracle Cloud Infrastructure.
+- ansible.oci.oci_volume_group_backup_info - Retrieve volume group backup information from Oracle Cloud Infrastructure.
+
 v1.0.0
 ======
 
@@ -15,7 +63,7 @@ Release summary for v1.0.0
 New Modules
 -----------
 
-- ansible.oci.oci_identity_availability_domain_info - Retrieve Availability Domain information from Oracle Cloud Infrastructure.
+- ansible.oci.oci_availability_domain_info - Retrieve Availability Domain information from Oracle Cloud Infrastructure.
 - ansible.oci.oci_blockstorage_volume - Manage a block volume resource in Oracle Cloud Infrastructure.
 - ansible.oci.oci_blockstorage_volume_info - Retrieve block volume information from Oracle Cloud Infrastructure.
 - ansible.oci.oci_boot_volume_backup - Manage a boot volume backup resource in Oracle Cloud Infrastructure.

@@ -138,3 +138,106 @@ releases:
         name: oci_volume_group_info
         namespace: ''
     release_date: '2026-08-25'
+  1.1.0:
+    changes:
+      minor_changes:
+        - oci_blockstorage_volume - add create-time source_details to restore from
+          a volume backup or clone from an existing volume.
+        - oci_vnic_attachment - add secondary VNIC attachment lifecycle management.
+        - oci_vnic_attachment_info - add VNIC attachment retrieval and listing.
+      release_summary: Release summary for v1.1.0
+    fragments:
+      - release-summary.yml
+      - vnic-attachment.yml
+      - volume-source-details.yml
+    modules:
+      - description: Manage a Bastion resource in Oracle Cloud Infrastructure.
+        name: oci_bastion
+        namespace: ''
+      - description: Retrieve bastion information from Oracle Cloud Infrastructure.
+        name: oci_bastion_info
+        namespace: ''
+      - description: Manage a boot volume resource in Oracle Cloud Infrastructure.
+        name: oci_boot_volume
+        namespace: ''
+      - description: Manage OCI compartments.
+        name: oci_identity_compartment
+        namespace: ''
+      - description: Retrieve OCI compartment information.
+        name: oci_identity_compartment_info
+        namespace: ''
+      - description: Manage OCI identity domains.
+        name: oci_identity_domain
+        namespace: ''
+      - description: Retrieve OCI identity domain information.
+        name: oci_identity_domain_info
+        namespace: ''
+      - description: Manage a group in an OCI IAM identity domain.
+        name: oci_identity_group
+        namespace: ''
+      - description: Retrieve groups from an OCI IAM identity domain.
+        name: oci_identity_group_info
+        namespace: ''
+      - description: Manage a user in an OCI IAM identity domain.
+        name: oci_identity_user
+        namespace: ''
+      - description: Manage a user group membership in an OCI IAM identity domain.
+        name: oci_identity_user_group_membership
+        namespace: ''
+      - description: Retrieve user group memberships from an OCI IAM identity domain.
+        name: oci_identity_user_group_membership_info
+        namespace: ''
+      - description: Retrieve users from an OCI IAM identity domain.
+        name: oci_identity_user_info
+        namespace: ''
+      - description: Manage a Private IP resource in Oracle Cloud Infrastructure.
+        name: oci_network_private_ip
+        namespace: ''
+      - description: Manage a Public IP resource in Oracle Cloud Infrastructure.
+        name: oci_network_public_ip
+        namespace: ''
+      - description: Manage an Object Storage bucket lifecycle policy.
+        name: oci_object_lifecycle_policy
+        namespace: ''
+      - description: Get an Object Storage bucket lifecycle policy from Oracle Cloud
+          Infrastructure.
+        name: oci_object_lifecycle_policy_info
+        namespace: ''
+      - description: Manage an Object Storage bucket in Oracle Cloud Infrastructure.
+        name: oci_object_storage_bucket
+        namespace: ''
+      - description: Retrieve Object Storage bucket information from Oracle Cloud
+          Infrastructure.
+        name: oci_object_storage_bucket_info
+        namespace: ''
+      - description: Upload, download, or delete an Object Storage object.
+        name: oci_object_storage_object
+        namespace: ''
+      - description: Retrieve Object Storage object information.
+        name: oci_object_storage_object_info
+        namespace: ''
+      - description: Manage a VNIC attachment resource in Oracle Cloud Infrastructure.
+        name: oci_vnic_attachment
+        namespace: ''
+      - description: Retrieve VNIC attachment information from Oracle Cloud Infrastructure.
+        name: oci_vnic_attachment_info
+        namespace: ''
+      - description: Manage a volume backup policy in Oracle Cloud Infrastructure.
+        name: oci_volume_backup_policy
+        namespace: ''
+      - description: Manage an OCI volume backup policy assignment.
+        name: oci_volume_backup_policy_assignment
+        namespace: ''
+      - description: Retrieve an OCI volume backup policy assignment.
+        name: oci_volume_backup_policy_assignment_info
+        namespace: ''
+      - description: Retrieve volume backup policy information from Oracle Cloud Infrastructure.
+        name: oci_volume_backup_policy_info
+        namespace: ''
+      - description: Manage a volume group backup resource in Oracle Cloud Infrastructure.
+        name: oci_volume_group_backup
+        namespace: ''
+      - description: Retrieve volume group backup information from Oracle Cloud Infrastructure.
+        name: oci_volume_group_backup_info
+        namespace: ''
+    release_date: '2026-10-04'
