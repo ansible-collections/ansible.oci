@@ -369,6 +369,25 @@ def test_upload_does_not_overwrite_object_created_after_head(monkeypatch, tmp_pa
     assert client.body == b"concurrent"
 
 
+@pytest.mark.parametrize("status,force", [(403, False), (412, False), (412, True)])
+def test_upload_propagates_unrecovered_service_errors(monkeypatch, tmp_path, status, force):
+    module_obj, service_error = load_object(monkeypatch)
+    source = tmp_path / "source"
+    source.write_bytes(b"hello")
+    client = ObjectClient(service_error)
+    failure = service_error(status)
+    params = base_params(src=str(source), force=force)
+
+    def fail_upload(**kwargs):
+        raise failure
+
+    monkeypatch.setattr(client, "put_object", fail_upload)
+    with pytest.raises(service_error) as result:
+        run(module_obj, monkeypatch, client, params)
+
+    assert result.value is failure
+
+
 def test_download_is_atomic_and_check_mode_does_not_write(monkeypatch, tmp_path):
     module_obj, service_error = load_object(monkeypatch)
     destination = tmp_path / "download"
@@ -485,8 +504,9 @@ def test_download_hash_failure_preserves_destination(monkeypatch, tmp_path, fail
         return original_hash(module, path)
 
     monkeypatch.setattr(module_obj.AnsibleModule, "sha256", fail_hash)
+    params = base_params(dest=str(destination), force=True)
     with pytest.raises(FailJsonCalled) as failed:
-        run(module_obj, monkeypatch, client, base_params(dest=str(destination), force=True))
+        run(module_obj, monkeypatch, client, params)
 
     assert failed.value.payload["msg"] == f"Cannot download object to {destination}: cannot read file for hashing"
     assert destination.read_bytes() == b"old"
@@ -591,8 +611,9 @@ def test_download_closes_response_when_temporary_cleanup_fails(monkeypatch, tmp_
         return original_unlink(path, *args, **kwargs)
 
     monkeypatch.setattr(module_obj.os, "unlink", fail_temporary_unlink)
+    params = base_params(dest=str(tmp_path / "download"))
     with pytest.raises(OSError, match="temporary cleanup failed"):
-        run(module_obj, monkeypatch, client, base_params(dest=str(tmp_path / "download")))
+        run(module_obj, monkeypatch, client, params)
     assert body.closed
 
 
@@ -995,15 +1016,30 @@ def test_argument_spec_marks_customer_key_and_hash_secret(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "params",
+    "params,expected_message",
     [
-        base_params(),
-        base_params(src="a", dest="b"),
-        base_params(state="absent", src="a"),
+        (base_params(), "state=present requires exactly one of src or dest"),
+        (base_params(src="a", dest="b"), "state=present requires exactly one of src or dest"),
+        (base_params(state="absent", src="a"), "src and dest cannot be used when state=absent"),
+        (base_params(src="a", dest="b", version_id=""), "version_id must not be empty"),
+        (
+            base_params(src="a", version_id="version-1", opc_sse_customer_key="key"),
+            "version_id is only supported for download and delete",
+        ),
+        (
+            base_params(dest="b", opc_meta={}, opc_sse_customer_key="key"),
+            "Upload options require src: opc_meta",
+        ),
+        (base_params(src="a", opc_sse_customer_key="key"), "All three SSE-C options must be supplied together"),
+        (
+            base_params(state="absent", src="a", opc_meta={}),
+            "src and dest cannot be used when state=absent",
+        ),
     ],
 )
-def test_validate_arguments(monkeypatch, params):
+def test_validate_arguments(monkeypatch, params, expected_message):
     module_obj = load_object(monkeypatch)[0]
     instance = make_module_instance(module_obj, "OciObjectStorageObjectModule", params)
-    with pytest.raises(FailJsonCalled):
+    with pytest.raises(FailJsonCalled) as result:
         instance.validate_arguments()
+    assert result.value.payload["msg"] == expected_message

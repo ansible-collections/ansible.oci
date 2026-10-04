@@ -229,41 +229,37 @@ class OciObjectStorageObjectModule(OciObjectStorageNamespaceMixin, OciModuleBase
             self.module.fail_json(msg="version_id must not be empty")
 
         if params.get("state", "present") == "present":
-            if bool(source) == bool(destination):
-                self.module.fail_json(
-                    msg="state=present requires exactly one of src or dest"
-                )
-            if source and params.get("version_id") is not None:
-                self.module.fail_json(
-                    msg="version_id is only supported for download and delete"
-                )
+            self._validate_present_arguments(source, destination)
+            return
 
-            if destination:
-                upload_options = [
-                    name for name in UPLOAD_OPTION_NAMES if params.get(name) is not None
-                ]
-                if upload_options:
-                    self.module.fail_json(
-                        msg="Upload options require src: " + ", ".join(upload_options)
-                    )
+        if source or destination:
+            self.module.fail_json(msg="src and dest cannot be used when state=absent")
+        upload_options = [
+            name for name in UPLOAD_OPTION_NAMES if params.get(name) is not None
+        ]
+        if upload_options:
+            self.module.fail_json(
+                msg="Upload options require src: " + ", ".join(upload_options)
+            )
 
-            customer_options = [
-                name
-                for name in CUSTOMER_ENCRYPTION_OPTION_NAMES
-                if params.get(name) is not None
-            ]
-            if customer_options and len(customer_options) != len(CUSTOMER_ENCRYPTION_OPTION_NAMES):
-                self.module.fail_json(msg="All three SSE-C options must be supplied together")
-            if customer_options and params["opc_sse_customer_algorithm"] != "aes256":
-                self.module.fail_json(msg="opc_sse_customer_algorithm must be aes256")
+    def _validate_present_arguments(self, source, destination):
+        """Validate upload and download inputs in their original error order.
 
-            if source and not os.path.isfile(source):
-                self.module.fail_json(msg="src must refer to an existing regular file")
-            if destination and os.path.isdir(destination):
-                self.module.fail_json(msg="dest must be a file path, not a directory")
-        else:
-            if source or destination:
-                self.module.fail_json(msg="src and dest cannot be used when state=absent")
+        Args:
+            source (str or None): Local upload path.
+            destination (str or None): Local download path.
+        """
+        params = self.module.params
+        if bool(source) == bool(destination):
+            self.module.fail_json(
+                msg="state=present requires exactly one of src or dest"
+            )
+        if source and params.get("version_id") is not None:
+            self.module.fail_json(
+                msg="version_id is only supported for download and delete"
+            )
+
+        if destination:
             upload_options = [
                 name for name in UPLOAD_OPTION_NAMES if params.get(name) is not None
             ]
@@ -271,6 +267,25 @@ class OciObjectStorageObjectModule(OciObjectStorageNamespaceMixin, OciModuleBase
                 self.module.fail_json(
                     msg="Upload options require src: " + ", ".join(upload_options)
                 )
+
+        self._validate_customer_encryption()
+        if source and not os.path.isfile(source):
+            self.module.fail_json(msg="src must refer to an existing regular file")
+        if destination and os.path.isdir(destination):
+            self.module.fail_json(msg="dest must be a file path, not a directory")
+
+    def _validate_customer_encryption(self):
+        """Require a complete SSE-C triplet using the supported algorithm."""
+        params = self.module.params
+        customer_options = [
+            name
+            for name in CUSTOMER_ENCRYPTION_OPTION_NAMES
+            if params.get(name) is not None
+        ]
+        if customer_options and len(customer_options) != len(CUSTOMER_ENCRYPTION_OPTION_NAMES):
+            self.module.fail_json(msg="All three SSE-C options must be supplied together")
+        if customer_options and params["opc_sse_customer_algorithm"] != "aes256":
+            self.module.fail_json(msg="opc_sse_customer_algorithm must be aes256")
 
     def _request_kwargs(self):
         """Build the object identity for SDK requests.
@@ -490,65 +505,75 @@ class OciObjectStorageObjectModule(OciObjectStorageNamespaceMixin, OciModuleBase
         """Upload, download, or delete an object, respecting force and check mode."""
         self.validate_arguments()
         params = self.module.params
-        state = params.get("state", "present")
 
-        if state == "absent":
-            existing = (
-                self._object_version()
-                if params.get("version_id")
-                else self._current_object()
-            )
-            if existing is None:
-                self.module.exit_json(changed=False)
-            if self.module.check_mode:
-                self.module.exit_json(changed=True)
+        if params.get("state", "present") == "absent":
+            self._execute_delete()
+        elif params.get("src"):
+            self._execute_upload()
+        else:
+            self._execute_download()
 
-            request_kwargs = self._request_kwargs()
-            if params.get("version_id"):
-                request_kwargs["version_id"] = params["version_id"]
-            self.client.delete_object(**request_kwargs)
+    def _execute_delete(self):
+        """Delete the current object or requested version, respecting check mode."""
+        params = self.module.params
+        existing = (
+            self._object_version()
+            if params.get("version_id")
+            else self._current_object()
+        )
+        if existing is None:
+            self.module.exit_json(changed=False)
+        if self.module.check_mode:
             self.module.exit_json(changed=True)
 
-        is_upload = bool(params.get("src"))
-        if (
-            not is_upload
-            and not params.get("force", False)
-            and os.path.lexists(params["dest"])
-        ):
-            self.module.exit_json(changed=False, resource={})
+        request_kwargs = self._request_kwargs()
+        if params.get("version_id"):
+            request_kwargs["version_id"] = params["version_id"]
+        self.client.delete_object(**request_kwargs)
+        self.module.exit_json(changed=True)
 
-        existing = self._current_object() if is_upload else self._head()
-        target_exists = existing is not None if is_upload else os.path.lexists(params["dest"])
-        if target_exists and not params.get("force", False):
+    def _execute_upload(self):
+        """Reconcile an upload, preserving matching or protected remote objects."""
+        params = self.module.params
+        existing = self._current_object()
+        if existing is not None and not params.get("force", False):
             self.module.exit_json(changed=False, resource=self._resource(existing))
-        if not is_upload and existing is None:
-            self.module.fail_json(msg="Cannot download object because it does not exist")
-
-        if target_exists:
-            path = params["src"] if is_upload else params["dest"]
-            expected_md5 = (
-                getattr(existing, "md5", None)
-                if is_upload
-                else existing.headers.get("content-md5")
-            )
-            if self._same_content(path, expected_md5):
-                self.module.exit_json(changed=False, resource=self._resource(existing))
+        if existing is not None and self._same_content(params["src"], getattr(existing, "md5", None)):
+            self.module.exit_json(changed=False, resource=self._resource(existing))
 
         if self.module.check_mode:
             self.module.exit_json(changed=True, resource=self._resource(existing))
 
-        if is_upload:
-            try:
-                response = self._upload(params["src"])
-            except oci.exceptions.ServiceError as exc:
-                if not params.get("force", False) and exc.status == 412:
-                    existing = self._current_object()
-                    if existing is not None:
-                        self.module.exit_json(changed=False, resource=self._resource(existing))
-                raise
-            changed = True
-        else:
-            response, changed = self._download(params["dest"])
+        try:
+            response = self._upload(params["src"])
+        except oci.exceptions.ServiceError as exc:
+            if not params.get("force", False) and exc.status == 412:
+                existing = self._current_object()
+                if existing is not None:
+                    self.module.exit_json(changed=False, resource=self._resource(existing))
+            raise
+        self.module.exit_json(changed=True, resource=self._resource(response))
+
+    def _execute_download(self):
+        """Reconcile a download, preserving matching or protected local files."""
+        params = self.module.params
+        destination = params["dest"]
+        if not params.get("force", False) and os.path.lexists(destination):
+            self.module.exit_json(changed=False, resource={})
+
+        existing = self._head()
+        target_exists = os.path.lexists(destination)
+        if target_exists and not params.get("force", False):
+            self.module.exit_json(changed=False, resource=self._resource(existing))
+        if existing is None:
+            self.module.fail_json(msg="Cannot download object because it does not exist")
+
+        if target_exists and self._same_content(destination, existing.headers.get("content-md5")):
+            self.module.exit_json(changed=False, resource=self._resource(existing))
+        if self.module.check_mode:
+            self.module.exit_json(changed=True, resource=self._resource(existing))
+
+        response, changed = self._download(destination)
         self.module.exit_json(changed=changed, resource=self._resource(response))
 
 
