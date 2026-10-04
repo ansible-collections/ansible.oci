@@ -64,11 +64,14 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
+from ansible_collections.ansible.oci.plugins.module_utils.oci_object_storage import (
+    OciObjectStorageNamespaceMixin,
+)
 
 oci = import_oci_sdk()[0]
 
 
-class OciObjectStorageObjectInfoModule(OciInfoBase):
+class OciObjectStorageObjectInfoModule(OciObjectStorageNamespaceMixin, OciInfoBase):
     results_key = "objects"
 
     @property
@@ -77,16 +80,6 @@ class OciObjectStorageObjectInfoModule(OciInfoBase):
 
     def serialize_result_resource(self, resource):
         return oci.util.to_dict(resource)
-
-    @property
-    def namespace_name(self):
-        namespace = getattr(self, "_namespace_name", None)
-        if namespace is None:
-            namespace = self.module.params.get("namespace_name")
-            if not namespace:
-                namespace = self.client.get_namespace().data
-            self._namespace_name = namespace
-        return namespace
 
     def fetch_resources(self):
         common = {

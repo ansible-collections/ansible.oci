@@ -178,6 +178,9 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
+from ansible_collections.ansible.oci.plugins.module_utils.oci_object_storage import (
+    OciObjectStorageNamespaceMixin,
+)
 
 oci = import_oci_sdk()[0]
 
@@ -206,7 +209,7 @@ STORAGE_TIER_TO_OCI = {
 }
 
 
-class OciObjectStorageObjectModule(OciModuleBase):
+class OciObjectStorageObjectModule(OciObjectStorageNamespaceMixin, OciModuleBase):
     @property
     def client_class(self):
         """Return the SDK client class.
@@ -215,21 +218,6 @@ class OciObjectStorageObjectModule(OciModuleBase):
             type: OCI Object Storage client class.
         """
         return oci.object_storage.ObjectStorageClient
-
-    @property
-    def namespace_name(self):
-        """Resolve and cache the supplied or default namespace.
-
-        Returns:
-            str: Object Storage namespace name.
-        """
-        namespace = getattr(self, "_namespace_name", None)
-        if namespace is None:
-            namespace = self.module.params.get("namespace_name")
-            if not namespace:
-                namespace = self.client.get_namespace().data
-            self._namespace_name = namespace
-        return namespace
 
     def validate_arguments(self):
         """Validate transfer options and fail the module for invalid inputs."""

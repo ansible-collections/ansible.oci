@@ -33,10 +33,15 @@ class ObjectClient:
         self.deletes = []
         self.gets = []
         self.heads = []
+        self.namespace_requests = []
+        self.namespace_error = None
         self.objects = None
         self.versions = []
 
     def get_namespace(self, **kwargs):
+        self.namespace_requests.append(kwargs)
+        if self.namespace_error is not None:
+            raise self.namespace_error
         return FakeResponse("testns")
 
     def head_object(self, **kwargs):
@@ -177,6 +182,9 @@ def run(module_obj, monkeypatch, client, params, check_mode=False):
     )
     instance.module.sha256 = types.MethodType(module_obj.AnsibleModule.sha256, instance.module)
     instance.module.digest_from_file = types.MethodType(module_obj.AnsibleModule.digest_from_file, instance.module)
+    monkeypatch.setattr(
+        instance, "call_with_retry", lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    )
 
     def list_resources(fn, *args, **kwargs):
         data = fn(*args, **kwargs).data
@@ -649,6 +657,78 @@ def test_namespace_is_resolved_when_omitted(monkeypatch, tmp_path):
         module_obj, monkeypatch, client, base_params(namespace_name=None, src=str(source))
     )
     assert result["changed"] is True
+    assert client.namespace_requests == [{}]
+    assert client.puts[0]["namespace_name"] == "testns"
+
+
+def test_namespace_uses_supplied_name_without_lookup(monkeypatch):
+    module_obj, service_error = load_object(monkeypatch)
+    client = ObjectClient(service_error)
+    instance = make_module_instance(
+        module_obj,
+        "OciObjectStorageObjectModule",
+        base_params(namespace_name="customns"),
+        client=client,
+    )
+    retry_calls = []
+    monkeypatch.setattr(
+        instance,
+        "call_with_retry",
+        lambda fn, *args, **kwargs: retry_calls.append(fn.__name__),
+    )
+
+    assert instance.namespace_name == "customns"
+    assert instance.namespace_name == "customns"
+    assert client.namespace_requests == []
+    assert retry_calls == []
+
+
+@pytest.mark.parametrize("namespace_name", [None, ""])
+def test_namespace_is_resolved_once_through_retry(monkeypatch, namespace_name):
+    module_obj, service_error = load_object(monkeypatch)
+    client = ObjectClient(service_error)
+    instance = make_module_instance(
+        module_obj,
+        "OciObjectStorageObjectModule",
+        base_params(namespace_name=namespace_name),
+        client=client,
+    )
+    retry_calls = []
+
+    def call_with_retry(fn, *args, **kwargs):
+        retry_calls.append((fn.__name__, args, kwargs))
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(instance, "call_with_retry", call_with_retry)
+
+    assert instance.namespace_name == "testns"
+    assert instance.namespace_name == "testns"
+    assert client.namespace_requests == [{}]
+    assert retry_calls == [("get_namespace", (), {})]
+
+
+def test_namespace_lookup_failure_is_not_cached(monkeypatch):
+    module_obj, service_error = load_object(monkeypatch)
+    client = ObjectClient(service_error)
+    client.namespace_error = service_error(403, "forbidden")
+    instance = make_module_instance(
+        module_obj,
+        "OciObjectStorageObjectModule",
+        base_params(namespace_name=None),
+        client=client,
+    )
+    monkeypatch.setattr(
+        instance, "call_with_retry", lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    )
+
+    with pytest.raises(service_error) as result:
+        instance.namespace_name
+
+    assert result.value is client.namespace_error
+    assert getattr(instance, "_namespace_name", None) is None
+    client.namespace_error = None
+    assert instance.namespace_name == "testns"
+    assert client.namespace_requests == [{}, {}]
 
 
 def test_download_missing_object_fails_even_in_check_mode(monkeypatch, tmp_path):
