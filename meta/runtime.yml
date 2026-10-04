@@ -66,6 +66,8 @@ action_groups:
     - oci_object_storage_bucket_info
     - oci_object_storage_object
     - oci_object_storage_object_info
+    - oci_object_lifecycle_policy
+    - oci_object_lifecycle_policy_info
     - oci_boot_volume_backup
     - oci_boot_volume_backup_info
     - oci_boot_volume_info

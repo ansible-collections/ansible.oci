@@ -1,22 +1,45 @@
 ---
-- name: Remove test object
-  ansible.oci.oci_object_storage_object:
-    bucket_name: "{{ oci_object_storage_object_bucket_name }}"
-    object_name: "{{ oci_object_storage_object_name }}"
-    state: absent
-  when: oci_object_storage_object_bucket_name | default('') | length > 0
-  ignore_errors: true
+- name: Clean up Object Storage object integration resources
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Remove test object
+      ansible.oci.oci_object_storage_object:
+        bucket_name: "{{ oci_object_storage_object_bucket_name }}"
+        object_name: "{{ oci_object_storage_object_name }}"
+        state: absent
+      when: oci_object_storage_object_bucket_name | default('') | length > 0
+      register: oci_cleanup_storage_object
+      retries: 3
+      ignore_errors: true
 
-- name: Remove test bucket
-  ansible.oci.oci_object_storage_bucket:
-    name: "{{ oci_object_storage_object_bucket_name }}"
-    state: absent
-    force: true
-  when: oci_object_storage_object_bucket_name | default('') | length > 0
-  ignore_errors: true
+    - name: Remove test bucket
+      ansible.oci.oci_object_storage_bucket:
+        name: "{{ oci_object_storage_object_bucket_name }}"
+        state: absent
+        force: true
+      when: oci_object_storage_object_bucket_name | default('') | length > 0
+      register: oci_cleanup_storage_object_bucket
+      retries: 3
+      ignore_errors: true
 
-- name: Remove local test directory
-  ansible.builtin.file:
-    path: "{{ oci_object_storage_object_temp_dir.path }}"
-    state: absent
-  when: oci_object_storage_object_temp_dir is defined
+    - name: Remove local test directory
+      ansible.builtin.file:
+        path: "{{ oci_object_storage_object_temp_dir.path }}"
+        state: absent
+      when: oci_object_storage_object_temp_dir is defined
+      register: oci_cleanup_storage_object_directory
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_storage_object is not failed
+          - oci_cleanup_storage_object_bucket is not failed
+          - oci_cleanup_storage_object_directory is not failed
+        fail_msg: >-
+          Resource cleanup failed after 3 retries;
+          see the failed cleanup tasks above.
