@@ -449,3 +449,165 @@ def test_absent_without_policy_is_unchanged_and_present_requires_items():
     )
     with pytest.raises(FailJsonCalled):
         present.validate_create_request()
+
+
+class PolicyClient:
+    def __init__(self, policy=None):
+        self.policy = policy
+        self.put_count = 0
+        self.delete_count = 0
+
+    def get_object_lifecycle_policy(self, namespace_name, bucket_name):
+        assert namespace_name == "ns"
+        assert bucket_name == "logs"
+        if self.policy is None:
+            raise ServiceError(404)
+        return FakeResponse(self.policy)
+
+    def put_object_lifecycle_policy(
+        self, namespace_name, bucket_name, put_object_lifecycle_policy_details
+    ):
+        assert namespace_name == "ns"
+        assert bucket_name == "logs"
+        self.put_count += 1
+        self.policy = FakeModel(
+            items=put_object_lifecycle_policy_details.items,
+            time_created="2026-10-04T12:00:00Z",
+        )
+        return FakeResponse(self.policy)
+
+    def delete_object_lifecycle_policy(self, namespace_name, bucket_name):
+        assert namespace_name == "ns"
+        assert bucket_name == "logs"
+        self.delete_count += 1
+        self.policy = None
+        return FakeResponse()
+
+
+def run_policy(module_obj, client, desired_items=None, state="present", check_mode=False):
+    instance = make_policy_module(
+        module_obj,
+        {
+            "bucket_name": "logs",
+            "namespace_name": "ns",
+            "state": state,
+            "items": desired_items,
+        },
+        client=client,
+        check_mode=check_mode,
+    )
+    with pytest.raises(ExitJsonCalled) as result:
+        instance.execute_resource_module()
+    return result.value.payload
+
+
+def test_replacement_removes_omitted_rules_and_reconciles_without_more_puts():
+    module_obj = load_collection_module("oci_object_lifecycle_policy")
+    client = PolicyClient()
+    original = items() + items(name="expire-logs", action="delete")
+    created = run_policy(module_obj, client, original)
+    assert created["changed"] is True
+    assert len(created["resource"]["items"]) == 2
+
+    desired = items(time_amount=60)
+    predicted = run_policy(module_obj, client, desired, check_mode=True)
+    assert predicted == {"changed": True}
+    assert len(client.policy.items) == 2
+    assert client.put_count == 1
+
+    replaced = run_policy(module_obj, client, desired)
+    assert replaced["changed"] is True
+    assert [rule["name"] for rule in replaced["resource"]["items"]] == [
+        "archive-old-objects"
+    ]
+    assert replaced["resource"]["items"][0]["time_amount"] == 60
+    assert run_policy(module_obj, client, desired)["changed"] is False
+    assert run_policy(module_obj, client, desired, check_mode=True)["changed"] is False
+    assert client.put_count == 2
+
+
+def test_empty_rules_clear_existing_policy_and_remain_distinct_from_deletion():
+    module_obj = load_collection_module("oci_object_lifecycle_policy")
+    client = PolicyClient()
+    run_policy(module_obj, client, items())
+
+    assert run_policy(module_obj, client, [], check_mode=True) == {"changed": True}
+    assert len(client.policy.items) == 1
+    assert client.put_count == 1
+
+    cleared = run_policy(module_obj, client, [])
+    assert cleared["changed"] is True
+    assert cleared["resource"]["items"] == []
+    assert run_policy(module_obj, client, [])["changed"] is False
+    assert run_policy(module_obj, client, [], check_mode=True)["changed"] is False
+    assert client.put_count == 2
+    assert client.delete_count == 0
+
+    assert run_policy(module_obj, client, state="absent", check_mode=True) == {
+        "changed": True
+    }
+    assert client.policy is not None
+    assert run_policy(module_obj, client, state="absent") == {"changed": True}
+    assert run_policy(module_obj, client, state="absent") == {"changed": False}
+    assert run_policy(module_obj, client, state="absent", check_mode=True) == {
+        "changed": False
+    }
+    assert client.delete_count == 1
+
+
+def test_reordered_rules_and_filters_reconcile_without_putting_again():
+    module_obj = load_collection_module("oci_object_lifecycle_policy")
+    client = PolicyClient()
+    desired = items(
+        object_name_filter={
+            "inclusion_prefixes": ["logs/", "data/"],
+            "exclusion_patterns": ["keep-*", "skip-*"],
+        }
+    ) + items(name="abort-uploads", action="abort", target="multipart-uploads")
+    run_policy(module_obj, client, desired)
+    reordered = [
+        desired[1],
+        dict(
+            desired[0],
+            object_name_filter={
+                "inclusion_prefixes": ["data/", "logs/"],
+                "exclusion_patterns": ["skip-*", "keep-*"],
+            },
+        ),
+    ]
+
+    result = run_policy(module_obj, client, reordered)
+    assert result["changed"] is False
+    assert len(result["resource"]["items"]) == 2
+    assert run_policy(module_obj, client, reordered, check_mode=True)["changed"] is False
+    assert client.put_count == 1
+
+
+def test_empty_rules_can_create_policy_and_reconcile_without_repeated_puts():
+    module_obj = load_collection_module("oci_object_lifecycle_policy")
+    client = PolicyClient()
+    assert run_policy(module_obj, client, [], check_mode=True) == {"changed": True}
+    assert client.policy is None
+    assert client.put_count == 0
+
+    created = run_policy(module_obj, client, [])
+    assert created["changed"] is True
+    assert created["resource"]["items"] == []
+    assert run_policy(module_obj, client, [])["changed"] is False
+    assert run_policy(module_obj, client, [], check_mode=True)["changed"] is False
+    assert client.put_count == 1
+
+
+def test_delete_rejects_empty_bucket_name_before_lookup():
+    module_obj = load_collection_module("oci_object_lifecycle_policy")
+    instance = make_policy_module(
+        module_obj,
+        {"state": "absent", "bucket_name": "", "namespace_name": "ns"},
+        client=types.SimpleNamespace(
+            get_object_lifecycle_policy=lambda **kwargs: pytest.fail(
+                "delete must reject an empty bucket name before lookup"
+            )
+        ),
+    )
+    with pytest.raises(FailJsonCalled):
+        instance.execute_resource_module()

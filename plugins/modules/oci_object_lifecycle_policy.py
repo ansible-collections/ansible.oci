@@ -243,22 +243,14 @@ class OciObjectLifecyclePolicyModule(OciObjectStorageNamespaceMixin, OciResource
     list_resource_method = None
     name_lookup_param = None
     create_resource_name = "Object Storage lifecycle policy"
+    create_required_fields = ("items",)
     common_update_field_specs = ()
-
-    @property
-    def update_field_specs(self):
-        return ()
+    update_field_specs = ()
 
     def validate_delete_request(self):
         if not self.module.params.get("bucket_name"):
             self.module.fail_json(
                 msg="Deleting an Object Storage lifecycle policy requires bucket_name"
-            )
-
-    def validate_create_request(self):
-        if self.module.params.get("items") is None:
-            self.module.fail_json(
-                msg="Creating or updating an Object Storage lifecycle policy requires items"
             )
 
     def resolve_target_resource(self):
@@ -272,6 +264,7 @@ class OciObjectLifecyclePolicyModule(OciObjectStorageNamespaceMixin, OciResource
         )
 
     def needs_update(self, resource):
+        """Override the shared comparison to ignore rule/filter order and normalize OCI enums and defaults."""
         current_items = getattr(resource, "items", None)
         desired_items = self.module.params.get("items")
         return normalized_policy_items(current_items) != normalized_policy_items(

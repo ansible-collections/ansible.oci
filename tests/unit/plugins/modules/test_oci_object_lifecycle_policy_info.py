@@ -118,7 +118,8 @@ def test_fetch_resolves_and_caches_namespace_when_omitted(monkeypatch):
     ]
 
 
-def test_info_serializes_policy_and_items_as_unchanged_list(monkeypatch):
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_info_serializes_policy_and_items_as_unchanged_list(monkeypatch, check_mode):
     module_obj = load_info_module(monkeypatch)
     policy = FakeModel(
         time_created="2026-09-20T12:00:00Z",
@@ -138,6 +139,7 @@ def test_info_serializes_policy_and_items_as_unchanged_list(monkeypatch):
             get_object_lifecycle_policy=lambda **kwargs: FakeResponse(data=policy)
         ),
     )
+    instance.module.check_mode = check_mode
     monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
 
     with pytest.raises(ExitJsonCalled) as exc_info:

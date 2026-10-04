@@ -1,12 +1,33 @@
 ---
-- name: Remove lifecycle policy left by integration test
-  ansible.oci.oci_object_lifecycle_policy:
-    state: absent
-    bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
-  when: oci_object_lifecycle_policy_bucket_created | default(false)
+- name: Clean up Object Storage lifecycle policy integration resources
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Remove lifecycle policy left by integration test
+      ansible.oci.oci_object_lifecycle_policy:
+        state: absent
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      when: oci_object_lifecycle_policy_bucket_created | default(false)
+      register: oci_cleanup_lifecycle_policy
+      retries: 3
+      ignore_errors: true
 
-- name: Remove integration bucket
-  ansible.oci.oci_object_storage_bucket:
-    state: absent
-    name: "{{ oci_object_lifecycle_policy_bucket_name }}"
-  when: oci_object_lifecycle_policy_bucket_created | default(false)
+    - name: Remove integration bucket
+      ansible.oci.oci_object_storage_bucket:
+        state: absent
+        name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      when: oci_object_lifecycle_policy_bucket_created | default(false)
+      register: oci_cleanup_lifecycle_policy_bucket
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_lifecycle_policy is not failed
+          - oci_cleanup_lifecycle_policy_bucket is not failed
+        fail_msg: >-
+          Resource cleanup failed after 3 retries;
+          see the failed cleanup tasks above.

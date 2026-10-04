@@ -79,9 +79,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_object_storage imp
 oci = import_oci_sdk()[0]
 
 
-class OciObjectLifecyclePolicyInfoModule(
-    OciInfoBase, OciObjectStorageNamespaceMixin
-):
+class OciObjectLifecyclePolicyInfoModule(OciObjectStorageNamespaceMixin, OciInfoBase):
     """Info adapter for the lifecycle policy of one Object Storage bucket."""
 
     @property

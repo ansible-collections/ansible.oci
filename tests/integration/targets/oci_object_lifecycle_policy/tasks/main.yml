@@ -20,11 +20,12 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
-    - name: Create an empty bucket for policy testing
+    - name: Create an empty versioned bucket for policy testing
       ansible.oci.oci_object_storage_bucket:
         state: present
         name: "{{ oci_object_lifecycle_policy_bucket_name }}"
         compartment_id: "{{ oci_integration_compartment_id }}"
+        versioning: Enabled
       register: oci_object_lifecycle_policy_bucket_create
 
     - name: Mark bucket for cleanup
@@ -38,21 +39,49 @@
           - >-
             oci_object_lifecycle_policy_bucket_create.resource.name ==
             oci_object_lifecycle_policy_bucket_name
+          - >-
+            oci_object_lifecycle_policy_bucket_create.resource.versioning ==
+            'Enabled'
+          - >-
+            oci_object_lifecycle_policy_bucket_create.resource.namespace
+            | length > 0
 
     - name: Predict policy creation
       ansible.oci.oci_object_lifecycle_policy: &policy_create
         state: present
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
         items:
-          - name: expire-logs
+          - name: archive-data
+            target: objects
+            action: archive
+            time_amount: 3
+            time_unit: years
+            is_enabled: false
+            object_name_filter:
+              inclusion_patterns:
+                - archive/*
+                - records/*
+              exclusion_patterns:
+                - archive/keep/*
+                - records/legal/*
+              inclusion_prefixes:
+                - archive/
+                - records/
+          - name: delete-logs
             target: objects
             action: delete
-            time_amount: 90
+            time_amount: 45
             time_unit: days
             is_enabled: false
             object_name_filter:
               inclusion_patterns:
                 - logs/*
+                - tmp/*
+              exclusion_patterns:
+                - logs/keep/*
+              inclusion_prefixes:
+                - logs/
+                - tmp/
       check_mode: true
       register: policy_create_check
 
@@ -77,24 +106,71 @@
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
       register: policy_created_info
 
-    - name: Verify created policy rules
+    - name: Look up created policy in check mode with explicit namespace
+      ansible.oci.oci_object_lifecycle_policy_info:
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+      check_mode: true
+      register: policy_created_check_info
+
+    - name: Verify created policy rules and check-mode info lookup
+      vars:
+        created_items: >-
+          {{ policy_created_info.object_lifecycle_policies[0]["items"] }}
+        created_archive: >-
+          {{ created_items
+             | selectattr("name", "equalto", "archive-data")
+             | first }}
+        created_delete: >-
+          {{ created_items
+             | selectattr("name", "equalto", "delete-logs")
+             | first }}
       ansible.builtin.assert:
         that:
           - policy_create.changed | bool
-          - policy_create.resource['items'] | length == 1
+          - policy_create.resource['items'] | length == 2
           - policy_created_info.object_lifecycle_policies | length == 1
           - >-
+            policy_created_check_info.changed is defined and
+            not policy_created_check_info.changed | bool
+          - >-
+            policy_created_check_info.object_lifecycle_policies ==
+            policy_created_info.object_lifecycle_policies
+          - >-
             policy_created_info.object_lifecycle_policies[0]['items']
-            | length == 1
+            | length == 2
+          - created_archive.action == 'ARCHIVE'
+          - created_archive.target == 'objects'
+          - created_archive.time_amount == 3
+          - created_archive.time_unit == 'YEARS'
+          - not (created_archive.is_enabled | bool)
           - >-
-            policy_created_info.object_lifecycle_policies[0]['items'][0].name
-            == 'expire-logs'
+            created_archive
+            .object_name_filter.inclusion_patterns | sort
+            == ['archive/*', 'records/*']
           - >-
-            policy_created_info.object_lifecycle_policies[0]['items'][0].time_amount
-            == 90
+            created_archive
+            .object_name_filter.exclusion_patterns | sort
+            == ['archive/keep/*', 'records/legal/*']
           - >-
-            not policy_created_info.object_lifecycle_policies[0]['items'][0]
-            .is_enabled | bool
+            created_archive
+            .object_name_filter.inclusion_prefixes | sort
+            == ['archive/', 'records/']
+          - created_delete.action == 'DELETE'
+          - created_delete.target == 'objects'
+          - created_delete.time_amount == 45
+          - created_delete.time_unit == 'DAYS'
+          - not (created_delete.is_enabled | bool)
+          - >-
+            created_delete
+            .object_name_filter.inclusion_patterns | sort == ['logs/*', 'tmp/*']
+          - >-
+            created_delete
+            .object_name_filter.exclusion_patterns | sort == ['logs/keep/*']
+          - >-
+            created_delete
+            .object_name_filter.inclusion_prefixes | sort == ['logs/', 'tmp/']
 
     - name: Reapply created policy
       ansible.oci.oci_object_lifecycle_policy:
@@ -117,31 +193,54 @@
       ansible.oci.oci_object_lifecycle_policy: &policy_update
         state: present
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
         items:
-          - name: expire-logs
-            target: objects
-            action: delete
-            time_amount: 120
-            time_unit: days
-            is_enabled: false
-            object_name_filter:
-              inclusion_patterns:
-                - logs/*
           - name: archive-data
             target: objects
             action: archive
-            time_amount: 30
-            time_unit: days
+            time_amount: 4
+            time_unit: years
             is_enabled: false
             object_name_filter:
               inclusion_patterns:
-                - data/*
+                - archive/*
+                - records/2024/*
+              exclusion_patterns:
+                - archive/keep/*
+                - records/legal/*
+              inclusion_prefixes:
+                - archive/
+                - records/2024/
+          - name: warm-data
+            target: objects
+            action: infrequent_access
+            time_amount: 90
+            time_unit: days
+            is_enabled: false
+            object_name_filter:
+              inclusion_prefixes:
+                - warm/
+          - name: abort-old-uploads
+            target: multipart-uploads
+            action: abort
+            time_amount: 7
+            time_unit: days
+            is_enabled: false
+          - name: delete-previous-versions
+            target: previous-object-versions
+            action: delete
+            time_amount: 2
+            time_unit: years
+            is_enabled: false
       check_mode: true
       register: policy_update_check
 
     - name: Probe policy after update check mode
       ansible.oci.oci_object_lifecycle_policy_info:
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
       register: policy_update_probe
 
     - name: Verify update check mode retained original rules
@@ -151,10 +250,14 @@
           - policy_update_probe.object_lifecycle_policies | length == 1
           - >-
             policy_update_probe.object_lifecycle_policies[0]['items']
-            | length == 1
+            | length == 2
           - >-
-            policy_update_probe.object_lifecycle_policies[0]['items'][0].time_amount
-            == 90
+            policy_update_probe.object_lifecycle_policies[0]['items']
+            | selectattr('name', 'equalto', 'delete-logs') | list | length == 1
+          - >-
+            policy_update_probe.object_lifecycle_policies[0]['items']
+            | selectattr('name', 'equalto', 'archive-data')
+            | map(attribute='time_amount') | list == [3]
 
     - name: Replace policy rules
       ansible.oci.oci_object_lifecycle_policy:
@@ -164,25 +267,91 @@
     - name: Read replaced policy
       ansible.oci.oci_object_lifecycle_policy_info:
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
       register: policy_updated_info
 
-    - name: Verify replacement contains both desired rules
+    - name: Verify replacement contains all desired rule fields
+      vars:
+        updated_items: >-
+          {{ policy_updated_info.object_lifecycle_policies[0]["items"] }}
+        updated_archive: >-
+          {{ updated_items
+             | selectattr("name", "equalto", "archive-data")
+             | first }}
+        updated_warm: >-
+          {{ updated_items
+             | selectattr("name", "equalto", "warm-data")
+             | first }}
+        updated_abort: >-
+          {{ updated_items
+             | selectattr("name", "equalto", "abort-old-uploads")
+             | first }}
+        updated_previous: >-
+          {{ updated_items
+             | selectattr("name", "equalto", "delete-previous-versions")
+             | first }}
       ansible.builtin.assert:
         that:
           - policy_update.changed | bool
-          - policy_update.resource['items'] | length == 2
+          - policy_update.resource['items'] | length == 4
           - policy_updated_info.object_lifecycle_policies | length == 1
           - >-
             policy_updated_info.object_lifecycle_policies[0]['items']
-            | length == 2
+            | length == 4
           - >-
-            policy_updated_info.object_lifecycle_policies[0]['items']
-            | selectattr('name', 'equalto', 'expire-logs')
-            | map(attribute='time_amount') | list == [120]
+            updated_items | map(attribute='name') | list | sort ==
+            ['abort-old-uploads', 'archive-data', 'delete-previous-versions',
+            'warm-data']
+          - updated_archive.action == 'ARCHIVE'
+          - updated_archive.target == 'objects'
+          - updated_archive.time_amount == 4
+          - updated_archive.time_unit == 'YEARS'
+          - not (updated_archive.is_enabled | bool)
           - >-
-            policy_updated_info.object_lifecycle_policies[0]['items']
-            | map(attribute='name') | list | sort
-            == ['archive-data', 'expire-logs']
+            updated_archive
+            .object_name_filter.inclusion_patterns | sort
+            == ['archive/*', 'records/2024/*']
+          - >-
+            updated_archive
+            .object_name_filter.exclusion_patterns | sort
+            == ['archive/keep/*', 'records/legal/*']
+          - >-
+            updated_archive
+            .object_name_filter.inclusion_prefixes | sort
+            == ['archive/', 'records/2024/']
+          - updated_warm.action == 'INFREQUENT_ACCESS'
+          - updated_warm.target == 'objects'
+          - updated_warm.time_amount == 90
+          - updated_warm.time_unit == 'DAYS'
+          - not (updated_warm.is_enabled | bool)
+          - >-
+            updated_warm
+            .object_name_filter.inclusion_prefixes == ['warm/']
+          - >-
+            updated_abort.action == 'ABORT'
+          - >-
+            updated_abort.target == 'multipart-uploads'
+          - >-
+            updated_abort.time_amount == 7
+          - >-
+            updated_abort.time_unit == 'DAYS'
+          - not (updated_abort.is_enabled | bool)
+          - >-
+            updated_abort.object_name_filter is not defined or
+            updated_abort.object_name_filter is none
+          - >-
+            updated_previous.action == 'DELETE'
+          - >-
+            updated_previous.target == 'previous-object-versions'
+          - >-
+            updated_previous.time_amount == 2
+          - >-
+            updated_previous.time_unit == 'YEARS'
+          - not (updated_previous.is_enabled | bool)
+          - >-
+            updated_previous.object_name_filter is not defined or
+            updated_previous.object_name_filter is none
 
     - name: Reapply replaced policy
       ansible.oci.oci_object_lifecycle_policy:
@@ -201,16 +370,155 @@
           - not policy_update_rerun.changed | bool
           - not policy_update_check_rerun.changed | bool
 
+    - name: Reorder policy rules and filter values
+      ansible.oci.oci_object_lifecycle_policy: &policy_update_reordered
+        state: present
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
+        items:
+          - name: delete-previous-versions
+            target: previous-object-versions
+            action: delete
+            time_amount: 2
+            time_unit: years
+            is_enabled: false
+          - name: abort-old-uploads
+            target: multipart-uploads
+            action: abort
+            time_amount: 7
+            time_unit: days
+            is_enabled: false
+          - name: warm-data
+            target: objects
+            action: infrequent_access
+            time_amount: 90
+            time_unit: days
+            is_enabled: false
+            object_name_filter:
+              inclusion_prefixes:
+                - warm/
+          - name: archive-data
+            target: objects
+            action: archive
+            time_amount: 4
+            time_unit: years
+            is_enabled: false
+            object_name_filter:
+              inclusion_patterns:
+                - records/2024/*
+                - archive/*
+              exclusion_patterns:
+                - records/legal/*
+                - archive/keep/*
+              inclusion_prefixes:
+                - records/2024/
+                - archive/
+      register: policy_update_reordered_result
+
+    - name: Recheck reordered policy in check mode
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_update_reordered
+      check_mode: true
+      register: policy_update_reordered_check
+
+    - name: Verify rule and filter order do not change policy state
+      ansible.builtin.assert:
+        that:
+          - not policy_update_reordered_result.changed | bool
+          - not policy_update_reordered_check.changed | bool
+
+    - name: Predict clearing all lifecycle rules
+      ansible.oci.oci_object_lifecycle_policy: &policy_clear
+        state: present
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
+        items: []
+      check_mode: true
+      register: policy_clear_check
+
+    - name: Probe policy after clear check mode
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
+      register: policy_clear_probe
+
+    - name: Verify clear check mode preserved populated policy
+      ansible.builtin.assert:
+        that:
+          - policy_clear_check.changed | bool
+          - >-
+            policy_clear_probe.object_lifecycle_policies ==
+            policy_updated_info.object_lifecycle_policies
+          - >-
+            policy_clear_probe.object_lifecycle_policies[0]['items']
+            | length == 4
+
+    - name: Clear all lifecycle rules
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_clear
+      register: policy_clear
+
+    - name: Read policy after clearing all rules
+      ansible.oci.oci_object_lifecycle_policy_info:
+        bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
+      register: policy_cleared_info
+
+    - name: Verify lifecycle policy has no rules
+      ansible.builtin.assert:
+        that:
+          - policy_clear.changed | bool
+          - >-
+            policy_cleared_info.object_lifecycle_policies | length == 0 or
+            policy_cleared_info.object_lifecycle_policies[0]['items']
+            | default([]) | length == 0
+
+    - name: Repeat clear of lifecycle rules
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_clear
+      register: policy_clear_rerun
+
+    - name: Recheck cleared lifecycle rules
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_clear
+      check_mode: true
+      register: policy_clear_check_rerun
+
+    - name: Verify clear state is idempotent
+      ansible.builtin.assert:
+        that:
+          - not policy_clear_rerun.changed | bool
+          - not policy_clear_check_rerun.changed | bool
+
+    - name: Recreate populated policy before deletion checks
+      ansible.oci.oci_object_lifecycle_policy:
+        <<: *policy_update
+      register: policy_recreate_for_delete
+
+    - name: Verify populated policy was recreated
+      ansible.builtin.assert:
+        that:
+          - policy_recreate_for_delete.changed | bool
+          - policy_recreate_for_delete.resource['items'] | length == 4
+
     - name: Predict policy deletion
       ansible.oci.oci_object_lifecycle_policy: &policy_delete
         state: absent
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
       check_mode: true
       register: policy_delete_check
 
     - name: Probe policy after delete check mode
       ansible.oci.oci_object_lifecycle_policy_info:
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
       register: policy_delete_probe
 
     - name: Verify delete check mode left policy present
@@ -220,7 +528,7 @@
           - policy_delete_probe.object_lifecycle_policies | length == 1
           - >-
             policy_delete_probe.object_lifecycle_policies[0]['items']
-            | length == 2
+            | length == 4
 
     - name: Delete lifecycle policy
       ansible.oci.oci_object_lifecycle_policy:
@@ -230,6 +538,8 @@
     - name: Read policy after deletion
       ansible.oci.oci_object_lifecycle_policy_info:
         bucket_name: "{{ oci_object_lifecycle_policy_bucket_name }}"
+        namespace_name: >-
+          {{ oci_object_lifecycle_policy_bucket_create.resource.namespace }}
       register: policy_deleted_info
 
     - name: Verify policy is absent
