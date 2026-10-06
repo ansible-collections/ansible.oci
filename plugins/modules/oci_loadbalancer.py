@@ -36,7 +36,7 @@ options:
     default: 1200
   wait_interval:
     description:
-      - Maximum number of seconds between status checks.
+      - Status-check intervals increase up to this maximum, in seconds.
     type: int
     default: 30
   state:
@@ -618,6 +618,7 @@ class OciLoadBalancerModule(OciResourceBase):
             The complete load-balancer update plan.
         """
         update_plan = super(OciLoadBalancerModule, self).build_update_plan(resource)
+        # IP-mode and reserved-IP strategies produce distinct fields.
         for strategy_plan in update_plan["strategy_operations"]:
             for operation in strategy_plan["operations"]:
                 update_plan["update_model_fields"].update(operation)
@@ -733,6 +734,7 @@ class OciLoadBalancerModule(OciResourceBase):
                 "fetch_func": self.make_work_request_fetcher(),
             }
 
+        # Client-level retries also cover the composite operation's internal reads.
         previous_retry_strategy = getattr(self.client, "retry_strategy", None)
         self.client.retry_strategy = oci.retry.DEFAULT_RETRY_STRATEGY
         try:
