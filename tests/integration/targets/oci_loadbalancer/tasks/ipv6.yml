@@ -8,7 +8,6 @@
       name: "{{ oci_loadbalancer_integration_ipv6_name }}"
       subnet_ids: ["{{ oci_loadbalancer_integration_ipv6_subnet_id }}"]
       is_private: false
-      shape_name: flexible
       shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
       ip_mode: ipv6
       reserved_ips: [{id: "{{ oci_lb_reserved_ip_id }}"}]

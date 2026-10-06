@@ -18,6 +18,9 @@ extends_documentation_fragment:
   - ansible.oci.oci_auth_options
   - ansible.oci.oci_name_lookup_options
   - ansible.oci.oci_tags_options
+notes:
+  - Oracle deprecated fixed shapes in May 2023; this module supports only C(flexible).
+    See U(https://docs.oracle.com/en-us/iaas/tools/python/latest/api/load_balancer/models/oci.load_balancer.models.CreateLoadBalancerDetails.html).
 options:
   wait:
     description:
@@ -72,18 +75,11 @@ options:
       - Whether the load balancer has a private IP address.
       - This is create-time only. Omitting the value lets OCI select the default.
     type: bool
-  shape_name:
-    description:
-      - The load balancer shape name. OCI determines supported values for the region.
-      - Required when creating a load balancer. Shape changes are supported.
-      - OCI deprecated fixed shapes in May 2023; use C(flexible) for new load balancers.
-      - Switching to C(flexible) requires C(shape_details).
-    type: str
   shape_details:
     description:
       - Bandwidth bounds for a C(flexible) shape.
-      - Required when creating or switching to C(flexible).
-      - Supplying only this option resizes the current shape.
+      - Required when creating a load balancer.
+      - Supplying this option updates the bandwidth of an existing flexible load balancer.
     type: dict
     suboptions:
       minimum_bandwidth_in_mbps:
@@ -128,12 +124,18 @@ EXAMPLES = r"""
     name: example-lb
     subnet_ids:
       - ocid1.subnet.oc1..example
-    shape_name: flexible
     shape_details:
       minimum_bandwidth_in_mbps: 100
       maximum_bandwidth_in_mbps: 800
     ip_mode: ipv4
   register: created_lb
+
+- name: Set the load balancer bandwidth to 450 Mbps
+  ansible.oci.oci_loadbalancer:
+    load_balancer_id: "{{ created_lb.resource.id }}"
+    shape_details:
+      minimum_bandwidth_in_mbps: 450
+      maximum_bandwidth_in_mbps: 450
 
 - name: Rename and resize a load balancer
   ansible.oci.oci_loadbalancer:
@@ -149,7 +151,6 @@ EXAMPLES = r"""
     name: public-lb
     subnet_ids:
       - ocid1.subnet.oc1..public
-    shape_name: flexible
     shape_details:
       minimum_bandwidth_in_mbps: 100
       maximum_bandwidth_in_mbps: 800
@@ -166,7 +167,6 @@ EXAMPLES = r"""
     name: private-dual-stack-lb
     subnet_ids:
       - ocid1.subnet.oc1..dualstack
-    shape_name: flexible
     shape_details:
       minimum_bandwidth_in_mbps: 100
       maximum_bandwidth_in_mbps: 800
@@ -348,7 +348,7 @@ oci = import_oci_sdk()[0]
 CREATE_REQUIRED_FIELDS = (
     "compartment_id",
     "name",
-    "shape_name",
+    "shape_details",
     "subnet_ids",
 )
 FLEXIBLE_SHAPE_NAME = "flexible"
@@ -377,21 +377,6 @@ def _is_flexible_shape(shape_name):
     )
 
 
-def _same_shape_name(left, right):
-    """Compare shape names without regard to case.
-
-    Args:
-        left: First shape name.
-        right: Second shape name.
-
-    Returns:
-        True when both names are equal, ignoring case.
-    """
-    if left is None or right is None:
-        return left == right
-    return left.casefold() == right.casefold()
-
-
 def _shape_details_dict(value):
     """Convert shape details to a dictionary with unset values removed.
 
@@ -404,28 +389,13 @@ def _shape_details_dict(value):
     return filter_none_values(dict(value)) if value is not None else None
 
 
-def _validate_shape_details(module, shape_name, shape_details, required=False):
-    """Validate shape-details usage and Flexible bandwidth bounds.
+def _validate_shape_details(module, shape_details):
+    """Validate flexible load-balancer bandwidth bounds.
 
     Args:
         module: Ansible module used to report invalid input.
-        shape_name: Requested load-balancer shape name.
-        shape_details: Requested Flexible bandwidth bounds.
-        required: Whether Flexible shape details are required.
+        shape_details: Requested bandwidth bounds.
     """
-    if _is_flexible_shape(shape_name) and shape_details is None:
-        if required:
-            module.fail_json(
-                msg="shape_details is required when shape_name is Flexible."
-            )
-        return
-    if shape_details is None:
-        return
-    if not _is_flexible_shape(shape_name):
-        module.fail_json(
-            msg="shape_details can only be used with shape_name Flexible."
-        )
-
     details = _shape_details_dict(shape_details)
     minimum = details.get("minimum_bandwidth_in_mbps") if details else None
     maximum = details.get("maximum_bandwidth_in_mbps") if details else None
@@ -440,7 +410,7 @@ def _validate_shape_details(module, shape_name, shape_details, required=False):
 
 
 def build_create_load_balancer_details(params):
-    """Build the OCI create model, translating IP mode and shape names.
+    """Build a flexible-shape OCI create model, translating IP mode.
 
     Args:
         params: Ansible module parameters for the new load balancer.
@@ -449,15 +419,12 @@ def build_create_load_balancer_details(params):
         An OCI CreateLoadBalancerDetails model.
     """
     shape_details = params.get("shape_details")
-    shape_name = params.get("shape_name")
     details = filter_none_values(
         {
             "compartment_id": params.get("compartment_id"),
             "display_name": params.get("name"),
             "subnet_ids": params.get("subnet_ids"),
-            "shape_name": (
-                FLEXIBLE_SHAPE_NAME if _is_flexible_shape(shape_name) else shape_name
-            ),
+            "shape_name": FLEXIBLE_SHAPE_NAME,
             "shape_details": (
                 oci.load_balancer.models.ShapeDetails(
                     **_shape_details_dict(shape_details)
@@ -558,9 +525,7 @@ class OciLoadBalancerModule(OciResourceBase):
             )
         _validate_shape_details(
             self.module,
-            self.module.params.get("shape_name"),
             self.module.params.get("shape_details"),
-            required=True,
         )
 
     def plan_reserved_ip_update(
@@ -641,7 +606,7 @@ class OciLoadBalancerModule(OciResourceBase):
         return [{"ip_mode": desired_oci_value}]
 
     def build_update_plan(self, resource):
-        """Extend shared planning with IP mode, reserved IPs, and shape changes.
+        """Extend shared planning with IP mode, reserved IPs, and bandwidth changes.
 
         This override folds translated IP-mode and reserved-IP operations into
         metadata updates and plans the separate shape endpoint operation.
@@ -664,7 +629,7 @@ class OciLoadBalancerModule(OciResourceBase):
         return update_plan
 
     def plan_shape_update(self, resource):
-        """Build a shape update model when shape settings differ.
+        """Build a flexible-shape update when requested bandwidth differs.
 
         Args:
             resource: Current load-balancer SDK model.
@@ -672,61 +637,24 @@ class OciLoadBalancerModule(OciResourceBase):
         Returns:
             An UpdateLoadBalancerShapeDetails model, or None when unchanged.
         """
-        desired_shape_name = self.module.params.get("shape_name")
         desired_shape_details = self.module.params.get("shape_details")
-        if desired_shape_name is None and desired_shape_details is None:
+        if desired_shape_details is None:
             return None
 
         resource_dict = self.serialize_result_resource(resource) or {}
-        current_shape_name = resource_dict.get("shape_name")
-        current_shape_details = _shape_details_dict(resource_dict.get("shape_details"))
-        target_shape_name = desired_shape_name or current_shape_name
-        if desired_shape_details is not None:
-            target_shape_details = _shape_details_dict(desired_shape_details)
-        elif _is_flexible_shape(target_shape_name):
-            target_shape_details = current_shape_details
-        else:
-            target_shape_details = None
-
-        if (
-            _is_flexible_shape(target_shape_name)
-            and desired_shape_name is not None
-            and not _is_flexible_shape(current_shape_name)
-            and desired_shape_details is None
-        ):
+        if not _is_flexible_shape(resource_dict.get("shape_name")):
             self.module.fail_json(
-                msg="shape_details is required when switching shape_name to Flexible."
+                msg="Bandwidth updates are only supported for flexible load balancers."
             )
-        _validate_shape_details(
-            self.module,
-            target_shape_name,
-            target_shape_details,
-            required=False,
-        )
-
-        shape_details_match = (
-            not _is_flexible_shape(target_shape_name)
-            or target_shape_details == current_shape_details
-        )
-        if (
-            _same_shape_name(target_shape_name, current_shape_name)
-            and shape_details_match
-        ):
+        target_shape_details = _shape_details_dict(desired_shape_details)
+        _validate_shape_details(self.module, target_shape_details)
+        current_shape_details = _shape_details_dict(resource_dict.get("shape_details"))
+        if target_shape_details == current_shape_details:
             return None
 
-        update_fields = {
-            "shape_name": (
-                FLEXIBLE_SHAPE_NAME
-                if _is_flexible_shape(target_shape_name)
-                else target_shape_name
-            )
-        }
-        if target_shape_details is not None:
-            update_fields["shape_details"] = oci.load_balancer.models.ShapeDetails(
-                **target_shape_details
-            )
         return oci.load_balancer.models.UpdateLoadBalancerShapeDetails(
-            **filter_none_values(update_fields)
+            shape_name=FLEXIBLE_SHAPE_NAME,
+            shape_details=oci.load_balancer.models.ShapeDetails(**target_shape_details),
         )
 
     def make_work_request_fetcher(self):
@@ -1043,7 +971,6 @@ def main():
         compartment_id=dict(type="str"),
         subnet_ids=dict(type="list", elements="str"),
         is_private=dict(type="bool"),
-        shape_name=dict(type="str"),
         shape_details=dict(
             type="dict",
             options=dict(

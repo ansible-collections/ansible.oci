@@ -14,7 +14,6 @@
     name: "{{ oci_lb_operation.name | default(omit) }}"
     subnet_ids: "{{ oci_lb_operation.subnet_ids | default(omit) }}"
     is_private: "{{ oci_lb_operation.is_private | default(omit) }}"
-    shape_name: "{{ oci_lb_operation.shape_name | default(omit) }}"
     shape_details: "{{ oci_lb_operation.shape_details | default(omit) }}"
     reserved_ips: "{{ oci_lb_operation.reserved_ips | default(omit) }}"
     ip_mode: "{{ oci_lb_operation.ip_mode | default(omit) }}"

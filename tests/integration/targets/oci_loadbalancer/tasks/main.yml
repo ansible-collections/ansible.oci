@@ -65,7 +65,6 @@
           name: "{{ oci_loadbalancer_integration_name }}"
           subnet_ids: ["{{ oci_lb_subnet_id }}"]
           is_private: false
-          shape_name: flexible
           shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
           reserved_ips: [{id: "{{ oci_lb_reserved_ip_id }}"}]
           ip_mode: ipv4
@@ -103,7 +102,7 @@
           name: "{{ oci_loadbalancer_integration_updated_name }}"
           freeform_tags: {phase: update}
 
-    - name: Test bandwidth updates without a shape name
+    - name: Test bandwidth updates
       ansible.builtin.include_tasks: test_lb_scenario.yml
       vars:
         oci_lb_lookup_name: "{{ oci_loadbalancer_integration_updated_name }}"
@@ -113,7 +112,7 @@
         oci_lb_expected:
           shape_details: "{{ oci_loadbalancer_integration_update_shape }}"
 
-    - name: Test name, tag, and shape updates together
+    - name: Test name, tag, and bandwidth updates together
       ansible.builtin.include_tasks: test_lb_scenario.yml
       vars:
         oci_lb_lookup_name: "{{ oci_loadbalancer_integration_updated_name }}"
@@ -121,7 +120,6 @@
           load_balancer_id: "{{ oci_lb_id }}"
           name: "{{ oci_loadbalancer_integration_name }}"
           freeform_tags: {phase: combined}
-          shape_name: flexible
           shape_details: "{{ oci_loadbalancer_integration_combined_shape }}"
         oci_lb_expected:
           name: "{{ oci_loadbalancer_integration_name }}"
@@ -160,7 +158,6 @@
           name: "{{ oci_loadbalancer_integration_private_name }}"
           subnet_ids: ["{{ oci_lb_subnet_id }}"]
           is_private: true
-          shape_name: flexible
           shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
         oci_lb_expected:
           name: "{{ oci_loadbalancer_integration_private_name }}"

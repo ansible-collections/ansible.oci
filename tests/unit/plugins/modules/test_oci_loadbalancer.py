@@ -5,6 +5,8 @@ import types
 
 import pytest
 
+from ansible.module_utils import basic
+
 from .conftest import (
     DummyModule,
     ExitJsonCalled,
@@ -84,7 +86,10 @@ def base_create_params(**overrides):
         "compartment_id": "ocid1.compartment.oc1..example",
         "name": "example-lb",
         "subnet_ids": ["ocid1.subnet.oc1..one"],
-        "shape_name": "100Mbps",
+        "shape_details": {
+            "minimum_bandwidth_in_mbps": 100,
+            "maximum_bandwidth_in_mbps": 800,
+        },
     }
     params.update(overrides)
     return params
@@ -190,14 +195,12 @@ def test_explicit_ip_mode_map_drives_create_plan_and_update_payload(monkeypatch)
     assert {reserved.id for reserved in details.reserved_ips} == {"reserved-new"}
 
 
-@pytest.mark.parametrize("shape_name", ["flexible", "Flexible", "FLEXIBLE"])
-def test_build_create_details_uses_load_balancer_sdk_models(monkeypatch, shape_name):
+def test_build_create_details_uses_load_balancer_sdk_models(monkeypatch):
     oci_module = install_fake_oci(monkeypatch)[0]
     module_obj = load_collection_module("oci_loadbalancer")
 
     details = module_obj.build_create_load_balancer_details(
         base_create_params(
-            shape_name=shape_name,
             shape_details={
                 "minimum_bandwidth_in_mbps": 100,
                 "maximum_bandwidth_in_mbps": 800,
@@ -224,10 +227,9 @@ def test_build_create_details_uses_load_balancer_sdk_models(monkeypatch, shape_n
     [
         ({"name": "example-lb"}, "compartment_id"),
         (base_create_params(subnet_ids=[]), "subnet_ids"),
-        (base_create_params(shape_name="Flexible"), "shape_details"),
+        (base_create_params(shape_details=None), "shape_details"),
         (
             base_create_params(
-                shape_name="Flexible",
                 shape_details={
                     "minimum_bandwidth_in_mbps": 801,
                     "maximum_bandwidth_in_mbps": 800,
@@ -250,16 +252,16 @@ def test_create_validation_rejects_missing_or_invalid_required_values(
     assert expected_message in exc_info.value.payload["msg"]
 
 
-def test_flexible_shape_create_accepts_valid_bandwidth_bounds(monkeypatch):
+@pytest.mark.parametrize("minimum, maximum", [(10, 8000), (450, 450)])
+def test_flexible_shape_create_accepts_valid_bandwidth_bounds(monkeypatch, minimum, maximum):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_loadbalancer")
     instance = make_lb_module(
         module_obj,
         base_create_params(
-            shape_name="Flexible",
             shape_details={
-                "minimum_bandwidth_in_mbps": 10,
-                "maximum_bandwidth_in_mbps": 8000,
+                "minimum_bandwidth_in_mbps": minimum,
+                "maximum_bandwidth_in_mbps": maximum,
             },
         ),
     )
@@ -593,7 +595,6 @@ def test_shape_change_runs_after_metadata_update_and_uses_flexible_details(monke
         module_obj,
         {
             "name": "renamed",
-            "shape_name": "Flexible",
             "shape_details": {
                 "minimum_bandwidth_in_mbps": 50,
                 "maximum_bandwidth_in_mbps": 500,
@@ -603,7 +604,7 @@ def test_shape_change_runs_after_metadata_update_and_uses_flexible_details(monke
         client,
     )
     resource = FakeModel(
-        id="lb", display_name="example-lb", shape_name="100Mbps", shape_details=None, ip_addresses=[]
+        id="lb", display_name="example-lb", shape_name="flexible", shape_details=None, ip_addresses=[]
     )
 
     instance.update_resource(resource)
@@ -616,7 +617,7 @@ def test_shape_change_runs_after_metadata_update_and_uses_flexible_details(monke
     assert shape_details.shape_details.maximum_bandwidth_in_mbps == 500
 
 
-def test_bandwidth_only_update_reuses_current_shape_name(monkeypatch):
+def test_bandwidth_update_sends_flexible_shape(monkeypatch):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_loadbalancer")
     client = types.SimpleNamespace(
@@ -684,7 +685,6 @@ def test_wait_false_with_combined_update_waits_between_operations(monkeypatch):
         module_obj,
         {
             "name": "renamed",
-            "shape_name": "Flexible",
             "shape_details": {
                 "minimum_bandwidth_in_mbps": 10,
                 "maximum_bandwidth_in_mbps": 100,
@@ -695,7 +695,7 @@ def test_wait_false_with_combined_update_waits_between_operations(monkeypatch):
     )
 
     instance.update_resource(
-        FakeModel(id="lb", display_name="example-lb", shape_name="100Mbps", shape_details=None, ip_addresses=[])
+        FakeModel(id="lb", display_name="example-lb", shape_name="flexible", shape_details=None, ip_addresses=[])
     )
 
     assert client.composite_calls[0][1]["wait_for_states"] == ["SUCCEEDED"]
@@ -865,7 +865,6 @@ def test_create_payload_uses_installed_load_balancer_models():
 
     details = module_obj.build_create_load_balancer_details(
         base_create_params(
-            shape_name="Flexible",
             shape_details={
                 "minimum_bandwidth_in_mbps": 100,
                 "maximum_bandwidth_in_mbps": 800,
@@ -876,6 +875,7 @@ def test_create_payload_uses_installed_load_balancer_models():
 
     assert isinstance(details, models.CreateLoadBalancerDetails)
     assert isinstance(details.shape_details, models.ShapeDetails)
+    assert details.shape_name == "flexible"
     assert isinstance(details.reserved_ips[0], models.ReservedIP)
 
 
@@ -913,14 +913,10 @@ def test_real_sdk_create_composite_surfaces_failed_work_request(monkeypatch):
     client.create_load_balancer = lambda details: FakeResponse(
         headers={"opc-work-request-id": "wr-failed"}
     )
-    client.get_work_request = lambda work_request_id: FakeResponse(
-        model.WorkRequest(
-            id=work_request_id,
-            lifecycle_state="IN_PROGRESS",
-        )
-    )
+    work_request_calls = []
 
     def fetch_until_failed(client_arg, response, **kwargs):
+        assert response.data.lifecycle_state == "IN_PROGRESS"
         assert kwargs["evaluate_response"](response) is False
         return kwargs["fetch_func"](response=response)
 
@@ -935,7 +931,16 @@ def test_real_sdk_create_composite_surfaces_failed_work_request(monkeypatch):
             )
         ],
     )
-    client.get_work_request = lambda work_request_id: FakeResponse(failed_request)
+    responses = iter([
+        FakeResponse(model.WorkRequest(id="wr-failed", lifecycle_state="IN_PROGRESS")),
+        FakeResponse(failed_request),
+    ])
+
+    def get_work_request(work_request_id):
+        work_request_calls.append(work_request_id)
+        return next(responses)
+
+    client.get_work_request = get_work_request
     instance = make_lb_module(module_obj, base_create_params(), client)
 
     with pytest.raises(FailJsonCalled) as exc_info:
@@ -944,6 +949,7 @@ def test_real_sdk_create_composite_surfaces_failed_work_request(monkeypatch):
     assert "wr-failed" in exc_info.value.payload["msg"]
     assert "BAD_INPUT" in exc_info.value.payload["msg"]
     assert "invalid subnet" in exc_info.value.payload["msg"]
+    assert work_request_calls == ["wr-failed", "wr-failed"]
     assert client.retry_strategy is None
 
 
@@ -1011,8 +1017,8 @@ def test_execute_create_then_matching_update_is_idempotent(monkeypatch):
         display_name="example-lb",
         compartment_id="ocid1.compartment.oc1..example",
         subnet_ids=["ocid1.subnet.oc1..one"],
-        shape_name="100Mbps",
-        shape_details=None,
+        shape_name="flexible",
+        shape_details=FakeModel(minimum_bandwidth_in_mbps=100, maximum_bandwidth_in_mbps=800),
         is_private=None,
         ip_mode=None,
         freeform_tags=None,
@@ -1051,7 +1057,7 @@ def test_execute_delete_then_repeated_absent_is_idempotent(monkeypatch):
     service_error = install_fake_oci(monkeypatch)[1]
     module_obj = load_collection_module("oci_loadbalancer")
     deleted = [False]
-    resource = FakeModel(id="lb", display_name="example-lb")
+    resource = FakeModel(id="lb", display_name="example-lb", shape_name="100Mbps")
 
     def get_load_balancer(load_balancer_id):
         if deleted[0]:
@@ -1092,39 +1098,23 @@ def test_execute_delete_then_repeated_absent_is_idempotent(monkeypatch):
     assert delete_calls == ["lb"]
 
 
-def test_lowercase_flexible_shape_is_valid_and_case_only_change_is_idempotent(monkeypatch):
+@pytest.mark.parametrize("current_shape", ["flexible", "Flexible", "FLEXIBLE"])
+def test_matching_bandwidth_is_idempotent(monkeypatch, current_shape):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_loadbalancer")
     details = {"minimum_bandwidth_in_mbps": 100, "maximum_bandwidth_in_mbps": 500}
     instance = make_lb_module(
         module_obj,
-        {"shape_name": "Flexible", "shape_details": details},
+        {"shape_details": details},
     )
     resource = FakeModel(
         id="lb",
-        shape_name="flexible",
+        shape_name=current_shape,
         shape_details=FakeModel(**details),
         ip_addresses=[],
     )
 
     assert instance.needs_update(resource) is False
-
-
-def test_create_accepts_lowercase_flexible_shape_name(monkeypatch):
-    install_fake_oci(monkeypatch)
-    module_obj = load_collection_module("oci_loadbalancer")
-    instance = make_lb_module(
-        module_obj,
-        base_create_params(
-            shape_name="flexible",
-            shape_details={
-                "minimum_bandwidth_in_mbps": 100,
-                "maximum_bandwidth_in_mbps": 500,
-            },
-        ),
-    )
-
-    instance.validate_create_request()
 
 
 def test_waited_create_without_completed_resource_fails_instead_of_snapshot(monkeypatch):
@@ -1165,7 +1155,6 @@ def test_waited_shape_change_fails_if_final_load_balancer_is_missing(monkeypatch
     instance = make_lb_module(
         module_obj,
         {
-            "shape_name": "Flexible",
             "shape_details": {
                 "minimum_bandwidth_in_mbps": 100,
                 "maximum_bandwidth_in_mbps": 500,
@@ -1175,7 +1164,7 @@ def test_waited_shape_change_fails_if_final_load_balancer_is_missing(monkeypatch
         client,
     )
 
-    resource = FakeModel(id="lb", shape_name="100Mbps", shape_details=None, ip_addresses=[])
+    resource = FakeModel(id="lb", shape_name="flexible", shape_details=None, ip_addresses=[])
 
     with pytest.raises(FailJsonCalled) as exc_info:
         instance.update_resource(resource)
@@ -1324,99 +1313,218 @@ def test_reserved_ip_desired_subset_already_attached_is_idempotent(monkeypatch):
     assert instance.needs_update(resource) is False
 
 
-def test_switching_to_flexible_without_bandwidth_details_fails(monkeypatch):
+@pytest.mark.parametrize("shape_name", ["flexible", "100Mbps", "10Mbps-Micro"])
+def test_main_rejects_shape_name_before_resource_operations(monkeypatch, shape_name):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_loadbalancer")
-    instance = make_lb_module(module_obj, {"shape_name": "flexible"})
+    initialized_modules = []
+    monkeypatch.setattr(basic, "_load_params", lambda: {"shape_name": shape_name})
+    monkeypatch.setattr(basic.AnsibleModule, "fail_json", DummyModule.fail_json)
 
+    def make_resource_module(module):
+        initialized_modules.append(module)
+        return types.SimpleNamespace(execute_resource_module=lambda: None)
+
+    monkeypatch.setattr(module_obj, "OciLoadBalancerModule", make_resource_module)
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        module_obj.main()
+
+    assert "Unsupported parameters" in exc_info.value.payload["msg"]
+    assert "shape_name" in exc_info.value.payload["msg"]
+    assert initialized_modules == []
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize("waiting", [False, True])
+@pytest.mark.parametrize("update_metadata", [False, True])
+@pytest.mark.parametrize("current_shape", ["100Mbps", "10Mbps-Micro"])
+def test_legacy_resize_fails_before_mutation(
+    monkeypatch, check_mode, waiting, update_metadata, current_shape
+):
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_loadbalancer")
     resource = FakeModel(
         id="lb",
-        shape_name="100Mbps",
+        display_name="example-lb",
+        shape_name=current_shape,
         shape_details=None,
+        freeform_tags={"purpose": "original"},
         ip_addresses=[],
+    )
+    client = types.SimpleNamespace(
+        composite_calls=[],
+        get_load_balancer=lambda load_balancer_id: FakeResponse(resource),
+    )
+    params = {
+        "load_balancer_id": "lb",
+        "wait": waiting,
+        "shape_details": {
+            "minimum_bandwidth_in_mbps": 100,
+            "maximum_bandwidth_in_mbps": 500,
+        },
+    }
+    if update_metadata:
+        params.update(name="renamed-lb", freeform_tags={"purpose": "updated"})
+    instance = make_lb_module(module_obj, params, client, check_mode=check_mode)
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert "only supported for flexible load balancers" in exc_info.value.payload["msg"]
+    assert client.composite_calls == []
+    assert resource.display_name == "example-lb"
+    assert resource.freeform_tags == {"purpose": "original"}
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize("waiting", [False, True])
+def test_invalid_combined_resize_fails_before_metadata_update(monkeypatch, check_mode, waiting):
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_loadbalancer")
+    resource = FakeModel(
+        id="lb",
+        display_name="example-lb",
+        shape_name="flexible",
+        shape_details=FakeModel(
+            minimum_bandwidth_in_mbps=100,
+            maximum_bandwidth_in_mbps=500,
+        ),
+        ip_addresses=[],
+    )
+    client = types.SimpleNamespace(
+        composite_calls=[],
+        get_load_balancer=lambda load_balancer_id: FakeResponse(resource),
+    )
+    instance = make_lb_module(
+        module_obj,
+        {
+            "load_balancer_id": "lb",
+            "name": "renamed-lb",
+            "wait": waiting,
+            "shape_details": {
+                "minimum_bandwidth_in_mbps": 500,
+                "maximum_bandwidth_in_mbps": 100,
+            },
+        },
+        client,
+        check_mode=check_mode,
     )
 
     with pytest.raises(FailJsonCalled) as exc_info:
-        instance.needs_update(resource)
+        instance.execute_resource_module()
 
-    assert "shape_details is required" in exc_info.value.payload["msg"]
+    assert "10 <= minimum_bandwidth_in_mbps <= maximum_bandwidth_in_mbps <= 8000" in exc_info.value.payload["msg"]
+    assert client.composite_calls == []
+    assert resource.display_name == "example-lb"
 
 
-def test_switching_from_flexible_to_fixed_omits_current_bandwidth_details(monkeypatch):
+@pytest.mark.parametrize("matching_bandwidth", [False, True])
+def test_check_mode_bandwidth_update_makes_no_api_changes(monkeypatch, matching_bandwidth):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_loadbalancer")
+    resource = FakeModel(
+        id="lb",
+        shape_name="flexible",
+        ip_addresses=[],
+        shape_details=FakeModel(
+            minimum_bandwidth_in_mbps=450 if matching_bandwidth else 100,
+            maximum_bandwidth_in_mbps=450 if matching_bandwidth else 800,
+        ),
+    )
+    client = types.SimpleNamespace(
+        composite_calls=[],
+        get_load_balancer=lambda load_balancer_id: FakeResponse(resource),
+    )
+    instance = make_lb_module(
+        module_obj,
+        {
+            "load_balancer_id": "lb",
+            "shape_details": {
+                "minimum_bandwidth_in_mbps": 450,
+                "maximum_bandwidth_in_mbps": 450,
+            },
+        },
+        client,
+        check_mode=True,
+    )
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert exc_info.value.payload["changed"] is not matching_bandwidth
+    assert client.composite_calls == []
+
+
+def test_execute_resize_then_repeated_present_is_idempotent(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_loadbalancer")
+    current = [
+        FakeModel(
+            id="lb",
+            shape_name="flexible",
+            ip_addresses=[],
+            shape_details=FakeModel(
+                minimum_bandwidth_in_mbps=100,
+                maximum_bandwidth_in_mbps=800,
+            ),
+        )
+    ]
+    client = types.SimpleNamespace(
+        composite_calls=[],
+        retry_strategy=None,
+        get_load_balancer=lambda load_balancer_id: FakeResponse(current[0]),
+    )
+
+    def composite_handler(operation, **kwargs):
+        assert operation == "update_shape"
+        details = kwargs["update_load_balancer_shape_details"]
+        assert details.shape_name == "flexible"
+        assert details.shape_details.minimum_bandwidth_in_mbps == 450
+        assert details.shape_details.maximum_bandwidth_in_mbps == 450
+        current[0] = FakeModel(
+            id="lb",
+            shape_name=details.shape_name,
+            shape_details=details.shape_details,
+            ip_addresses=[],
+        )
+        return FakeResponse(FakeModel(id="wr-shape", lifecycle_state="SUCCEEDED"))
+
+    client.composite_handler = composite_handler
+    params = {
+        "load_balancer_id": "lb",
+        "shape_details": {
+            "minimum_bandwidth_in_mbps": 450,
+            "maximum_bandwidth_in_mbps": 450,
+        },
+    }
+    first = make_lb_module(module_obj, params, client)
+    with pytest.raises(ExitJsonCalled) as first_result:
+        first.execute_resource_module()
+
+    second = make_lb_module(module_obj, params, client)
+    with pytest.raises(ExitJsonCalled) as second_result:
+        second.execute_resource_module()
+
+    assert first_result.value.payload["changed"] is True
+    assert second_result.value.payload["changed"] is False
+    assert [call[0] for call in client.composite_calls] == ["update_shape"]
+
+
+def test_legacy_metadata_update_does_not_resize(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_loadbalancer")
+    resource = FakeModel(id="lb", display_name="original", shape_name="100Mbps", ip_addresses=[])
     client = types.SimpleNamespace(
         composite_calls=[],
         retry_strategy=None,
         composite_handler=lambda operation, **kwargs: FakeResponse(
-            FakeModel(id="wr-shape", lifecycle_state="SUCCEEDED")
-        ),
-        get_load_balancer=lambda load_balancer_id: FakeResponse(
-            FakeModel(id=load_balancer_id, shape_name="100Mbps", shape_details=None)
+            FakeModel(id="lb", display_name="renamed")
         ),
     )
-    instance = make_lb_module(module_obj, {"shape_name": "100Mbps", "wait": True}, client)
-    resource = FakeModel(
-        id="lb",
-        shape_name="flexible",
-        shape_details=FakeModel(
-            minimum_bandwidth_in_mbps=100,
-            maximum_bandwidth_in_mbps=500,
-        ),
-        ip_addresses=[],
-    )
+    instance = make_lb_module(module_obj, {"name": "renamed"}, client)
 
     instance.update_resource(resource)
 
-    operation, kwargs = client.composite_calls[0]
-    assert operation == "update_shape"
-    details = kwargs["update_load_balancer_shape_details"]
-    assert details.shape_name == "100Mbps"
-    assert not hasattr(details, "shape_details")
-
-
-def test_switching_to_fixed_rejects_explicit_shape_details(monkeypatch):
-    install_fake_oci(monkeypatch)
-    module_obj = load_collection_module("oci_loadbalancer")
-    instance = make_lb_module(
-        module_obj,
-        {
-            "shape_name": "100Mbps",
-            "shape_details": {
-                "minimum_bandwidth_in_mbps": 100,
-                "maximum_bandwidth_in_mbps": 500,
-            },
-        },
-    )
-
-    resource = FakeModel(
-        id="lb",
-        shape_name="flexible",
-        shape_details=FakeModel(
-            minimum_bandwidth_in_mbps=100,
-            maximum_bandwidth_in_mbps=500,
-        ),
-        ip_addresses=[],
-    )
-
-    with pytest.raises(FailJsonCalled) as exc_info:
-        instance.needs_update(resource)
-
-    assert "only be used with shape_name Flexible" in exc_info.value.payload["msg"]
-
-
-def test_fixed_shape_with_reported_bandwidth_metadata_is_idempotent(monkeypatch):
-    install_fake_oci(monkeypatch)
-    module_obj = load_collection_module("oci_loadbalancer")
-    instance = make_lb_module(module_obj, {"shape_name": "100Mbps"})
-    resource = FakeModel(
-        id="lb",
-        shape_name="100Mbps",
-        shape_details=FakeModel(
-            minimum_bandwidth_in_mbps=10,
-            maximum_bandwidth_in_mbps=100,
-        ),
-        ip_addresses=[],
-    )
-
-    assert instance.needs_update(resource) is False
+    assert [call[0] for call in client.composite_calls] == ["update"]
+    assert client.composite_calls[0][1]["update_load_balancer_details"].display_name == "renamed"
