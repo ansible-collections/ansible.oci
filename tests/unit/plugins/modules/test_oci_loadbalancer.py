@@ -782,10 +782,10 @@ def test_failed_work_request_fetch_reports_id_and_error_details(monkeypatch):
     instance = make_lb_module(module_obj, {"name": "updated", "wait": True}, client)
     fetch_failed_work_request = instance.make_work_request_fetcher()
 
+    response = FakeResponse(FakeModel(id="wr-failed", lifecycle_state="IN_PROGRESS"))
+
     with pytest.raises(Exception, match="wr-failed.*BAD_INPUT.*invalid subnet"):
-        fetch_failed_work_request(
-            response=FakeResponse(FakeModel(id="wr-failed", lifecycle_state="IN_PROGRESS"))
-        )
+        fetch_failed_work_request(response=response)
 
 
 def test_composite_timeout_error_reports_operation_and_work_request_id(monkeypatch):
@@ -1175,10 +1175,10 @@ def test_waited_shape_change_fails_if_final_load_balancer_is_missing(monkeypatch
         client,
     )
 
+    resource = FakeModel(id="lb", shape_name="100Mbps", shape_details=None, ip_addresses=[])
+
     with pytest.raises(FailJsonCalled) as exc_info:
-        instance.update_resource(
-            FakeModel(id="lb", shape_name="100Mbps", shape_details=None, ip_addresses=[])
-        )
+        instance.update_resource(resource)
 
     assert "finished resizing" in exc_info.value.payload["msg"]
 
@@ -1221,8 +1221,10 @@ def test_waited_delete_reports_raw_409_dependent_resource_error(monkeypatch):
     )
     instance = make_lb_module(module_obj, {"wait": True}, client)
 
+    resource = FakeModel(id="lb")
+
     with pytest.raises(FailJsonCalled) as exc_info:
-        instance.delete_resource(FakeModel(id="lb"))
+        instance.delete_resource(resource)
 
     assert "Cannot delete load balancer lb while dependent resources exist" in exc_info.value.payload["msg"]
     assert "listener rules still exist" in exc_info.value.payload["msg"]
@@ -1239,18 +1241,18 @@ def test_work_request_fetcher_rejects_initial_failed_response_without_refetch(mo
     instance = make_lb_module(module_obj, {}, client)
     fetch_work_request = instance.make_work_request_fetcher()
 
-    with pytest.raises(RuntimeError, match="wr-failed.*BAD_INPUT.*invalid subnet"):
-        fetch_work_request(
-            response=FakeResponse(
-                FakeModel(
-                    id="wr-failed",
-                    lifecycle_state="FAILED",
-                    error_details=[
-                        FakeModel(error_code="BAD_INPUT", message="invalid subnet")
-                    ],
-                )
-            )
+    response = FakeResponse(
+        FakeModel(
+            id="wr-failed",
+            lifecycle_state="FAILED",
+            error_details=[
+                FakeModel(error_code="BAD_INPUT", message="invalid subnet")
+            ],
         )
+    )
+
+    with pytest.raises(RuntimeError, match="wr-failed.*BAD_INPUT.*invalid subnet"):
+        fetch_work_request(response=response)
 
     assert calls == []
 
@@ -1327,15 +1329,15 @@ def test_switching_to_flexible_without_bandwidth_details_fails(monkeypatch):
     module_obj = load_collection_module("oci_loadbalancer")
     instance = make_lb_module(module_obj, {"shape_name": "flexible"})
 
+    resource = FakeModel(
+        id="lb",
+        shape_name="100Mbps",
+        shape_details=None,
+        ip_addresses=[],
+    )
+
     with pytest.raises(FailJsonCalled) as exc_info:
-        instance.needs_update(
-            FakeModel(
-                id="lb",
-                shape_name="100Mbps",
-                shape_details=None,
-                ip_addresses=[],
-            )
-        )
+        instance.needs_update(resource)
 
     assert "shape_details is required" in exc_info.value.payload["msg"]
 
@@ -1387,18 +1389,18 @@ def test_switching_to_fixed_rejects_explicit_shape_details(monkeypatch):
         },
     )
 
+    resource = FakeModel(
+        id="lb",
+        shape_name="flexible",
+        shape_details=FakeModel(
+            minimum_bandwidth_in_mbps=100,
+            maximum_bandwidth_in_mbps=500,
+        ),
+        ip_addresses=[],
+    )
+
     with pytest.raises(FailJsonCalled) as exc_info:
-        instance.needs_update(
-            FakeModel(
-                id="lb",
-                shape_name="flexible",
-                shape_details=FakeModel(
-                    minimum_bandwidth_in_mbps=100,
-                    maximum_bandwidth_in_mbps=500,
-                ),
-                ip_addresses=[],
-            )
-        )
+        instance.needs_update(resource)
 
     assert "only be used with shape_name Flexible" in exc_info.value.payload["msg"]
 
