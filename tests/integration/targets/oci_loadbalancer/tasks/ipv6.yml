@@ -1,0 +1,63 @@
+---
+- name: Test dual-stack load balancer creation
+  ansible.builtin.include_tasks: test_lb_scenario.yml
+  vars:
+    oci_lb_lookup_name: "{{ oci_loadbalancer_integration_ipv6_name }}"
+    oci_lb_operation:
+      compartment_id: "{{ oci_integration_compartment_id }}"
+      name: "{{ oci_loadbalancer_integration_ipv6_name }}"
+      subnet_ids: ["{{ oci_loadbalancer_integration_ipv6_subnet_id }}"]
+      is_private: false
+      shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
+      ip_mode: ipv6
+      reserved_ips: [{id: "{{ oci_lb_reserved_ip_id }}"}]
+    oci_lb_expected:
+      ip_mode: IPV6
+      is_private: false
+
+- name: Test switching to IPv4 only
+  ansible.builtin.include_tasks: test_lb_scenario.yml
+  vars:
+    oci_lb_lookup_name: "{{ oci_loadbalancer_integration_ipv6_name }}"
+    oci_lb_operation:
+      load_balancer_id: "{{ oci_lb_id }}"
+      ip_mode: ipv4
+    oci_lb_expected:
+      ip_mode: IPV4
+
+- name: Test enabling IPv6 with an ephemeral IP
+  ansible.builtin.include_tasks: test_lb_scenario.yml
+  vars:
+    oci_lb_lookup_name: "{{ oci_loadbalancer_integration_ipv6_name }}"
+    oci_lb_operation:
+      load_balancer_id: "{{ oci_lb_id }}"
+      ip_mode: ipv6
+    oci_lb_expected:
+      ip_mode: IPV6
+  when: oci_loadbalancer_integration_ipv6_reserved_ip_id | length == 0
+
+- name: Test enabling IPv6 with a reserved IP
+  ansible.builtin.include_tasks: test_lb_scenario.yml
+  vars:
+    oci_lb_lookup_name: "{{ oci_loadbalancer_integration_ipv6_name }}"
+    oci_lb_operation:
+      load_balancer_id: "{{ oci_lb_id }}"
+      ip_mode: ipv6
+      reserved_ips: [{id: "{{ oci_loadbalancer_integration_ipv6_reserved_ip_id }}"}]
+    oci_lb_expected:
+      ip_mode: IPV6
+  when: oci_loadbalancer_integration_ipv6_reserved_ip_id | length > 0
+
+- name: Report missing reserved IPv6 IP
+  ansible.builtin.debug:
+    msg: Reserved-IP update scenario skipped; set OCI_LOADBALANCER_IPV6_RESERVED_IP_ID to an unassigned reserved IPv6 address in the test subnet.
+  when: oci_loadbalancer_integration_ipv6_reserved_ip_id | length == 0
+
+- name: Test dual-stack load balancer deletion
+  ansible.builtin.include_tasks: test_lb_scenario.yml
+  vars:
+    oci_lb_lookup_name: "{{ oci_loadbalancer_integration_ipv6_name }}"
+    oci_lb_operation:
+      state: absent
+      load_balancer_id: "{{ oci_lb_id }}"
+    oci_lb_expected: {}
