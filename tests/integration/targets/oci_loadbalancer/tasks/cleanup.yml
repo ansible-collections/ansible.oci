@@ -1,0 +1,52 @@
+---
+- name: Run load balancer cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked load balancers during cleanup
+      ansible.oci.oci_loadbalancer:
+        state: absent
+        load_balancer_id: "{{ item }}"
+      loop: "{{ oci_lb_cleanup_ids | default([]) | unique | list }}"
+      when: item | default('') | length > 0
+      register: oci_cleanup_load_balancers
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete the test-owned reserved public IP during cleanup
+      ansible.oci.oci_network_public_ip:
+        state: absent
+        public_ip_id: "{{ oci_lb_reserved_ip_id }}"
+      when: oci_lb_reserved_ip_id | default('') | length > 0
+      register: oci_cleanup_reserved_ip
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete leaked subnet during cleanup
+      ansible.oci.oci_network_subnet:
+        state: absent
+        subnet_id: "{{ oci_lb_subnet_id }}"
+      when: oci_lb_subnet_id | default('') | length > 0
+      register: oci_cleanup_subnet
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete leaked VCN during cleanup
+      ansible.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_lb_vcn_id }}"
+      when: oci_lb_vcn_id | default('') | length > 0
+      register: oci_cleanup_vcn
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_load_balancers is not failed
+          - oci_cleanup_reserved_ip is not failed
+          - oci_cleanup_subnet is not failed
+          - oci_cleanup_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

@@ -75,3 +75,5 @@ action_groups:
     - oci_bastion_info
     - oci_identity_domain
     - oci_identity_domain_info
+    - oci_loadbalancer
+    - oci_loadbalancer_info

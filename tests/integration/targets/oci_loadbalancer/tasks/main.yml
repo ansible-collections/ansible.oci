@@ -1,0 +1,189 @@
+---
+- name: Check the test compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Set unique test names
+  ansible.builtin.set_fact:
+    oci_lb_cleanup_ids: []
+    oci_loadbalancer_integration_vcn_name: "{{ oci_loadbalancer_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_loadbalancer_integration_subnet_name: "{{ oci_loadbalancer_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_loadbalancer_integration_name: "{{ oci_loadbalancer_integration_name }}-{{ oci_integration_rpfx }}"
+    oci_loadbalancer_integration_updated_name: "{{ oci_loadbalancer_integration_updated_name }}-{{ oci_integration_rpfx }}"
+    oci_loadbalancer_integration_private_name: "{{ oci_loadbalancer_integration_private_name }}-{{ oci_integration_rpfx }}"
+    oci_loadbalancer_integration_ipv6_name: "{{ oci_loadbalancer_integration_ipv6_name }}-{{ oci_integration_rpfx }}"
+    oci_loadbalancer_integration_reserved_ip_name: "{{ oci_loadbalancer_integration_reserved_ip_name }}-{{ oci_integration_rpfx }}"
+
+- name: Test the load balancer lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create the test VCN
+      ansible.oci.oci_network_vcn:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_loadbalancer_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_loadbalancer_integration_vcn_cidr }}"
+      register: oci_lb_vcn
+
+    - name: Save the VCN ID
+      ansible.builtin.set_fact:
+        oci_lb_vcn_id: "{{ oci_lb_vcn.resource.id }}"
+
+    - name: Create the regional test subnet
+      ansible.oci.oci_network_subnet:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_lb_vcn_id }}"
+        name: "{{ oci_loadbalancer_integration_subnet_name }}"
+        cidr_block: "{{ oci_loadbalancer_integration_subnet_cidr }}"
+      register: oci_lb_subnet
+
+    - name: Save the subnet ID
+      ansible.builtin.set_fact:
+        oci_lb_subnet_id: "{{ oci_lb_subnet.resource.id }}"
+
+    - name: Reserve the test public IP
+      ansible.oci.oci_network_public_ip:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_loadbalancer_integration_reserved_ip_name }}"
+        lifetime: reserved
+      register: oci_lb_reserved_ip
+
+    - name: Save the reserved IP ID
+      ansible.builtin.set_fact:
+        oci_lb_reserved_ip_id: "{{ oci_lb_reserved_ip.resource.id }}"
+
+    - name: Test public load balancer creation with a reserved IP
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: "{{ oci_loadbalancer_integration_name }}"
+        oci_lb_operation:
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_loadbalancer_integration_name }}"
+          subnet_ids: ["{{ oci_lb_subnet_id }}"]
+          is_private: false
+          shape_name: flexible
+          shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
+          reserved_ips: [{id: "{{ oci_lb_reserved_ip_id }}"}]
+          ip_mode: ipv4
+          freeform_tags: {phase: create}
+        oci_lb_expected:
+          name: "{{ oci_loadbalancer_integration_name }}"
+          is_private: false
+          shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
+          ip_mode: IPV4
+          freeform_tags: {phase: create}
+
+    - name: List load balancers by name and state
+      ansible.oci.oci_loadbalancer_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_loadbalancer_integration_name }}"
+        lifecycle_state: ACTIVE
+      register: oci_lb_list
+
+    - name: Check the list contains the load balancer
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_list.changed | bool
+          - oci_lb_list.load_balancers | length == 1
+          - oci_lb_list.load_balancers[0].id == oci_lb_id
+
+    - name: Test name and tag updates
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: "{{ oci_loadbalancer_integration_name }}"
+        oci_lb_operation:
+          load_balancer_id: "{{ oci_lb_id }}"
+          name: "{{ oci_loadbalancer_integration_updated_name }}"
+          freeform_tags: {phase: update}
+        oci_lb_expected:
+          name: "{{ oci_loadbalancer_integration_updated_name }}"
+          freeform_tags: {phase: update}
+
+    - name: Test bandwidth updates without a shape name
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: "{{ oci_loadbalancer_integration_updated_name }}"
+        oci_lb_operation:
+          load_balancer_id: "{{ oci_lb_id }}"
+          shape_details: "{{ oci_loadbalancer_integration_update_shape }}"
+        oci_lb_expected:
+          shape_details: "{{ oci_loadbalancer_integration_update_shape }}"
+
+    - name: Test name, tag, and shape updates together
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: "{{ oci_loadbalancer_integration_updated_name }}"
+        oci_lb_operation:
+          load_balancer_id: "{{ oci_lb_id }}"
+          name: "{{ oci_loadbalancer_integration_name }}"
+          freeform_tags: {phase: combined}
+          shape_name: flexible
+          shape_details: "{{ oci_loadbalancer_integration_combined_shape }}"
+        oci_lb_expected:
+          name: "{{ oci_loadbalancer_integration_name }}"
+          freeform_tags: {phase: combined}
+          shape_details: "{{ oci_loadbalancer_integration_combined_shape }}"
+
+    - name: Test public load balancer deletion by name
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: "{{ oci_loadbalancer_integration_name }}"
+        oci_lb_operation:
+          state: absent
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_loadbalancer_integration_name }}"
+        oci_lb_expected: {}
+
+    - name: Read the reserved IP after deleting the load balancer
+      ansible.oci.oci_network_public_ip:
+        public_ip_id: "{{ oci_lb_reserved_ip_id }}"
+      register: oci_lb_preserved_ip
+
+    - name: Check the reserved IP was kept
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_preserved_ip.changed | bool
+          - oci_lb_preserved_ip.resource.id == oci_lb_reserved_ip_id
+          - oci_lb_preserved_ip.resource.lifetime == 'RESERVED'
+          - oci_lb_preserved_ip.resource.lifecycle_state == 'AVAILABLE'
+
+    - name: Test private load balancer creation
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: "{{ oci_loadbalancer_integration_private_name }}"
+        oci_lb_operation:
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_loadbalancer_integration_private_name }}"
+          subnet_ids: ["{{ oci_lb_subnet_id }}"]
+          is_private: true
+          shape_name: flexible
+          shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
+        oci_lb_expected:
+          name: "{{ oci_loadbalancer_integration_private_name }}"
+          is_private: true
+          shape_details: "{{ oci_loadbalancer_integration_create_shape }}"
+
+    - name: Test private load balancer deletion by ID
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: "{{ oci_loadbalancer_integration_private_name }}"
+        oci_lb_operation:
+          state: absent
+          load_balancer_id: "{{ oci_lb_id }}"
+        oci_lb_expected: {}
+
+    - name: Test IPv6 with the configured subnet
+      ansible.builtin.include_tasks: ipv6.yml
+      when: oci_loadbalancer_integration_ipv6_subnet_id | length > 0
+
+    - name: Report missing IPv6 subnet
+      ansible.builtin.debug:
+        msg: IPv6 live scenarios skipped; set OCI_LOADBALANCER_IPV6_SUBNET_ID to an IPv6-enabled regional public subnet.
+      when: oci_loadbalancer_integration_ipv6_subnet_id | length == 0
+  always:
+    - name: Clean up integration resources
+      ansible.builtin.include_tasks: cleanup.yml

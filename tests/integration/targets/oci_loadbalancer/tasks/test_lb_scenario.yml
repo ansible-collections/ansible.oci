@@ -1,0 +1,119 @@
+---
+- name: Read the load balancer before the test
+  ansible.oci.oci_loadbalancer_info: &oci_lb_probe_options
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_lb_lookup_name }}"
+    load_balancer_id: "{{ oci_lb_operation.load_balancer_id | default(omit) }}"
+  register: oci_lb_before
+
+- name: Run the scenario in check mode
+  ansible.oci.oci_loadbalancer: &oci_lb_operation_options
+    state: "{{ oci_lb_operation.state | default('present') }}"
+    load_balancer_id: "{{ oci_lb_operation.load_balancer_id | default(omit) }}"
+    compartment_id: "{{ oci_lb_operation.compartment_id | default(omit) }}"
+    name: "{{ oci_lb_operation.name | default(omit) }}"
+    subnet_ids: "{{ oci_lb_operation.subnet_ids | default(omit) }}"
+    is_private: "{{ oci_lb_operation.is_private | default(omit) }}"
+    shape_name: "{{ oci_lb_operation.shape_name | default(omit) }}"
+    shape_details: "{{ oci_lb_operation.shape_details | default(omit) }}"
+    reserved_ips: "{{ oci_lb_operation.reserved_ips | default(omit) }}"
+    ip_mode: "{{ oci_lb_operation.ip_mode | default(omit) }}"
+    freeform_tags: "{{ oci_lb_operation.freeform_tags | default(omit) }}"
+    wait: true
+  check_mode: true
+  register: oci_lb_prediction
+
+- name: Read load balancer after check mode
+  ansible.oci.oci_loadbalancer_info:
+    <<: *oci_lb_probe_options
+  register: oci_lb_after_prediction
+
+- name: Check that check mode predicts a change without changing the load balancer
+  ansible.builtin.assert:
+    that:
+      - oci_lb_prediction.changed | bool
+      - oci_lb_after_prediction.load_balancers == oci_lb_before.load_balancers
+
+- name: Run the scenario
+  ansible.oci.oci_loadbalancer:
+    <<: *oci_lb_operation_options
+  register: oci_lb_applied
+
+- name: Save the load balancer ID
+  ansible.builtin.set_fact:
+    oci_lb_id: "{{ oci_lb_applied.resource.id }}"
+    oci_lb_cleanup_ids: "{{ (oci_lb_cleanup_ids | default([])) + [oci_lb_applied.resource.id] }}"
+  when: oci_lb_operation.state | default('present') == 'present'
+
+- name: Read the load balancer after the change
+  ansible.oci.oci_loadbalancer_info:
+    load_balancer_id: "{{ oci_lb_id }}"
+  register: oci_lb_after
+
+- name: Check the load balancer state
+  ansible.builtin.assert:
+    that:
+      - oci_lb_applied.changed | bool
+      - >-
+        (oci_lb_operation.state | default('present') == 'absent'
+        and (oci_lb_after.load_balancers | length == 0
+        or oci_lb_after.load_balancers[0].lifecycle_state == 'DELETED'))
+        or (oci_lb_operation.state | default('present') == 'present'
+        and oci_lb_after.load_balancers | length == 1
+        and oci_lb_after.load_balancers[0].id == oci_lb_id
+        and oci_lb_after.load_balancers[0].lifecycle_state == 'ACTIVE')
+
+- name: Check the load balancer settings
+  ansible.builtin.assert:
+    that:
+      - oci_lb_after.load_balancers[0][item.key] == item.value
+  loop: "{{ oci_lb_expected | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Check the reserved IPs are attached
+  ansible.builtin.assert:
+    that:
+      - >-
+        oci_lb_operation.reserved_ips | map(attribute='id') | list
+        | difference(oci_lb_after.load_balancers[0].ip_addresses
+        | map(attribute='reserved_ip') | select('mapping') | map(attribute='id') | list)
+        | length == 0
+  when: oci_lb_operation.reserved_ips | default([]) | length > 0
+
+- name: Check existing reserved IPs were kept
+  ansible.builtin.assert:
+    that:
+      - >-
+        oci_lb_before.load_balancers[0].ip_addresses
+        | map(attribute='reserved_ip') | select('mapping') | map(attribute='id') | list
+        | difference(oci_lb_after.load_balancers[0].ip_addresses
+        | map(attribute='reserved_ip') | select('mapping') | map(attribute='id') | list)
+        | length == 0
+  when:
+    - oci_lb_operation.state | default('present') == 'present'
+    - oci_lb_before.load_balancers | length > 0
+    - oci_lb_operation.reserved_ips | default([]) | length > 0
+
+- name: Run the scenario again
+  ansible.oci.oci_loadbalancer:
+    <<: *oci_lb_operation_options
+  register: oci_lb_rerun
+
+- name: Run the scenario again in check mode
+  ansible.oci.oci_loadbalancer:
+    <<: *oci_lb_operation_options
+  check_mode: true
+  register: oci_lb_check_rerun
+
+- name: Read the load balancer after both reruns
+  ansible.oci.oci_loadbalancer_info:
+    load_balancer_id: "{{ oci_lb_id }}"
+  register: oci_lb_after_reruns
+
+- name: Check both reruns leave the load balancer unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_lb_rerun.changed | bool
+      - not oci_lb_check_rerun.changed | bool
+      - oci_lb_after_reruns.load_balancers == oci_lb_after.load_balancers
