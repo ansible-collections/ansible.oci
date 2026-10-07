@@ -50,17 +50,15 @@
           compartment_id: "{{ oci_integration_compartment_id }}"
           name: "{{ oci_oke_cluster_integration_name }}"
           vcn_id: "{{ oci_oke_vcn_id }}"
-          kubernetes_version: "{{ oci_oke_cluster_integration_kubernetes_version }}"
           type: BASIC_CLUSTER
           endpoint_config:
             subnet_id: "{{ oci_oke_subnet_id }}"
             is_public_ip_enabled: true
-          freeform_tags: {phase: create}
+          freeform_tags: { phase: create }
         oci_oke_expected:
           name: "{{ oci_oke_cluster_integration_name }}"
-          kubernetes_version: "{{ oci_oke_cluster_integration_kubernetes_version }}"
           type: BASIC_CLUSTER
-          freeform_tags: {phase: create}
+          freeform_tags: { phase: create }
 
     - name: List clusters by name and state
       ansible.oci.oci_oke_cluster_info:
@@ -83,10 +81,10 @@
         oci_oke_operation:
           cluster_id: "{{ oci_oke_cluster_id }}"
           name: "{{ oci_oke_cluster_integration_updated_name }}"
-          freeform_tags: {phase: update}
+          freeform_tags: { phase: update }
         oci_oke_expected:
           name: "{{ oci_oke_cluster_integration_updated_name }}"
-          freeform_tags: {phase: update}
+          freeform_tags: { phase: update }
 
     - name: Test cluster deletion by ID
       ansible.builtin.include_tasks: test_cluster_scenario.yml
