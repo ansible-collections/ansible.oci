@@ -77,3 +77,5 @@ action_groups:
     - oci_identity_domain_info
     - oci_loadbalancer
     - oci_loadbalancer_info
+    - oci_oke_cluster
+    - oci_oke_cluster_info

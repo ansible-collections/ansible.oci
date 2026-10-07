@@ -1,0 +1,7 @@
+---
+oci_oke_cluster_integration_vcn_name: oci-oke-vcn
+oci_oke_cluster_integration_subnet_name: oci-oke-subnet
+oci_oke_cluster_integration_name: oci-oke-cluster
+oci_oke_cluster_integration_updated_name: oci-oke-cluster-updated
+oci_oke_cluster_integration_vcn_cidr: 10.252.0.0/16
+oci_oke_cluster_integration_subnet_cidr: 10.252.1.0/24
