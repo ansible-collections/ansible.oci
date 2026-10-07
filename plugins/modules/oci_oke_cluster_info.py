@@ -149,6 +149,21 @@ class OciOkeClusterInfoModule(OciInfoBase):
     # resolve against ``name``.
     name_response_field = "name"
 
+    def collect_list_filters(self, *param_groups):
+        """Collect list filters, adapting ``lifecycle_state`` to the SDK shape.
+
+        Unlike most OCI list operations, ``ContainerEngineClient.list_clusters``
+        takes ``lifecycle_state`` as a list of states and validates each entry
+        against the allowed enum. The shared module interface exposes a single
+        string, so wrap it in a one-item list before the SDK call; otherwise the
+        SDK iterates the string character-by-character and rejects each char.
+        """
+        filters = super().collect_list_filters(*param_groups)
+        lifecycle_state = filters.get("lifecycle_state")
+        if isinstance(lifecycle_state, str):
+            filters["lifecycle_state"] = [lifecycle_state]
+        return filters
+
 
 def main():
     """Build the info argument spec and run the OKE cluster info module."""

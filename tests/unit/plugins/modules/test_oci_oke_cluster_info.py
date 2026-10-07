@@ -107,10 +107,12 @@ def test_list_uses_base_filters_for_name_and_lifecycle(monkeypatch):
     )
 
     assert instance.fetch_resources() == [matching]
+    # list_clusters takes lifecycle_state as a list, so the scalar module param
+    # is wrapped before being handed to the SDK.
     assert calls == [
         (
             "list-method",
-            {"compartment_id": "compartment", "lifecycle_state": "ACTIVE"},
+            {"compartment_id": "compartment", "lifecycle_state": ["ACTIVE"]},
         )
     ]
 
