@@ -58,7 +58,10 @@ options:
   kubernetes_version:
     description:
       - The Kubernetes version to run on the cluster control plane.
-      - Required when creating a cluster.
+      - When omitted while creating a cluster, the module defaults to the latest
+        Kubernetes version OCI currently offers for new clusters.
+      - When omitted while updating an existing cluster, the control-plane version
+        is left unchanged.
       - For an existing cluster, changing this value upgrades the control plane in
         place. The requested version must be one of the cluster's
         C(available_kubernetes_upgrades); requesting a version outside that allowed
@@ -334,6 +337,8 @@ resource:
       returned: when available
 """
 
+import re
+
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
@@ -352,10 +357,10 @@ CREATE_REQUIRED_FIELDS = (
     "compartment_id",
     "name",
     "vcn_id",
-    "kubernetes_version",
 )
 CLUSTER_ENTITY_TYPE = "cluster"
 WORK_REQUEST_ID_HEADER = "opc-work-request-id"
+ALL_CLUSTER_OPTIONS_ID = "all"
 
 
 def _build_endpoint_config(endpoint_config):
@@ -657,15 +662,49 @@ class OciOkeClusterModule(OciResourceBase):
         resource = self.get_resource_by_id(cluster_id)
         return resource if resource is not None else {"id": cluster_id}
 
+    def _latest_kubernetes_version(self):
+        """Return the newest Kubernetes version OCI offers for new clusters.
+
+        Used to default ``kubernetes_version`` at create time when the caller
+        omits it. The version is chosen by numeric component so the newest is
+        selected regardless of the order OCI returns the list in.
+
+        Returns:
+            The latest available Kubernetes version string.
+        """
+        response = self.call_with_retry(
+            self.client.get_cluster_options,
+            cluster_option_id=ALL_CLUSTER_OPTIONS_ID,
+        )
+        versions = getattr(response.data, "kubernetes_versions", None) or []
+        if not versions:
+            self.module.fail_json(
+                msg=(
+                    "Could not determine a default kubernetes_version: OCI "
+                    "returned no available Kubernetes versions."
+                )
+            )
+        return max(
+            versions,
+            key=lambda version: tuple(
+                int(part) for part in re.findall(r"\d+", version)
+            ),
+        )
+
     def create_resource(self):
         """Create a cluster and resolve its result through OCI work requests.
 
         This override drives the asynchronous create work request and resolves
-        the cluster OCID from the work request resources.
+        the cluster OCID from the work request resources. When the caller omits
+        ``kubernetes_version``, it is defaulted to the latest version OCI offers.
 
         Returns:
             The created Cluster model, or an ID-only result when wait=False.
         """
+        if self.module.params.get("kubernetes_version") is None:
+            self.module.params["kubernetes_version"] = (
+                self._latest_kubernetes_version()
+            )
         response = self.call_with_retry(
             self.client.create_cluster,
             create_cluster_details=build_create_cluster_details(self.module.params),
