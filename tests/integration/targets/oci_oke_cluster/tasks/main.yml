@@ -1,0 +1,101 @@
+---
+- name: Check the test compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Set unique test names
+  ansible.builtin.set_fact:
+    oci_oke_cleanup_ids: []
+    oci_oke_cluster_integration_vcn_name: "{{ oci_oke_cluster_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_cluster_integration_subnet_name: "{{ oci_oke_cluster_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_cluster_integration_name: "{{ oci_oke_cluster_integration_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_cluster_integration_updated_name: "{{ oci_oke_cluster_integration_updated_name }}-{{ oci_integration_rpfx }}"
+
+- name: Test the OKE cluster lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create the test VCN
+      ansible.oci.oci_network_vcn:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_oke_cluster_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_oke_cluster_integration_vcn_cidr }}"
+      register: oci_oke_vcn
+
+    - name: Save the VCN ID
+      ansible.builtin.set_fact:
+        oci_oke_vcn_id: "{{ oci_oke_vcn.resource.id }}"
+
+    - name: Create the regional endpoint subnet
+      ansible.oci.oci_network_subnet:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_oke_vcn_id }}"
+        name: "{{ oci_oke_cluster_integration_subnet_name }}"
+        cidr_block: "{{ oci_oke_cluster_integration_subnet_cidr }}"
+      register: oci_oke_subnet
+
+    - name: Save the subnet ID
+      ansible.builtin.set_fact:
+        oci_oke_subnet_id: "{{ oci_oke_subnet.resource.id }}"
+
+    - name: Test cluster creation
+      ansible.builtin.include_tasks: test_cluster_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_cluster_integration_name }}"
+        oci_oke_operation:
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_oke_cluster_integration_name }}"
+          vcn_id: "{{ oci_oke_vcn_id }}"
+          kubernetes_version: "{{ oci_oke_cluster_integration_kubernetes_version }}"
+          type: BASIC_CLUSTER
+          endpoint_config:
+            subnet_id: "{{ oci_oke_subnet_id }}"
+            is_public_ip_enabled: true
+          freeform_tags: {phase: create}
+        oci_oke_expected:
+          name: "{{ oci_oke_cluster_integration_name }}"
+          kubernetes_version: "{{ oci_oke_cluster_integration_kubernetes_version }}"
+          type: BASIC_CLUSTER
+          freeform_tags: {phase: create}
+
+    - name: List clusters by name and state
+      ansible.oci.oci_oke_cluster_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_oke_cluster_integration_name }}"
+        lifecycle_state: ACTIVE
+      register: oci_oke_list
+
+    - name: Check the list contains the cluster
+      ansible.builtin.assert:
+        that:
+          - not oci_oke_list.changed | bool
+          - oci_oke_list.clusters | length == 1
+          - oci_oke_list.clusters[0].id == oci_oke_cluster_id
+
+    - name: Test name and tag updates
+      ansible.builtin.include_tasks: test_cluster_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_cluster_integration_name }}"
+        oci_oke_operation:
+          cluster_id: "{{ oci_oke_cluster_id }}"
+          name: "{{ oci_oke_cluster_integration_updated_name }}"
+          freeform_tags: {phase: update}
+        oci_oke_expected:
+          name: "{{ oci_oke_cluster_integration_updated_name }}"
+          freeform_tags: {phase: update}
+
+    - name: Test cluster deletion by ID
+      ansible.builtin.include_tasks: test_cluster_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_cluster_integration_updated_name }}"
+        oci_oke_operation:
+          state: absent
+          cluster_id: "{{ oci_oke_cluster_id }}"
+        oci_oke_expected: {}
+  always:
+    - name: Clean up integration resources
+      ansible.builtin.include_tasks: cleanup.yml
