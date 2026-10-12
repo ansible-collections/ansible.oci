@@ -87,7 +87,7 @@ def test_main_wires_argument_spec_and_runs_module(monkeypatch):
     assert spec["kubernetes_version"] == {"type": "str"}
     assert spec["type"] == {
         "type": "str",
-        "choices": ["BASIC_CLUSTER", "ENHANCED_CLUSTER"],
+        "choices": ["basic_cluster", "enhanced_cluster"],
     }
     assert spec["endpoint_config"]["type"] == "dict"
     assert spec["endpoint_config"]["options"]["nsg_ids"] == {
@@ -95,9 +95,46 @@ def test_main_wires_argument_spec_and_runs_module(monkeypatch):
         "elements": "str",
     }
     assert spec["cluster_pod_network_options"]["options"]["cni_type"]["choices"] == [
-        "OCI_VCN_IP_NATIVE",
-        "FLANNEL_OVERLAY",
+        "oci_vcn_ip_native",
+        "flannel_overlay",
     ]
+
+
+def test_main_normalizes_enum_values_to_sdk_constants(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    module_obj = load_collection_module("oci_oke_cluster")
+    captured = {}
+
+    params = {
+        "type": "basic_cluster",
+        "cluster_pod_network_options": [{"cni_type": "oci_vcn_ip_native"}],
+        "auth_type": "api_key",
+    }
+
+    def fake_ansible_module(**kwargs):
+        return DummyModule(params)
+
+    class FakeClusterModule:
+        def __init__(self, module):
+            captured["module"] = module
+
+        def execute_resource_module(self):
+            pass
+
+    monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
+    monkeypatch.setattr(module_obj, "OciOkeClusterModule", FakeClusterModule)
+
+    module_obj.main()
+
+    normalized = captured["module"].params
+    # Enum values are upper-cased to the SDK vocabulary before the module runs.
+    assert normalized["type"] == "BASIC_CLUSTER"
+    assert normalized["cluster_pod_network_options"][0]["cni_type"] == (
+        "OCI_VCN_IP_NATIVE"
+    )
+    # Keys that merely end in "_type" are not enum keys and are left untouched.
+    assert normalized["auth_type"] == "api_key"
 
 
 def test_class_metadata(monkeypatch):

@@ -74,7 +74,7 @@ options:
       - The cluster type.
       - Set only at create time and immutable afterwards.
     type: str
-    choices: [BASIC_CLUSTER, ENHANCED_CLUSTER]
+    choices: [basic_cluster, enhanced_cluster]
   kms_key_id:
     description:
       - The OCID of the KMS key used for cluster encryption.
@@ -134,7 +134,7 @@ options:
         description:
           - The CNI used by the node pools of this cluster.
         type: str
-        choices: [OCI_VCN_IP_NATIVE, FLANNEL_OVERLAY]
+        choices: [oci_vcn_ip_native, flannel_overlay]
   options:
     description:
       - Optional cluster-creation attributes.
@@ -198,7 +198,7 @@ EXAMPLES = r"""
     name: example-cluster
     vcn_id: ocid1.vcn.oc1..example
     kubernetes_version: v1.29.1
-    type: BASIC_CLUSTER
+    type: basic_cluster
     endpoint_config:
       subnet_id: ocid1.subnet.oc1..example
       is_public_ip_enabled: true
@@ -210,11 +210,11 @@ EXAMPLES = r"""
     name: example-enhanced
     vcn_id: ocid1.vcn.oc1..example
     kubernetes_version: v1.29.1
-    type: ENHANCED_CLUSTER
+    type: enhanced_cluster
     endpoint_config:
       subnet_id: ocid1.subnet.oc1..endpoint
     cluster_pod_network_options:
-      - cni_type: OCI_VCN_IP_NATIVE
+      - cni_type: oci_vcn_ip_native
     options:
       service_lb_subnet_ids:
         - ocid1.subnet.oc1..lb
@@ -346,6 +346,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_COMMON_ARGS,
     filter_none_values,
     import_oci_sdk,
+    normalize_enum_values,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -362,6 +363,14 @@ CREATE_REQUIRED_FIELDS = (
 CLUSTER_ENTITY_TYPE = "cluster"
 WORK_REQUEST_ID_HEADER = "opc-work-request-id"
 ALL_CLUSTER_OPTIONS_ID = "all"
+
+# Module inputs use lowercase snake_case choices (Ansible convention), while
+# OCI's wire format and returned resources use upper-case constants (for example
+# "basic_cluster" -> "BASIC_CLUSTER"). ``main`` normalizes module params through
+# normalize_enum_values once, so every downstream read -- the create/update
+# builders, the immutable drift check on ``type``, and idempotency comparisons --
+# sees the same upper-case vocabulary as the serialized OCI resource.
+ENUM_KEYS = frozenset({"type", "cni_type"})
 
 
 def _build_endpoint_config(endpoint_config):
@@ -871,7 +880,7 @@ def main():
         cluster_id=dict(type="str"),
         vcn_id=dict(type="str"),
         kubernetes_version=dict(type="str"),
-        type=dict(type="str", choices=["BASIC_CLUSTER", "ENHANCED_CLUSTER"]),
+        type=dict(type="str", choices=["basic_cluster", "enhanced_cluster"]),
         kms_key_id=dict(type="str"),
         endpoint_config=dict(
             type="dict",
@@ -899,7 +908,7 @@ def main():
             options=dict(
                 cni_type=dict(
                     type="str",
-                    choices=["OCI_VCN_IP_NATIVE", "FLANNEL_OVERLAY"],
+                    choices=["oci_vcn_ip_native", "flannel_overlay"],
                 ),
             ),
         ),
@@ -935,6 +944,10 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
+    # Convert the lowercase snake_case enum choices to the upper-case constants
+    # OCI expects, in one pass, so the builders and comparisons downstream all
+    # work against the SDK vocabulary. See ENUM_KEYS.
+    module.params = normalize_enum_values(module.params, ENUM_KEYS)
     OciOkeClusterModule(module).execute_resource_module()
 
 

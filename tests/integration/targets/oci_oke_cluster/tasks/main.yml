@@ -50,7 +50,7 @@
           compartment_id: "{{ oci_integration_compartment_id }}"
           name: "{{ oci_oke_cluster_integration_name }}"
           vcn_id: "{{ oci_oke_vcn_id }}"
-          type: BASIC_CLUSTER
+          type: basic_cluster
           endpoint_config:
             subnet_id: "{{ oci_oke_subnet_id }}"
             is_public_ip_enabled: true
