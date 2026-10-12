@@ -736,17 +736,19 @@ class OciResourceBase(OciModuleBase, ABC):
             return response_data
         return self.wait_for_resource_id(resource_id, target_states)
 
-    def delete_resource_and_wait(
+    def call_delete_fn(
         self, resource, delete_fn, action_verb="delete", **delete_kwargs
     ):
-        """Delete or detach ``resource`` and optionally wait for a dead state.
+        """Invoke ``delete_fn`` and translate a dependency conflict.
 
         ``delete_fn`` is the concrete OCI lifecycle method and ``action_verb``
         describes it in errors. A 409 response is translated into a clearer
-        module failure when dependent resources block the operation.
+        module failure when dependent resources block the operation. The raw
+        OCI response is returned so callers can drive either lifecycle-state or
+        work-request waiting.
         """
         try:
-            response = self.call_with_retry(delete_fn, **delete_kwargs)
+            return self.call_with_retry(delete_fn, **delete_kwargs)
         except Exception as exc:
             if getattr(exc, "status", None) == 409:
                 self.module.fail_json(
@@ -756,6 +758,19 @@ class OciResourceBase(OciModuleBase, ABC):
                     )
                 )
             raise
+
+    def delete_resource_and_wait(
+        self, resource, delete_fn, action_verb="delete", **delete_kwargs
+    ):
+        """Delete or detach ``resource`` and optionally wait for a dead state.
+
+        ``delete_fn`` is the concrete OCI lifecycle method and ``action_verb``
+        describes it in errors. A 409 response is translated into a clearer
+        module failure when dependent resources block the operation.
+        """
+        response = self.call_delete_fn(
+            resource, delete_fn, action_verb, **delete_kwargs
+        )
 
         return self.get_mutation_result(
             response.data,

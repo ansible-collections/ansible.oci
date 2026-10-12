@@ -82,7 +82,7 @@ def test_main_wires_argument_spec_and_runs_module(monkeypatch):
     assert spec["name"] == {"type": "str"}
     assert spec["compartment_id"] == {"type": "str"}
     # cluster-specific params.
-    assert spec["cluster_id"] == {"type": "str", "aliases": ["id"]}
+    assert spec["cluster_id"] == {"type": "str"}
     assert spec["vcn_id"] == {"type": "str"}
     assert spec["kubernetes_version"] == {"type": "str"}
     assert spec["type"] == {
@@ -709,15 +709,17 @@ def test_update_resource_renames_and_waits(monkeypatch):
     assert updated.name == "new"
 
 
-def test_delete_resource_calls_delete_cluster(monkeypatch):
+def test_delete_resource_waits_for_work_request(monkeypatch):
     install_fake_oci(monkeypatch)
 
     cluster_module = load_collection_module("oci_oke_cluster")
     delete_calls = []
+    waited = []
+    response = FakeResponse(data=None, headers={"opc-work-request-id": "wr1"})
 
     def delete_cluster(cluster_id):
         delete_calls.append(cluster_id)
-        return FakeResponse(data=None)
+        return response
 
     resource = FakeModel(id="ocid1.cluster.oc1..c1")
     instance = make_cluster_module(
@@ -728,10 +730,52 @@ def test_delete_resource_calls_delete_cluster(monkeypatch):
     monkeypatch.setattr(instance, "call_with_retry", lambda fn, *a, **k: fn(*a, **k))
     monkeypatch.setattr(
         instance,
-        "wait_for_resource_id",
-        lambda resource_id, target_states, **kwargs: None,
+        "wait_for_work_request",
+        lambda client, work_request_id: waited.append(work_request_id),
+    )
+    monkeypatch.setattr(
+        instance,
+        "get_resource_by_id",
+        lambda cluster_id: FakeModel(id=cluster_id, lifecycle_state="DELETED"),
     )
 
-    instance.delete_resource(resource)
+    result = instance.delete_resource(resource)
 
     assert delete_calls == ["ocid1.cluster.oc1..c1"]
+    assert waited == ["wr1"]
+    assert result.lifecycle_state == "DELETED"
+
+
+def test_delete_resource_without_wait_skips_work_request(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    delete_calls = []
+    response = FakeResponse(data=None, headers={"opc-work-request-id": "wr1"})
+
+    def delete_cluster(cluster_id):
+        delete_calls.append(cluster_id)
+        return response
+
+    resource = FakeModel(id="ocid1.cluster.oc1..c1")
+    instance = make_cluster_module(
+        cluster_module,
+        {"wait": False},
+        client=types.SimpleNamespace(delete_cluster=delete_cluster),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, *a, **k: fn(*a, **k))
+    monkeypatch.setattr(
+        instance,
+        "get_resource_by_id",
+        lambda cluster_id: None,
+    )
+
+    def fail_if_waited(*args, **kwargs):
+        raise AssertionError("wait_for_work_request should not run when wait=False")
+
+    monkeypatch.setattr(instance, "wait_for_work_request", fail_if_waited)
+
+    result = instance.delete_resource(resource)
+
+    assert delete_calls == ["ocid1.cluster.oc1..c1"]
+    assert result == {"id": "ocid1.cluster.oc1..c1"}

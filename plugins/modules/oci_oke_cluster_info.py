@@ -21,9 +21,7 @@ options:
   cluster_id:
     description:
       - The OCID of one cluster to retrieve.
-      - Use C(id) as an alias.
     type: str
-    aliases: [id]
   compartment_id:
     description:
       - The OCID of the compartment to list clusters from.
@@ -169,7 +167,7 @@ def main():
     """Build the info argument spec and run the OKE cluster info module."""
     argument_spec = dict(
         OCI_AUTH_ARGS,
-        cluster_id=dict(type="str", aliases=["id"]),
+        cluster_id=dict(type="str"),
         compartment_id=dict(type="str"),
         name=dict(type="str"),
         lifecycle_state=dict(type="str"),

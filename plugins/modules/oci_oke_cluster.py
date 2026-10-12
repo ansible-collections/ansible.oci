@@ -36,7 +36,6 @@ options:
         scoped C(name).
       - Use C(id) as an alias.
     type: str
-    aliases: [id]
   name:
     description:
       - The cluster name.
@@ -67,6 +66,8 @@ options:
         C(available_kubernetes_upgrades); requesting a version outside that allowed
         upgrade path fails the module. Setting it to the cluster's current version
         is idempotent. Downgrades are not supported by OCI.
+      - Supported versions change regularly. See the OCI documentation for the current
+        list of versions, https://docs.oracle.com/en-us/iaas/Content/ContEng/Concepts/contengaboutk8sversions.htm
     type: str
   type:
     description:
@@ -385,13 +386,14 @@ def _build_endpoint_config(endpoint_config):
 
 
 def _build_image_policy_config(image_policy_config):
-    """Build the OCI image policy config model from module input.
+    """Build image policy config kwargs shared by create and update.
 
     Args:
         image_policy_config: Image policy mapping, or None.
 
     Returns:
-        A CreateImagePolicyConfigDetails model, or None when unset.
+        A dict of model kwargs suitable for the create/update image policy
+        config models, or None when unset.
     """
     if image_policy_config is None:
         return None
@@ -411,37 +413,7 @@ def _build_image_policy_config(image_policy_config):
             ),
         }
     )
-    return oci.container_engine.models.CreateImagePolicyConfigDetails(**details)
-
-
-def _build_update_image_policy_config(image_policy_config):
-    """Build the OCI update image policy config model from module input.
-
-    Args:
-        image_policy_config: Image policy mapping, or None.
-
-    Returns:
-        An UpdateImagePolicyConfigDetails model, or None when unset.
-    """
-    if image_policy_config is None:
-        return None
-    key_details = image_policy_config.get("key_details")
-    details = filter_none_values(
-        {
-            "is_policy_enabled": image_policy_config.get("is_policy_enabled"),
-            "key_details": (
-                [
-                    oci.container_engine.models.KeyDetails(
-                        **filter_none_values(key_detail)
-                    )
-                    for key_detail in key_details
-                ]
-                if key_details is not None
-                else None
-            ),
-        }
-    )
-    return oci.container_engine.models.UpdateImagePolicyConfigDetails(**details)
+    return details
 
 
 def _build_cluster_pod_network_options(pod_network_options):
@@ -516,6 +488,9 @@ def build_create_cluster_details(params):
     Returns:
         A CreateClusterDetails model.
     """
+    image_policy_config = _build_image_policy_config(
+        params.get("image_policy_config")
+    )
     details = filter_none_values(
         {
             "compartment_id": params.get("compartment_id"),
@@ -525,8 +500,12 @@ def build_create_cluster_details(params):
             "type": params.get("type"),
             "kms_key_id": params.get("kms_key_id"),
             "endpoint_config": _build_endpoint_config(params.get("endpoint_config")),
-            "image_policy_config": _build_image_policy_config(
-                params.get("image_policy_config")
+            "image_policy_config": (
+                oci.container_engine.models.CreateImagePolicyConfigDetails(
+                    **image_policy_config
+                )
+                if image_policy_config is not None
+                else None
             ),
             "cluster_pod_network_options": _build_cluster_pod_network_options(
                 params.get("cluster_pod_network_options")
@@ -835,13 +814,13 @@ class OciOkeClusterModule(OciResourceBase):
         for strategy_operation in update_plan["strategy_operations"]:
             param_name = strategy_operation["param_name"]
             operations = strategy_operation["operations"]
-            if not operations:
-                continue
             if param_name == "kubernetes_version":
                 update_fields["kubernetes_version"] = operations[0][1]
             elif param_name == "image_policy_config":
                 update_fields["image_policy_config"] = (
-                    _build_update_image_policy_config(operations[0][1])
+                    oci.container_engine.models.UpdateImagePolicyConfigDetails(
+                        **_build_image_policy_config(operations[0][1])
+                    )
                 )
 
         if not update_fields:
@@ -858,22 +837,30 @@ class OciOkeClusterModule(OciResourceBase):
         return self._get_cluster_or_id(resource.id)
 
     def delete_resource(self, resource):
-        """Delete the cluster through the shared delete helper.
+        """Delete the cluster and wait on its delete work request.
 
-        The shared helper waits for the cluster to reach a dead state, which the
-        delete work request drives.
+        The delete endpoint returns only a work request rather than driving the
+        cluster lifecycle state synchronously, so this override waits on the
+        work request itself. That surfaces a failed delete immediately instead
+        of waiting until timeout, and honours the documented promise to wait for
+        work-request success. The shared delete call is reused so a 409 from
+        dependent resources is still translated into a clearer failure.
 
         Args:
             resource: Cluster model to delete.
 
         Returns:
-            The result from the base delete helper.
+            The deleted Cluster model, or an ID-only result when wait=False.
         """
-        return self.delete_resource_and_wait(
+        response = self.call_delete_fn(
             resource,
             self.client.delete_cluster,
             cluster_id=resource.id,
         )
+        if self.module.params.get("wait", True):
+            work_request_id = self._work_request_id(response, "delete")
+            self.wait_for_work_request(self.client, work_request_id)
+        return self._get_cluster_or_id(resource.id)
 
 
 def main():
@@ -881,7 +868,7 @@ def main():
     argument_spec = dict(
         OCI_COMMON_ARGS,
         state=dict(type="str", choices=["present", "absent"], default="present"),
-        cluster_id=dict(type="str", aliases=["id"]),
+        cluster_id=dict(type="str"),
         vcn_id=dict(type="str"),
         kubernetes_version=dict(type="str"),
         type=dict(type="str", choices=["BASIC_CLUSTER", "ENHANCED_CLUSTER"]),

@@ -44,7 +44,7 @@ def test_main_requires_id_or_compartment_and_exposes_filters(monkeypatch):
     module_obj.main()
 
     assert captured["required_one_of"] == [["cluster_id", "compartment_id"]]
-    assert captured["argument_spec"]["cluster_id"] == {"type": "str", "aliases": ["id"]}
+    assert captured["argument_spec"]["cluster_id"] == {"type": "str"}
     assert captured["argument_spec"]["name"] == {"type": "str"}
     assert captured["argument_spec"]["lifecycle_state"] == {"type": "str"}
 
