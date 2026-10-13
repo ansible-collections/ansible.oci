@@ -1,0 +1,166 @@
+---
+- name: Check the test compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Set unique test names
+  ansible.builtin.set_fact:
+    oci_oke_np_cleanup_ids: []
+    oci_oke_node_pool_integration_vcn_name: "{{ oci_oke_node_pool_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_node_pool_integration_subnet_name: "{{ oci_oke_node_pool_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_node_pool_integration_cluster_name: "{{ oci_oke_node_pool_integration_cluster_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_node_pool_integration_name: "{{ oci_oke_node_pool_integration_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_node_pool_integration_updated_name: "{{ oci_oke_node_pool_integration_updated_name }}-{{ oci_integration_rpfx }}"
+
+- name: Test the OKE node pool lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Get an availability domain
+      ansible.oci.oci_identity_availability_domain_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+      register: oci_oke_np_ads
+
+    - name: Save the availability domain name
+      ansible.builtin.set_fact:
+        oci_oke_np_ad: "{{ oci_oke_np_ads.availability_domains[0].name }}"
+
+    - name: Create the test VCN
+      ansible.oci.oci_network_vcn:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_oke_node_pool_integration_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_oke_node_pool_integration_vcn_cidr }}"
+      register: oci_oke_np_vcn
+
+    - name: Save the VCN ID
+      ansible.builtin.set_fact:
+        oci_oke_np_vcn_id: "{{ oci_oke_np_vcn.resource.id }}"
+
+    - name: Create the node subnet
+      ansible.oci.oci_network_subnet:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_oke_np_vcn_id }}"
+        name: "{{ oci_oke_node_pool_integration_subnet_name }}"
+        cidr_block: "{{ oci_oke_node_pool_integration_subnet_cidr }}"
+      register: oci_oke_np_subnet
+
+    - name: Save the subnet ID
+      ansible.builtin.set_fact:
+        oci_oke_np_subnet_id: "{{ oci_oke_np_subnet.resource.id }}"
+
+    - name: Create the parent cluster
+      ansible.oci.oci_oke_cluster:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_oke_node_pool_integration_cluster_name }}"
+        vcn_id: "{{ oci_oke_np_vcn_id }}"
+        type: basic_cluster
+        endpoint_config:
+          subnet_id: "{{ oci_oke_np_subnet_id }}"
+          is_public_ip_enabled: true
+      register: oci_oke_np_cluster
+
+    - name: Save the cluster ID
+      ansible.builtin.set_fact:
+        oci_oke_np_cluster_id: "{{ oci_oke_np_cluster.resource.id }}"
+
+    # oci_oke_node_pool_options_info is read-only, so there is no
+    # check-mode/idempotency create/update/delete matrix to assert here; it only
+    # ever reports changed=false.
+    - name: List the node pool images available for the cluster and shape
+      ansible.oci.oci_oke_node_pool_options_info:
+        node_pool_option_id: "{{ oci_oke_np_cluster_id }}"
+        node_pool_os_arch: "{{ oci_oke_node_pool_integration_node_os_arch }}"
+      register: oci_oke_np_options
+
+    - name: Select a worker-node image for the node pool
+      ansible.builtin.set_fact:
+        oci_oke_np_image_id: >-
+          {{
+            oci_oke_node_pool_integration_image_id
+            if (oci_oke_node_pool_integration_image_id | default('', true) | length > 0)
+            else (
+              oci_oke_np_options.node_pool_options[0].sources
+              | selectattr('image_id') | map(attribute='image_id') | first | default('')
+            )
+          }}
+
+    - name: Check the options yielded a selectable worker-node image
+      ansible.builtin.assert:
+        that:
+          - not oci_oke_np_options.changed | bool
+          - oci_oke_np_options.node_pool_options | length == 1
+          - oci_oke_np_options.node_pool_options[0].sources | length > 0
+          - oci_oke_np_image_id | length > 0
+        fail_msg: >-
+          No worker-node image was found for cluster {{ oci_oke_np_cluster_id }}
+          and architecture {{ oci_oke_node_pool_integration_node_os_arch }}.
+          Set oci_oke_node_pool_integration_image_id to override discovery.
+
+    - name: Test node pool creation
+      ansible.builtin.include_tasks: test_node_pool_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_node_pool_integration_name }}"
+        oci_oke_operation:
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          cluster_id: "{{ oci_oke_np_cluster_id }}"
+          name: "{{ oci_oke_node_pool_integration_name }}"
+          node_shape: "{{ oci_oke_node_pool_integration_node_shape }}"
+          node_shape_config:
+            ocpus: "{{ oci_oke_node_pool_integration_node_ocpus }}"
+            memory_in_gbs: "{{ oci_oke_node_pool_integration_node_memory_gbs }}"
+          node_source_details:
+            image_id: "{{ oci_oke_np_image_id }}"
+          node_config_details:
+            size: 1
+            placement_configs:
+              - availability_domain: "{{ oci_oke_np_ad }}"
+                subnet_id: "{{ oci_oke_np_subnet_id }}"
+          freeform_tags: { phase: create }
+        oci_oke_expected:
+          name: "{{ oci_oke_node_pool_integration_name }}"
+          freeform_tags: { phase: create }
+
+    - name: List node pools by name and state
+      ansible.oci.oci_oke_node_pool_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        cluster_id: "{{ oci_oke_np_cluster_id }}"
+        name: "{{ oci_oke_node_pool_integration_name }}"
+        lifecycle_state: ACTIVE
+      register: oci_oke_np_list
+
+    - name: Check the list contains the node pool
+      ansible.builtin.assert:
+        that:
+          - not oci_oke_np_list.changed | bool
+          - oci_oke_np_list.node_pools | length == 1
+          - oci_oke_np_list.node_pools[0].id == oci_oke_np_node_pool_id
+
+    - name: Test scale, rename, and tag updates
+      ansible.builtin.include_tasks: test_node_pool_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_node_pool_integration_name }}"
+        oci_oke_operation:
+          node_pool_id: "{{ oci_oke_np_node_pool_id }}"
+          name: "{{ oci_oke_node_pool_integration_updated_name }}"
+          node_config_details:
+            size: 2
+          freeform_tags: { phase: update }
+        oci_oke_expected:
+          name: "{{ oci_oke_node_pool_integration_updated_name }}"
+          freeform_tags: { phase: update }
+
+    - name: Test node pool deletion by ID
+      ansible.builtin.include_tasks: test_node_pool_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_node_pool_integration_updated_name }}"
+        oci_oke_operation:
+          state: absent
+          node_pool_id: "{{ oci_oke_np_node_pool_id }}"
+        oci_oke_expected: {}
+  always:
+    - name: Clean up integration resources
+      ansible.builtin.include_tasks: cleanup.yml

@@ -240,6 +240,28 @@ def filter_none_values(data):
     }
 
 
+def build_model(source, model_class, keys=None):
+    """Build an OCI ``model_class`` from the mapping ``source``.
+
+    Collapses the shared model-builder boilerplate used across modules: skip when
+    the input mapping is unset, select the fields to carry over, drop the ones the
+    caller left unset, and instantiate the model.
+
+    Args:
+        source: The module-input mapping, or None.
+        model_class: The SDK model class to instantiate.
+        keys: The ``source`` keys to copy onto the model; unset keys are dropped.
+            When None, every key of ``source`` is used.
+
+    Returns:
+        A ``model_class`` instance, or None when ``source`` is None.
+    """
+    if source is None:
+        return None
+    selected = source if keys is None else {key: source.get(key) for key in keys}
+    return model_class(**filter_none_values(selected))
+
+
 def normalize_enum_values(value, enum_keys):
     """Recursively upper-case string values under known OCI enum keys.
 
