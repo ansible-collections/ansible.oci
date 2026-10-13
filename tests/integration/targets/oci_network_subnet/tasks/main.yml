@@ -153,7 +153,13 @@
 
     - name: Intentionally create a second subnet with the same display name
       ansible.oci.oci_network_subnet:
-        <<: *oci_subnet_create_module_options
+        state: "{{ oci_subnet_create_params.state }}"
+        compartment_id: "{{ oci_subnet_create_params.compartment_id }}"
+        vcn_id: "{{ oci_subnet_create_params.vcn_id }}"
+        name: "{{ oci_subnet_create_params.name }}"
+        route_table_id: "{{ oci_subnet_create_params.route_table_id }}"
+        security_list_ids: "{{ oci_subnet_create_params.security_list_ids }}"
+        freeform_tags: "{{ oci_subnet_create_params.freeform_tags }}"
         allow_duplicate_name: true
         cidr_block: 10.251.2.0/24
         dns_label: "dup{{ oci_integration_rpfx }}"
