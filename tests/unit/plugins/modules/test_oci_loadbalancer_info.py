@@ -5,6 +5,8 @@ import types
 
 import pytest
 
+from ansible.module_utils.common.arg_spec import ArgumentSpecValidator
+
 from .conftest import (
     DummyModule,
     ExitJsonCalled,
@@ -44,9 +46,16 @@ def test_main_requires_id_or_compartment_and_exposes_filters(monkeypatch):
     module_obj.main()
 
     assert captured["required_one_of"] == [["load_balancer_id", "compartment_id"]]
-    assert captured["argument_spec"]["load_balancer_id"] == {"type": "str", "aliases": ["id"]}
-    assert captured["argument_spec"]["name"] == {"type": "str", "aliases": ["display_name"]}
-    assert captured["argument_spec"]["lifecycle_state"] == {"type": "str"}
+    assert captured["argument_spec"]["load_balancer_id"] == {"type": "str"}
+    assert captured["argument_spec"]["name"] == {"type": "str"}
+    states = ["creating", "failed", "active", "deleting", "deleted"]
+    state_spec = captured["argument_spec"]["lifecycle_state"]
+    assert state_spec == {"type": "str", "choices": states}
+    validator = ArgumentSpecValidator({"lifecycle_state": state_spec})
+    for state in states:
+        assert not validator.validate({"lifecycle_state": state}).error_messages
+        assert validator.validate({"lifecycle_state": state.upper()}).error_messages
+    assert validator.validate({"lifecycle_state": "unknown"}).error_messages
 
 
 def test_get_by_id_returns_single_load_balancer(monkeypatch):
@@ -84,12 +93,13 @@ def test_get_by_id_404_returns_empty_list(monkeypatch):
     assert instance.fetch_resources() == []
 
 
-def test_list_uses_base_filters_for_name_and_lifecycle(monkeypatch):
+@pytest.mark.parametrize("state", ["creating", "failed", "active", "deleting", "deleted"])
+def test_list_uses_base_filters_for_name_and_lifecycle(monkeypatch, state):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_loadbalancer_info")
     calls = []
-    matching = FakeModel(id="lb", display_name="example-lb", lifecycle_state="ACTIVE")
-    other_name = FakeModel(id="other", display_name="other-lb", lifecycle_state="ACTIVE")
+    matching = FakeModel(id="lb", display_name="example-lb", lifecycle_state=state.upper())
+    other_name = FakeModel(id="other", display_name="other-lb", lifecycle_state=state.upper())
     listed = [matching, other_name]
     instance = make_module_instance(
         module_obj,
@@ -97,7 +107,7 @@ def test_list_uses_base_filters_for_name_and_lifecycle(monkeypatch):
         {
             "compartment_id": "compartment",
             "name": "example-lb",
-            "lifecycle_state": "ACTIVE",
+            "lifecycle_state": state,
         },
         client=types.SimpleNamespace(list_load_balancers="list-method"),
     )
@@ -113,7 +123,7 @@ def test_list_uses_base_filters_for_name_and_lifecycle(monkeypatch):
             "list-method",
             {
                 "compartment_id": "compartment",
-                "lifecycle_state": "ACTIVE",
+                "lifecycle_state": state.upper(),
             },
         )
     ]

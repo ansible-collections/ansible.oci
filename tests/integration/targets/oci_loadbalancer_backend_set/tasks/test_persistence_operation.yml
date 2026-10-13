@@ -1,0 +1,78 @@
+---
+- name: Read the backend set before {{ oci_lb_persistence_operation.name }}
+  ansible.oci.oci_loadbalancer_backend_set_info: &oci_lb_persistence_probe
+    load_balancer_id: '{{ oci_lb_test_id }}'
+    name: '{{ oci_lb_test_backend_set }}'
+  register: oci_lb_persistence_before
+
+- name: Predict {{ oci_lb_persistence_operation.name }}
+  ansible.oci.oci_loadbalancer_backend_set: &oci_lb_persistence_options
+    load_balancer_id: '{{ oci_lb_test_id }}'
+    name: '{{ oci_lb_test_backend_set }}'
+    session_persistence_configuration: >-
+      {{ {'cookie_name': 'application_session'}
+         if oci_lb_persistence_operation.option == 'session_persistence_configuration'
+         else omit }}
+    lb_cookie_session_persistence_configuration: >-
+      {{ {'cookie_name': 'load_balancer_session'}
+         if oci_lb_persistence_operation.option == 'lb_cookie_session_persistence_configuration'
+         else omit }}
+  check_mode: true
+  register: oci_lb_persistence_prediction
+
+- name: Read the backend set after check mode
+  ansible.oci.oci_loadbalancer_backend_set_info:
+    <<: *oci_lb_persistence_probe
+  register: oci_lb_persistence_after_check
+
+- name: Assert check mode predicted a change and preserved cookie persistence
+  ansible.builtin.assert:
+    that:
+      - oci_lb_persistence_prediction.changed
+      - oci_lb_persistence_after_check.backend_sets == oci_lb_persistence_before.backend_sets
+
+- name: Apply {{ oci_lb_persistence_operation.name }}
+  ansible.oci.oci_loadbalancer_backend_set:
+    <<: *oci_lb_persistence_options
+  register: oci_lb_persistence_applied
+
+- name: Read the backend set after the cookie persistence change
+  ansible.oci.oci_loadbalancer_backend_set_info:
+    <<: *oci_lb_persistence_probe
+  register: oci_lb_persistence_after
+
+- name: Assert only the requested cookie persistence configuration is active
+  ansible.builtin.assert:
+    that:
+      - oci_lb_persistence_applied.changed
+      - oci_lb_persistence_after.backend_sets | length == 1
+      - >-
+        oci_lb_persistence_after.backend_sets[0][oci_lb_persistence_operation.option].cookie_name ==
+        ('application_session' if oci_lb_persistence_operation.option == 'session_persistence_configuration'
+         else 'load_balancer_session')
+      - oci_lb_persistence_after.backend_sets[0].get(oci_lb_persistence_operation.opposite) is none
+      - oci_lb_persistence_after.backend_sets[0].health_checker == oci_lb_persistence_before.backend_sets[0].health_checker
+      - oci_lb_persistence_after.backend_sets[0].policy == oci_lb_persistence_before.backend_sets[0].policy
+
+- name: Test {{ oci_lb_persistence_operation.name }} idempotency
+  ansible.oci.oci_loadbalancer_backend_set:
+    <<: *oci_lb_persistence_options
+  register: oci_lb_persistence_repeat
+
+- name: Test {{ oci_lb_persistence_operation.name }} idempotency in check mode
+  ansible.oci.oci_loadbalancer_backend_set:
+    <<: *oci_lb_persistence_options
+  check_mode: true
+  register: oci_lb_persistence_repeat_check
+
+- name: Read the backend set after cookie persistence idempotency tests
+  ansible.oci.oci_loadbalancer_backend_set_info:
+    <<: *oci_lb_persistence_probe
+  register: oci_lb_persistence_final
+
+- name: Assert cookie persistence idempotency preserved the backend set
+  ansible.builtin.assert:
+    that:
+      - not oci_lb_persistence_repeat.changed
+      - not oci_lb_persistence_repeat_check.changed
+      - oci_lb_persistence_final.backend_sets == oci_lb_persistence_after.backend_sets
