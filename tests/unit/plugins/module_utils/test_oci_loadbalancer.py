@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+import copy
 import types
 
 import oci
@@ -180,6 +181,117 @@ def test_build_model_normalizes_nested_enums_without_filling_omitted_fields(monk
     assert details.ssl_configuration.protocols == ["TLSv1.2"]
     assert details.ssl_configuration.server_order_preference == "ENABLED"
     assert details.ssl_configuration.cipher_suite_name == "CustomCipher"
+
+
+@pytest.mark.parametrize("sequence_type", [list, tuple])
+def test_normalization_preserves_nested_values_and_input(sequence_type):
+    helper = load_collection_module("oci_loadbalancer")
+    fields = {
+        "nested": sequence_type([
+            {
+                "protocols": sequence_type(["tlsv1.2", "UnknownTLS", None, 7]),
+                "name": "KeepCase",
+                "enabled": False,
+            },
+            None,
+        ]),
+        "protocols": sequence_type([]),
+    }
+    original = copy.deepcopy(fields)
+
+    normalized = helper.normalize_load_balancer_fields(fields)
+
+    assert normalized["nested"] == sequence_type([
+        {
+            "protocols": ["TLSv1.2", "UnknownTLS", None, 7],
+            "name": "KeepCase",
+            "enabled": False,
+        },
+        None,
+    ])
+    assert normalized["protocols"] == []
+    assert fields == original
+
+
+@pytest.mark.parametrize("sequence_type", [list, tuple])
+def test_model_building_preserves_sdk_instances_and_backend_values(
+    monkeypatch, sequence_type
+):
+    helper = _load_helper(monkeypatch)
+    models = oci.load_balancer.models
+    existing_backend = models.BackendDetails(ip_address="10.0.0.1", port=80)
+    health_checker = models.HealthCheckerDetails(protocol="HTTP", port=80)
+    fields = {
+        "name": "PoolA",
+        "policy": "round_robin",
+        "health_checker": health_checker,
+        "ssl_configuration": None,
+        "unsupported_parameter": "ignored",
+        "backends": sequence_type([
+            None,
+            existing_backend,
+            {"ip_address": "10.0.0.2", "port": 80, "weight": 0, "backup": False},
+        ]),
+    }
+    original = copy.deepcopy(fields)
+
+    details = helper.build_load_balancer_model("CreateBackendSetDetails", fields)
+
+    assert details.health_checker is health_checker
+    assert details.ssl_configuration is None
+    assert not hasattr(details, "unsupported_parameter")
+    assert len(details.backends) == 2
+    assert details.backends[0] is existing_backend
+    assert isinstance(details.backends[1], models.BackendDetails)
+    assert details.backends[1].ip_address == "10.0.0.2"
+    assert details.backends[1].weight == 0
+    assert details.backends[1].backup is False
+    assert fields == original
+
+    empty_details = helper.build_load_balancer_model(
+        "CreateBackendSetDetails", {"backends": sequence_type([])}
+    )
+    assert empty_details.backends == []
+
+
+@pytest.mark.parametrize("sequence_type", [list, tuple])
+def test_routing_model_building_preserves_sdk_instances_and_order(
+    monkeypatch, sequence_type
+):
+    helper = _load_helper(monkeypatch)
+    models = oci.load_balancer.models
+    existing_action = models.ForwardToBackendSet(backend_set_name="PoolA")
+    existing_rule = models.RoutingRule(
+        name="First",
+        condition="http.request.url.path eq '/First'",
+        actions=[existing_action],
+    )
+    fields = {
+        "name": "RouteA",
+        "rules": sequence_type([
+            existing_rule,
+            {
+                "name": "Second",
+                "condition": "http.request.url.path eq '/Second'",
+                "actions": sequence_type([
+                    existing_action,
+                    {"backend_set_name": "PoolB"},
+                ]),
+            },
+        ]),
+    }
+    original = copy.deepcopy(fields)
+
+    details = helper.build_load_balancer_model("CreateRoutingPolicyDetails", fields)
+
+    assert details.condition_language_version == "V1"
+    assert details.rules[0] is existing_rule
+    assert isinstance(details.rules[1], models.RoutingRule)
+    assert details.rules[1].name == "Second"
+    assert details.rules[1].actions[0] is existing_action
+    assert isinstance(details.rules[1].actions[1], models.ForwardToBackendSet)
+    assert details.rules[1].actions[1].backend_set_name == "PoolB"
+    assert fields == original
 
 
 def test_merge_load_balancer_fields_preserves_unsupplied_values_and_replaces_lists():

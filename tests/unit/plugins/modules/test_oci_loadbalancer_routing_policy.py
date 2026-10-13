@@ -73,7 +73,8 @@ def test_main_exposes_verified_routing_policy_options(monkeypatch):
     }
     assert args["state"]["choices"] == ["present", "absent"]
     assert {"wait", "wait_timeout", "wait_interval"} <= set(args)
-    assert "id" not in args and "compartment_id" not in args
+    assert "id" not in args
+    assert "compartment_id" not in args
     assert captured["executed"] is True
 
     validator = ModuleArgumentSpecValidator(args)

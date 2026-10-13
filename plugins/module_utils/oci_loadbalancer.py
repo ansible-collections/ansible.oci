@@ -60,36 +60,37 @@ def normalize_load_balancer_fields(fields):
             for rule in rules
         ]
 
-    def normalize_tls_protocols(value):
-        """Apply OCI's mixed-case spelling to the known TLS protocol choices.
+    return _normalize_tls_protocols(normalized)
 
-        Args:
-            value: A normalized mapping, list, tuple, or scalar value.
 
-        Returns:
-            A recursively copied value with known TLS protocol names converted.
-        """
-        if isinstance(value, Mapping):
-            result = {}
-            for key, item in value.items():
-                if key == "protocols" and isinstance(item, (list, tuple)):
-                    item = [
-                        _TLS_PROTOCOL_VALUES.get(protocol, protocol)
-                        if isinstance(protocol, str)
-                        else protocol
-                        for protocol in item
-                    ]
-                else:
-                    item = normalize_tls_protocols(item)
-                result[key] = item
-            return result
-        if isinstance(value, list):
-            return [normalize_tls_protocols(item) for item in value]
-        if isinstance(value, tuple):
-            return tuple(normalize_tls_protocols(item) for item in value)
-        return value
+def _normalize_tls_protocols(value):
+    """Convert known TLS protocol names to OCI spelling.
 
-    return normalize_tls_protocols(normalized)
+    Args:
+        value: A mapping, list, tuple, or scalar value.
+
+    Returns:
+        A copied value with known TLS protocol names converted.
+    """
+    if isinstance(value, Mapping):
+        result = {}
+        for key, item in value.items():
+            if key == "protocols" and isinstance(item, (list, tuple)):
+                item = [
+                    _TLS_PROTOCOL_VALUES.get(protocol, protocol)
+                    if isinstance(protocol, str)
+                    else protocol
+                    for protocol in item
+                ]
+            else:
+                item = _normalize_tls_protocols(item)
+            result[key] = item
+        return result
+    if isinstance(value, list):
+        return [_normalize_tls_protocols(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_normalize_tls_protocols(item) for item in value)
+    return value
 
 
 def _normalize_routing_rule(rule):
@@ -112,6 +113,48 @@ def _normalize_routing_rule(rule):
                 action = normalize_enum_values(action, ("name",))
             result["actions"].append(action)
     return result
+
+
+def _build_model_field(model_name, field_name, value):
+    """Convert a supported field to its nested SDK model types.
+
+    Args:
+        model_name: Name of the containing SDK model class.
+        field_name: Name of the supported field.
+        value: Field value to convert.
+
+    Returns:
+        The converted value, or the original value when no conversion applies.
+    """
+    nested_model_name = _NESTED_MODEL_NAMES.get(field_name)
+    if nested_model_name and isinstance(value, Mapping):
+        value = _build_model(nested_model_name, value)
+    elif field_name == "backends" and isinstance(value, (list, tuple)):
+        value = [
+            _build_model("BackendDetails", backend)
+            if isinstance(backend, Mapping)
+            else backend
+            for backend in value
+            if backend is not None
+        ]
+    elif (
+        model_name == "RoutingRule"
+        and field_name == "actions"
+        and isinstance(value, (list, tuple))
+    ):
+        value = [
+            _build_model("ForwardToBackendSet", action)
+            if isinstance(action, Mapping)
+            and action.get("name") == "FORWARD_TO_BACKENDSET"
+            else action
+            for action in value
+        ]
+    elif field_name == "rules" and isinstance(value, (list, tuple)):
+        value = [
+            _build_model("RoutingRule", rule) if isinstance(rule, Mapping) else rule
+            for rule in value
+        ]
+    return value
 
 
 def _build_model(model_name, fields):
@@ -138,31 +181,7 @@ def _build_model(model_name, fields):
         if field_name not in supported_fields or value is None:
             continue
 
-        nested_model_name = _NESTED_MODEL_NAMES.get(field_name)
-        if nested_model_name and isinstance(value, Mapping):
-            value = _build_model(nested_model_name, value)
-        elif field_name == "backends" and isinstance(value, (list, tuple)):
-            value = [
-                _build_model("BackendDetails", backend)
-                if isinstance(backend, Mapping)
-                else backend
-                for backend in value
-                if backend is not None
-            ]
-        elif model_name == "RoutingRule" and field_name == "actions" and isinstance(value, (list, tuple)):
-            value = [
-                _build_model("ForwardToBackendSet", action)
-                if isinstance(action, Mapping)
-                and action.get("name") == "FORWARD_TO_BACKENDSET"
-                else action
-                for action in value
-            ]
-        elif field_name == "rules" and isinstance(value, (list, tuple)):
-            value = [
-                _build_model("RoutingRule", rule) if isinstance(rule, Mapping) else rule
-                for rule in value
-            ]
-        values[field_name] = value
+        values[field_name] = _build_model_field(model_name, field_name, value)
 
     return model_class(**values)
 
