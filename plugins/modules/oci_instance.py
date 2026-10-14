@@ -1083,13 +1083,13 @@ NESTED_UPDATE_BUILDERS = {
         value, oci.core.models.UpdateInstanceShapeConfigDetails
     ),
     "launch_options": lambda value: build_model(
-        {"launch_options": value},
+        value,
         oci.core.models.LaunchOptions,
         enum_keys=ENUM_KEYS,
     ),
     "instance_options": lambda value: build_model(value, oci.core.models.InstanceOptions),
     "availability_config": lambda value: build_model(
-        {"availability_config": value},
+        value,
         oci.core.models.UpdateInstanceAvailabilityConfigDetails,
         enum_keys=ENUM_KEYS,
     ),
