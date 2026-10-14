@@ -81,6 +81,8 @@
     # A cluster's option set also lists images for older Kubernetes versions it
     # still supports. The node pool defaults to the cluster's version, so the
     # image has to be built for that exact version or create fails with a 409.
+    # GPU images share the architecture but only run on GPU shapes, so skip them
+    # or create fails with "Node shape and image are not compatible".
     - name: Select a worker-node image for the node pool
       ansible.builtin.set_fact:
         oci_oke_np_image_id: >-
@@ -90,6 +92,7 @@
             else (
               oci_oke_np_options.node_pool_options[0].sources
               | selectattr('image_id')
+              | rejectattr('source_name', 'search', 'GPU')
               | selectattr('source_name', 'search',
                   '-OKE-' ~ (oci_oke_np_k8s_version | regex_replace('^v', '') | regex_escape) ~ '(-|$)')
               | map(attribute='image_id') | first | default('')
