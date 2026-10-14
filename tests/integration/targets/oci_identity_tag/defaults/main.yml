@@ -1,0 +1,5 @@
+---
+oci_identity_tag_integration_namespace_name: ansible-tag-integration
+oci_identity_tag_integration_namespace_description: "Temporary OCI tag integration namespace"
+oci_identity_tag_integration_enum_name: ansible-tag-enum
+oci_identity_tag_integration_default_name: ansible-tag-default
