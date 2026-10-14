@@ -846,6 +846,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_RUNNING,
     LIFECYCLE_STOPPED,
     OCI_COMMON_ARGS,
+    build_model,
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
@@ -946,26 +947,12 @@ def build_source_details(params):
     return None
 
 
-def build_shape_config(params, model_class):
-    shape_config = params.get("shape_config")
-    if not shape_config:
-        return None
-    return model_class(**filter_none_values(dict(shape_config)))
-
-
 def build_launch_options(params):
     launch_options = params.get("launch_options")
     if not launch_options:
         return None
     details = filter_none_values(normalize_enum_values(dict(launch_options), ENUM_KEYS))
     return oci.core.models.LaunchOptions(**details)
-
-
-def build_instance_options(params):
-    instance_options = params.get("instance_options")
-    if not instance_options:
-        return None
-    return oci.core.models.InstanceOptions(**filter_none_values(dict(instance_options)))
 
 
 def build_availability_config(params, model_class):
@@ -1056,8 +1043,9 @@ def build_create_instance_details(params):
             "compartment_id": params.get("compartment_id"),
             "display_name": params.get("name"),
             "shape": params.get("shape"),
-            "shape_config": build_shape_config(
-                params, oci.core.models.LaunchInstanceShapeConfigDetails
+            "shape_config": build_model(
+                params.get("shape_config"),
+                oci.core.models.LaunchInstanceShapeConfigDetails,
             ),
             "source_details": build_source_details(params),
             "create_vnic_details": build_create_vnic_details(params),
@@ -1065,7 +1053,9 @@ def build_create_instance_details(params):
             "extended_metadata": params.get("extended_metadata"),
             "security_attributes": params.get("security_attributes"),
             "launch_options": build_launch_options(params),
-            "instance_options": build_instance_options(params),
+            "instance_options": build_model(
+                params.get("instance_options"), oci.core.models.InstanceOptions
+            ),
             "availability_config": build_availability_config(
                 params, oci.core.models.LaunchInstanceAvailabilityConfigDetails
             ),
@@ -1097,11 +1087,11 @@ def build_create_instance_details(params):
 # go through the exact same construction and enum-normalization logic as
 # create payloads.
 NESTED_UPDATE_BUILDERS = {
-    "shape_config": lambda value: build_shape_config(
-        {"shape_config": value}, oci.core.models.UpdateInstanceShapeConfigDetails
+    "shape_config": lambda value: build_model(
+        value, oci.core.models.UpdateInstanceShapeConfigDetails
     ),
     "launch_options": lambda value: build_launch_options({"launch_options": value}),
-    "instance_options": lambda value: build_instance_options({"instance_options": value}),
+    "instance_options": lambda value: build_model(value, oci.core.models.InstanceOptions),
     "availability_config": lambda value: build_availability_config(
         {"availability_config": value},
         oci.core.models.UpdateInstanceAvailabilityConfigDetails,
