@@ -775,6 +775,32 @@ def test_existing_destination_is_unchanged_when_remote_object_is_missing(monkeyp
     assert result["changed"] is False
 
 
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_forced_download_missing_object_preserves_destination(
+    monkeypatch, tmp_path, check_mode
+):
+    module_obj, service_error = load_object(monkeypatch)
+    destination = tmp_path / "download"
+    destination.write_bytes(b"existing")
+    client = ObjectClient(service_error)
+    instance = make_module_instance(
+        module_obj,
+        "OciObjectStorageObjectModule",
+        base_params(dest=str(destination), force=True),
+        client=client,
+        check_mode=check_mode,
+    )
+
+    with pytest.raises(FailJsonCalled) as result:
+        instance.execute_resource_module()
+
+    assert result.value.payload["msg"] == (
+        "Cannot download object because it does not exist"
+    )
+    assert destination.read_bytes() == b"existing"
+    assert not client.gets
+
+
 def test_existing_destination_needs_no_customer_key_when_not_forced(monkeypatch, tmp_path):
     module_obj, service_error = load_object(monkeypatch)
     destination = tmp_path / "download"

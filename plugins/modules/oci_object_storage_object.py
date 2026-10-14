@@ -566,7 +566,9 @@ class OciObjectStorageObjectModule(OciObjectStorageNamespaceMixin, OciModuleBase
         if target_exists and not params.get("force", False):
             self.module.exit_json(changed=False, resource=self._resource(existing))
         if existing is None:
-            self.module.fail_json(msg="Cannot download object because it does not exist")
+            return self.module.fail_json(
+                msg="Cannot download object because it does not exist"
+            )
 
         if target_exists and self._same_content(destination, existing.headers.get("content-md5")):
             self.module.exit_json(changed=False, resource=self._resource(existing))

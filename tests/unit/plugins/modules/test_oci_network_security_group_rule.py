@@ -285,6 +285,25 @@ def test_create_calls_bulk_add_and_returns_created_rule(monkeypatch):
     assert details.security_rules[0].udp_options.destination_port_range.min == 53
 
 
+@pytest.mark.parametrize("operation", ["add", "update"])
+@pytest.mark.parametrize(
+    "data",
+    [None, FakeModel(), FakeModel(security_rules=None), FakeModel(security_rules=[])],
+    ids=["no-data", "missing-rules", "none-rules", "empty-rules"],
+)
+def test_mutation_response_without_rules_fails(monkeypatch, operation, data):
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_network_security_group_rule")
+    instance = make_rule_module(module_obj, {})
+
+    with pytest.raises(FailJsonCalled) as result:
+        instance.rule_from_mutation_response(FakeResponse(data=data), operation)
+
+    assert result.value.payload["msg"] == (
+        f"OCI returned no rule after the {operation} operation"
+    )
+
+
 def test_create_check_mode_does_not_call_add(monkeypatch):
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_network_security_group_rule")
