@@ -84,7 +84,7 @@ def test_main_wires_argument_spec_and_runs_module(monkeypatch):
     assert spec["name"] == {"type": "str"}
     assert spec["compartment_id"] == {"type": "str"}
     # node pool specific params.
-    assert spec["node_pool_id"] == {"type": "str", "aliases": ["id"]}
+    assert spec["node_pool_id"] == {"type": "str"}
     assert spec["cluster_id"] == {"type": "str"}
     assert spec["node_shape"] == {"type": "str"}
     assert spec["node_config_details"]["type"] == "dict"
@@ -502,6 +502,59 @@ def test_needs_update_true_when_placement_subnet_changes(monkeypatch):
     )
 
     assert instance.needs_update(resource) is True
+
+
+def test_needs_update_false_when_sibling_placement_supplies_extra_key(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    node_pool_module = load_collection_module("oci_oke_node_pool")
+    # One desired placement supplies fault_domains; the other omits it. The
+    # omitted key must not be required of the sibling entry just because a
+    # neighbor supplied it, even though OCI populates it on both current entries.
+    instance = make_node_pool_module(
+        node_pool_module,
+        {
+            "node_config_details": {
+                "size": 2,
+                "placement_configs": [
+                    {
+                        "availability_domain": "AD-1",
+                        "subnet_id": "s1",
+                        "capacity_reservation_id": None,
+                        "fault_domains": ["FD-1"],
+                    },
+                    {
+                        "availability_domain": "AD-2",
+                        "subnet_id": "s2",
+                        "capacity_reservation_id": None,
+                        "fault_domains": None,
+                    },
+                ],
+            }
+        },
+    )
+    resource = FakeModel(
+        id="ocid1.nodepool.oc1..n1",
+        node_config_details={
+            "size": 2,
+            "placement_configs": [
+                {
+                    "availability_domain": "AD-1",
+                    "subnet_id": "s1",
+                    "capacity_reservation_id": None,
+                    "fault_domains": ["FD-1"],
+                },
+                {
+                    "availability_domain": "AD-2",
+                    "subnet_id": "s2",
+                    "capacity_reservation_id": None,
+                    "fault_domains": ["FD-2", "FD-3"],
+                },
+            ],
+        },
+    )
+
+    assert instance.needs_update(resource) is False
 
 
 def test_needs_update_true_when_node_shape_config_changes(monkeypatch):

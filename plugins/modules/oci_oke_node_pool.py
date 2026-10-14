@@ -36,7 +36,6 @@ options:
         scoped C(name).
       - Use C(id) as an alias.
     type: str
-    aliases: [id]
   name:
     description:
       - The node pool name.
@@ -126,6 +125,16 @@ options:
         description:
           - Whether in-transit encryption is enabled for the nodes' volumes.
         type: bool
+      freeform_tags:
+        description:
+          - Free-form tags applied to the nodes in the pool.
+          - "Example: C({\"Department\": \"Finance\"})"
+        type: dict
+      defined_tags:
+        description:
+          - Defined tags applied to the nodes in the pool.
+          - "Example: C({\"Operations\": {\"CostCenter\": \"42\"}})"
+        type: dict
       placement_configs:
         description:
           - The placement configuration for the pool's nodes across availability
@@ -862,10 +871,12 @@ class OciOkeNodePoolModule(OciResourceBase):
     def _placement_configs_differ(current_configs, desired_configs):
         """Return True when the desired placement configs differ from current.
 
-        Placement entries are matched order-insensitively and compared only on
-        the keys the caller actually supplied, so OCI-populated extras (for
-        example default ``fault_domains``) never register as drift. A differing
-        entry count is always a change.
+        Placement entries are matched order-insensitively. Each desired entry is
+        compared only on the keys that entry actually supplied, so OCI-populated
+        extras (for example default ``fault_domains``) never register as drift.
+        A key omitted from one desired entry is not required of the others, even
+        when a sibling entry supplies it. A differing entry count is always a
+        change.
 
         Args:
             current_configs: Serialized current placement config list.
@@ -875,27 +886,24 @@ class OciOkeNodePoolModule(OciResourceBase):
         Returns:
             True when the placement configuration differs, otherwise False.
         """
-        provided_keys = set()
-        for entry in desired_configs:
-            provided_keys |= {key for key, value in entry.items() if value is not None}
+        if len(current_configs) != len(desired_configs):
+            return True
 
-        def normalize(entries):
-            normalized = [
-                tuple(
-                    sorted(
-                        (
-                            key,
-                            tuple(value) if isinstance(value, list) else value,
-                        )
-                        for key, value in entry.items()
-                        if key in provided_keys and value is not None
-                    )
-                )
-                for entry in entries
-            ]
-            return sorted(normalized)
+        remaining = list(current_configs)
+        for desired in desired_configs:
+            provided = {
+                key: value for key, value in desired.items() if value is not None
+            }
+            for index, current in enumerate(remaining):
+                if all(
+                    current.get(key) == value for key, value in provided.items()
+                ):
+                    del remaining[index]
+                    break
+            else:
+                return True
 
-        return normalize(current_configs) != normalize(desired_configs)
+        return False
 
     def plan_node_config_details(self, resource, resource_dict, spec, desired_value):
         """Plan an in-place node config reconcile.
@@ -1073,7 +1081,7 @@ def main():
     argument_spec = dict(
         OCI_COMMON_ARGS,
         state=dict(type="str", choices=["present", "absent"], default="present"),
-        node_pool_id=dict(type="str", aliases=["id"]),
+        node_pool_id=dict(type="str"),
         cluster_id=dict(type="str"),
         kubernetes_version=dict(type="str"),
         node_shape=dict(type="str"),
@@ -1098,6 +1106,8 @@ def main():
                 nsg_ids=dict(type="list", elements="str"),
                 kms_key_id=dict(type="str"),
                 is_pv_encryption_in_transit_enabled=dict(type="bool"),
+                freeform_tags=dict(type="dict"),
+                defined_tags=dict(type="dict"),
                 placement_configs=dict(
                     type="list",
                     elements="dict",
