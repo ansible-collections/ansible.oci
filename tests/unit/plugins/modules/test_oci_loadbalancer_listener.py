@@ -77,7 +77,6 @@ def test_main_exposes_oracle_listener_options_and_standard_auth_wait(monkeypatch
     assert args["ssl_configuration"]["options"]["protocols"] == {
         "type": "list",
         "elements": "str",
-        "choices": ["tlsv1", "tlsv1.1", "tlsv1.2", "tlsv1.3"],
     }
     assert args["ssl_configuration"]["options"]["server_order_preference"]["choices"] == [
         "enabled",
@@ -99,10 +98,10 @@ def test_main_exposes_oracle_listener_options_and_standard_auth_wait(monkeypatch
     tls_validator = ModuleArgumentSpecValidator(
         {"protocols": ssl_options["protocols"]}
     )
-    for protocol in ("tlsv1", "tlsv1.1", "tlsv1.2", "tlsv1.3"):
+    for protocol in ("TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"):
         assert not tls_validator.validate({"protocols": [protocol]}).error_messages
-    for value in (["TLSv1.2"], ["ssl3"]):
-        assert tls_validator.validate({"protocols": value}).error_messages
+    for protocol in ("TLSv9.9", "tlsv1.2", "UnknownTLS"):
+        assert not tls_validator.validate({"protocols": [protocol]}).error_messages
     order_validator = ModuleArgumentSpecValidator(
         {"server_order_preference": ssl_options["server_order_preference"]}
     )
@@ -204,7 +203,7 @@ def test_listener_partial_update_preserves_omitted_and_sdk_only_nested_values(mo
             "name": "web",
             "ssl_configuration": {
                 "verify_depth": 7,
-                "protocols": ["tlsv1", "tlsv1.1", "tlsv1.2", "tlsv1.3"],
+                "protocols": ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"],
                 "server_order_preference": "enabled",
             },
         },
@@ -308,7 +307,7 @@ def test_listener_check_mode_predicts_change_without_mutating_and_same_state_is_
             "port": 80,
             "protocol": "http",
             "ssl_configuration": {
-                "protocols": ["tlsv1.2"],
+                "protocols": ["TLSv1.2"],
                 "server_order_preference": "enabled",
             },
             "state": "present",
@@ -399,7 +398,7 @@ def test_listener_create_uses_typed_sdk_details_and_waited_composite(monkeypatch
             "port": 80,
             "protocol": "http",
             "ssl_configuration": {
-                "protocols": ["tlsv1.2"],
+                "protocols": ["TLSv1.2"],
                 "server_order_preference": "enabled",
             },
             "wait": True,

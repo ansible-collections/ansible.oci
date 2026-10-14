@@ -142,7 +142,6 @@ def test_main_exposes_only_resource_and_nested_parameters(monkeypatch):
     assert argument_spec["ssl_configuration"]["options"]["protocols"] == {
         "type": "list",
         "elements": "str",
-        "choices": ["tlsv1", "tlsv1.1", "tlsv1.2", "tlsv1.3"],
     }
     assert argument_spec["session_persistence_configuration"]["options"]["cookie_name"] == {
         "type": "str",
@@ -457,11 +456,6 @@ def test_same_persistence_configuration_is_idempotent(check_mode, field, value):
             ["ROUND_ROBIN", "unsupported"],
         ),
         ("health_checker.protocol", ["http", "tcp"], ["HTTP", "udp"]),
-        (
-            "ssl_configuration.protocols",
-            ["tlsv1", "tlsv1.1", "tlsv1.2", "tlsv1.3"],
-            ["TLSv1.2", "ssl3"],
-        ),
     ],
 )
 def test_enum_arguments_validate_only_supported_lowercase_values(
@@ -475,16 +469,29 @@ def test_enum_arguments_validate_only_supported_lowercase_values(
         params = dict(prefix)
         if parameter == "policy":
             params[parameter] = value
-        elif parameter == "health_checker.protocol":
-            params["health_checker"] = {"protocol": value}
         else:
-            params["ssl_configuration"] = {"protocols": [value]}
+            params["health_checker"] = {"protocol": value}
         return params
 
     for value in values:
         assert validator.validate(params_for(value)).error_messages == []
     for value in invalid_values:
         assert validator.validate(params_for(value)).error_messages
+
+
+@pytest.mark.parametrize(
+    "protocol", ["TLSv1.2", "TLSv1.3", "TLSv9.9", "tlsv1.2", "UnknownTLS"]
+)
+def test_tls_protocol_validation_is_delegated_to_oci(monkeypatch, protocol):
+    validator = ModuleArgumentSpecValidator(_backend_set_argument_spec(monkeypatch))
+    result = validator.validate({
+        "load_balancer_id": "lb-ocid",
+        "name": "pool-a",
+        "ssl_configuration": {"protocols": [protocol]},
+    })
+
+    assert result.error_messages == []
+    assert result.validated_parameters["ssl_configuration"]["protocols"] == [protocol]
 
 
 def test_create_backend_set_builds_typed_nested_models(monkeypatch):
@@ -513,7 +520,7 @@ def test_create_backend_set_builds_typed_nested_models(monkeypatch):
             "ssl_configuration": {
                 "verify_peer_certificate": False,
                 "verify_depth": 0,
-                "protocols": ["tlsv1.2"],
+                "protocols": ["TLSv1.2"],
             },
             "wait": False,
         }
@@ -742,7 +749,7 @@ def test_matching_backend_set_is_unchanged_in_normal_and_check_mode(
             "policy": desired_policy,
             "health_checker": {"protocol": "http", "url_path": "/health"},
             "ssl_configuration": {
-                "protocols": ["tlsv1.2"],
+                "protocols": ["TLSv1.2"],
             },
             "backends": [{"ip_address": "10.0.0.7", "port": 8080}],
         },

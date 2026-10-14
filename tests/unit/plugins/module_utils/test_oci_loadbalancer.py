@@ -143,7 +143,7 @@ def test_normalize_load_balancer_fields_preserves_case_sensitive_values_and_tls_
     helper = load_collection_module("oci_loadbalancer")
     fields = {
         "ssl_configuration": {
-            "protocols": ["tlsv1", "tlsv1.1", "tlsv1.2", "tlsv1.3", "tlsv1.5"],
+            "protocols": ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3", "TLSv1.5"],
             "cipher_suite_name": "MyCustomCipher",
         },
         "session_persistence_configuration": {"cookie_name": "SessionID"},
@@ -151,12 +151,12 @@ def test_normalize_load_balancer_fields_preserves_case_sensitive_values_and_tls_
 
     assert helper.normalize_load_balancer_fields(fields) == {
         "ssl_configuration": {
-            "protocols": ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3", "tlsv1.5"],
+            "protocols": ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3", "TLSv1.5"],
             "cipher_suite_name": "MyCustomCipher",
         },
         "session_persistence_configuration": {"cookie_name": "SessionID"},
     }
-    assert fields["ssl_configuration"]["protocols"][0] == "tlsv1"
+    assert fields["ssl_configuration"]["protocols"][0] == "TLSv1"
 
 
 def test_build_model_normalizes_nested_enums_without_filling_omitted_fields(monkeypatch):
@@ -168,7 +168,7 @@ def test_build_model_normalizes_nested_enums_without_filling_omitted_fields(monk
             "policy": "least_connections",
             "health_checker": {"protocol": "http", "url_path": "/ready"},
             "ssl_configuration": {
-                "protocols": ["tlsv1.2"],
+                "protocols": ["TLSv1.2"],
                 "server_order_preference": "enabled",
                 "cipher_suite_name": "CustomCipher",
             },
@@ -189,7 +189,7 @@ def test_normalization_preserves_nested_values_and_input(sequence_type):
     fields = {
         "nested": sequence_type([
             {
-                "protocols": sequence_type(["tlsv1.2", "UnknownTLS", None, 7]),
+                "protocols": sequence_type(["TLSv1.2", "UnknownTLS", None, 7]),
                 "name": "KeepCase",
                 "enabled": False,
             },
@@ -203,13 +203,13 @@ def test_normalization_preserves_nested_values_and_input(sequence_type):
 
     assert normalized["nested"] == sequence_type([
         {
-            "protocols": ["TLSv1.2", "UnknownTLS", None, 7],
+            "protocols": sequence_type(["TLSv1.2", "UnknownTLS", None, 7]),
             "name": "KeepCase",
             "enabled": False,
         },
         None,
     ])
-    assert normalized["protocols"] == []
+    assert normalized["protocols"] == sequence_type([])
     assert fields == original
 
 
@@ -324,6 +324,47 @@ def test_merge_load_balancer_fields_preserves_unsupplied_values_and_replaces_lis
         },
         "backends": [{"ip_address": "10.0.0.2", "port": 80}],
     }
+
+
+@pytest.mark.parametrize(
+    "protocol", ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3", "TLSv9.9", "tlsv1.2"]
+)
+def test_tls_protocol_strings_pass_unchanged_to_sdk(monkeypatch, protocol):
+    helper = _load_helper(monkeypatch)
+    fields = {"ssl_configuration": {"protocols": [protocol]}}
+    original = copy.deepcopy(fields)
+
+    details = helper.build_load_balancer_model("CreateListenerDetails", fields)
+
+    assert details.ssl_configuration.protocols == [protocol]
+    assert fields == original
+
+
+@pytest.mark.parametrize(
+    "current,desired,expected",
+    [
+        (None, {"enabled": False}, {"enabled": False}),
+        ({"port": 80}, None, {"port": 80}),
+        ({"port": 80}, [], {"port": 80}),
+        ([], {"port": 0}, {"port": 0}),
+        (None, None, {}),
+        (
+            {"nested": {"enabled": True, "port": 80}, "items": [1]},
+            {"nested": {"enabled": False, "port": 0}, "items": []},
+            {"nested": {"enabled": False, "port": 0}, "items": []},
+        ),
+    ],
+)
+def test_merge_preserves_input_data_and_explicit_values(current, desired, expected):
+    helper = load_collection_module("oci_loadbalancer")
+    original_current = copy.deepcopy(current)
+    original_desired = copy.deepcopy(desired)
+
+    result = helper.merge_load_balancer_fields(current, desired)
+
+    assert result == expected
+    assert current == original_current
+    assert desired == original_desired
 
 
 def test_subset_comparison_treats_lowercase_nested_enums_as_oci_values(monkeypatch):
@@ -549,7 +590,8 @@ def test_update_preserves_required_values_and_waits_then_reads_child(monkeypatch
     ]
 
 
-def test_create_builds_typed_details_waits_and_reads_child(monkeypatch):
+@pytest.mark.parametrize("wait_params", [{}, {"wait": True}])
+def test_create_builds_typed_details_waits_and_reads_child(monkeypatch, wait_params):
     helper = _load_helper(monkeypatch)
     resource_base = helper.OciLoadBalancerSubresourceBase
     created_resource = types.SimpleNamespace(name="pool-a", policy="ROUND_ROBIN")
@@ -576,7 +618,7 @@ def test_create_builds_typed_details_waits_and_reads_child(monkeypatch):
                 "name": "pool-a",
                 "policy": "ROUND_ROBIN",
                 "backends": [{"ip_address": "10.0.0.7", "port": 8080}],
-                "wait": True,
+                **wait_params,
             }
         )
     )

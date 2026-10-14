@@ -94,10 +94,15 @@ options:
         description: Friendly name of the certificate bundle. OCI does not allow the name to be changed.
         type: str
       protocols:
-        description: SSL protocols supported by the listener. OCI defaults to tlsv1.2 when omitted.
+        description:
+          - SSL/TLS protocols for listener connections.
+          - Use OCI spelling, for example C(TLSv1.2). The module passes values unchanged to OCI.
+          - OCI validates supported versions.
+            See U(https://docs.oracle.com/en-us/iaas/tools/python/latest/api/load_balancer/models/oci.load_balancer.models.SSLConfigurationDetails.html).
+          - On creation, OCI defaults to C(TLSv1.2) when omitted.
+          - During updates, omitted protocols stay unchanged.
         type: list
         elements: str
-        choices: [tlsv1, tlsv1.1, tlsv1.2, tlsv1.3]
       cipher_suite_name:
         description: Cipher suite used for HTTPS or SSL connections.
         type: str
@@ -317,7 +322,6 @@ def main():
                 protocols=dict(
                     type="list",
                     elements="str",
-                    choices=["tlsv1", "tlsv1.1", "tlsv1.2", "tlsv1.3"],
                 ),
                 cipher_suite_name=dict(type="str"),
                 server_order_preference=dict(
