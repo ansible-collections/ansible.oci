@@ -947,22 +947,6 @@ def build_source_details(params):
     return None
 
 
-def build_launch_options(params):
-    launch_options = params.get("launch_options")
-    if not launch_options:
-        return None
-    details = filter_none_values(normalize_enum_values(dict(launch_options), ENUM_KEYS))
-    return oci.core.models.LaunchOptions(**details)
-
-
-def build_availability_config(params, model_class):
-    availability_config = params.get("availability_config")
-    if not availability_config:
-        return None
-    details = filter_none_values(normalize_enum_values(dict(availability_config), ENUM_KEYS))
-    return model_class(**details)
-
-
 def build_preemptible_instance_config(params):
     preemptible_instance_config = params.get("preemptible_instance_config")
     if not preemptible_instance_config:
@@ -986,8 +970,10 @@ def build_agent_config(params, model_class):
     plugins = None
     if plugins_config:
         plugins = [
-            oci.core.models.InstanceAgentPluginConfigDetails(
-                **filter_none_values(normalize_enum_values(dict(plugin_config), ENUM_KEYS))
+            build_model(
+                plugin_config,
+                oci.core.models.InstanceAgentPluginConfigDetails,
+                enum_keys=ENUM_KEYS,
             )
             for plugin_config in plugins_config
         ]
@@ -1052,12 +1038,18 @@ def build_create_instance_details(params):
             "metadata": params.get("metadata"),
             "extended_metadata": params.get("extended_metadata"),
             "security_attributes": params.get("security_attributes"),
-            "launch_options": build_launch_options(params),
+            "launch_options": build_model(
+                params.get("launch_options") or None,
+                oci.core.models.LaunchOptions,
+                enum_keys=ENUM_KEYS,
+            ),
             "instance_options": build_model(
                 params.get("instance_options"), oci.core.models.InstanceOptions
             ),
-            "availability_config": build_availability_config(
-                params, oci.core.models.LaunchInstanceAvailabilityConfigDetails
+            "availability_config": build_model(
+                params.get("availability_config") or None,
+                oci.core.models.LaunchInstanceAvailabilityConfigDetails,
+                enum_keys=ENUM_KEYS,
             ),
             "preemptible_instance_config": build_preemptible_instance_config(params),
             "agent_config": build_agent_config(
@@ -1090,11 +1082,16 @@ NESTED_UPDATE_BUILDERS = {
     "shape_config": lambda value: build_model(
         value, oci.core.models.UpdateInstanceShapeConfigDetails
     ),
-    "launch_options": lambda value: build_launch_options({"launch_options": value}),
+    "launch_options": lambda value: build_model(
+        {"launch_options": value},
+        oci.core.models.LaunchOptions,
+        enum_keys=ENUM_KEYS,
+    ),
     "instance_options": lambda value: build_model(value, oci.core.models.InstanceOptions),
-    "availability_config": lambda value: build_availability_config(
+    "availability_config": lambda value:  build_model(
         {"availability_config": value},
         oci.core.models.UpdateInstanceAvailabilityConfigDetails,
+        enum_keys=ENUM_KEYS,
     ),
     "agent_config": lambda value: build_agent_config(
         {"agent_config": value}, oci.core.models.UpdateInstanceAgentConfigDetails
