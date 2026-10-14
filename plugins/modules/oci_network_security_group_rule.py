@@ -517,7 +517,7 @@ class OciNetworkSecurityGroupRuleModule(OciResourceBase):
     def rule_from_mutation_response(self, response, operation):
         security_rules = getattr(response.data, "security_rules", None) or []
         if not security_rules:
-            self.module.fail_json(
+            return self.module.fail_json(
                 msg=f"OCI returned no rule after the {operation} operation"
             )
         return security_rules[0]
