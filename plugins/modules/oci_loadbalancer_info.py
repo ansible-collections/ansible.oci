@@ -21,9 +21,7 @@ options:
   load_balancer_id:
     description:
       - The OCID of one load balancer to retrieve.
-      - Use C(id) as an alias.
     type: str
-    aliases: [id]
   compartment_id:
     description:
       - The OCID of the compartment to list load balancers from.
@@ -32,16 +30,20 @@ options:
     description:
       - Filter load balancers by display name.
       - Only used when C(compartment_id) is provided.
-      - Use C(display_name) as an alias.
     type: str
-    aliases: [display_name]
+  lifecycle_state:
+    description:
+      - Filter listed load balancers by lifecycle state.
+      - Only used when C(compartment_id) is provided.
+    type: str
+    choices: [creating, failed, active, deleting, deleted]
 """
 
 EXAMPLES = r"""
 - name: List active load balancers in a compartment
   ansible.oci.oci_loadbalancer_info:
     compartment_id: ocid1.compartment.oc1..example
-    lifecycle_state: ACTIVE
+    lifecycle_state: active
 
 - name: Get a load balancer by OCID
   ansible.oci.oci_loadbalancer_info:
@@ -211,7 +213,11 @@ class OciLoadBalancerInfoModule(OciInfoBase):
 
     @property
     def client_class(self):
-        """Return the load-balancer service client required by this adapter."""
+        """Return the load balancer SDK client.
+
+        Returns:
+            The LoadBalancerClient class.
+        """
         return oci.load_balancer.LoadBalancerClient
 
     results_key = "load_balancers"
@@ -220,15 +226,33 @@ class OciLoadBalancerInfoModule(OciInfoBase):
     list_resource_method = "list_load_balancers"
     list_filter_params = ("compartment_id", "lifecycle_state")
 
+    def collect_list_filters(self, *param_groups):
+        """Translate the lifecycle filter to OCI casing before listing.
+
+        Args:
+            *param_groups: Parameter groups collected by the base helper.
+
+        Returns:
+            SDK filters with an uppercase lifecycle state, when supplied.
+        """
+        filters = super(OciLoadBalancerInfoModule, self).collect_list_filters(
+            *param_groups
+        )
+        if "lifecycle_state" in filters:
+            filters["lifecycle_state"] = filters["lifecycle_state"].upper()
+        return filters
+
 
 def main():
     """Build the info argument spec and run the load-balancer info module."""
     argument_spec = dict(
         OCI_AUTH_ARGS,
-        load_balancer_id=dict(type="str", aliases=["id"]),
+        load_balancer_id=dict(type="str"),
         compartment_id=dict(type="str"),
-        name=dict(type="str", aliases=["display_name"]),
-        lifecycle_state=dict(type="str"),
+        name=dict(type="str"),
+        lifecycle_state=dict(
+            type="str", choices=["creating", "failed", "active", "deleting", "deleted"]
+        ),
     )
     module = AnsibleModule(
         argument_spec=argument_spec,

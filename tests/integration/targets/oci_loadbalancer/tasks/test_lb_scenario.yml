@@ -94,23 +94,23 @@
     - oci_lb_before.load_balancers | length > 0
     - oci_lb_operation.reserved_ips | default([]) | length > 0
 
-- name: Run the scenario again
+- name: Test scenario idempotency
   ansible.oci.oci_loadbalancer:
     <<: *oci_lb_operation_options
   register: oci_lb_rerun
 
-- name: Run the scenario again in check mode
+- name: Test scenario idempotency in check mode
   ansible.oci.oci_loadbalancer:
     <<: *oci_lb_operation_options
   check_mode: true
   register: oci_lb_check_rerun
 
-- name: Read the load balancer after both reruns
+- name: Read the load balancer after idempotency tests
   ansible.oci.oci_loadbalancer_info:
     load_balancer_id: "{{ oci_lb_id }}"
   register: oci_lb_after_reruns
 
-- name: Check both reruns leave the load balancer unchanged
+- name: Assert idempotency tests preserved the load balancer
   ansible.builtin.assert:
     that:
       - not oci_lb_rerun.changed | bool

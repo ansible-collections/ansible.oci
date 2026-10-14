@@ -1,0 +1,26 @@
+---
+- name: Delete the test load balancer and its subresources
+  ansible.oci.oci_loadbalancer:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_lb_test_name }}'
+    state: absent
+  when: oci_lb_test_name | default('', true) | length > 0
+  register: oci_lb_test_cleanup
+  until: oci_lb_test_cleanup is succeeded
+  retries: 10
+  delay: 30
+
+- name: Delete the test subnet
+  ansible.oci.oci_network_subnet:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    vcn_id: '{{ oci_lb_test_vcn_id }}'
+    name: '{{ oci_lb_test_subnet_name }}'
+    state: absent
+  when: oci_lb_test_vcn_id | default('', true) | length > 0
+
+- name: Delete the test VCN
+  ansible.oci.oci_network_vcn:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_lb_test_vcn_name }}'
+    state: absent
+  when: oci_lb_test_vcn_name | default('', true) | length > 0

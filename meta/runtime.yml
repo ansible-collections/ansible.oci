@@ -79,3 +79,13 @@ action_groups:
     - oci_loadbalancer_info
     - oci_oke_cluster
     - oci_oke_cluster_info
+    - oci_loadbalancer_backend_set
+    - oci_loadbalancer_backend_set_info
+    - oci_loadbalancer_backend
+    - oci_loadbalancer_backend_info
+    - oci_loadbalancer_listener
+    - oci_loadbalancer_listener_info
+    - oci_loadbalancer_health_checker
+    - oci_loadbalancer_health_checker_info
+    - oci_loadbalancer_routing_policy
+    - oci_loadbalancer_routing_policy_info

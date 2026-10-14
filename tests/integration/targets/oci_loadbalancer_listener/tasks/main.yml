@@ -1,0 +1,314 @@
+---
+- name: Exercise listener lifecycle
+  block:
+    - name: Prepare the parent load balancer
+      ansible.builtin.include_role:
+        name: prepare_oci_loadbalancer_subresources
+
+    - name: Create the prerequisite backend set
+      ansible.oci.oci_loadbalancer_backend_set:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_backend_set }}'
+        policy: round_robin
+        health_checker:
+          protocol: tcp
+          port: 8080
+          return_code: 200
+          retries: 3
+          timeout_in_millis: 3000
+          interval_in_millis: 10000
+          response_body_regex: .*
+
+    - name: Read state before listener creation
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_before
+
+    - name: Predict listener creation
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        default_backend_set_name: '{{ oci_lb_test_backend_set }}'
+        port: 8080
+        protocol: tcp
+      check_mode: true
+      register: oci_lb_prediction
+
+    - name: Assert change predicted
+      ansible.builtin.assert:
+        that:
+          - oci_lb_prediction.changed | bool
+
+    - name: Read state after check mode
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_after_check
+
+    - name: Assert check mode preserved OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_before.listeners == oci_lb_after_check.listeners
+
+    - name: Apply listener creation
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        default_backend_set_name: '{{ oci_lb_test_backend_set }}'
+        port: 8080
+        protocol: tcp
+      register: oci_lb_applied
+
+    - name: Assert operation changed OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_applied.changed | bool
+
+    - name: Read resulting state
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_after
+
+    - name: Assert resource configuration
+      ansible.builtin.assert:
+        that:
+          - oci_lb_after.listeners | length == 1
+          - oci_lb_after.listeners[0].port == 8080
+          - oci_lb_after.listeners[0].protocol == 'TCP'
+
+    - name: Test listener creation idempotency
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        default_backend_set_name: '{{ oci_lb_test_backend_set }}'
+        port: 8080
+        protocol: tcp
+      register: oci_lb_repeat
+
+    - name: Test listener creation idempotency in check mode
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        default_backend_set_name: '{{ oci_lb_test_backend_set }}'
+        port: 8080
+        protocol: tcp
+      check_mode: true
+      register: oci_lb_repeat_check
+
+    - name: Assert idempotency in normal and check mode
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_repeat.changed | bool
+          - not oci_lb_repeat_check.changed | bool
+
+    - name: Read remote state after idempotency tests
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_final
+
+    - name: Assert idempotency tests preserved remote state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_final.listeners == oci_lb_after.listeners
+
+    - name: List listeners from the parent
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_listeners
+
+    - name: Assert listener is listed
+      ansible.builtin.assert:
+        that:
+          - oci_lb_test_listener in (oci_lb_listeners.listeners | map(attribute='name') | list)
+
+    - name: Read state before listener update
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_before
+
+    - name: Predict listener update
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        port: 8081
+      check_mode: true
+      register: oci_lb_prediction
+
+    - name: Assert change predicted
+      ansible.builtin.assert:
+        that:
+          - oci_lb_prediction.changed | bool
+
+    - name: Read state after check mode
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_after_check
+
+    - name: Assert check mode preserved OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_before.listeners == oci_lb_after_check.listeners
+
+    - name: Apply listener update
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        port: 8081
+      register: oci_lb_applied
+
+    - name: Assert operation changed OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_applied.changed | bool
+
+    - name: Read resulting state
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_after
+
+    - name: Assert resource configuration
+      ansible.builtin.assert:
+        that:
+          - oci_lb_after.listeners | length == 1
+          - oci_lb_after.listeners[0].port == 8081
+          - oci_lb_after.listeners[0].protocol == 'TCP'
+
+    - name: Test listener update idempotency
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        port: 8081
+      register: oci_lb_repeat
+
+    - name: Test listener update idempotency in check mode
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        port: 8081
+      check_mode: true
+      register: oci_lb_repeat_check
+
+    - name: Assert idempotency in normal and check mode
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_repeat.changed | bool
+          - not oci_lb_repeat_check.changed | bool
+
+    - name: Read remote state after idempotency tests
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_final
+
+    - name: Assert idempotency tests preserved remote state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_final.listeners == oci_lb_after.listeners
+
+    - name: Assert omitted backend set was preserved
+      ansible.builtin.assert:
+        that:
+          - oci_lb_after.listeners[0].default_backend_set_name == oci_lb_test_backend_set
+
+    - name: Read state before listener deletion
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_before
+
+    - name: Predict listener deletion
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        state: absent
+      check_mode: true
+      register: oci_lb_prediction
+
+    - name: Assert change predicted
+      ansible.builtin.assert:
+        that:
+          - oci_lb_prediction.changed | bool
+
+    - name: Read state after check mode
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_after_check
+
+    - name: Assert check mode preserved OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_before.listeners == oci_lb_after_check.listeners
+
+    - name: Apply listener deletion
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        state: absent
+      register: oci_lb_applied
+
+    - name: Assert operation changed OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_applied.changed | bool
+
+    - name: Read resulting state
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_after
+
+    - name: Assert resource was deleted
+      ansible.builtin.assert:
+        that:
+          - oci_lb_after.listeners | length == 0
+
+    - name: Test listener deletion idempotency
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        state: absent
+      register: oci_lb_repeat
+
+    - name: Test listener deletion idempotency in check mode
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        state: absent
+      check_mode: true
+      register: oci_lb_repeat_check
+
+    - name: Assert idempotency in normal and check mode
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_repeat.changed | bool
+          - not oci_lb_repeat_check.changed | bool
+
+    - name: Read remote state after idempotency tests
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_final
+
+    - name: Assert idempotency tests preserved remote state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_final.listeners == oci_lb_after.listeners
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  vars:
+    oci_lb_test_suffix: listener
+
+  always:
+    - name: Clean up test-owned resources
+      ansible.builtin.include_role:
+        name: prepare_oci_loadbalancer_subresources
+        tasks_from: cleanup

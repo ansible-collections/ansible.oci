@@ -48,17 +48,13 @@ options:
   load_balancer_id:
     description:
       - The OCID of the load balancer to manage.
-      - Use C(id) as an alias.
     type: str
-    aliases: [id]
   name:
     description:
       - The load balancer display name.
       - Required when creating a load balancer.
       - When C(load_balancer_id) is omitted, name lookup is scoped by C(compartment_id).
-      - Use C(display_name) as an alias.
     type: str
-    aliases: [display_name]
   compartment_id:
     description:
       - The OCID of the compartment containing the load balancer.
@@ -338,6 +334,9 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     filter_none_values,
     import_oci_sdk,
 )
+from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer import (
+    build_load_balancer_model,
+)
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
@@ -418,37 +417,30 @@ def build_create_load_balancer_details(params):
     Returns:
         An OCI CreateLoadBalancerDetails model.
     """
-    shape_details = params.get("shape_details")
-    details = filter_none_values(
-        {
-            "compartment_id": params.get("compartment_id"),
-            "display_name": params.get("name"),
-            "subnet_ids": params.get("subnet_ids"),
-            "shape_name": FLEXIBLE_SHAPE_NAME,
-            "shape_details": (
-                oci.load_balancer.models.ShapeDetails(
-                    **_shape_details_dict(shape_details)
-                )
-                if shape_details is not None
-                else None
-            ),
-            "is_private": params.get("is_private"),
-            "ip_mode": IP_MODE_TO_OCI.get(
-                params.get("ip_mode"), params.get("ip_mode")
-            ),
-            "reserved_ips": (
-                [
-                    oci.load_balancer.models.ReservedIP(**reserved_ip)
-                    for reserved_ip in params.get("reserved_ips") or []
-                ]
-                if params.get("reserved_ips") is not None
-                else None
-            ),
-            "freeform_tags": params.get("freeform_tags"),
-            "defined_tags": params.get("defined_tags"),
-        }
+    fields = {
+        key: params.get(key)
+        for key in (
+            "compartment_id", "subnet_ids", "is_private",
+            "freeform_tags", "defined_tags",
+        )
+    }
+    fields.update(
+        display_name=params.get("name"),
+        shape_name=FLEXIBLE_SHAPE_NAME,
+        ip_mode=IP_MODE_TO_OCI.get(params.get("ip_mode"), params.get("ip_mode")),
     )
-    return oci.load_balancer.models.CreateLoadBalancerDetails(**details)
+    shape_details = params.get("shape_details")
+    if shape_details is not None:
+        fields["shape_details"] = oci.load_balancer.models.ShapeDetails(
+            **_shape_details_dict(shape_details)
+        )
+    reserved_ips = params.get("reserved_ips")
+    if reserved_ips is not None:
+        fields["reserved_ips"] = [
+            oci.load_balancer.models.ReservedIP(**reserved_ip)
+            for reserved_ip in reserved_ips or []
+        ]
+    return build_load_balancer_model("CreateLoadBalancerDetails", fields)
 
 
 class OciLoadBalancerModule(OciResourceBase):
@@ -456,7 +448,11 @@ class OciLoadBalancerModule(OciResourceBase):
 
     @property
     def client_class(self):
-        """Return the load-balancer service client required by this adapter."""
+        """Return the load balancer SDK client.
+
+        Returns:
+            The LoadBalancerClient class.
+        """
         return oci.load_balancer.LoadBalancerClient
 
     resource_id_param = "load_balancer_id"
@@ -498,9 +494,6 @@ class OciLoadBalancerModule(OciResourceBase):
     def get_resource_response(self, resource_id):
         """Fetch a load balancer for base lookups and wait polling.
 
-        This override supplies the concrete SDK getter required by the base
-        resource helper.
-
         Args:
             resource_id: OCI load-balancer identifier.
 
@@ -513,11 +506,7 @@ class OciLoadBalancerModule(OciResourceBase):
         )
 
     def validate_create_request(self):
-        """Apply load-balancer subnet and Flexible-shape create validation.
-
-        This override adds a nonempty subnet check and Flexible bandwidth
-        bounds validation to the shared required-field checks.
-        """
+        """Apply load-balancer subnet and Flexible-shape create validation."""
         super(OciLoadBalancerModule, self).validate_create_request()
         if not self.module.params.get("subnet_ids"):
             self.module.fail_json(
@@ -607,9 +596,6 @@ class OciLoadBalancerModule(OciResourceBase):
 
     def build_update_plan(self, resource):
         """Extend shared planning with IP mode, reserved IPs, and bandwidth changes.
-
-        This override folds translated IP-mode and reserved-IP operations into
-        metadata updates and plans the separate shape endpoint operation.
 
         Args:
             resource: Current load-balancer SDK model.
@@ -785,9 +771,6 @@ class OciLoadBalancerModule(OciResourceBase):
     def create_resource(self):
         """Create a load balancer and resolve its result through OCI work requests.
 
-        This override resolves asynchronous creation and obtains the resource
-        ID when wait=False.
-
         Returns:
             The created load-balancer model or an ID-only result.
         """
@@ -836,9 +819,6 @@ class OciLoadBalancerModule(OciResourceBase):
 
     def build_update_details(self, update_model_fields):
         """Build update details after translating IP mode and ReservedIP fields.
-
-        The base requires each adapter to construct its service-specific SDK
-        payload.
 
         Args:
             update_model_fields: Fields selected by the update planner.
@@ -896,9 +876,6 @@ class OciLoadBalancerModule(OciResourceBase):
     def update_resource(self, resource):
         """Apply metadata and shape updates through their separate OCI APIs.
 
-        This override sequences both endpoints and waits on work requests,
-        because the resource reaching ACTIVE alone does not prove completion.
-
         Args:
             resource: Current load-balancer SDK model.
 
@@ -947,9 +924,6 @@ class OciLoadBalancerModule(OciResourceBase):
     def delete_resource(self, resource):
         """Delete the load balancer through the shared delete helper.
 
-        This override binds the raw SDK delete call and delegates waiting and
-        error handling to the base helper.
-
         Args:
             resource: Load-balancer SDK model to delete.
 
@@ -968,8 +942,8 @@ def main():
     argument_spec = dict(
         OCI_COMMON_ARGS,
         state=dict(type="str", choices=["present", "absent"], default="present"),
-        load_balancer_id=dict(type="str", aliases=["id"]),
-        name=dict(type="str", aliases=["display_name"]),
+        load_balancer_id=dict(type="str"),
+        name=dict(type="str"),
         compartment_id=dict(type="str"),
         subnet_ids=dict(type="list", elements="str"),
         is_private=dict(type="bool"),

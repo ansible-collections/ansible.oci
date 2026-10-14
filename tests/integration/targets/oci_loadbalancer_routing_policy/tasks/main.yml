@@ -1,0 +1,143 @@
+---
+- name: Exercise routing policy lifecycle
+  block:
+    - name: Prepare the parent load balancer
+      ansible.builtin.include_role:
+        name: prepare_oci_loadbalancer_subresources
+
+    - name: Create the prerequisite backend set
+      ansible.oci.oci_loadbalancer_backend_set:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_backend_set }}'
+        policy: round_robin
+        health_checker:
+          protocol: tcp
+          port: 8080
+
+    - name: Test routing policy creation
+      ansible.builtin.include_tasks: test_policy_operation.yml
+      vars:
+        oci_lb_policy_operation_name: creation
+        oci_lb_policy_operation:
+          rules: '{{ oci_lb_policy_initial_rules }}'
+
+    - name: List routing policies
+      ansible.oci.oci_loadbalancer_routing_policy_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_policy_list
+
+    - name: Assert the created routing policy is listed
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_policy_list.changed
+          - oci_lb_policy_name in (oci_lb_policy_list.routing_policies | map(attribute='name') | list)
+
+    - name: Test routing policy rule order update
+      ansible.builtin.include_tasks: test_policy_operation.yml
+      vars:
+        oci_lb_policy_operation_name: rule order update
+        oci_lb_policy_operation:
+          rules: '{{ oci_lb_policy_initial_rules | reverse | list }}'
+
+    - name: Test routing policy rule replacement
+      ansible.builtin.include_tasks: test_policy_operation.yml
+      vars:
+        oci_lb_policy_operation_name: rule replacement
+        oci_lb_policy_operation:
+          rules:
+            - name: ImagesRule
+              condition: "http.request.url.path sw '/NewImages'"
+              actions:
+                - backend_set_name: '{{ oci_lb_test_backend_set }}'
+
+    - name: Test routing policy idempotency with omitted settings
+      ansible.oci.oci_loadbalancer_routing_policy:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_policy_name }}'
+      register: oci_lb_policy_omitted
+
+    - name: Test routing policy idempotency with omitted settings in check mode
+      ansible.oci.oci_loadbalancer_routing_policy:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_policy_name }}'
+      check_mode: true
+      register: oci_lb_policy_omitted_check
+
+    - name: Read the routing policy after idempotency tests with omitted settings
+      ansible.oci.oci_loadbalancer_routing_policy_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_policy_name }}'
+      register: oci_lb_policy_after_omitted
+
+    - name: Assert idempotency tests with omitted settings preserved the policy
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_policy_omitted.changed
+          - not oci_lb_policy_omitted_check.changed
+          - oci_lb_policy_after_omitted.routing_policies == oci_lb_policy_after.routing_policies
+
+    - name: Assign the routing policy to an HTTP listener
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        default_backend_set_name: '{{ oci_lb_test_backend_set }}'
+        port: 8080
+        protocol: http
+        routing_policy_name: '{{ oci_lb_policy_name }}'
+
+    - name: Read the listener with the routing policy
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_policy_listener
+
+    - name: Assert the listener uses the routing policy
+      ansible.builtin.assert:
+        that:
+          - oci_lb_policy_listener.listeners | length == 1
+          - oci_lb_policy_listener.listeners[0].routing_policy_name == oci_lb_policy_name
+
+    - name: Delete the listener before deleting its routing policy
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        state: absent
+
+    - name: Test routing policy deletion
+      ansible.builtin.include_tasks: test_policy_operation.yml
+      vars:
+        oci_lb_policy_operation_name: deletion
+        oci_lb_policy_operation:
+          state: absent
+
+    - name: List routing policies after deletion
+      ansible.oci.oci_loadbalancer_routing_policy_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_policy_list_after
+
+    - name: Assert the deleted policy is not listed
+      ansible.builtin.assert:
+        that:
+          - oci_lb_policy_name not in (oci_lb_policy_list_after.routing_policies | map(attribute='name') | list)
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  vars:
+    oci_lb_test_suffix: routing-policy
+    oci_lb_policy_name: routing_{{ oci_integration_rpfx }}
+    oci_lb_policy_initial_rules:
+      - name: ImagesRule
+        condition: "http.request.url.path eq '/Images'"
+        actions:
+          - backend_set_name: '{{ oci_lb_test_backend_set }}'
+      - name: DocumentsRule
+        condition: "http.request.url.path sw '/Documents'"
+        actions:
+          - backend_set_name: '{{ oci_lb_test_backend_set }}'
+
+  always:
+    - name: Clean up test-owned resources
+      ansible.builtin.include_role:
+        name: prepare_oci_loadbalancer_subresources
+        tasks_from: cleanup

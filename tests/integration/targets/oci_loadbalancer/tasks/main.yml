@@ -20,6 +20,7 @@
     group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
+
   block:
     - name: Create the test VCN
       ansible.oci.oci_network_vcn:
@@ -80,7 +81,7 @@
       ansible.oci.oci_loadbalancer_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_loadbalancer_integration_name }}"
-        lifecycle_state: ACTIVE
+        lifecycle_state: active
       register: oci_lb_list
 
     - name: Check the list contains the load balancer
@@ -181,6 +182,7 @@
       ansible.builtin.debug:
         msg: IPv6 live scenarios skipped; set OCI_LOADBALANCER_IPV6_SUBNET_ID to an IPv6-enabled regional public subnet.
       when: oci_loadbalancer_integration_ipv6_subnet_id | length == 0
+
   always:
     - name: Clean up integration resources
       ansible.builtin.include_tasks: cleanup.yml

@@ -1,7 +1,11 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+import copy
+import importlib
 import types
+
+import oci as real_oci
 
 import pytest
 
@@ -18,6 +22,17 @@ from .conftest import (
     make_module_instance,
     raising,
 )
+
+
+class FakeCreateLoadBalancerDetails(FakeModel):
+    swagger_types = dict.fromkeys(
+        (
+            "compartment_id", "display_name", "subnet_ids", "shape_name",
+            "shape_details", "is_private", "ip_mode", "reserved_ips",
+            "freeform_tags", "defined_tags",
+        ),
+        "object",
+    )
 
 
 class CompositeOperationError(Exception):
@@ -62,6 +77,11 @@ def install_fake_oci(monkeypatch):
         LoadBalancerClientCompositeOperations=FakeCompositeOperations,
         models=oci_module.identity.models,
     )
+    oci_module.load_balancer.models.CreateLoadBalancerDetails = FakeCreateLoadBalancerDetails
+    helper = importlib.import_module(
+        "ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer"
+    )
+    monkeypatch.setattr(helper, "oci", oci_module)
     oci_module.exceptions.CompositeOperationError = CompositeOperationError
     return oci_module, service_error
 
@@ -114,8 +134,8 @@ def test_main_exposes_load_balancer_arguments_without_defaulting_is_private(monk
     module_obj.main()
 
     spec = captured["argument_spec"]
-    assert spec["load_balancer_id"] == {"type": "str", "aliases": ["id"]}
-    assert spec["name"] == {"type": "str", "aliases": ["display_name"]}
+    assert spec["load_balancer_id"] == {"type": "str"}
+    assert spec["name"] == {"type": "str"}
     assert spec["subnet_ids"] == {"type": "list", "elements": "str"}
     assert spec["is_private"] == {"type": "bool"}
     assert spec["ip_mode"]["choices"] == ["ipv4", "ipv6"]
@@ -220,6 +240,53 @@ def test_build_create_details_uses_load_balancer_sdk_models(monkeypatch):
     assert details.subnet_ids == ["ocid1.subnet.oc1..one"]
     assert details.ip_mode == "IPV6"
     assert details.is_private is True
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {},
+        {"ip_mode": "ipv4", "is_private": False, "reserved_ips": []},
+        {"ip_mode": "ipv6", "is_private": True, "reserved_ips": [{"id": "reserved"}]},
+        {"freeform_tags": {}, "defined_tags": {}},
+        {"freeform_tags": {"Team": "MiXeD"}, "defined_tags": {"Team": {"Owner": "MiXeD"}}},
+        {"shape_details": None, "reserved_ips": None, "is_private": None},
+    ],
+)
+def test_create_details_preserve_values_with_shared_builder(monkeypatch, overrides):
+    module_obj = load_collection_module("oci_loadbalancer")
+    helper = importlib.import_module(
+        "ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer"
+    )
+    monkeypatch.setattr(module_obj, "oci", real_oci)
+    monkeypatch.setattr(helper, "oci", real_oci)
+    params = base_create_params(**overrides)
+    params.update(state="present", config_profile_name="DEFAULT", backend_sets={"ignored": {}})
+    original = copy.deepcopy(params)
+
+    details = module_obj.build_create_load_balancer_details(params)
+
+    assert isinstance(details, real_oci.load_balancer.models.CreateLoadBalancerDetails)
+    assert details.compartment_id == params["compartment_id"]
+    assert details.display_name == params["name"]
+    assert details.subnet_ids == params["subnet_ids"]
+    assert details.shape_name == "flexible"
+    assert details.ip_mode == {"ipv4": "IPV4", "ipv6": "IPV6"}.get(params.get("ip_mode"))
+    assert details.is_private is params.get("is_private")
+    assert details.freeform_tags == params.get("freeform_tags")
+    assert details.defined_tags == params.get("defined_tags")
+    assert details.backend_sets is None
+    if params.get("shape_details") is None:
+        assert details.shape_details is None
+    else:
+        assert isinstance(details.shape_details, real_oci.load_balancer.models.ShapeDetails)
+        assert real_oci.util.to_dict(details.shape_details) == params["shape_details"]
+    if params.get("reserved_ips") is None:
+        assert details.reserved_ips is None
+    else:
+        assert all(isinstance(item, real_oci.load_balancer.models.ReservedIP) for item in details.reserved_ips)
+        assert [real_oci.util.to_dict(item) for item in details.reserved_ips] == params["reserved_ips"]
+    assert params == original
 
 
 @pytest.mark.parametrize(
@@ -859,8 +926,12 @@ def test_delete_wait_false_does_not_poll_after_raw_delete(monkeypatch):
     assert delete_calls == ["lb"]
 
 
-def test_create_payload_uses_installed_load_balancer_models():
+def test_create_payload_uses_installed_load_balancer_models(monkeypatch):
     module_obj = load_collection_module("oci_loadbalancer")
+    helper = importlib.import_module(
+        "ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer"
+    )
+    monkeypatch.setattr(helper, "oci", real_oci)
     models = module_obj.oci.load_balancer.models
 
     details = module_obj.build_create_load_balancer_details(
@@ -881,6 +952,10 @@ def test_create_payload_uses_installed_load_balancer_models():
 
 def test_real_sdk_create_composite_returns_refreshed_resource(monkeypatch):
     module_obj = load_collection_module("oci_loadbalancer")
+    helper = importlib.import_module(
+        "ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer"
+    )
+    monkeypatch.setattr(helper, "oci", real_oci)
     model = module_obj.oci.load_balancer.models
     calls = []
     client = types.SimpleNamespace(retry_strategy=None)
