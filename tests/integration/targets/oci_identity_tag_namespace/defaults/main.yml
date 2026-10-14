@@ -1,0 +1,12 @@
+---
+oci_identity_tag_namespace_integration_name: "ansible-tag-namespace-integration"
+oci_identity_tag_namespace_integration_retired_name: "ansible-tag-namespace-retired-integration"
+oci_identity_tag_namespace_integration_description: "OCI tag namespace integration test"
+oci_identity_tag_namespace_integration_update_description: "OCI tag namespace integration test updated"
+oci_identity_tag_namespace_integration_retired_description: "OCI retired tag namespace integration test"
+oci_identity_tag_namespace_integration_create_tags:
+  phase: create
+  role: integration
+oci_identity_tag_namespace_integration_update_tags:
+  phase: update
+  role: integration
