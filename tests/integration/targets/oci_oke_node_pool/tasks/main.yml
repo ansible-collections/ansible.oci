@@ -63,9 +63,10 @@
           is_public_ip_enabled: true
       register: oci_oke_np_cluster
 
-    - name: Save the cluster ID
+    - name: Save the cluster ID and Kubernetes version
       ansible.builtin.set_fact:
         oci_oke_np_cluster_id: "{{ oci_oke_np_cluster.resource.id }}"
+        oci_oke_np_k8s_version: "{{ oci_oke_np_cluster.resource.kubernetes_version }}"
 
     # oci_oke_node_pool_options_info is read-only, so there is no
     # check-mode/idempotency create/update/delete matrix to assert here; it only
@@ -74,8 +75,12 @@
       ansible.oci.oci_oke_node_pool_options_info:
         node_pool_option_id: "{{ oci_oke_np_cluster_id }}"
         node_pool_os_arch: "{{ oci_oke_node_pool_integration_node_os_arch }}"
+        node_pool_k8s_version: "{{ oci_oke_np_k8s_version }}"
       register: oci_oke_np_options
 
+    # A cluster's option set also lists images for older Kubernetes versions it
+    # still supports. The node pool defaults to the cluster's version, so the
+    # image has to be built for that exact version or create fails with a 409.
     - name: Select a worker-node image for the node pool
       ansible.builtin.set_fact:
         oci_oke_np_image_id: >-
@@ -84,7 +89,10 @@
             if (oci_oke_node_pool_integration_image_id | default('', true) | length > 0)
             else (
               oci_oke_np_options.node_pool_options[0].sources
-              | selectattr('image_id') | map(attribute='image_id') | first | default('')
+              | selectattr('image_id')
+              | selectattr('source_name', 'search',
+                  '-OKE-' ~ (oci_oke_np_k8s_version | regex_replace('^v', '') | regex_escape) ~ '(-|$)')
+              | map(attribute='image_id') | first | default('')
             )
           }}
 
@@ -96,8 +104,9 @@
           - oci_oke_np_options.node_pool_options[0].sources | length > 0
           - oci_oke_np_image_id | length > 0
         fail_msg: >-
-          No worker-node image was found for cluster {{ oci_oke_np_cluster_id }}
-          and architecture {{ oci_oke_node_pool_integration_node_os_arch }}.
+          No worker-node image was found for cluster {{ oci_oke_np_cluster_id }},
+          architecture {{ oci_oke_node_pool_integration_node_os_arch }}, and
+          Kubernetes version {{ oci_oke_np_k8s_version }}.
           Set oci_oke_node_pool_integration_image_id to override discovery.
 
     - name: Test node pool creation
