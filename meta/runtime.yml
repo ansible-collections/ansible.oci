@@ -2,6 +2,8 @@
 requires_ansible: ">=2.16.0"
 action_groups:
     oci:
+        - oci_identity_api_key
+        - oci_identity_api_key_info
         - oci_identity_compartment
         - oci_identity_compartment_info
         - oci_identity_dynamic_group
