@@ -128,8 +128,9 @@ def test_name_comparison_allows_case_only_difference_and_blocks_change(monkeypat
     same = make_namespace_module(module_obj, {"name": "operations"})
     assert same.compare_update_field_values("Operations", "operations", "case_insensitive") is False
     changed = make_namespace_module(module_obj, {"name": "new-name"})
+    resource = FakeModel(id="ns", name="Operations")
     with pytest.raises(FailJsonCalled):
-        changed.build_update_plan(FakeModel(id="ns", name="Operations"))
+        changed.build_update_plan(resource)
 
 
 def test_update_plan_tracks_mutable_fields_and_retirement_wait_state(monkeypatch):
@@ -146,11 +147,11 @@ def test_update_plan_tracks_mutable_fields_and_retirement_wait_state(monkeypatch
         "description": "New description",
         "is_retired": True,
     }
-    assert instance.update_wait_states == ("INACTIVE",)
+    assert instance.update_wait_states == ["INACTIVE"]
     instance.module.params["is_retired"] = False
-    assert instance.update_wait_states == ("ACTIVE",)
+    assert instance.update_wait_states == ["ACTIVE"]
     instance.module.params["is_retired"] = None
-    assert instance.update_wait_states == ("ACTIVE", "INACTIVE")
+    assert instance.update_wait_states == ["ACTIVE", "INACTIVE"]
 
 
 def test_create_and_update_use_namespace_sdk_methods(monkeypatch):
@@ -368,5 +369,6 @@ def test_delete_reports_dependency_conflict(monkeypatch):
         ),
     )
     monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+    resource = FakeModel(id="ns")
     with pytest.raises(FailJsonCalled, match="dependent resources exist"):
-        instance.delete_resource(FakeModel(id="ns"))
+        instance.delete_resource(resource)
