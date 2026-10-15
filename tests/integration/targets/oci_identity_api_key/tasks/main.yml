@@ -1,0 +1,286 @@
+---
+- name: Validate identity API key integration inputs
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_identity_api_key_integration_home_region | length > 0
+
+- name: Initialize cleanup markers and unique names
+  ansible.builtin.set_fact:
+    oci_identity_api_key_domain_id: ""
+    oci_identity_api_key_domain_url: ""
+    oci_identity_api_key_user_id: ""
+    oci_identity_api_key_first_fingerprint: ""
+    oci_identity_api_key_second_fingerprint: ""
+    oci_identity_api_key_integration_domain_name: >-
+      {{ oci_identity_api_key_integration_domain_name }}-{{ oci_integration_rpfx }}
+    oci_identity_api_key_integration_user_name: >-
+      {{ oci_identity_api_key_integration_user_name }}-{{ oci_integration_rpfx }}@example.com
+
+- name: Exercise identity API key lifecycle in a temporary domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create a temporary identity domain
+      ansible.oci.oci_identity_domain:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_api_key_integration_domain_name }}"
+        description: "{{ oci_identity_api_key_integration_domain_description }}"
+        home_region: "{{ oci_identity_api_key_integration_home_region }}"
+        license_type: free
+      register: oci_identity_api_key_domain_create
+
+    - name: Capture temporary identity domain endpoint
+      ansible.builtin.set_fact:
+        oci_identity_api_key_domain_id: "{{ oci_identity_api_key_domain_create.resource.id }}"
+        oci_identity_api_key_domain_url: "{{ oci_identity_api_key_domain_create.resource.url }}"
+
+    - name: Verify temporary identity domain endpoint
+      ansible.builtin.assert:
+        that:
+          - oci_identity_api_key_domain_id | length > 0
+          - oci_identity_api_key_domain_url | length > 0
+
+    - name: Wait for the temporary identity domain API
+      block:
+        - name: Poll temporary identity domain API
+          ansible.oci.oci_identity_user_info:
+            domain_url: "{{ oci_identity_api_key_domain_url }}"
+            user_name: "{{ oci_identity_api_key_integration_user_name }}"
+          register: oci_identity_api_key_domain_readiness
+          until: oci_identity_api_key_domain_readiness is succeeded
+          retries: 12
+          delay: 5
+      rescue:
+        - name: Report temporary identity domain readiness failure
+          ansible.builtin.fail:
+            msg: >-
+              Identity domain API readiness retry limit reached
+              (12 retries, 5 seconds apart, excluding API request time).
+              Last API result: {{ ansible_failed_result }}
+
+    - name: Create temporary identity user
+      ansible.oci.oci_identity_user:
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_name: "{{ oci_identity_api_key_integration_user_name }}"
+        name: OCI API Key Integration
+        given_name: OCI
+        family_name: Integration
+        email: "{{ oci_identity_api_key_integration_user_name }}"
+        active: true
+      register: oci_identity_api_key_user_create
+
+    - name: Capture temporary identity user ID
+      ansible.builtin.set_fact:
+        oci_identity_api_key_user_id: "{{ oci_identity_api_key_user_create.resource.id }}"
+
+    - name: Wait for the temporary identity user API representation
+      ansible.oci.oci_identity_user_info:
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+      register: oci_identity_api_key_user_readiness
+      until: oci_identity_api_key_user_readiness.users | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Load public API key fixtures
+      ansible.builtin.set_fact:
+        oci_identity_api_key_first_pem: "{{ lookup('file', role_path + '/files/api_key_one.pem') }}"
+        oci_identity_api_key_second_pem: "{{ lookup('file', role_path + '/files/api_key_two.pem') }}"
+
+    - name: Create first API key in check mode
+      ansible.oci.oci_identity_api_key: &api_key_one
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        key: "{{ oci_identity_api_key_first_pem }}"
+      check_mode: true
+      register: oci_identity_api_key_first_check
+
+    - name: Verify first API key check mode left it absent
+      ansible.oci.oci_identity_api_key_info:
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+      register: oci_identity_api_key_first_check_info
+      failed_when: not oci_identity_api_key_first_check.changed or oci_identity_api_key_first_check_info.api_keys | length != 0
+
+    - name: Create first API key
+      ansible.oci.oci_identity_api_key:
+        <<: *api_key_one
+      register: oci_identity_api_key_first_create
+
+    - name: Verify first API key upload changed state
+      ansible.builtin.assert:
+        that:
+          - oci_identity_api_key_first_create.changed
+
+    - name: Capture first API key fingerprint
+      ansible.builtin.set_fact:
+        oci_identity_api_key_first_fingerprint: "{{ oci_identity_api_key_first_create.resource.fingerprint }}"
+
+    - name: Verify first API key normal rerun is unchanged
+      ansible.oci.oci_identity_api_key:
+        <<: *api_key_one
+      register: oci_identity_api_key_first_rerun
+      failed_when: >-
+        oci_identity_api_key_first_rerun.changed or
+        oci_identity_api_key_first_rerun.resource.fingerprint !=
+        oci_identity_api_key_first_fingerprint
+
+    - name: Verify first API key check rerun is unchanged
+      ansible.oci.oci_identity_api_key:
+        <<: *api_key_one
+      check_mode: true
+      register: oci_identity_api_key_first_check_rerun
+      failed_when: oci_identity_api_key_first_check_rerun.changed
+
+    - name: Retrieve first API key by domain ID
+      ansible.oci.oci_identity_api_key_info:
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+      register: oci_identity_api_key_info_by_id
+      until: oci_identity_api_key_info_by_id.api_keys | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Verify first API key info fields
+      ansible.builtin.assert:
+        that:
+          - oci_identity_api_key_info_by_id.api_keys[0].id | length > 0
+          - oci_identity_api_key_info_by_id.api_keys[0].ocid | length > 0
+          - oci_identity_api_key_info_by_id.api_keys[0].domain_id == oci_identity_api_key_domain_id
+          - oci_identity_api_key_info_by_id.api_keys[0].user_id == oci_identity_api_key_user_id
+          - oci_identity_api_key_info_by_id.api_keys[0].fingerprint == oci_identity_api_key_first_fingerprint
+
+    - name: Retrieve first API key by domain URL and fingerprint
+      ansible.oci.oci_identity_api_key_info:
+        domain_url: "{{ oci_identity_api_key_domain_url }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        fingerprint: "{{ oci_identity_api_key_first_fingerprint }}"
+      register: oci_identity_api_key_info_by_fingerprint
+      failed_when: oci_identity_api_key_info_by_fingerprint.api_keys | length != 1
+
+    - name: Create second API key in check mode
+      ansible.oci.oci_identity_api_key: &api_key_two
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        key: "{{ oci_identity_api_key_second_pem }}"
+      check_mode: true
+      register: oci_identity_api_key_second_check_create
+      failed_when: not oci_identity_api_key_second_check_create.changed
+
+    - name: Verify second API key check mode left the first key only
+      ansible.oci.oci_identity_api_key_info:
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+      register: oci_identity_api_key_second_check_info
+      failed_when: oci_identity_api_key_second_check_info.api_keys | length != 1
+
+    - name: Create second API key
+      ansible.oci.oci_identity_api_key:
+        <<: *api_key_two
+      register: oci_identity_api_key_second_create
+
+    - name: Verify second API key upload changed state
+      ansible.builtin.assert:
+        that:
+          - oci_identity_api_key_second_create.changed
+
+    - name: Capture second API key fingerprint
+      ansible.builtin.set_fact:
+        oci_identity_api_key_second_fingerprint: "{{ oci_identity_api_key_second_create.resource.fingerprint }}"
+
+    - name: Verify second API key normal rerun is unchanged
+      ansible.oci.oci_identity_api_key:
+        <<: *api_key_two
+      register: oci_identity_api_key_second_rerun
+      failed_when: >-
+        oci_identity_api_key_second_rerun.changed or
+        oci_identity_api_key_second_rerun.resource.fingerprint !=
+        oci_identity_api_key_second_fingerprint
+
+    - name: Verify second API key check rerun is unchanged
+      ansible.oci.oci_identity_api_key:
+        <<: *api_key_two
+      check_mode: true
+      register: oci_identity_api_key_second_check
+      failed_when: oci_identity_api_key_second_check.changed
+
+    - name: Verify both API keys remain
+      ansible.oci.oci_identity_api_key_info:
+        domain_url: "{{ oci_identity_api_key_domain_url }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+      register: oci_identity_api_key_info_both
+      failed_when: oci_identity_api_key_info_both.api_keys | length != 2
+
+    - name: Delete first API key in check mode
+      ansible.oci.oci_identity_api_key:
+        state: absent
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        fingerprint: "{{ oci_identity_api_key_first_fingerprint }}"
+      check_mode: true
+      register: oci_identity_api_key_first_delete_check
+      failed_when: not oci_identity_api_key_first_delete_check.changed
+
+    - name: Verify delete check mode left both API keys present
+      ansible.oci.oci_identity_api_key_info:
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+      register: oci_identity_api_key_delete_check_info
+      failed_when: oci_identity_api_key_delete_check_info.api_keys | length != 2
+
+    - name: Delete first API key
+      ansible.oci.oci_identity_api_key:
+        state: absent
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        fingerprint: "{{ oci_identity_api_key_first_fingerprint }}"
+      register: oci_identity_api_key_first_delete
+
+    - name: Verify first API key deletion changed state
+      ansible.builtin.assert:
+        that:
+          - oci_identity_api_key_first_delete.changed
+
+    - name: Verify first API key delete is idempotent
+      ansible.oci.oci_identity_api_key:
+        state: absent
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        fingerprint: "{{ oci_identity_api_key_first_fingerprint }}"
+      register: oci_identity_api_key_first_delete_rerun
+      failed_when: oci_identity_api_key_first_delete_rerun.changed
+
+    - name: Verify first API key check deletion is unchanged
+      ansible.oci.oci_identity_api_key:
+        state: absent
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        fingerprint: "{{ oci_identity_api_key_first_fingerprint }}"
+      check_mode: true
+      register: oci_identity_api_key_first_delete_check_rerun
+      failed_when: oci_identity_api_key_first_delete_check_rerun.changed
+
+    - name: Verify deleted fingerprint is absent
+      ansible.oci.oci_identity_api_key_info:
+        domain_id: "{{ oci_identity_api_key_domain_id }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+        fingerprint: "{{ oci_identity_api_key_first_fingerprint }}"
+      register: oci_identity_api_key_deleted_info
+      failed_when: oci_identity_api_key_deleted_info.api_keys | length != 0
+
+    - name: Verify second API key remains after first deletion
+      ansible.oci.oci_identity_api_key_info:
+        domain_url: "{{ oci_identity_api_key_domain_url }}"
+        user_id: "{{ oci_identity_api_key_user_id }}"
+      register: oci_identity_api_key_info_after_delete
+      failed_when: >-
+        oci_identity_api_key_info_after_delete.api_keys | length != 1 or
+        oci_identity_api_key_info_after_delete.api_keys[0].fingerprint !=
+        oci_identity_api_key_second_fingerprint
+
+  always:
+    - name: Clean up temporary API keys, user, and identity domain
+      ansible.builtin.include_tasks: cleanup.yml
