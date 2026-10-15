@@ -22,7 +22,11 @@ options:
   state:
     description:
       - Set to C(present) to create or manage the namespace.
-      - Set to C(absent) to delete an empty namespace. Delete its tag definitions first.
+      - Set to C(absent) to retire and delete the namespace and all its tag definitions.
+      - Deletion also removes these defined tags from resources across the tenancy.
+      - The module waits up to C(wait_timeout) seconds and fails if deletion does not finish.
+      - OCI continues deletion after the timeout.
+      - Set C(wait=false) to return after OCI accepts the deletion request.
     type: str
     choices: [present, absent]
     default: present
@@ -57,7 +61,8 @@ options:
       - If set during creation, the module creates the namespace and then retires it.
       - Set to C(false) to activate the namespace. Retired tag definitions
         remain retired until each definition is activated separately.
-      - Omit this option to leave the retirement state unchanged.
+      - When C(state=present), omit this option to leave the retirement state unchanged.
+      - When C(state=absent), the module retires the namespace regardless of this option.
     type: bool
 """
 
@@ -81,7 +86,7 @@ EXAMPLES = r"""
     tag_namespace_id: "{{ namespace.resource.id }}"
     is_retired: true
 
-- name: Delete an empty namespace
+- name: Delete a namespace and its tag definitions
   ansible.oci.oci_identity_tag_namespace:
     tag_namespace_id: "{{ namespace.resource.id }}"
     state: absent
@@ -144,6 +149,7 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_ACTIVE,
+    LIFECYCLE_DELETING,
     OCI_AUTH_ARGS,
     OCI_TAG_ARGS,
     OCI_WAIT_ARGS,
@@ -316,19 +322,40 @@ class OciIdentityTagNamespaceModule(OciResourceBase):
         return oci.identity.models.UpdateTagNamespaceDetails(**update_model_fields)
 
     def delete_resource(self, resource):
-        """Delete the namespace and wait for OCI's terminal state.
+        """Retire and delete the namespace and its tag definitions.
 
         Args:
             resource: The namespace model to delete.
 
         Returns:
-            The OCI delete response or waited result.
+            The delete response or the completed work request.
         """
-        return self.delete_resource_and_wait(
+        if resource.lifecycle_state == LIFECYCLE_DELETING:
+            return self.get_mutation_result(
+                resource, resource.id, tuple(self.dead_states)
+            )
+
+        if not resource.is_retired:
+            self.call_with_retry(
+                self.client.update_tag_namespace,
+                tag_namespace_id=resource.id,
+                update_tag_namespace_details=oci.identity.models.UpdateTagNamespaceDetails(
+                    is_retired=True
+                ),
+            )
+
+        response = self.call_delete_fn(
             resource,
-            self.client.delete_tag_namespace,
+            self.client.cascade_delete_tag_namespace,
             tag_namespace_id=resource.id,
         )
+        if self.module.params.get("wait", True):
+            return self.wait_for_work_request(
+                self.client,
+                response.headers["opc-work-request-id"],
+                get_work_request_fn=self.client.get_tagging_work_request,
+            )
+        return response
 
 
 def main():

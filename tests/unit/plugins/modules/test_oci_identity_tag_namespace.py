@@ -202,23 +202,77 @@ def test_create_and_update_use_namespace_sdk_methods(monkeypatch):
     assert created.lifecycle_state == "INACTIVE"
 
 
-def test_delete_uses_namespace_id_and_waits(monkeypatch):
-    """Verify deletion uses the namespace ID and waits."""
+@pytest.mark.parametrize("is_retired", [False, True])
+@pytest.mark.parametrize("wait", [False, True])
+def test_delete_retires_and_cascades(monkeypatch, is_retired, wait):
+    """Verify retirement, cascade deletion, and optional work request waiting."""
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_identity_tag_namespace")
     calls = []
+    response = FakeResponse(None, headers={"opc-work-request-id": "work-request"})
+
+    def update_namespace(**kwargs):
+        """Record the retirement request."""
+        calls.append(("retire", kwargs))
+        return FakeResponse(None)
+
+    def cascade_delete(**kwargs):
+        """Record deletion of the namespace and its definitions."""
+        calls.append(("cascade", kwargs))
+        return response
+
+    client = types.SimpleNamespace(
+        update_tag_namespace=update_namespace,
+        cascade_delete_tag_namespace=cascade_delete,
+        get_tagging_work_request="get_tagging_work_request",
+    )
     instance = make_namespace_module(
         module_obj,
-        {"wait": True},
-        client=types.SimpleNamespace(
-            delete_tag_namespace=lambda **kwargs: calls.append(kwargs)
-            or FakeResponse(None)
-        ),
+        {"wait": wait, "is_retired": False, "description": "Ignore during deletion"},
+        client=client,
     )
     monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
-    monkeypatch.setattr(instance, "wait_for_resource_id", lambda *args, **kwargs: None)
-    instance.delete_resource(FakeModel(id="ocid1.tagnamespace.oc1..example"))
-    assert calls == [{"tag_namespace_id": "ocid1.tagnamespace.oc1..example"}]
+    monkeypatch.setattr(
+        instance,
+        "wait_for_work_request",
+        lambda *args, **kwargs: calls.append(("wait", args, kwargs)) or "completed",
+    )
+    result = instance.delete_resource(
+        FakeModel(id="ns", is_retired=is_retired, lifecycle_state="INACTIVE" if is_retired else "ACTIVE")
+    )
+    if not is_retired:
+        operation, options = calls.pop(0)
+        assert operation == "retire"
+        assert options["tag_namespace_id"] == "ns"
+        assert options["update_tag_namespace_details"].__dict__ == {"is_retired": True}
+    assert calls.pop(0) == ("cascade", {"tag_namespace_id": "ns"})
+    if wait:
+        assert calls.pop(0) == (
+            "wait", (client, "work-request"),
+            {"get_work_request_fn": client.get_tagging_work_request},
+        )
+        assert result == "completed"
+    else:
+        assert result is response
+    assert calls == []
+
+
+@pytest.mark.parametrize("wait", [False, True])
+def test_delete_does_not_restart_pending_deletion(monkeypatch, wait):
+    """Verify repeated deletion does not repeat retirement or cascade deletion."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_identity_tag_namespace")
+    instance = make_namespace_module(module_obj, {"wait": wait})
+    resource = FakeModel(id="ns", lifecycle_state="DELETING", is_retired=True)
+    calls = []
+    monkeypatch.setattr(
+        instance,
+        "get_mutation_result",
+        lambda *args: calls.append(args) or resource,
+    )
+    assert instance.delete_resource(resource) is resource
+    assert calls[0][:2] == (resource, "ns")
+    assert set(calls[0][2]) == instance.dead_states
 
 
 def test_get_by_id_returns_none_on_404(monkeypatch):
@@ -360,15 +414,15 @@ def test_delete_reports_dependency_conflict(monkeypatch):
     """Test that OCI dependency conflicts become a clear module failure."""
     service_error = install_fake_oci(monkeypatch)[1]
     module_obj = load_collection_module("oci_identity_tag_namespace")
-    error = service_error(409, "tag definitions exist")
+    error = service_error(409, "tag deletion already in progress")
     instance = make_namespace_module(
         module_obj,
         {},
         client=types.SimpleNamespace(
-            delete_tag_namespace=raising(error)
+            cascade_delete_tag_namespace=raising(error)
         ),
     )
     monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
-    resource = FakeModel(id="ns")
+    resource = FakeModel(id="ns", is_retired=True, lifecycle_state="INACTIVE")
     with pytest.raises(FailJsonCalled, match="dependent resources exist"):
         instance.delete_resource(resource)
