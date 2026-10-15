@@ -1,6 +1,9 @@
 ---
 oci_oke_node_pool_integration_vcn_name: oci-oke-np-vcn
 oci_oke_node_pool_integration_subnet_name: oci-oke-np-subnet
+oci_oke_node_pool_integration_igw_name: oci-oke-np-igw
+oci_oke_node_pool_integration_route_table_name: oci-oke-np-rt
+oci_oke_node_pool_integration_security_list_name: oci-oke-np-sl
 oci_oke_node_pool_integration_cluster_name: oci-oke-np-cluster
 oci_oke_node_pool_integration_name: oci-oke-np
 oci_oke_node_pool_integration_updated_name: oci-oke-np-updated

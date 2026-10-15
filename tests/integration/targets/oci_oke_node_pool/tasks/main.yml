@@ -9,6 +9,9 @@
     oci_oke_np_cleanup_ids: []
     oci_oke_node_pool_integration_vcn_name: "{{ oci_oke_node_pool_integration_vcn_name }}-{{ oci_integration_rpfx }}"
     oci_oke_node_pool_integration_subnet_name: "{{ oci_oke_node_pool_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_node_pool_integration_igw_name: "{{ oci_oke_node_pool_integration_igw_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_node_pool_integration_route_table_name: "{{ oci_oke_node_pool_integration_route_table_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_node_pool_integration_security_list_name: "{{ oci_oke_node_pool_integration_security_list_name }}-{{ oci_integration_rpfx }}"
     oci_oke_node_pool_integration_cluster_name: "{{ oci_oke_node_pool_integration_cluster_name }}-{{ oci_integration_rpfx }}"
     oci_oke_node_pool_integration_name: "{{ oci_oke_node_pool_integration_name }}-{{ oci_integration_rpfx }}"
     oci_oke_node_pool_integration_updated_name: "{{ oci_oke_node_pool_integration_updated_name }}-{{ oci_integration_rpfx }}"
@@ -40,12 +43,79 @@
       ansible.builtin.set_fact:
         oci_oke_np_vcn_id: "{{ oci_oke_np_vcn.resource.id }}"
 
+    # Worker nodes only finish provisioning (and the create work request only
+    # succeeds) once they register with the cluster API endpoint, so the subnet
+    # needs a route out and security rules that allow the node-to-endpoint
+    # traffic. Without them the module waits until wait_timeout.
+    - name: Create the internet gateway
+      ansible.oci.oci_network_internet_gateway:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_oke_np_vcn_id }}"
+        name: "{{ oci_oke_node_pool_integration_igw_name }}"
+        is_enabled: true
+      register: oci_oke_np_igw
+
+    - name: Save the internet gateway ID
+      ansible.builtin.set_fact:
+        oci_oke_np_igw_id: "{{ oci_oke_np_igw.resource.id }}"
+
+    - name: Create the route table
+      ansible.oci.oci_network_route_table:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_oke_np_vcn_id }}"
+        name: "{{ oci_oke_node_pool_integration_route_table_name }}"
+        route_rules:
+          - destination: 0.0.0.0/0
+            destination_type: CIDR_BLOCK
+            network_entity_id: "{{ oci_oke_np_igw_id }}"
+      register: oci_oke_np_route_table
+
+    - name: Save the route table ID
+      ansible.builtin.set_fact:
+        oci_oke_np_route_table_id: "{{ oci_oke_np_route_table.resource.id }}"
+
+    # The API endpoint and the workers share one subnet, so allowing all
+    # intra-subnet traffic covers kubelet (10250), the endpoint (6443), and
+    # node registration (12250).
+    - name: Create the security list
+      ansible.oci.oci_network_security_list:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_oke_np_vcn_id }}"
+        name: "{{ oci_oke_node_pool_integration_security_list_name }}"
+        ingress_security_rules:
+          - source: "{{ oci_oke_node_pool_integration_subnet_cidr }}"
+            protocol: all
+            description: All traffic between workers and the API endpoint
+          - source: 0.0.0.0/0
+            protocol: "6"
+            description: Kubernetes API endpoint
+            tcp_options:
+              destination_port_min: 6443
+              destination_port_max: 6443
+          - source: 0.0.0.0/0
+            protocol: "1"
+            description: Path MTU discovery
+            icmp_options:
+              type: 3
+              code: 4
+        egress_security_rules:
+          - destination: 0.0.0.0/0
+            protocol: all
+      register: oci_oke_np_security_list
+
+    - name: Save the security list ID
+      ansible.builtin.set_fact:
+        oci_oke_np_security_list_id: "{{ oci_oke_np_security_list.resource.id }}"
+
     - name: Create the node subnet
       ansible.oci.oci_network_subnet:
         compartment_id: "{{ oci_integration_compartment_id }}"
         vcn_id: "{{ oci_oke_np_vcn_id }}"
         name: "{{ oci_oke_node_pool_integration_subnet_name }}"
         cidr_block: "{{ oci_oke_node_pool_integration_subnet_cidr }}"
+        route_table_id: "{{ oci_oke_np_route_table_id }}"
+        security_list_ids:
+          - "{{ oci_oke_np_security_list_id }}"
       register: oci_oke_np_subnet
 
     - name: Save the subnet ID
