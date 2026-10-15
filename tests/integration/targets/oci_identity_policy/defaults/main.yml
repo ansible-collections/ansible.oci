@@ -1,0 +1,25 @@
+---
+oci_identity_policy_integration_name: "oci-policy-integration"
+oci_identity_policy_integration_description: "OCI identity policy integration test"
+oci_identity_policy_initial_statements:
+  - >-
+    Allow any-user to inspect vcns in compartment id
+    {{ oci_integration_compartment_id }} where request.principal.id =
+    '{{ oci_integration_compartment_id }}'
+  - >-
+    Allow any-user to inspect subnets in compartment id
+    {{ oci_integration_compartment_id }} where request.principal.id =
+    '{{ oci_integration_compartment_id }}'
+oci_identity_policy_updated_statements:
+  - >-
+    Allow any-user to inspect vcns in compartment id
+    {{ oci_integration_compartment_id }} where request.principal.id =
+    '{{ oci_integration_compartment_id }}'
+  - >-
+    Allow any-user to inspect subnets in compartment id
+    {{ oci_integration_compartment_id }} where request.principal.id =
+    '{{ oci_integration_compartment_id }}'
+  - >-
+    Allow any-user to inspect instances in compartment id
+    {{ oci_integration_compartment_id }} where request.principal.id =
+    '{{ oci_integration_compartment_id }}'

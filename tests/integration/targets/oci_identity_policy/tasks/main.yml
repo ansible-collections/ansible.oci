@@ -1,0 +1,410 @@
+---
+- name: Validate policy test inputs
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Initialize policy cleanup markers
+  ansible.builtin.set_fact:
+    oci_identity_policy_cleanup_id: ""
+    oci_identity_policy_cleanup_name: "{{ oci_identity_policy_integration_name }}-{{ oci_integration_rpfx }}"
+    oci_identity_policy_integration_name: "{{ oci_identity_policy_integration_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise identity policy lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Check policy creation
+      ansible.oci.oci_identity_policy: &policy_create
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_policy_integration_name }}"
+        description: "{{ oci_identity_policy_integration_description }}"
+        statements: "{{ oci_identity_policy_initial_statements }}"
+        version_date: ""
+        freeform_tags:
+          phase: create
+      check_mode: true
+      register: policy_create_check
+
+    - name: Verify policy creation check left policy absent
+      ansible.oci.oci_identity_policy_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_policy_integration_name }}"
+      register: policy_create_check_info
+      failed_when: >-
+        not policy_create_check.changed or
+        policy_create_check_info.policies | length != 0
+
+    - name: Create policy
+      ansible.oci.oci_identity_policy:
+        <<: *policy_create
+      register: policy_create
+
+    - name: Capture policy id for cleanup
+      ansible.builtin.set_fact:
+        oci_identity_policy_cleanup_id: "{{ policy_create.resource.id }}"
+
+    - name: Verify created policy values
+      ansible.builtin.assert:
+        that:
+          - policy_create.changed
+          - policy_create.resource.id | length > 0
+          - policy_create.resource.name == oci_identity_policy_integration_name
+          - policy_create.resource.compartment_id == oci_integration_compartment_id
+          - policy_create.resource.description == oci_identity_policy_integration_description
+          - policy_create.resource.version_date | default('', true) == ''
+          - policy_create.resource.freeform_tags.phase == 'create'
+          - policy_create.resource.statements | sort == oci_identity_policy_initial_statements | sort
+
+    - name: Wait for policy visibility by exact name
+      ansible.oci.oci_identity_policy_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_policy_integration_name }}"
+      register: policy_by_name
+      until: policy_by_name.policies | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Verify policy creation is idempotent
+      ansible.oci.oci_identity_policy:
+        <<: *policy_create
+      register: policy_create_rerun
+      failed_when: >-
+        policy_create_rerun.changed or
+        policy_create_rerun.resource.id != policy_create.resource.id
+
+    - name: Verify policy creation is idempotent in check mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_create
+      check_mode: true
+      register: policy_create_check_rerun
+      failed_when: >-
+        policy_create_check_rerun.changed or
+        policy_create_check_rerun.resource.id != policy_create.resource.id
+
+    - name: Verify statement order does not cause a change
+      ansible.oci.oci_identity_policy:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_policy_integration_name }}"
+        description: "{{ oci_identity_policy_integration_description }}"
+        statements: "{{ oci_identity_policy_initial_statements | reverse | list }}"
+        version_date: ""
+        freeform_tags:
+          phase: create
+      register: policy_reordered
+      failed_when: policy_reordered.changed
+
+    - name: Retrieve policy by id
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_by_id
+
+    - name: Retrieve policy by lifecycle state
+      ansible.oci.oci_identity_policy_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        lifecycle_state: active
+      register: policies_active
+
+    - name: Verify info queries return the policy
+      ansible.builtin.assert:
+        that:
+          - policy_by_id.policies | length == 1
+          - policy_by_id.policies[0].id == policy_create.resource.id
+          - policy_by_id.policies[0].name == oci_identity_policy_integration_name
+          - policies_active.policies | selectattr('id', 'equalto', policy_create.resource.id) | list | length == 1
+
+    - name: Check policy update
+      ansible.oci.oci_identity_policy: &policy_update
+        policy_id: "{{ policy_create.resource.id }}"
+        description: "{{ oci_identity_policy_integration_description }} updated"
+        statements: "{{ oci_identity_policy_updated_statements }}"
+        version_date: "2021-01-17"
+        freeform_tags:
+          phase: update
+      check_mode: true
+      register: policy_update_check
+      failed_when: not policy_update_check.changed
+
+    - name: Verify policy update check left policy unchanged
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_update_check_info
+      failed_when: >-
+        policy_update_check_info.policies | length != 1 or
+        policy_update_check_info.policies[0].description !=
+          oci_identity_policy_integration_description or
+        policy_update_check_info.policies[0].version_date | default('', true) != '' or
+        policy_update_check_info.policies[0].freeform_tags.phase != 'create' or
+        policy_update_check_info.policies[0].statements | sort != oci_identity_policy_initial_statements | sort
+
+    - name: Update policy
+      ansible.oci.oci_identity_policy:
+        <<: *policy_update
+      register: policy_update
+
+    - name: Verify updated policy values
+      ansible.builtin.assert:
+        that:
+          - policy_update.changed
+          - policy_update.resource.description == oci_identity_policy_integration_description + ' updated'
+          - policy_update.resource.version_date[:10] == '2021-01-17'
+          - policy_update.resource.freeform_tags.phase == 'update'
+          - policy_update.resource.statements | sort == oci_identity_policy_updated_statements | sort
+
+    - name: Wait for policy update visibility
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_after_update
+      until: >-
+        policy_after_update.policies | length == 1 and
+        policy_after_update.policies[0].version_date[:10] == '2021-01-17' and
+        policy_after_update.policies[0].description ==
+          oci_identity_policy_integration_description + ' updated'
+      retries: 12
+      delay: 5
+
+    - name: Verify update is idempotent in normal mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_update
+      register: policy_update_rerun
+      failed_when: policy_update_rerun.changed
+
+    - name: Verify update is idempotent in check mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_update
+      check_mode: true
+      register: policy_update_check_rerun
+      failed_when: policy_update_check_rerun.changed
+
+    - name: Check policy date-only update
+      ansible.oci.oci_identity_policy: &policy_date_update
+        policy_id: "{{ policy_create.resource.id }}"
+        version_date: "2022-01-17"
+      check_mode: true
+      register: policy_date_update_check
+      failed_when: not policy_date_update_check.changed
+
+    - name: Verify date-only check left policy unchanged
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_date_update_check_info
+      failed_when: >-
+        policy_date_update_check_info.policies | length != 1 or
+        policy_date_update_check_info.policies[0].version_date[:10] != '2021-01-17' or
+        policy_date_update_check_info.policies[0].statements | sort != oci_identity_policy_updated_statements | sort or
+        policy_date_update_check_info.policies[0].freeform_tags.phase != 'update'
+
+    - name: Update policy date without changing statements
+      ansible.oci.oci_identity_policy:
+        <<: *policy_date_update
+      register: policy_date_update
+
+    - name: Verify date-only policy update
+      ansible.builtin.assert:
+        that:
+          - policy_date_update.changed
+          - policy_date_update.resource.version_date[:10] == '2022-01-17'
+          - policy_date_update.resource.statements | sort == oci_identity_policy_updated_statements | sort
+          - policy_date_update.resource.freeform_tags.phase == 'update'
+
+    - name: Wait for date-only policy update
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_after_date_update
+      until: >-
+        policy_after_date_update.policies | length == 1 and
+        policy_after_date_update.policies[0].version_date[:10] == '2022-01-17' and
+        policy_after_date_update.policies[0].statements | sort == oci_identity_policy_updated_statements | sort
+      retries: 12
+      delay: 5
+
+    - name: Verify date-only update is idempotent in normal mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_date_update
+      register: policy_date_update_rerun
+      failed_when: >-
+        policy_date_update_rerun.changed or
+        policy_date_update_rerun.resource.version_date[:10] != '2022-01-17'
+
+    - name: Verify date-only update is idempotent in check mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_date_update
+      check_mode: true
+      register: policy_date_update_check_rerun
+      failed_when: >-
+        policy_date_update_check_rerun.changed or
+        policy_date_update_check_rerun.resource.version_date[:10] != '2022-01-17'
+
+    - name: Check policy statement-only update
+      ansible.oci.oci_identity_policy: &policy_statements_update
+        policy_id: "{{ policy_create.resource.id }}"
+        statements: "{{ oci_identity_policy_initial_statements }}"
+      check_mode: true
+      register: policy_statements_update_check
+      failed_when: not policy_statements_update_check.changed
+
+    - name: Verify statement check kept the pinned date
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_statements_update_check_info
+      failed_when: >-
+        policy_statements_update_check_info.policies | length != 1 or
+        policy_statements_update_check_info.policies[0].version_date[:10] != '2022-01-17' or
+        policy_statements_update_check_info.policies[0].statements | sort != oci_identity_policy_updated_statements | sort
+
+    - name: Update policy statements and keep the pinned date
+      ansible.oci.oci_identity_policy:
+        <<: *policy_statements_update
+      register: policy_statements_update
+
+    - name: Verify statement-only policy update
+      ansible.builtin.assert:
+        that:
+          - policy_statements_update.changed
+          - policy_statements_update.resource.version_date[:10] == '2022-01-17'
+          - policy_statements_update.resource.statements | sort == oci_identity_policy_initial_statements | sort
+          - policy_statements_update.resource.freeform_tags.phase == 'update'
+
+    - name: Wait for policy statement update
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_after_statements_update
+      until: >-
+        policy_after_statements_update.policies | length == 1 and
+        policy_after_statements_update.policies[0].version_date[:10] == '2022-01-17' and
+        policy_after_statements_update.policies[0].statements | sort == oci_identity_policy_initial_statements | sort
+      retries: 12
+      delay: 5
+
+    - name: Verify statement-only update is idempotent in normal mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_statements_update
+      register: policy_statements_update_rerun
+      failed_when: >-
+        policy_statements_update_rerun.changed or
+        policy_statements_update_rerun.resource.version_date[:10] != '2022-01-17'
+
+    - name: Verify statement-only update is idempotent in check mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_statements_update
+      check_mode: true
+      register: policy_statements_update_check_rerun
+      failed_when: >-
+        policy_statements_update_check_rerun.changed or
+        policy_statements_update_check_rerun.resource.version_date[:10] != '2022-01-17'
+
+    - name: Check policy date clear
+      ansible.oci.oci_identity_policy: &policy_clear_version
+        policy_id: "{{ policy_create.resource.id }}"
+        version_date: ""
+      check_mode: true
+      register: policy_clear_version_check
+      failed_when: not policy_clear_version_check.changed
+
+    - name: Verify date clear check left policy unchanged
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_clear_version_check_info
+      failed_when: >-
+        policy_clear_version_check_info.policies | length != 1 or
+        policy_clear_version_check_info.policies[0].version_date[:10] != '2022-01-17' or
+        policy_clear_version_check_info.policies[0].statements | sort != oci_identity_policy_initial_statements | sort or
+        policy_clear_version_check_info.policies[0].freeform_tags.phase != 'update'
+
+    - name: Clear policy date
+      ansible.oci.oci_identity_policy:
+        <<: *policy_clear_version
+      register: policy_clear_version
+
+    - name: Verify cleared policy date and preserved statements
+      ansible.builtin.assert:
+        that:
+          - policy_clear_version.changed
+          - policy_clear_version.resource.version_date | default('', true) == ''
+          - policy_clear_version.resource.statements | sort == oci_identity_policy_initial_statements | sort
+          - policy_clear_version.resource.freeform_tags.phase == 'update'
+
+    - name: Wait for policy date clear
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_version_cleared
+      until: >-
+        policy_version_cleared.policies | length == 1 and
+        policy_version_cleared.policies[0].version_date | default('', true) == '' and
+        policy_version_cleared.policies[0].statements | sort == oci_identity_policy_initial_statements | sort
+      retries: 12
+      delay: 5
+
+    - name: Verify date clear is idempotent in normal mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_clear_version
+      register: policy_clear_version_rerun
+      failed_when: >-
+        policy_clear_version_rerun.changed or
+        policy_clear_version_rerun.resource.id != policy_create.resource.id
+
+    - name: Verify date clear is idempotent in check mode
+      ansible.oci.oci_identity_policy:
+        <<: *policy_clear_version
+      check_mode: true
+      register: policy_clear_version_check_rerun
+      failed_when: >-
+        policy_clear_version_check_rerun.changed or
+        policy_clear_version_check_rerun.resource.id != policy_create.resource.id
+
+    - name: Check policy deletion
+      ansible.oci.oci_identity_policy:
+        policy_id: "{{ policy_create.resource.id }}"
+        state: absent
+      check_mode: true
+      register: policy_delete_check
+      failed_when: not policy_delete_check.changed
+
+    - name: Verify deletion check left policy present
+      ansible.oci.oci_identity_policy_info:
+        policy_id: "{{ policy_create.resource.id }}"
+      register: policy_delete_check_info
+      failed_when: policy_delete_check_info.policies | length != 1
+
+    - name: Delete policy
+      ansible.oci.oci_identity_policy:
+        policy_id: "{{ policy_create.resource.id }}"
+        state: absent
+      register: policy_delete
+      failed_when: not policy_delete.changed
+
+    - name: Wait until policy is absent from active list
+      ansible.oci.oci_identity_policy_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_policy_integration_name }}"
+        lifecycle_state: active
+      register: policy_after_delete
+      until: policy_after_delete.policies | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify policy deletion is idempotent
+      ansible.oci.oci_identity_policy:
+        policy_id: "{{ policy_create.resource.id }}"
+        state: absent
+      register: policy_delete_rerun
+      failed_when: policy_delete_rerun.changed
+
+    - name: Verify policy deletion is idempotent in check mode
+      ansible.oci.oci_identity_policy:
+        policy_id: "{{ policy_create.resource.id }}"
+        state: absent
+      check_mode: true
+      register: policy_delete_check_rerun
+      failed_when: policy_delete_check_rerun.changed
+
+    - name: Clear policy cleanup markers after verified delete
+      ansible.builtin.set_fact:
+        oci_identity_policy_cleanup_id: ""
+        oci_identity_policy_cleanup_name: ""
+
+  always:
+    - name: Clean up the temporary policy
+      ansible.builtin.include_tasks: cleanup.yml
