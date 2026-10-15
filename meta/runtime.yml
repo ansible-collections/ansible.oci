@@ -10,6 +10,8 @@ action_groups:
     - oci_identity_user_info
     - oci_identity_user_group_membership
     - oci_identity_user_group_membership_info
+    - oci_identity_policy
+    - oci_identity_policy_info
     - oci_network_vcn
     - oci_network_vcn_info
     - oci_network_subnet
