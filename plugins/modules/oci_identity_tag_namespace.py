@@ -223,14 +223,14 @@ class OciIdentityTagNamespaceModule(OciResourceBase):
         """Return wait states for namespace activation and retirement.
 
         Returns:
-            The lifecycle state values used by the update waiter.
+            The list of lifecycle states used by the update waiter.
         """
         is_retired = self.module.params.get("is_retired")
         if is_retired is True:
-            return (LIFECYCLE_INACTIVE,)
+            return [LIFECYCLE_INACTIVE]
         if is_retired is False:
-            return (LIFECYCLE_ACTIVE,)
-        return (LIFECYCLE_ACTIVE, LIFECYCLE_INACTIVE)
+            return [LIFECYCLE_ACTIVE]
+        return [LIFECYCLE_ACTIVE, LIFECYCLE_INACTIVE]
 
     def filter_resources_by_display_name(self, resources, name_value):
         """Match names case-insensitively because the base filter uses exact case.
