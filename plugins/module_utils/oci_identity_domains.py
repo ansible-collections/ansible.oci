@@ -25,6 +25,7 @@ CORE_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
 CORE_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group"
 PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 OCI_TAGS_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:extension:OCITags"
+API_KEY_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:apikey"
 
 OCI_IDENTITY_DOMAIN_ARGS = {
     "domain_id": dict(type="str"),
@@ -196,6 +197,48 @@ def serialize_membership(member, group_id, user_id=None):
         "display_name": getattr(member, "display", None),
         "type": getattr(member, "type", None),
         "date_added": getattr(member, "date_added", None),
+    }
+
+
+def build_api_key_filter(user_id, fingerprint=None):
+    """Build a SCIM filter for API keys owned by one user.
+
+    Args:
+        user_id: SCIM identifier of the user.
+        fingerprint: Optional server-generated key fingerprint.
+
+    Returns:
+        A SCIM filter string.
+    """
+    conditions = [f'user.value eq "{escape_scim_filter_value(user_id)}"']
+    if fingerprint is not None:
+        conditions.append(
+            f'fingerprint eq "{escape_scim_filter_value(fingerprint)}"'
+        )
+    return " and ".join(conditions)
+
+
+def serialize_api_key(resource):
+    """Serialize an API key model into the module result shape.
+
+    Args:
+        resource: OCI API key model.
+
+    Returns:
+        A dictionary with API key fields used by Ansible.
+    """
+    meta = getattr(resource, "meta", None)
+    user = getattr(resource, "user", None)
+    return {
+        "id": getattr(resource, "id", None),
+        "ocid": getattr(resource, "ocid", None),
+        "domain_id": getattr(resource, "domain_ocid", None),
+        "user_id": getattr(user, "value", None),
+        "user_ocid": getattr(user, "ocid", None),
+        "key": getattr(resource, "key", None),
+        "fingerprint": getattr(resource, "fingerprint", None),
+        "time_created": getattr(meta, "created", None),
+        "time_modified": getattr(meta, "last_modified", None),
     }
 
 
