@@ -1,0 +1,95 @@
+---
+- name: Read the node pool before the test
+  ansible.oci.oci_oke_node_pool_info: &oci_oke_probe_options
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    cluster_id: "{{ oci_oke_np_cluster_id }}"
+    name: "{{ oci_oke_lookup_name }}"
+    node_pool_id: "{{ oci_oke_operation.node_pool_id | default(omit) }}"
+  register: oci_oke_before
+
+- name: Run the scenario in check mode
+  ansible.oci.oci_oke_node_pool: &oci_oke_operation_options
+    state: "{{ oci_oke_operation.state | default('present') }}"
+    node_pool_id: "{{ oci_oke_operation.node_pool_id | default(omit) }}"
+    compartment_id: "{{ oci_oke_operation.compartment_id | default(omit) }}"
+    cluster_id: "{{ oci_oke_operation.cluster_id | default(omit) }}"
+    name: "{{ oci_oke_operation.name | default(omit) }}"
+    node_shape: "{{ oci_oke_operation.node_shape | default(omit) }}"
+    node_shape_config: "{{ oci_oke_operation.node_shape_config | default(omit) }}"
+    node_source_details: "{{ oci_oke_operation.node_source_details | default(omit) }}"
+    node_config_details: "{{ oci_oke_operation.node_config_details | default(omit) }}"
+    freeform_tags: "{{ oci_oke_operation.freeform_tags | default(omit) }}"
+    wait: true
+  check_mode: true
+  register: oci_oke_prediction
+
+- name: Read the node pool after check mode
+  ansible.oci.oci_oke_node_pool_info:
+    <<: *oci_oke_probe_options
+  register: oci_oke_after_prediction
+
+- name: Check that check mode predicts a change without changing the node pool
+  ansible.builtin.assert:
+    that:
+      - oci_oke_prediction.changed | bool
+      - oci_oke_after_prediction.node_pools == oci_oke_before.node_pools
+
+- name: Run the scenario
+  ansible.oci.oci_oke_node_pool:
+    <<: *oci_oke_operation_options
+  register: oci_oke_applied
+
+- name: Save the node pool ID
+  ansible.builtin.set_fact:
+    oci_oke_np_node_pool_id: "{{ oci_oke_applied.resource.id }}"
+    oci_oke_np_cleanup_ids: "{{ (oci_oke_np_cleanup_ids | default([])) + [oci_oke_applied.resource.id] }}"
+  when: oci_oke_operation.state | default('present') == 'present'
+
+- name: Read the node pool after the change
+  ansible.oci.oci_oke_node_pool_info:
+    node_pool_id: "{{ oci_oke_np_node_pool_id }}"
+  register: oci_oke_after
+
+- name: Check the node pool state
+  ansible.builtin.assert:
+    that:
+      - oci_oke_applied.changed | bool
+      - >-
+        (oci_oke_operation.state | default('present') == 'absent'
+        and (oci_oke_after.node_pools | length == 0
+        or oci_oke_after.node_pools[0].lifecycle_state == 'DELETED'))
+        or (oci_oke_operation.state | default('present') == 'present'
+        and oci_oke_after.node_pools | length == 1
+        and oci_oke_after.node_pools[0].id == oci_oke_np_node_pool_id
+        and oci_oke_after.node_pools[0].lifecycle_state == 'ACTIVE')
+
+- name: Check the node pool settings
+  ansible.builtin.assert:
+    that:
+      - oci_oke_after.node_pools[0][item.key] == item.value
+  loop: "{{ oci_oke_expected | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Run the scenario again
+  ansible.oci.oci_oke_node_pool:
+    <<: *oci_oke_operation_options
+  register: oci_oke_rerun
+
+- name: Run the scenario again in check mode
+  ansible.oci.oci_oke_node_pool:
+    <<: *oci_oke_operation_options
+  check_mode: true
+  register: oci_oke_check_rerun
+
+- name: Read the node pool after both reruns
+  ansible.oci.oci_oke_node_pool_info:
+    node_pool_id: "{{ oci_oke_np_node_pool_id }}"
+  register: oci_oke_after_reruns
+
+- name: Check both reruns leave the node pool unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_oke_rerun.changed | bool
+      - not oci_oke_check_rerun.changed | bool
+      - oci_oke_after_reruns.node_pools == oci_oke_after.node_pools
