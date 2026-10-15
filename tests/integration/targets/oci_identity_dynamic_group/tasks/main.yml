@@ -1,0 +1,279 @@
+---
+- name: Validate domain creation inputs
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_identity_dynamic_group_integration_home_region | length > 0
+
+- name: Compute unique domain and dynamic group names
+  ansible.builtin.set_fact:
+    oci_identity_dynamic_group_domain_id: ""
+    oci_identity_dynamic_group_domain_url: ""
+    oci_identity_dynamic_group_cleanup_id: ""
+    oci_identity_dynamic_group_integration_domain_name: >-
+      {{ oci_identity_dynamic_group_integration_domain_name }}-{{ oci_integration_rpfx }}
+    oci_identity_dynamic_group_integration_name: >-
+      {{ oci_identity_dynamic_group_integration_name }}-{{ oci_integration_rpfx }}
+    oci_identity_dynamic_group_cleanup_name: >-
+      {{ oci_identity_dynamic_group_integration_name }}-{{ oci_integration_rpfx }}
+
+- name: Exercise identity-domain dynamic group lifecycle in a temporary domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create a temporary identity domain
+      ansible.oci.oci_identity_domain:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_dynamic_group_integration_domain_name }}"
+        description: "{{ oci_identity_dynamic_group_integration_domain_description }}"
+        home_region: "{{ oci_identity_dynamic_group_integration_home_region }}"
+        license_type: free
+      register: dynamic_group_domain_create
+
+    - name: Capture temporary identity domain endpoint
+      ansible.builtin.set_fact:
+        oci_identity_dynamic_group_domain_id: "{{ dynamic_group_domain_create.resource.id }}"
+        oci_identity_dynamic_group_domain_url: "{{ dynamic_group_domain_create.resource.url }}"
+
+    - name: Verify temporary identity domain endpoint
+      ansible.builtin.assert:
+        that:
+          - oci_identity_dynamic_group_domain_id | length > 0
+          - oci_identity_dynamic_group_domain_url | length > 0
+
+    - name: Wait for the temporary identity domain API
+      block:
+        - name: Poll temporary identity domain API
+          ansible.oci.oci_identity_dynamic_group_info:
+            domain_url: "{{ oci_identity_dynamic_group_domain_url }}"
+            name: "{{ oci_identity_dynamic_group_integration_name }}"
+          register: oci_identity_domain_readiness
+          until: oci_identity_domain_readiness is succeeded
+          retries: 12
+          delay: 5
+      rescue:
+        - name: Report temporary identity domain readiness failure
+          ansible.builtin.fail:
+            msg: >-
+              Identity domain API readiness retry limit reached
+              (12 retries, 5 seconds apart, excluding API request time).
+              Last API result: {{ ansible_failed_result }}
+
+    - name: Create dynamic group in check mode
+      ansible.oci.oci_identity_dynamic_group: &dynamic_group_create
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        name: "{{ oci_identity_dynamic_group_integration_name }}"
+        description: "{{ oci_identity_dynamic_group_integration_description }}"
+        matching_rule: "{{ oci_identity_dynamic_group_integration_matching_rule }}"
+        freeform_tags:
+          phase: create
+      check_mode: true
+      register: dynamic_group_check
+
+    - name: Verify check mode left dynamic group absent
+      ansible.oci.oci_identity_dynamic_group_info:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        name: "{{ oci_identity_dynamic_group_integration_name }}"
+      register: dynamic_group_check_info
+      failed_when: >-
+        not dynamic_group_check.changed or dynamic_group_check_info.dynamic_groups | length != 0
+
+    - name: Create dynamic group
+      ansible.oci.oci_identity_dynamic_group:
+        <<: *dynamic_group_create
+      register: dynamic_group_create_result
+
+    - name: Track dynamic group for cleanup
+      ansible.builtin.set_fact:
+        oci_identity_dynamic_group_cleanup_id: "{{ dynamic_group_create_result.resource.id }}"
+
+    - name: Verify create result identifies the new dynamic group
+      ansible.builtin.assert:
+        that:
+          - dynamic_group_create_result.changed
+          - dynamic_group_create_result.resource.id | length > 0
+          - dynamic_group_create_result.resource.domain_id == oci_identity_dynamic_group_domain_id
+          - >-
+            dynamic_group_create_result.resource.name ==
+            oci_identity_dynamic_group_integration_name
+          - dynamic_group_create_result.resource.freeform_tags.phase == 'create'
+          - dynamic_group_create_result.resource.description == oci_identity_dynamic_group_integration_description
+          - dynamic_group_create_result.resource.matching_rule == oci_identity_dynamic_group_integration_matching_rule
+
+    - name: Wait until dynamic group is visible by name
+      ansible.oci.oci_identity_dynamic_group_info:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        name: "{{ oci_identity_dynamic_group_integration_name }}"
+      register: dynamic_group_by_name
+      until: dynamic_group_by_name.dynamic_groups | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Verify create is idempotent by name
+      ansible.oci.oci_identity_dynamic_group:
+        <<: *dynamic_group_create
+      register: dynamic_group_create_rerun
+      failed_when: dynamic_group_create_rerun.changed
+
+    - name: Verify create is unchanged in check mode
+      ansible.oci.oci_identity_dynamic_group:
+        <<: *dynamic_group_create
+      check_mode: true
+      register: dynamic_group_create_check_rerun
+      failed_when: dynamic_group_create_check_rerun.changed
+
+    - name: Retrieve dynamic group by ID through its domain URL
+      ansible.oci.oci_identity_dynamic_group_info:
+        domain_url: "{{ oci_identity_dynamic_group_domain_url }}"
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      register: dynamic_group_by_id
+
+    - name: Verify info result identifies the same dynamic group
+      ansible.builtin.assert:
+        that:
+          - dynamic_group_by_id.dynamic_groups | length == 1
+          - dynamic_group_by_id.dynamic_groups[0].id == dynamic_group_create_result.resource.id
+          - dynamic_group_by_id.dynamic_groups[0].domain_id == oci_identity_dynamic_group_domain_id
+          - dynamic_group_by_id.dynamic_groups[0].name == oci_identity_dynamic_group_integration_name
+          - dynamic_group_by_id.dynamic_groups[0].description == oci_identity_dynamic_group_integration_description
+          - dynamic_group_by_id.dynamic_groups[0].matching_rule == oci_identity_dynamic_group_integration_matching_rule
+
+    - name: Update dynamic group in check mode
+      ansible.oci.oci_identity_dynamic_group: &dynamic_group_updated
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+        name: "{{ oci_identity_dynamic_group_integration_name }}-updated"
+        description: "{{ oci_identity_dynamic_group_integration_description }} updated"
+        matching_rule: "ALL { {{ oci_identity_dynamic_group_integration_matching_rule }} }"
+        freeform_tags:
+          phase: update
+      check_mode: true
+      register: dynamic_group_update_check
+      failed_when: not dynamic_group_update_check.changed
+
+    - name: Verify update check mode left dynamic group unchanged
+      ansible.oci.oci_identity_dynamic_group_info:
+        domain_url: "{{ oci_identity_dynamic_group_domain_url }}"
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      register: dynamic_group_update_check_info
+      failed_when: >-
+        dynamic_group_update_check_info.dynamic_groups | length != 1 or
+        dynamic_group_update_check_info.dynamic_groups[0].name !=
+        oci_identity_dynamic_group_integration_name or
+        dynamic_group_update_check_info.dynamic_groups[0].description !=
+        oci_identity_dynamic_group_integration_description or
+        dynamic_group_update_check_info.dynamic_groups[0].matching_rule !=
+        oci_identity_dynamic_group_integration_matching_rule or
+        dynamic_group_update_check_info.dynamic_groups[0].freeform_tags.get('phase') != 'create'
+
+    - name: Update dynamic group
+      ansible.oci.oci_identity_dynamic_group:
+        <<: *dynamic_group_updated
+      register: dynamic_group_update
+
+    - name: Verify update
+      ansible.builtin.assert:
+        that:
+          - dynamic_group_update.changed
+          - >-
+            dynamic_group_update.resource.name ==
+            oci_identity_dynamic_group_integration_name + '-updated'
+          - dynamic_group_update.resource.freeform_tags.phase == 'update'
+          - dynamic_group_update.resource.description == oci_identity_dynamic_group_integration_description + ' updated'
+          - dynamic_group_update.resource.matching_rule == 'ALL { ' + oci_identity_dynamic_group_integration_matching_rule + ' }'
+
+    - name: Wait until updated dynamic group is visible
+      ansible.oci.oci_identity_dynamic_group_info:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      register: dynamic_group_after_update
+      until: >-
+        dynamic_group_after_update.dynamic_groups | length == 1 and
+        dynamic_group_after_update.dynamic_groups[0].name ==
+        oci_identity_dynamic_group_integration_name + '-updated' and
+        dynamic_group_after_update.dynamic_groups[0].freeform_tags.get('phase') == 'update' and
+        dynamic_group_after_update.dynamic_groups[0].description ==
+        oci_identity_dynamic_group_integration_description + ' updated' and
+        dynamic_group_after_update.dynamic_groups[0].matching_rule ==
+        'ALL { ' + oci_identity_dynamic_group_integration_matching_rule + ' }'
+      retries: 12
+      delay: 5
+
+    - name: Rerun updated dynamic group configuration
+      ansible.oci.oci_identity_dynamic_group:
+        <<: *dynamic_group_updated
+      register: dynamic_group_update_rerun
+
+    - name: Assert update is idempotent on rerun
+      ansible.builtin.assert:
+        that:
+          - not dynamic_group_update_rerun.changed | bool
+          - dynamic_group_update_rerun.resource.id == dynamic_group_create_result.resource.id
+
+    - name: Verify update is unchanged in check mode
+      ansible.oci.oci_identity_dynamic_group:
+        <<: *dynamic_group_updated
+      check_mode: true
+      register: dynamic_group_update_check_rerun
+      failed_when: dynamic_group_update_check_rerun.changed
+
+    - name: Delete dynamic group in check mode
+      ansible.oci.oci_identity_dynamic_group:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        state: absent
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      check_mode: true
+      register: dynamic_group_delete_check
+      failed_when: not dynamic_group_delete_check.changed
+
+    - name: Verify delete check mode left dynamic group present
+      ansible.oci.oci_identity_dynamic_group_info:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      register: dynamic_group_delete_check_info
+      failed_when: dynamic_group_delete_check_info.dynamic_groups | length != 1
+
+    - name: Delete dynamic group
+      ansible.oci.oci_identity_dynamic_group:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        state: absent
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      register: dynamic_group_delete
+      failed_when: not dynamic_group_delete.changed
+
+    - name: Wait until deleted dynamic group is absent
+      ansible.oci.oci_identity_dynamic_group_info:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      register: dynamic_group_after_delete
+      until: dynamic_group_after_delete.dynamic_groups | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify dynamic group deletion is idempotent
+      ansible.oci.oci_identity_dynamic_group:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        state: absent
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      register: dynamic_group_delete_rerun
+      failed_when: dynamic_group_delete_rerun.changed
+
+    - name: Verify repeated deletion is unchanged in check mode
+      ansible.oci.oci_identity_dynamic_group:
+        domain_id: "{{ oci_identity_dynamic_group_domain_id }}"
+        state: absent
+        dynamic_group_id: "{{ dynamic_group_create_result.resource.id }}"
+      check_mode: true
+      register: dynamic_group_delete_check_rerun
+      failed_when: dynamic_group_delete_check_rerun.changed
+
+    - name: Clear dynamic group cleanup marker
+      ansible.builtin.set_fact:
+        oci_identity_dynamic_group_cleanup_id: ""
+        oci_identity_dynamic_group_cleanup_name: ""
+
+  always:
+    - name: Clean up temporary dynamic group and identity domain
+      ansible.builtin.include_tasks: cleanup.yml

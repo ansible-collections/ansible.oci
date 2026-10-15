@@ -1,0 +1,8 @@
+---
+oci_identity_dynamic_group_integration_home_region: "us-sanjose-1"
+oci_identity_dynamic_group_integration_domain_name: "oci-dynamic-group-integration-domain"
+oci_identity_dynamic_group_integration_domain_description: "OCI dynamic group integration test domain"
+oci_identity_dynamic_group_integration_name: "oci-dynamic-group-integration"
+oci_identity_dynamic_group_integration_description: "OCI dynamic group integration test"
+oci_identity_dynamic_group_integration_matching_rule: >-
+  instance.compartment.id = '{{ oci_integration_compartment_id }}'
