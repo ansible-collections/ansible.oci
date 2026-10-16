@@ -636,42 +636,53 @@ class OciAutonomousDatabaseModule(OciResourceBase):
         state = self.module.params.get("state", "present")
 
         if state == "absent":
-            self.validate_delete_request()
-            resource = self.resolve_target_resource()
-            if resource is None:
-                self.module.exit_json(changed=False)
-            if self.check_mode:
-                self.module.exit_json(changed=True)
-            self.delete_resource(resource)
-            self.module.exit_json(changed=True)
+            self._execute_absent()
+            return
 
         # state in (present, running, stopped)
         resource = self.resolve_target_resource()
         if resource is None:
-            if self.resource_id:
-                self.fail_missing_update_target()
-            self.validate_create_request()
-            if self.check_mode:
-                self.module.exit_json(changed=True)
-            resource = self.create_resource()
-            # With wait=False, create_resource() returns the raw create response
-            # without confirming the database reached AVAILABLE, so it is
-            # typically still PROVISIONING here. power_change_needed() would
-            # then see neither settled state and skip the transition even when
-            # one was requested. Only chase the power state when waiting is
-            # enabled, matching oci_instance.py's launch-then-stop handling; a
-            # wait=False run that requests running/stopped at create time
-            # settles into the OCI default (AVAILABLE) and needs a follow-up
-            # run to reach the requested power state.
-            if self.module.params.get("wait", True) and self.power_change_needed(
-                resource
-            ):
-                resource = self.apply_power_state(resource)
-            self.module.exit_json(
-                changed=True,
-                resource=self.serialize_result_resource(resource),
-            )
+            self._execute_create()
+            return
 
+        self._execute_update(resource)
+
+    def _execute_absent(self):
+        self.validate_delete_request()
+        resource = self.resolve_target_resource()
+        if resource is None:
+            self.module.exit_json(changed=False)
+        if self.check_mode:
+            self.module.exit_json(changed=True)
+        self.delete_resource(resource)
+        self.module.exit_json(changed=True)
+
+    def _execute_create(self):
+        if self.resource_id:
+            self.fail_missing_update_target()
+        self.validate_create_request()
+        if self.check_mode:
+            self.module.exit_json(changed=True)
+        resource = self.create_resource()
+        # With wait=False, create_resource() returns the raw create response
+        # without confirming the database reached AVAILABLE, so it is
+        # typically still PROVISIONING here. power_change_needed() would
+        # then see neither settled state and skip the transition even when
+        # one was requested. Only chase the power state when waiting is
+        # enabled, matching oci_instance.py's launch-then-stop handling; a
+        # wait=False run that requests running/stopped at create time
+        # settles into the OCI default (AVAILABLE) and needs a follow-up
+        # run to reach the requested power state.
+        if self.module.params.get("wait", True) and self.power_change_needed(
+            resource
+        ):
+            resource = self.apply_power_state(resource)
+        self.module.exit_json(
+            changed=True,
+            resource=self.serialize_result_resource(resource),
+        )
+
+    def _execute_update(self, resource):
         update_needed = self.needs_update(resource)
         power_needed = self.power_change_needed(resource)
         if self.check_mode:
