@@ -578,9 +578,7 @@ def test_execute_create_with_wait_false_skips_power_change(monkeypatch):
     monkeypatch.setattr(instance, "resolve_target_resource", lambda: None)
     monkeypatch.setattr(instance, "create_resource", lambda: provisioning)
     power_calls = []
-    monkeypatch.setattr(
-        instance, "apply_power_state", lambda resource: power_calls.append(resource)
-    )
+    monkeypatch.setattr(instance, "apply_power_state", power_calls.append)
     monkeypatch.setattr(
         instance, "serialize_result_resource", lambda resource: {"id": resource.id}
     )
