@@ -200,6 +200,137 @@ resource:
   description: The Autonomous Database resource.
   returned: when state != absent
   type: dict
+  contains:
+    id:
+      description: The OCID of the Autonomous Database.
+      type: str
+      returned: always
+      sample: ocid1.autonomousdatabase.oc1..example
+    name:
+      description: The display name of the Autonomous Database.
+      type: str
+      returned: always
+      sample: example-adb
+    db_name:
+      description: The database name.
+      type: str
+      returned: always
+      sample: exampleadb
+    compartment_id:
+      description: The OCID of the compartment containing the database.
+      type: str
+      returned: always
+      sample: ocid1.compartment.oc1..example
+    lifecycle_state:
+      description: The current lifecycle state of the database.
+      type: str
+      returned: always
+      sample: AVAILABLE
+    db_workload:
+      description: The workload type of the database.
+      type: str
+      returned: always
+      sample: OLTP
+    compute_model:
+      description: The compute model of the database.
+      type: str
+      returned: always
+      sample: ECPU
+    compute_count:
+      description: The compute amount (ECPUs) available to the database.
+      type: float
+      returned: always
+      sample: 2.0
+    cpu_core_count:
+      description: The number of OCPU cores available to the database.
+      type: int
+      returned: always
+      sample: null
+    data_storage_size_in_tbs:
+      description: The size, in terabytes, of the data volume.
+      type: int
+      returned: always
+      sample: 1
+    is_auto_scaling_enabled:
+      description: Whether compute auto scaling is enabled.
+      type: bool
+      returned: always
+      sample: true
+    is_free_tier:
+      description: Whether the database is an Always Free resource.
+      type: bool
+      returned: always
+      sample: false
+    is_mtls_connection_required:
+      description: Whether mutual TLS is required for connections.
+      type: bool
+      returned: always
+      sample: true
+    license_model:
+      description: The Oracle license model that applies to the database.
+      type: str
+      returned: always
+      sample: LICENSE_INCLUDED
+    db_version:
+      description: The Oracle Database version.
+      type: str
+      returned: always
+      sample: "19c"
+    subnet_id:
+      description: The OCID of the subnet for a private endpoint.
+      type: str
+      returned: always
+      sample: null
+    nsg_ids:
+      description: The network security groups the private endpoint belongs to.
+      type: list
+      elements: str
+      returned: always
+      sample: []
+    private_endpoint_ip:
+      description: The private endpoint IP address of the database.
+      type: str
+      returned: always
+      sample: null
+    whitelisted_ips:
+      description: The client IP access control list.
+      type: list
+      elements: str
+      returned: always
+      sample: []
+    connection_strings:
+      description: The connection strings used to connect to the database.
+      type: dict
+      returned: always
+      sample: {}
+    freeform_tags:
+      description: Free-form tags applied to the database.
+      type: dict
+      returned: always
+      sample: {"environment": "production"}
+    defined_tags:
+      description: Defined tags applied to the database.
+      type: dict
+      returned: always
+      sample: {"Operations": {"CostCenter": "42"}}
+    time_created:
+      description: The date and time the database was created, in RFC3339 format.
+      type: str
+      returned: always
+      sample: "2026-01-01T00:00:00.000Z"
+  sample:
+    id: ocid1.autonomousdatabase.oc1..example
+    name: example-adb
+    db_name: exampleadb
+    compartment_id: ocid1.compartment.oc1..example
+    lifecycle_state: AVAILABLE
+    db_workload: OLTP
+    compute_model: ECPU
+    compute_count: 2.0
+    data_storage_size_in_tbs: 1
+    is_auto_scaling_enabled: true
+    license_model: LICENSE_INCLUDED
+    time_created: "2026-01-01T00:00:00.000Z"
 """
 
 from ansible.module_utils.basic import AnsibleModule
