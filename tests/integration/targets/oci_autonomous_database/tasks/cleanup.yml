@@ -1,0 +1,21 @@
+---
+- name: Run autonomous database cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked autonomous database during cleanup
+      ansible.oci.oci_autonomous_database:
+        state: absent
+        autonomous_database_id: "{{ oci_adb_id }}"
+      when: oci_adb_id | default('') | length > 0
+      register: oci_cleanup_adb
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_adb is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup task above.
