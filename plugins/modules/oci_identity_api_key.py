@@ -114,6 +114,8 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains i
 
 oci = import_oci_sdk()[0]
 
+SELF_CHANGE_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:extension:selfChange:User"
+
 
 class OciIdentityApiKeyModule(OciIdentityDomainResourceBase):
     """Manage API keys through the OCI Identity Domains client."""
@@ -227,10 +229,15 @@ class OciIdentityApiKeyModule(OciIdentityDomainResourceBase):
         """
         api_key = build_model(
             {
-                "schemas": build_schemas(API_KEY_SCHEMA),
+                "schemas": build_schemas(API_KEY_SCHEMA) + [SELF_CHANGE_SCHEMA],
                 "key": self.module.params["key"],
                 "user": oci.identity_domains.models.ApiKeyUser(
                     value=self.module.params["user_id"]
+                ),
+                "urn_ietf_params_scim_schemas_oracle_idcs_extension_self_change_user": (
+                    oci.identity_domains.models.ExtensionSelfChangeUser(
+                        allow_self_change=True
+                    )
                 ),
             },
             oci.identity_domains.models.ApiKey,
@@ -243,7 +250,22 @@ class OciIdentityApiKeyModule(OciIdentityDomainResourceBase):
         Args:
             resource: API key model selected by fingerprint.
         """
-        self.call_with_retry(self.client.delete_api_key, api_key_id=resource.id)
+        # The SDK delete method omits the allowSelfChange query parameter.
+        # The base client retains the configured signer and connection settings.
+        self.call_with_retry(
+            self.client.base_client.call_api,
+            resource_path="/admin/v1/ApiKeys/{apiKeyId}",
+            method="DELETE",
+            path_params={"apiKeyId": resource.id},
+            query_params={"allowSelfChange": True},
+            header_params={
+                "accept": "application/json, application/scim+json",
+                "content-type": "application/json",
+            },
+            operation_name="delete_api_key",
+            api_reference_link="https://docs.oracle.com/iaas/api/#/en/identity-domains/v1/ApiKey/DeleteApiKey",
+            required_arguments=["apiKeyId"],
+        )
 
 
 def main():

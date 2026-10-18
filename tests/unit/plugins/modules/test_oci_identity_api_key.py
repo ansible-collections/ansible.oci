@@ -3,7 +3,9 @@ __metaclass__ = type
 
 import types
 
+import oci.identity_domains
 import pytest
+from oci.base_client import BaseClient
 
 from .conftest import (
     DummyModule,
@@ -31,6 +33,7 @@ def load_api_key_module(monkeypatch):
         model_names=(
             "ApiKey",
             "ApiKeyUser",
+            "ExtensionSelfChangeUser",
             "ExtensionOCITags",
             "FreeformTags",
             "DefinedTags",
@@ -94,6 +97,7 @@ def test_main_defines_api_key_contract(monkeypatch):
     assert captured["argument_spec"]["key"]["no_log"] is True
     assert captured["argument_spec"]["fingerprint"] == {"type": "str"}
     assert captured["argument_spec"]["state"]["default"] == "present"
+    assert "allow_self_change" not in captured["argument_spec"]
 
 
 def test_create_validates_key_and_user(monkeypatch):
@@ -199,10 +203,38 @@ def test_create_uses_api_key_schema_and_user_model(monkeypatch):
 
     assert created.id == "key1"
     api_key = calls[0]["api_key"]
-    assert api_key.schemas == [module_obj.API_KEY_SCHEMA]
+    assert api_key.schemas == [module_obj.API_KEY_SCHEMA, module_obj.SELF_CHANGE_SCHEMA]
     assert api_key.key == "PUBLIC"
     assert api_key.user.value == "user1"
+    extension = api_key.urn_ietf_params_scim_schemas_oracle_idcs_extension_self_change_user
+    assert extension.allow_self_change is True
     assert not hasattr(api_key, "fingerprint")
+
+
+@pytest.mark.parametrize("user_id", ["self-user", "other-user"])
+def test_create_serializes_self_change_with_real_sdk(monkeypatch, user_id):
+    """Check the SDK payload without changing the requested user."""
+    module_obj = load_api_key_module(monkeypatch)
+    monkeypatch.setattr(module_obj, "oci", oci)
+    calls = []
+    instance = make_api_key(
+        module_obj,
+        {"user_id": user_id, "key": "PUBLIC"},
+        client=types.SimpleNamespace(
+            create_api_key=lambda **kwargs: calls.append(kwargs) or FakeResponse()
+        ),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+
+    instance.create_resource()
+
+    serializer = object.__new__(BaseClient)
+    serializer.complex_type_mappings = oci.identity_domains.models.identity_domains_type_mapping
+    payload = serializer.sanitize_for_serialization(calls[0]["api_key"])
+    assert payload["user"] == {"value": user_id}
+    assert payload["key"] == "PUBLIC"
+    assert payload[module_obj.SELF_CHANGE_SCHEMA] == {"allowSelfChange": True}
+    assert module_obj.SELF_CHANGE_SCHEMA in payload["schemas"]
 
 
 def test_delete_uses_resource_scim_id(monkeypatch):
@@ -217,14 +249,57 @@ def test_delete_uses_resource_scim_id(monkeypatch):
         module_obj,
         {"user_id": "user1", "key": "PUBLIC"},
         client=types.SimpleNamespace(
-            delete_api_key=lambda **kwargs: calls.append(kwargs) or FakeResponse()
+            base_client=types.SimpleNamespace(
+                call_api=lambda **kwargs: calls.append(kwargs) or FakeResponse()
+            ),
         ),
     )
     monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
 
     instance.delete_resource(FakeModel(id="scim-key-id"))
 
-    assert calls == [{"api_key_id": "scim-key-id"}]
+    assert len(calls) == 1
+    request = calls[0]
+    assert request["resource_path"] == "/admin/v1/ApiKeys/{apiKeyId}"
+    assert request["method"] == "DELETE"
+    assert request["path_params"] == {"apiKeyId": "scim-key-id"}
+    assert request["query_params"] == {"allowSelfChange": True}
+    assert request["operation_name"] == "delete_api_key"
+    serializer = object.__new__(BaseClient)
+    serializer.complex_type_mappings = oci.identity_domains.models.identity_domains_type_mapping
+    assert serializer.process_query_params(request["query_params"]) == {"allowSelfChange": "true"}
+
+
+@pytest.mark.parametrize("operation", ["create", "delete"])
+@pytest.mark.parametrize("status", [401, 403])
+def test_self_change_preserves_access_denied_errors(monkeypatch, operation, status):
+    """Return access errors without a fallback request."""
+    module_obj = load_api_key_module(monkeypatch)
+    error = module_obj.oci.exceptions.ServiceError(status, "access denied")
+    calls = []
+
+    def deny_access(**kwargs):
+        calls.append(kwargs)
+        raise error
+
+    instance = make_api_key(
+        module_obj,
+        {"user_id": "other-user", "key": "PUBLIC"},
+        client=types.SimpleNamespace(
+            create_api_key=deny_access,
+            base_client=types.SimpleNamespace(call_api=deny_access),
+        ),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+
+    with pytest.raises(type(error)) as failure:
+        if operation == "create":
+            instance.create_resource()
+        else:
+            instance.delete_resource(FakeModel(id="other-user-key"))
+
+    assert failure.value is error
+    assert len(calls) == 1
 
 
 def test_execute_present_check_mode_reports_change_without_create(monkeypatch):
@@ -356,14 +431,14 @@ def test_resource_lifecycle_uses_scoped_paginated_lookup(
         client=types.SimpleNamespace(
             list_api_keys=list_api_keys,
             create_api_key=create_api_key,
-            delete_api_key=delete_api_key,
+            base_client=types.SimpleNamespace(call_api=delete_api_key),
         ),
         check_mode=check_mode,
     )
     monkeypatch.setattr(
         instance,
         "call_with_retry",
-        lambda method, **kwargs: method(**kwargs),
+        lambda fn, **kwargs: fn(**kwargs),
     )
 
     expected_changed = (
@@ -387,7 +462,9 @@ def test_resource_lifecycle_uses_scoped_paginated_lookup(
         assert len(create_calls) == 1
         assert create_calls[0]["api_key"].key == "PUBLIC"
     else:
-        assert delete_calls == [{"api_key_id": "target-id"}]
+        assert len(delete_calls) == 1
+        assert delete_calls[0]["path_params"] == {"apiKeyId": "target-id"}
+        assert delete_calls[0]["query_params"] == {"allowSelfChange": True}
 
 
 def test_serialize_api_key_result_shape(monkeypatch):
