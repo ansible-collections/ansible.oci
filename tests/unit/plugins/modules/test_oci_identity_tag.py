@@ -81,7 +81,8 @@ def test_main_declares_tag_contract(monkeypatch):
     assert "tag_id" not in spec
 
 
-def test_create_sends_sdk_model_and_namespace(monkeypatch):
+@pytest.mark.parametrize("is_cost_tracking", [True, False])
+def test_create_sends_sdk_model_and_namespace(monkeypatch, is_cost_tracking):
     """Test create sends sdk model and namespace behavior."""
     module_obj = load_tag_module(monkeypatch)
     calls = []
@@ -95,7 +96,11 @@ def test_create_sends_sdk_model_and_namespace(monkeypatch):
             "tag_namespace_id": "ns1",
             "name": "Environment",
             "description": "Deployment environment",
-            "is_cost_tracking": True,
+            "is_cost_tracking": is_cost_tracking,
+            "freeform_tags": {},
+            "defined_tags": {},
+            "is_retired": False,
+            "config_profile_name": "DEFAULT",
             "validator": {"validator_type": "enum", "values": ["Dev", "Prod"]},
         },
         client,
@@ -107,6 +112,12 @@ def test_create_sends_sdk_model_and_namespace(monkeypatch):
     details = calls[0]["create_tag_details"]
     assert isinstance(details, module_obj.oci.identity.models.CreateTagDetails)
     assert details.name == "Environment"
+    assert details.is_cost_tracking is is_cost_tracking
+    assert details.freeform_tags == {}
+    assert details.defined_tags == {}
+    assert not hasattr(details, "tag_namespace_id")
+    assert not hasattr(details, "is_retired")
+    assert not hasattr(details, "config_profile_name")
     assert isinstance(details.validator, module_obj.oci.identity.models.EnumTagDefinitionValidator)
     assert details.validator.values == ["Dev", "Prod"]
 
@@ -133,6 +144,7 @@ def test_default_validator_accepts_ansible_null_values(monkeypatch):
     instance.validate_validator()
     validator = module_obj.build_tag_validator(instance.module.params["validator"])
     assert isinstance(validator, module_obj.oci.identity.models.DefaultTagDefinitionValidator)
+    assert not hasattr(validator, "values")
 
 
 @pytest.mark.parametrize(
@@ -217,10 +229,16 @@ def test_update_validator_uses_model_and_keeps_arbitrary_key_case(monkeypatch):
     instance = make_tag(module_obj, {"tag_namespace_id": "ns1", "name": "T"})
     details = instance.build_update_details(
         {"validator": {"validator_type": "enum", "values": ["X"]},
-         "defined_tags": {"validator_type": {"MixedCase": "v"}}}
+         "defined_tags": {"validator_type": {"MixedCase": "v"}},
+         "freeform_tags": {}, "is_cost_tracking": False, "description": None}
     )
     assert isinstance(details.validator, module_obj.oci.identity.models.EnumTagDefinitionValidator)
     assert details.defined_tags == {"validator_type": {"MixedCase": "v"}}
+    assert details.validator.validator_type == "ENUM"
+    assert details.validator.values == ["X"]
+    assert details.freeform_tags == {}
+    assert details.is_cost_tracking is False
+    assert not hasattr(details, "description")
 
 
 def test_absent_delete_retires_before_delete(monkeypatch):

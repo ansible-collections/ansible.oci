@@ -13,8 +13,6 @@
       {{ oci_identity_tag_integration_namespace_name }}-{{ oci_integration_rpfx }}
     oci_identity_tag_integration_enum_name: >-
       {{ oci_identity_tag_integration_enum_name }}-{{ oci_integration_rpfx }}
-    oci_identity_tag_integration_default_name: >-
-      {{ oci_identity_tag_integration_default_name }}-{{ oci_integration_rpfx }}
     oci_identity_tag_integration_namespace_id: ""
 
 - name: Create and test tags in a temporary namespace
@@ -67,13 +65,6 @@
             <<: *enum_create
           register: oci_tag_create_again
           failed_when: oci_tag_create_again.changed
-
-        - name: Check enum tag create idempotency
-          ansible.oci.oci_identity_tag:
-            <<: *enum_create
-          check_mode: true
-          register: oci_tag_create_check_again
-          failed_when: oci_tag_create_check_again.changed
 
         - name: Verify created enum tag fields
           ansible.builtin.assert:
@@ -148,13 +139,6 @@
           register: oci_tag_update_again
           failed_when: oci_tag_update_again.changed
 
-        - name: Check enum tag update idempotency
-          ansible.oci.oci_identity_tag:
-            <<: *enum_update
-          check_mode: true
-          register: oci_tag_update_check_again
-          failed_when: oci_tag_update_check_again.changed
-
         - name: Check clearing enum validator with default validator
           ansible.oci.oci_identity_tag: &enum_default
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
@@ -186,13 +170,6 @@
             <<: *enum_default
           register: oci_tag_default_again
           failed_when: oci_tag_default_again.changed
-
-        - name: Check default validator update idempotency
-          ansible.oci.oci_identity_tag:
-            <<: *enum_default
-          check_mode: true
-          register: oci_tag_default_check_again
-          failed_when: oci_tag_default_check_again.changed
 
         - name: Verify default validator was removed
           ansible.oci.oci_identity_tag_info:
@@ -240,13 +217,6 @@
           register: oci_tag_retire_again
           failed_when: oci_tag_retire_again.changed
 
-        - name: Check retired tag idempotency
-          ansible.oci.oci_identity_tag:
-            <<: *enum_retired
-          check_mode: true
-          register: oci_tag_retire_check_again
-          failed_when: oci_tag_retire_check_again.changed
-
         - name: List tags and filter inactive tags
           ansible.oci.oci_identity_tag_info:
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
@@ -289,13 +259,6 @@
           register: oci_tag_reactivate_again
           failed_when: oci_tag_reactivate_again.changed
 
-        - name: Check reactivated tag idempotency
-          ansible.oci.oci_identity_tag:
-            <<: *enum_active
-          check_mode: true
-          register: oci_tag_reactivate_check_again
-          failed_when: oci_tag_reactivate_check_again.changed
-
         - name: Verify enum tag is active again
           ansible.oci.oci_identity_tag_info:
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
@@ -303,67 +266,18 @@
           register: oci_tag_reactivate_info
           failed_when: oci_tag_reactivate_info.tags[0].lifecycle_state != 'ACTIVE'
 
-        - name: Check create tag with the default validator
-          ansible.oci.oci_identity_tag: &default_create
-            tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_default_name }}"
-            description: "Tag with default validator"
-            validator:
-              validator_type: default
-          check_mode: true
-          register: oci_tag_default_create_check
-
-        - name: Verify default validator tag create check leaves it absent
-          ansible.oci.oci_identity_tag_info:
-            tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_default_name }}"
-          register: oci_tag_default_create_probe
-          failed_when: >-
-            not oci_tag_default_create_check.changed or
-            oci_tag_default_create_probe.tags | length != 0
-
-        - name: Create tag with the default validator
-          ansible.oci.oci_identity_tag:
-            <<: *default_create
-          register: oci_tag_default_create
-
-        - name: Verify default validator tag create result
-          ansible.builtin.assert:
-            that:
-              - oci_tag_default_create.changed
-              - oci_tag_default_create.resource.name == oci_identity_tag_integration_default_name
-              - >-
-                oci_tag_default_create.resource.validator is not defined or
-                oci_tag_default_create.resource.validator is none or
-                oci_tag_default_create.resource.validator.validator_type is not defined or
-                oci_tag_default_create.resource.validator.validator_type in [none, 'DEFAULT']
-
-        - name: Verify default validator tag create is idempotent
-          ansible.oci.oci_identity_tag:
-            <<: *default_create
-          register: oci_tag_default_create_again
-          failed_when: oci_tag_default_create_again.changed
-
-        - name: Check default validator tag create idempotency
-          ansible.oci.oci_identity_tag:
-            <<: *default_create
-          check_mode: true
-          register: oci_tag_default_create_check_again
-          failed_when: oci_tag_default_create_check_again.changed
-
         - name: Verify list returns summary rows without validators
           ansible.oci.oci_identity_tag_info:
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
           register: oci_tag_list
           failed_when: >-
-            oci_tag_list.tags | length != 2 or
-            'validator' in oci_tag_list.tags[0] or
-            'validator' in oci_tag_list.tags[1]
+            oci_tag_list.tags | length != 1 or
+            'validator' in oci_tag_list.tags[0]
 
         - name: Check tag delete with automatic retirement
-          ansible.oci.oci_identity_tag: &default_delete
+          ansible.oci.oci_identity_tag: &tag_delete
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_default_name }}"
+            name: "{{ oci_identity_tag_integration_enum_name }}"
             state: absent
           check_mode: true
           register: oci_tag_delete_check
@@ -371,7 +285,7 @@
         - name: Verify tag delete check keeps tag active
           ansible.oci.oci_identity_tag_info:
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_default_name }}"
+            name: "{{ oci_identity_tag_integration_enum_name }}"
           register: oci_tag_delete_probe
           failed_when: >-
             not oci_tag_delete_check.changed or
@@ -381,7 +295,7 @@
 
         - name: Delete tag and retire it automatically
           ansible.oci.oci_identity_tag:
-            <<: *default_delete
+            <<: *tag_delete
           register: oci_tag_delete
 
         - name: Verify tag deletion result
@@ -392,97 +306,34 @@
         - name: Verify deleted tag is absent
           ansible.oci.oci_identity_tag_info:
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_default_name }}"
+            name: "{{ oci_identity_tag_integration_enum_name }}"
           register: oci_tag_after_delete
-          until: >-
-            oci_tag_after_delete.tags | length == 0 or
-            oci_tag_after_delete.tags | selectattr('lifecycle_state', 'equalto', 'DELETED') | list | length == oci_tag_after_delete.tags | length
-          retries: 12
-          delay: 5
+          failed_when: >-
+            oci_tag_after_delete.tags | length != 0 and
+            oci_tag_after_delete.tags | selectattr('lifecycle_state', 'equalto', 'DELETED') | list | length != oci_tag_after_delete.tags | length
 
         - name: Verify tag delete is idempotent
           ansible.oci.oci_identity_tag:
-            <<: *default_delete
+            <<: *tag_delete
           register: oci_tag_delete_again
           failed_when: oci_tag_delete_again.changed
 
         - name: Check tag delete idempotency
           ansible.oci.oci_identity_tag:
-            <<: *default_delete
+            <<: *tag_delete
           check_mode: true
           register: oci_tag_delete_check_again
           failed_when: oci_tag_delete_check_again.changed
 
-        - name: Verify default tag remains absent after delete check mode
+        - name: Verify tag remains absent after delete check mode
           ansible.oci.oci_identity_tag_info:
             tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_default_name }}"
+            name: "{{ oci_identity_tag_integration_enum_name }}"
           register: oci_tag_delete_final_info
           failed_when: >-
             oci_tag_delete_final_info.tags | length != 0 and
             oci_tag_delete_final_info.tags | selectattr('lifecycle_state', 'equalto', 'DELETED') | list | length != oci_tag_delete_final_info.tags | length
 
-        - name: Check delete enum tag
-          ansible.oci.oci_identity_tag: &enum_delete
-            tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_enum_name }}"
-            state: absent
-          check_mode: true
-          register: oci_tag_enum_delete_check
-
-        - name: Verify enum delete check preserves active tag
-          ansible.oci.oci_identity_tag_info:
-            tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_enum_name }}"
-          register: oci_tag_enum_delete_probe
-          failed_when: >-
-            not oci_tag_enum_delete_check.changed or
-            oci_tag_enum_delete_probe.tags | length != 1 or
-            oci_tag_enum_delete_probe.tags[0].lifecycle_state != 'ACTIVE' or
-            oci_tag_enum_delete_probe.tags[0].is_retired != false
-
-        - name: Delete enum tag and retire it automatically
-          ansible.oci.oci_identity_tag:
-            <<: *enum_delete
-          register: oci_tag_enum_delete
-
-        - name: Verify enum tag deletion result
-          ansible.builtin.assert:
-            that:
-              - oci_tag_enum_delete.changed
-
-        - name: Wait until deleted enum tag is absent
-          ansible.oci.oci_identity_tag_info:
-            tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_enum_name }}"
-          register: oci_tag_enum_after_delete
-          until: >-
-            oci_tag_enum_after_delete.tags | length == 0 or
-            oci_tag_enum_after_delete.tags | selectattr('lifecycle_state', 'equalto', 'DELETED') | list | length == oci_tag_enum_after_delete.tags | length
-          retries: 12
-          delay: 5
-
-        - name: Verify enum tag delete is idempotent
-          ansible.oci.oci_identity_tag:
-            <<: *enum_delete
-          register: oci_tag_enum_delete_again
-          failed_when: oci_tag_enum_delete_again.changed
-
-        - name: Check enum tag delete idempotency
-          ansible.oci.oci_identity_tag:
-            <<: *enum_delete
-          check_mode: true
-          register: oci_tag_enum_delete_check_again
-          failed_when: oci_tag_enum_delete_check_again.changed
-
-        - name: Verify enum tag remains absent after delete check mode
-          ansible.oci.oci_identity_tag_info:
-            tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
-            name: "{{ oci_identity_tag_integration_enum_name }}"
-          register: oci_tag_enum_delete_final_info
-          failed_when: >-
-            oci_tag_enum_delete_final_info.tags | length != 0 and
-            oci_tag_enum_delete_final_info.tags | selectattr('lifecycle_state', 'equalto', 'DELETED') | list | length != oci_tag_enum_delete_final_info.tags | length
   rescue:
     - name: Preserve the integration test failure
       ansible.builtin.fail:

@@ -131,8 +131,8 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     OCI_TAG_ARGS,
     OCI_WAIT_ARGS,
+    build_model,
     import_oci_sdk,
-    filter_none_values,
     normalize_enum_values,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
@@ -157,12 +157,12 @@ def build_tag_validator(validator):
     """
     if validator is None:
         return None
-    options = normalize_enum_values(validator, {"validator_type"})
-    if options["validator_type"] == "ENUM":
-        return oci.identity.models.EnumTagDefinitionValidator(**options)
-    return oci.identity.models.DefaultTagDefinitionValidator(
-        **filter_none_values(options)
+    model_class = (
+        oci.identity.models.EnumTagDefinitionValidator
+        if validator["validator_type"].upper() == "ENUM"
+        else oci.identity.models.DefaultTagDefinitionValidator
     )
+    return build_model(validator, model_class, enum_keys={"validator_type"})
 
 
 class OciIdentityTagModule(OciResourceBase):
@@ -288,14 +288,12 @@ class OciIdentityTagModule(OciResourceBase):
             The created tag model after any requested retirement update.
         """
         params = self.module.params
-        details = oci.identity.models.CreateTagDetails(
-            name=params["name"],
-            description=params["description"],
-            freeform_tags=params.get("freeform_tags"),
-            defined_tags=params.get("defined_tags"),
-            is_cost_tracking=params.get("is_cost_tracking"),
-            validator=build_tag_validator(params.get("validator")),
+        details = build_model(
+            params,
+            oci.identity.models.CreateTagDetails,
+            ("name", "description", "freeform_tags", "defined_tags", "is_cost_tracking"),
         )
+        details.validator = build_tag_validator(params.get("validator"))
         response = self.call_with_retry(
             self.client.create_tag,
             tag_namespace_id=params["tag_namespace_id"],
@@ -303,7 +301,7 @@ class OciIdentityTagModule(OciResourceBase):
         )
         resource = self.get_mutation_result(response.data, params["name"], ("ACTIVE",))
         if params.get("is_retired"):
-            update = oci.identity.models.UpdateTagDetails(is_retired=True)
+            update = self.build_update_details({"is_retired": True})
             response = self.call_with_retry(
                 self.client.update_tag,
                 tag_namespace_id=params["tag_namespace_id"],
@@ -350,7 +348,7 @@ class OciIdentityTagModule(OciResourceBase):
         fields = dict(update_model_fields)
         if "validator" in fields:
             fields["validator"] = build_tag_validator(fields["validator"])
-        return oci.identity.models.UpdateTagDetails(**fields)
+        return build_model(fields, oci.identity.models.UpdateTagDetails)
 
     def update_resource(self, resource):
         """Update a tag with both required path arguments.
@@ -393,7 +391,7 @@ class OciIdentityTagModule(OciResourceBase):
         params = self.module.params
         tag_name = params["name"]
         if not getattr(resource, "is_retired", False):
-            details = oci.identity.models.UpdateTagDetails(is_retired=True)
+            details = self.build_update_details({"is_retired": True})
             response = self.call_with_retry(
                 self.client.update_tag,
                 tag_namespace_id=params["tag_namespace_id"],
