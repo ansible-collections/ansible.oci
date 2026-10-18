@@ -153,7 +153,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     OCI_TAG_ARGS,
     OCI_WAIT_ARGS,
-    filter_none_values,
+    build_model,
     import_oci_sdk,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
@@ -176,16 +176,11 @@ def build_create_tag_namespace_details(params):
     Returns:
         The OCI create details model.
     """
-    details = filter_none_values(
-        {
-            "compartment_id": params.get("compartment_id"),
-            "name": params.get("name"),
-            "description": params.get("description"),
-            "freeform_tags": params.get("freeform_tags"),
-            "defined_tags": params.get("defined_tags"),
-        }
+    return build_model(
+        params,
+        oci.identity.models.CreateTagNamespaceDetails,
+        ("compartment_id", "name", "description", "freeform_tags", "defined_tags"),
     )
-    return oci.identity.models.CreateTagNamespaceDetails(**details)
 
 
 class OciIdentityTagNamespaceModule(OciResourceBase):
@@ -319,7 +314,9 @@ class OciIdentityTagNamespaceModule(OciResourceBase):
         Returns:
             The OCI update details model.
         """
-        return oci.identity.models.UpdateTagNamespaceDetails(**update_model_fields)
+        return build_model(
+            update_model_fields, oci.identity.models.UpdateTagNamespaceDetails
+        )
 
     def delete_resource(self, resource):
         """Retire and delete the namespace and its tag definitions.
@@ -339,8 +336,8 @@ class OciIdentityTagNamespaceModule(OciResourceBase):
             self.call_with_retry(
                 self.client.update_tag_namespace,
                 tag_namespace_id=resource.id,
-                update_tag_namespace_details=oci.identity.models.UpdateTagNamespaceDetails(
-                    is_retired=True
+                update_tag_namespace_details=build_model(
+                    {"is_retired": True}, oci.identity.models.UpdateTagNamespaceDetails
                 ),
             )
 

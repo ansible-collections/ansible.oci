@@ -67,24 +67,59 @@ def test_main_exposes_namespace_arguments(monkeypatch):
     assert "allow_duplicate_name" not in captured["argument_spec"]
 
 
-def test_create_details_include_scope_and_tags(monkeypatch):
-    """Verify create details preserve the compartment, name, and tags."""
+@pytest.mark.parametrize(
+    "description, tag_fields, expected_tags",
+    [
+        pytest.param(
+            "Operations tags",
+            {
+                "freeform_tags": {"owner": "platform"},
+                "defined_tags": {"Operations": {"CostCenter": "42"}},
+            },
+            {
+                "freeform_tags": {"owner": "platform"},
+                "defined_tags": {"Operations": {"CostCenter": "42"}},
+            },
+            id="populated",
+        ),
+        pytest.param("Operations tags", {}, {}, id="omitted"),
+        pytest.param(
+            "Operations tags",
+            {"freeform_tags": None, "defined_tags": None},
+            {},
+            id="unset",
+        ),
+        pytest.param(
+            "",
+            {"freeform_tags": {}, "defined_tags": {}},
+            {"freeform_tags": {}, "defined_tags": {}},
+            id="empty",
+        ),
+    ],
+)
+def test_create_details_include_scope_and_tags(
+    monkeypatch, description, tag_fields, expected_tags
+):
+    """Verify creation preserves supplied values and excludes unrelated parameters."""
     install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_identity_tag_namespace")
     details = module_obj.build_create_tag_namespace_details(
         {
             "compartment_id": "ocid1.tenancy.oc1..example",
             "name": "Operations",
-            "description": "Operations tags",
-            "freeform_tags": {"owner": "platform"},
-            "defined_tags": {"Operations": {"CostCenter": "42"}},
+            "description": description,
+            "state": "present",
+            "is_retired": False,
+            "wait": False,
+            **tag_fields,
         }
     )
-    assert details.compartment_id == "ocid1.tenancy.oc1..example"
-    assert details.name == "Operations"
-    assert details.description == "Operations tags"
-    assert details.freeform_tags == {"owner": "platform"}
-    assert details.defined_tags == {"Operations": {"CostCenter": "42"}}
+    assert details.__dict__ == {
+        "compartment_id": "ocid1.tenancy.oc1..example",
+        "name": "Operations",
+        "description": description,
+        **expected_tags,
+    }
 
 
 def test_name_lookup_is_case_insensitive_and_compartment_scoped(monkeypatch):
@@ -152,6 +187,29 @@ def test_update_plan_tracks_mutable_fields_and_retirement_wait_state(monkeypatch
     assert instance.update_wait_states == ["ACTIVE"]
     instance.module.params["is_retired"] = None
     assert instance.update_wait_states == ["ACTIVE", "INACTIVE"]
+
+
+def test_update_details_preserve_empty_values_and_false(monkeypatch):
+    """Verify updates can clear descriptions and tags and activate a namespace."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_identity_tag_namespace")
+    desired_fields = {
+        "description": "",
+        "is_retired": False,
+        "freeform_tags": {},
+        "defined_tags": {},
+    }
+    instance = make_namespace_module(module_obj, desired_fields)
+    resource = FakeModel(
+        id="ns",
+        description="Operations tags",
+        is_retired=True,
+        freeform_tags={"owner": "platform"},
+        defined_tags={"Operations": {"CostCenter": "42"}},
+    )
+    plan = instance.build_update_plan(resource)
+    details = instance.build_update_details(plan["update_model_fields"])
+    assert details.__dict__ == desired_fields
 
 
 def test_create_and_update_use_namespace_sdk_methods(monkeypatch):
