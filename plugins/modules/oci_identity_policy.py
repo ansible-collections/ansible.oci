@@ -147,7 +147,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     OCI_TAG_ARGS,
     OCI_WAIT_ARGS,
-    filter_none_values,
+    build_model,
     import_oci_sdk,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
@@ -175,7 +175,7 @@ def build_create_policy_details(params):
     Returns:
         The OCI CreatePolicyDetails model.
     """
-    details = filter_none_values(
+    return build_model(
         {
             "compartment_id": params.get("compartment_id"),
             "name": params.get("name"),
@@ -184,9 +184,9 @@ def build_create_policy_details(params):
             "version_date": params.get("version_date") or None,
             "freeform_tags": params.get("freeform_tags"),
             "defined_tags": params.get("defined_tags"),
-        }
+        },
+        oci.identity.models.CreatePolicyDetails,
     )
-    return oci.identity.models.CreatePolicyDetails(**details)
 
 
 def validate_policy_parameters(module):
@@ -353,7 +353,7 @@ class OciIdentityPolicyModule(OciResourceBase):
         details = dict(update_model_fields)
         if details.get("version_date") == "":
             details["version_date"] = oci.util.NONE_SENTINEL
-        return oci.identity.models.UpdatePolicyDetails(**details)
+        return build_model(details, oci.identity.models.UpdatePolicyDetails)
 
     def delete_resource(self, resource):
         """Delete a policy through the shared delete and wait helper.

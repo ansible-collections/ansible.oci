@@ -164,8 +164,9 @@ def test_create_requires_all_fields(monkeypatch, params, missing):
 def test_invalid_name_statements_or_date_fail_main_validation(monkeypatch, params, text):
     """Reject empty values and malformed policy dates."""
     module_obj = load_policy_module(monkeypatch)
+    module = DummyModule(params)
     with pytest.raises(FailJsonCalled) as failure:
-        module_obj.validate_policy_parameters(DummyModule(params))
+        module_obj.validate_policy_parameters(module)
     assert text in failure.value.payload["msg"]
 
 
@@ -208,15 +209,15 @@ def test_resource_contract(monkeypatch):
     assert instance.resource_id_param == "policy_id"
     assert instance.name_response_field == "name"
     assert instance.create_required_fields == ("compartment_id", "name", "description", "statements")
+    name_update = make_policy(module_obj, {"name": "new-name"})
+    current_name = FakeModel(name="audit")
     with pytest.raises(FailJsonCalled) as name_error:
-        make_policy(module_obj, {"name": "new-name"}).needs_update(
-            FakeModel(name="audit")
-        )
+        name_update.needs_update(current_name)
     assert "name" in name_error.value.payload["msg"]
+    compartment_update = make_policy(module_obj, {"compartment_id": "other"})
+    current_compartment = FakeModel(compartment_id="compartment1")
     with pytest.raises(FailJsonCalled) as compartment_error:
-        make_policy(module_obj, {"compartment_id": "other"}).needs_update(
-            FakeModel(compartment_id="compartment1")
-        )
+        compartment_update.needs_update(current_compartment)
     assert "compartment_id" in compartment_error.value.payload["msg"]
 
 
