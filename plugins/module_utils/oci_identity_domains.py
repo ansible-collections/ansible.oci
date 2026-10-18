@@ -16,6 +16,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
 )
+from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
 
 imported_oci_sdk = import_oci_sdk()
 oci = imported_oci_sdk[0]
@@ -23,6 +24,7 @@ HAS_OCI_SDK = imported_oci_sdk[1]
 
 CORE_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
 CORE_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group"
+CORE_DYNAMIC_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:DynamicResourceGroup"
 PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 OCI_TAGS_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:extension:OCITags"
 
@@ -58,6 +60,8 @@ def resolve_domain_url(module):
 class OciIdentityDomainsMixin:
     """Create a domain-scoped client and normalize SCIM list pagination."""
 
+    scim_response_attributes = ()
+
     def __init__(self, module):
         if not HAS_OCI_SDK:
             module.fail_json(msg=missing_required_lib("oci"))
@@ -85,6 +89,36 @@ class OciIdentityDomainsMixin:
             if not next_page:
                 return resources
             request_kwargs["page"] = next_page
+
+    def get_scim_response_kwargs(self):
+        """Return response attributes required by a SCIM resource.
+
+        Returns:
+            Keyword arguments for an Identity Domains response operation.
+        """
+        if not self.scim_response_attributes:
+            return {}
+        return {
+            "attributes": ",".join(self.scim_response_attributes),
+            "attribute_sets": ["default"],
+        }
+
+    def list_resources_by_display_name(self, name_value=None):
+        """List identity-domain resources with an optional exact display name.
+
+        Args:
+            name_value: Optional display name to match exactly.
+
+        Returns:
+            Matching SCIM resources from every response page.
+        """
+        kwargs = self.get_scim_response_kwargs()
+        if name_value is not None:
+            value = escape_scim_filter_value(name_value)
+            kwargs["filter"] = f'displayName eq "{value}"'
+        return self.list_all_resources(
+            getattr(self.client, self.list_resource_method), **kwargs
+        )
 
 
 def build_schemas(core_schema, include_tags=False):
@@ -187,6 +221,21 @@ def serialize_group(group):
     }
 
 
+def serialize_dynamic_group(group):
+    """Serialize a dynamic group and its rule fields.
+
+    Args:
+        group: Identity Domains dynamic group model.
+
+    Returns:
+        A dictionary with the group fields used by Ansible.
+    """
+    result = serialize_group(group)
+    result["description"] = getattr(group, "description", None)
+    result["matching_rule"] = getattr(group, "matching_rule", None)
+    return result
+
+
 def serialize_membership(member, group_id, user_id=None):
     return {
         "group_id": group_id,
@@ -242,6 +291,19 @@ class OciIdentityDomainResourceBase(OciIdentityDomainsMixin, OciResourceBase):
     update_field_specs = ()
     scim_update_paths = ()
     patch_method_name = None
+    resource_id_kwarg = None
+
+    def find_resources_by_name(self):
+        """Find resources by an exact SCIM display-name filter.
+
+        The shared OCI lookup filters local results instead of sending a SCIM filter.
+
+        Returns:
+            Matching Identity Domains resources, or an empty list without a name.
+        """
+        if not self.has_name_lookup_request:
+            return []
+        return self.list_resources_by_display_name(self.name_lookup_value)
 
     def build_extra_patch_operations(self, resource, current):
         """Return resource-specific operations after scalar field changes."""
@@ -260,13 +322,68 @@ class OciIdentityDomainResourceBase(OciIdentityDomainsMixin, OciResourceBase):
         return {"update_needed": bool(operations), "operations": operations}
 
     def update_resource(self, resource):
+        """Apply planned SCIM changes and return the updated model.
+
+        The inherited update method expects an OCI details model.
+        Identity Domains requires SCIM PATCH operations.
+
+        Args:
+            resource: Current Identity Domains model.
+
+        Returns:
+            The updated model returned by the SCIM PATCH operation.
+        """
         operations = self.get_update_plan(resource)["operations"]
         if not operations:
             return resource
         return self.call_with_retry(
             getattr(self.client, self.patch_method_name),
             **{
-                self.resource_id_param: resource.id,
+                self.resource_id_kwarg or self.resource_id_param: resource.id,
                 "patch_op": build_patch_op(operations),
+                **self.get_scim_response_kwargs(),
             },
         ).data
+
+
+class OciIdentityDomainInfoBase(OciIdentityDomainsMixin, OciInfoBase):
+    """Fetch and list identity-domain resources with SCIM response fields."""
+
+    def fetch_resources(self):
+        """Fetch one resource by ID or list resources by optional exact name.
+
+        The shared info flow does not apply Identity Domains SCIM filters or attributes.
+
+        Returns:
+            A list of Identity Domains resource models.
+
+        Raises:
+            NotImplementedError: If the required get or list method is unset.
+        """
+        resource_id = (
+            self.module.params.get(self.resource_id_param)
+            if self.resource_id_param
+            else None
+        )
+        if resource_id:
+            if self.resource_get_method is None:
+                raise NotImplementedError(
+                    f"{type(self).__name__} must define resource_get_method"
+                )
+            resource_id_kwarg = self.resource_id_kwarg or self.resource_id_param
+            return self.get_resource_by_id(
+                resource_id,
+                getattr(self.client, self.resource_get_method),
+                **{
+                    resource_id_kwarg: resource_id,
+                    **self.get_scim_response_kwargs(),
+                },
+            )
+
+        if self.list_resource_method is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} must define list_resource_method"
+            )
+        return self.list_resources_by_display_name(
+            self.module.params.get(self.name_filter_param)
+        )

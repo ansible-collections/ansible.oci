@@ -85,31 +85,19 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import OCI_AUTH_ARGS
 from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains import (
     OCI_IDENTITY_DOMAIN_ARGS,
-    OciIdentityDomainsMixin,
-    escape_scim_filter_value,
+    OciIdentityDomainInfoBase,
     serialize_group,
 )
-from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
 
 
-class OciIdentityGroupInfoModule(OciIdentityDomainsMixin, OciInfoBase):
+class OciIdentityGroupInfoModule(OciIdentityDomainInfoBase):
     results_key = "groups"
+    resource_id_param = "group_id"
+    resource_get_method = "get_group"
+    list_resource_method = "list_groups"
 
     def serialize_result_resource(self, resource):
         return serialize_group(resource)
-
-    def fetch_resources(self):
-        group_id = self.module.params.get("group_id")
-        if group_id:
-            return self.get_resource_by_id(
-                group_id, self.client.get_group, group_id=group_id
-            )
-        name = self.module.params.get("name")
-        kwargs = {}
-        if name is not None:
-            value = escape_scim_filter_value(name)
-            kwargs["filter"] = f'displayName eq "{value}"'
-        return self.list_all_resources(self.client.list_groups, **kwargs)
 
 
 def main():

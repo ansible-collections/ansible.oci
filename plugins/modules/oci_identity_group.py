@@ -107,7 +107,6 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains i
     OciIdentityDomainResourceBase,
     build_schemas,
     build_tags_extension,
-    escape_scim_filter_value,
     serialize_group,
 )
 
@@ -144,14 +143,6 @@ class OciIdentityGroupModule(OciIdentityDomainResourceBase):
             self.module.fail_json(
                 msg="Creating a group requires a nonempty name"
             )
-
-    def find_resources_by_name(self):
-        if not self.has_name_lookup_request:
-            return []
-        value = escape_scim_filter_value(self.name_lookup_value)
-        return self.list_all_resources(
-            self.client.list_groups, filter=f'displayName eq "{value}"'
-        )
 
     def get_resource_response(self, resource_id):
         return self.call_with_retry(self.client.get_group, group_id=resource_id)
