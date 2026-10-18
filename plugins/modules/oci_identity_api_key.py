@@ -100,6 +100,7 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
+    build_model,
     import_oci_sdk,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains import (
@@ -224,12 +225,15 @@ class OciIdentityApiKeyModule(OciIdentityDomainResourceBase):
         Returns:
             The created API key model.
         """
-        api_key = oci.identity_domains.models.ApiKey(
-            schemas=build_schemas(API_KEY_SCHEMA),
-            key=self.module.params["key"],
-            user=oci.identity_domains.models.ApiKeyUser(
-                value=self.module.params["user_id"]
-            ),
+        api_key = build_model(
+            {
+                "schemas": build_schemas(API_KEY_SCHEMA),
+                "key": self.module.params["key"],
+                "user": oci.identity_domains.models.ApiKeyUser(
+                    value=self.module.params["user_id"]
+                ),
+            },
+            oci.identity_domains.models.ApiKey,
         )
         return self.call_with_retry(self.client.create_api_key, api_key=api_key).data
 
