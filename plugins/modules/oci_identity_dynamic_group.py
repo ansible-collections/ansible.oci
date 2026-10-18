@@ -116,6 +116,7 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     OCI_TAG_ARGS,
+    build_model,
     import_oci_sdk,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains import (
@@ -142,12 +143,15 @@ def build_dynamic_group(params):
     tags = build_tags_extension(
         params.get("freeform_tags"), params.get("defined_tags")
     )
-    return oci.identity_domains.models.DynamicResourceGroup(
-        schemas=build_schemas(CORE_DYNAMIC_GROUP_SCHEMA, tags is not None),
-        display_name=params.get("name"),
-        description=params.get("description"),
-        matching_rule=params.get("matching_rule"),
-        urn_ietf_params_scim_schemas_oracle_idcs_extension_oci_tags=tags,
+    return build_model(
+        {
+            "schemas": build_schemas(CORE_DYNAMIC_GROUP_SCHEMA, tags is not None),
+            "display_name": params.get("name"),
+            "description": params.get("description"),
+            "matching_rule": params.get("matching_rule"),
+            "urn_ietf_params_scim_schemas_oracle_idcs_extension_oci_tags": tags,
+        },
+        oci.identity_domains.models.DynamicResourceGroup,
     )
 
 
