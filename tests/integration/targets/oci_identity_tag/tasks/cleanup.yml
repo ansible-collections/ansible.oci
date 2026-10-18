@@ -1,0 +1,43 @@
+---
+- name: Clean up temporary identity tags and namespace
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete temporary enum tag
+      ansible.oci.oci_identity_tag:
+        state: absent
+        tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
+        name: "{{ oci_identity_tag_integration_enum_name }}"
+      when: oci_identity_tag_integration_namespace_id | length > 0
+      register: oci_cleanup_enum_tag
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete temporary identity tag namespace by ID
+      ansible.oci.oci_identity_tag_namespace:
+        state: absent
+        tag_namespace_id: "{{ oci_identity_tag_integration_namespace_id }}"
+      when: oci_identity_tag_integration_namespace_id | length > 0
+      register: oci_cleanup_tag_namespace_by_id
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete temporary identity tag namespace by name when no ID was captured
+      ansible.oci.oci_identity_tag_namespace:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_identity_tag_integration_namespace_name }}"
+      when: oci_identity_tag_integration_namespace_id | length == 0
+      register: oci_cleanup_tag_namespace_by_name
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_enum_tag is not failed
+          - oci_cleanup_tag_namespace_by_id is not failed
+          - oci_cleanup_tag_namespace_by_name is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

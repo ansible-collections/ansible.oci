@@ -344,6 +344,7 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_COMMON_ARGS,
+    build_model,
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
@@ -382,16 +383,11 @@ def _build_endpoint_config(endpoint_config):
     Returns:
         A CreateClusterEndpointConfigDetails model, or None when unset.
     """
-    if endpoint_config is None:
-        return None
-    details = filter_none_values(
-        {
-            "subnet_id": endpoint_config.get("subnet_id"),
-            "nsg_ids": endpoint_config.get("nsg_ids"),
-            "is_public_ip_enabled": endpoint_config.get("is_public_ip_enabled"),
-        }
+    return build_model(
+        endpoint_config,
+        oci.container_engine.models.CreateClusterEndpointConfigDetails,
+        ("subnet_id", "nsg_ids", "is_public_ip_enabled"),
     )
-    return oci.container_engine.models.CreateClusterEndpointConfigDetails(**details)
 
 
 def _build_image_policy_config(image_policy_config):
@@ -412,9 +408,7 @@ def _build_image_policy_config(image_policy_config):
             "is_policy_enabled": image_policy_config.get("is_policy_enabled"),
             "key_details": (
                 [
-                    oci.container_engine.models.KeyDetails(
-                        **filter_none_values(key_detail)
-                    )
+                    build_model(key_detail, oci.container_engine.models.KeyDetails)
                     for key_detail in key_details
                 ]
                 if key_details is not None
@@ -437,8 +431,8 @@ def _build_cluster_pod_network_options(pod_network_options):
     if pod_network_options is None:
         return None
     return [
-        oci.container_engine.models.ClusterPodNetworkOptionDetails(
-            **filter_none_values(option)
+        build_model(
+            option, oci.container_engine.models.ClusterPodNetworkOptionDetails
         )
         for option in pod_network_options
     ]
@@ -455,33 +449,21 @@ def _build_cluster_create_options(options):
     """
     if options is None:
         return None
-    network_config = options.get("kubernetes_network_config")
-    add_ons = options.get("add_ons")
-    admission_controller_options = options.get("admission_controller_options")
     details = filter_none_values(
         {
             "service_lb_subnet_ids": options.get("service_lb_subnet_ids"),
             "ip_families": options.get("ip_families"),
-            "kubernetes_network_config": (
-                oci.container_engine.models.KubernetesNetworkConfig(
-                    **filter_none_values(network_config)
-                )
-                if network_config is not None
-                else None
+            "kubernetes_network_config": build_model(
+                options.get("kubernetes_network_config"),
+                oci.container_engine.models.KubernetesNetworkConfig,
             ),
-            "add_ons": (
-                oci.container_engine.models.AddOnOptions(
-                    **filter_none_values(add_ons)
-                )
-                if add_ons is not None
-                else None
+            "add_ons": build_model(
+                options.get("add_ons"),
+                oci.container_engine.models.AddOnOptions,
             ),
-            "admission_controller_options": (
-                oci.container_engine.models.AdmissionControllerOptions(
-                    **filter_none_values(admission_controller_options)
-                )
-                if admission_controller_options is not None
-                else None
+            "admission_controller_options": build_model(
+                options.get("admission_controller_options"),
+                oci.container_engine.models.AdmissionControllerOptions,
             ),
         }
     )

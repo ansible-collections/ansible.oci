@@ -488,6 +488,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     LIFECYCLE_FAILED,
     OCI_COMMON_ARGS,
+    build_model,
     filter_none_values,
     import_oci_sdk,
 )
@@ -696,7 +697,7 @@ def build_volume_source_details(source_details):
         return None
     model_name = SOURCE_DETAILS_MODELS[source_details["type"]]
     model_class = getattr(oci.core.models, model_name)
-    return model_class(**filter_none_values({"id": source_details.get("id")}))
+    return build_model(source_details, model_class, keys=["id"])
 
 
 def build_create_volume_details(params):
