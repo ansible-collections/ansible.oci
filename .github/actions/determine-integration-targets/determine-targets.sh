@@ -1,101 +1,62 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-pr_number="${1:?pr-number argument is required}"
-repo="${2:?repository argument is required}"
-changed_files_override="${CHANGED_FILES_OVERRIDE:-}"
+collection_path="${1:?collection-path argument is required}"
+base_sha="${2:?base-sha argument is required}"
 
-declare -A selected_targets=()
+# Use a disposable checkout. Keep the base and PR head on separate local branches.
+cd "${collection_path}"
+git branch -f ci-base "${base_sha}"
+git checkout -B ci-head HEAD
+merge_base="$(git merge-base ci-base HEAD)"
+changed_files="$(git diff --name-only "${merge_base}" HEAD)"
+
 run_all=false
-
-add_target() {
-  local target_name="$1"
-
-  if [[ -n "${target_name}" ]]; then
-    selected_targets["${target_name}"]=1
-  fi
-}
-
-classify_file() {
-  local file_path="$1"
-  local file_name target_name
-
+while IFS= read -r file_path; do
   case "${file_path}" in
-    plugins/module_utils/*)
+    Makefile|requirements.txt)
+      # Native collection selection ignores these files.
       run_all=true
-      ;;
-    plugins/modules/oci_*_info.py)
-      file_name="$(basename "${file_path}" .py)"
-      case "${file_name}" in
-        oci_image_info|oci_shape_info|oci_identity_availability_domain_info)
-          add_target "oci_instance"
-          ;;
-        *)
-          add_target "${file_name%_info}"
-          ;;
-      esac
-      ;;
-    plugins/modules/oci_*.py)
-      file_name="$(basename "${file_path}" .py)"
-      add_target "${file_name}"
-      ;;
-    plugins/doc_fragments/*)
-      ;;
-    plugins/*)
-      run_all=true
-      ;;
-    tests/integration/targets/oci_*/*)
-      target_name="${file_path#tests/integration/targets/}"
-      add_target "${target_name%%/*}"
-      ;;
-    tests/integration/*)
-      run_all=true
-      ;;
-    requirements.txt|Makefile)
-      run_all=true
-      ;;
-    *)
       ;;
   esac
-}
-
-emit_outputs() {
-  local targets
-
-  if [[ "${run_all}" == true ]]; then
-    {
-      echo "run-integration=true"
-      echo "targets="
-    } >> "${GITHUB_OUTPUT}"
-    return
-  fi
-
-  if [[ "${#selected_targets[@]}" -gt 0 ]]; then
-    targets="$(
-      printf '%s\n' "${!selected_targets[@]}" | sort -u | paste -sd' ' -
-    )"
-    {
-      echo "run-integration=true"
-      echo "targets=${targets}"
-    } >> "${GITHUB_OUTPUT}"
-    return
-  fi
-
-  {
-    echo "run-integration=false"
-    echo "targets="
-  } >> "${GITHUB_OUTPUT}"
-}
-
-if [[ -n "${changed_files_override}" ]]; then
-  changed_files="${changed_files_override}"
-else
-  changed_files="$(gh pr diff "${pr_number}" --name-only --repo "${repo}")"
-fi
-
-while IFS= read -r file_path; do
-  [[ -z "${file_path}" ]] && continue
-  classify_file "${file_path}"
 done <<< "${changed_files}"
 
-emit_outputs
+# Include renames as deletions. The old utility imports are absent from the PR head.
+deleted_utils="$(git diff --name-only --no-renames --diff-filter=D \
+  "${merge_base}" HEAD -- plugins/module_utils/)"
+if [[ -n "${deleted_utils}" ]]; then
+  run_all=true
+fi
+
+selection_args=(--changed --base-branch ci-base)
+if [[ "${run_all}" == true ]]; then
+  echo "Shared infrastructure or a removed utility requires all integration targets."
+  selection_args=()
+fi
+
+selected="$(ansible-test integration --list-targets --allow-destructive "${selection_args[@]}")"
+targets=()
+if [[ -n "${selected}" ]]; then
+  selected="$(printf '%s\n' "${selected}" | LC_ALL=C sort -u)"
+  while IFS= read -r target; do
+    # Target names enter a shell command in the integration execution job.
+    if [[ ! "${target}" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]]; then
+      echo "Invalid integration target: ${target}" >&2
+      exit 1
+    fi
+    targets+=("${target}")
+  done <<< "${selected}"
+fi
+
+run_integration=false
+if [[ "${#targets[@]}" -gt 0 ]]; then
+  run_integration=true
+  printf 'Selected integration target: %s\n' "${targets[@]}"
+else
+  echo "No integration targets selected."
+fi
+
+{
+  echo "run-integration=${run_integration}"
+  echo "targets=${targets[*]}"
+} >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT must be set}"

@@ -20,13 +20,18 @@ concurrency:
     }}
   cancel-in-progress: true
 
+env:
+  INTEGRATION_ANSIBLE_REF: stable-2.18
+  INTEGRATION_PYTHON_VERSION: '3.12'
+
 jobs:
   determine-integration-targets:
     name: Determine integration targets
     runs-on: ubuntu-latest
+    environment:
+      name: oci-integration
     permissions:
       contents: read
-      pull-requests: read
     outputs:
       run-integration: ${{ steps.determine.outputs.run-integration }}
       targets: ${{ steps.determine.outputs.targets }}
@@ -34,13 +39,32 @@ jobs:
       - name: Checkout base ref
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
+
+      - name: Checkout PR for target selection
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: ansible_collections/ansible/oci
+          fetch-depth: 0
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
+      - name: Set up Python ${{ env.INTEGRATION_PYTHON_VERSION }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.INTEGRATION_PYTHON_VERSION }}
+
+      - name: Install Ansible ${{ env.INTEGRATION_ANSIBLE_REF }}
+        run: python3 -m pip install "https://github.com/ansible/ansible/archive/${INTEGRATION_ANSIBLE_REF}.tar.gz" --disable-pip-version-check
 
       - name: Determine integration targets
         id: determine
         uses: ./.github/actions/determine-integration-targets
         with:
-          pr-number: ${{ github.event.pull_request.number }}
+          collection-path: ${{ github.workspace }}/ansible_collections/ansible/oci
+          base-sha: ${{ github.event.pull_request.base.sha }}
 
   integration-pr:
     name: Integration PR
@@ -70,9 +94,9 @@ jobs:
       - name: Run OCI integration workflow
         uses: ./.github/actions/run-oci-integration
         with:
-          ansible-ref: stable-2.18
+          ansible-ref: ${{ env.INTEGRATION_ANSIBLE_REF }}
           integration-targets: ${{ needs.determine-integration-targets.outputs.targets }}
-          python-version: '3.12'
+          python-version: ${{ env.INTEGRATION_PYTHON_VERSION }}
 
   integration-pr-check:
     if: always()
