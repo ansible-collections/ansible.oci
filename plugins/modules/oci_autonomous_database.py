@@ -15,7 +15,7 @@ description:
     behavior, and result shaping.
   - Create requests must omit C(autonomous_database_id). After create, capture
     the returned ID and use it for later tasks.
-version_added: "1.1.0"
+version_added: "1.2.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:
@@ -82,6 +82,12 @@ options:
     description:
       - The Autonomous Database workload type.
       - Set only at create time; the module does not change it afterwards.
+      - C(oltp) is Autonomous Transaction Processing, tuned for transactional workloads.
+      - C(dw) is Autonomous Data Warehouse, tuned for analytics and reporting workloads.
+      - C(ajd) is Autonomous JSON Database, an ATP-based workload licensed for JSON
+        document use cases.
+      - C(apex) is an ATP-based workload geared toward low-code app building, with
+        Oracle APEX and ORDS pre-provisioned.
     type: str
     choices: [oltp, dw, ajd, apex]
   compute_model:
@@ -341,7 +347,6 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_COMMON_ARGS,
     build_model,
     import_oci_sdk,
-    normalize_enum_values,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -390,10 +395,9 @@ CREATE_DETAIL_KEYS = (
 
 # Module inputs use lowercase snake_case choices (Ansible convention), while
 # OCI's wire format and returned resources use upper-case constants (for example
-# "oltp" -> "OLTP", "license_included" -> "LICENSE_INCLUDED"). ``main`` normalizes
-# module params through normalize_enum_values once, so the create builder and the
-# update drift checks all see the same upper-case vocabulary as the serialized OCI
-# resource.
+# "oltp" -> "OLTP", "license_included" -> "LICENSE_INCLUDED"). ``main`` upper-cases
+# these top-level params once, so the create builder and the update drift checks
+# all see the same upper-case vocabulary as the serialized OCI resource.
 ENUM_KEYS = frozenset({"db_workload", "compute_model", "license_model"})
 WAIT_FOR_ADB_AVAILABLE = [LIFECYCLE_AVAILABLE]
 WAIT_FOR_ADB_STOPPED = [LIFECYCLE_STOPPED]
@@ -624,82 +628,23 @@ class OciAutonomousDatabaseModule(OciResourceBase):
             target_states = WAIT_FOR_ADB_STOPPED
         return self.get_mutation_result(response.data, resource.id, target_states)
 
-    def execute_resource_module(self):
-        """Run the present/absent/running/stopped lifecycle for the module.
+    def extra_change_needed(self, resource):
+        return self.power_change_needed(resource)
 
-        Overrides the base present/absent flow because the inherited
-        implementation cannot express the C(running) and C(stopped) power
-        states this resource supports. Resource resolution, create, update, and
-        delete still reuse the inherited hooks; only the extra power-state
-        reconciliation is added here.
-        """
-        state = self.module.params.get("state", "present")
+    def apply_extra_change(self, resource):
+        return self.apply_power_state(resource)
 
-        if state == "absent":
-            self._execute_absent()
-            return
-
-        # state in (present, running, stopped)
-        resource = self.resolve_target_resource()
-        if resource is None:
-            self._execute_create()
-            return
-
-        self._execute_update(resource)
-
-    def _execute_absent(self):
-        self.validate_delete_request()
-        resource = self.resolve_target_resource()
-        if resource is None:
-            self.module.exit_json(changed=False)
-        if self.check_mode:
-            self.module.exit_json(changed=True)
-        self.delete_resource(resource)
-        self.module.exit_json(changed=True)
-
-    def _execute_create(self):
-        if self.resource_id:
-            self.fail_missing_update_target()
-        self.validate_create_request()
-        if self.check_mode:
-            self.module.exit_json(changed=True)
-        resource = self.create_resource()
+    def finalize_created_resource(self, resource):
         # With wait=False, create_resource() returns the raw create response
         # without confirming the database reached AVAILABLE, so it is
-        # typically still PROVISIONING here. power_change_needed() would
-        # then see neither settled state and skip the transition even when
-        # one was requested. Only chase the power state when waiting is
-        # enabled, matching oci_instance.py's launch-then-stop handling; a
-        # wait=False run that requests running/stopped at create time
-        # settles into the OCI default (AVAILABLE) and needs a follow-up
-        # run to reach the requested power state.
+        # typically still PROVISIONING here and power_change_needed() would
+        # skip the transition. Only chase the power state when waiting is
+        # enabled; a wait=False run needs a follow-up run to reach it.
         if self.module.params.get("wait", True) and self.power_change_needed(
             resource
         ):
-            resource = self.apply_power_state(resource)
-        self.module.exit_json(
-            changed=True,
-            resource=self.serialize_result_resource(resource),
-        )
-
-    def _execute_update(self, resource):
-        update_needed = self.needs_update(resource)
-        power_needed = self.power_change_needed(resource)
-        if self.check_mode:
-            self.module.exit_json(changed=update_needed or power_needed)
-
-        changed = False
-        if update_needed:
-            resource = self.update_resource(resource)
-            changed = True
-        if self.power_change_needed(resource):
-            resource = self.apply_power_state(resource)
-            changed = True
-
-        self.module.exit_json(
-            changed=changed,
-            resource=self.serialize_result_resource(resource),
-        )
+            return self.apply_power_state(resource)
+        return resource
 
 
 def main():
@@ -739,9 +684,15 @@ def main():
         supports_check_mode=True,
     )
     # Convert the lowercase snake_case enum choices to the upper-case constants
-    # OCI expects, in one pass, so the create builder and drift comparisons
-    # downstream all work against the SDK vocabulary. See ENUM_KEYS.
-    module.params = normalize_enum_values(module.params, ENUM_KEYS)
+    # OCI expects, so the create builder and drift comparisons downstream all
+    # work against the SDK vocabulary. See ENUM_KEYS. This only touches the
+    # named top-level params directly (rather than recursing through all of
+    # module.params) so it can't reach into freeform_tags/defined_tags and
+    # rewrite user-supplied tag keys/values that happen to match an enum name.
+    for key in ENUM_KEYS:
+        value = module.params.get(key)
+        if isinstance(value, str):
+            module.params[key] = value.upper()
 
     OciAutonomousDatabaseModule(module).execute_resource_module()
 

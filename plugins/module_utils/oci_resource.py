@@ -848,22 +848,49 @@ class OciResourceBase(OciModuleBase, ABC):
             self.validate_create_request()
             if self.check_mode:
                 self.module.exit_json(changed=True)
-            resource = self.create_resource()
+            resource = self.finalize_created_resource(self.create_resource())
             self.module.exit_json(
                 changed=True,
                 resource=self.serialize_result_resource(resource),
             )
 
-        if self.needs_update(resource):
-            if self.check_mode:
-                self.module.exit_json(changed=True)
+        update_needed = self.needs_update(resource)
+        extra_change_needed = self.extra_change_needed(resource)
+        if self.check_mode and (update_needed or extra_change_needed):
+            self.module.exit_json(changed=True)
+
+        changed = False
+        if update_needed:
             resource = self.update_resource(resource)
-            self.module.exit_json(
-                changed=True,
-                resource=self.serialize_result_resource(resource),
-            )
+            changed = True
+        if self.extra_change_needed(resource):
+            resource = self.apply_extra_change(resource)
+            changed = True
 
         self.module.exit_json(
-            changed=False,
+            changed=changed,
             resource=self.serialize_result_resource(resource),
         )
+
+    def finalize_created_resource(self, resource):
+        """Hook to adjust a newly created resource before it is returned.
+
+        Subclasses may override this to apply follow-up changes the create API
+        cannot express. The default returns the resource unchanged.
+        """
+        return resource
+
+    def extra_change_needed(self, resource) -> bool:
+        """Hook returning ``True`` when a non-field change is still required.
+
+        Used for reconciliation that is not an update-field diff, such as a
+        start/stop transition. The default reports no extra change.
+        """
+        return False
+
+    def apply_extra_change(self, resource):
+        """Hook applying the change reported by :meth:`extra_change_needed`.
+
+        Returns the refreshed resource. The default returns it unchanged.
+        """
+        return resource

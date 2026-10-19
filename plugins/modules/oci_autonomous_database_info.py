@@ -14,7 +14,7 @@ description:
   - Use C(autonomous_database_id) to fetch a single database, or
     C(compartment_id) to list databases in a compartment.
   - This is a read-only module and does not modify resources.
-version_added: "1.1.0"
+version_added: "1.2.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:
@@ -28,7 +28,7 @@ options:
   autonomous_database_id:
     description:
       - The OCID of a specific Autonomous Database to retrieve.
-      - When specified, returns a single resource instead of a list.
+      - When specified, returns a single resource inside of a list.
     type: str
   name:
     description:
