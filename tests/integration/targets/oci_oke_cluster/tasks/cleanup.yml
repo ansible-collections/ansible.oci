@@ -12,16 +12,23 @@
       loop: "{{ oci_oke_cleanup_ids | default([]) | unique | list }}"
       when: item | default('') | length > 0
       register: oci_cleanup_clusters
-      retries: 3
+      until: oci_cleanup_clusters is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
+    # The cluster's delete work request can succeed before the endpoint VNIC it
+    # leaves in the subnet is actually released, so the subnet delete needs to
+    # poll past that short window instead of failing on the first attempt.
     - name: Delete leaked subnet during cleanup
       ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_oke_subnet_id }}"
       when: oci_oke_subnet_id | default('') | length > 0
       register: oci_cleanup_subnet
-      retries: 3
+      until: oci_cleanup_subnet is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Delete leaked VCN during cleanup
@@ -30,7 +37,9 @@
         vcn_id: "{{ oci_oke_vcn_id }}"
       when: oci_oke_vcn_id | default('') | length > 0
       register: oci_cleanup_vcn
-      retries: 3
+      until: oci_cleanup_vcn is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Verify resource cleanup succeeded
