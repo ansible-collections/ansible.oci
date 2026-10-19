@@ -2,8 +2,11 @@ name: Determine OCI integration targets
 description: Resolve whether a PR should run all, selected, or no integration targets
 
 inputs:
-  pr-number:
-    description: Pull request number to inspect
+  collection-path:
+    description: Path to the disposable PR checkout in the collection directory layout
+    required: true
+  base-sha:
+    description: Base commit used to find the PR merge base
     required: true
 
 outputs:
@@ -21,8 +24,9 @@ runs:
       id: determine
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        COLLECTION_PATH: ${{ inputs.collection-path }}
+        BASE_SHA: ${{ inputs.base-sha }}
       run: >-
         bash "${{ github.action_path }}/determine-targets.sh"
-        "${{ inputs.pr-number }}"
-        "${{ github.repository }}"
+        "${COLLECTION_PATH}"
+        "${BASE_SHA}"
