@@ -1166,9 +1166,22 @@ def main():
         supports_check_mode=True,
     )
     # Convert the lowercase snake_case enum choices to the upper-case constants
-    # OCI expects, in one pass, so the builders and comparisons downstream all
-    # work against the SDK vocabulary. See ENUM_KEYS.
-    module.params = normalize_enum_values(module.params, ENUM_KEYS)
+    # OCI expects, so the builders and comparisons downstream all work against
+    # the SDK vocabulary. See ENUM_KEYS. "cni_type" is normalized at its own
+    # path, node_config_details.node_pool_pod_network_option_details, rather
+    # than by recursing through all of module.params (or even all of
+    # node_config_details) -- node_config_details also carries
+    # freeform_tags/defined_tags as siblings, and recursing into those would
+    # rewrite user-supplied tag keys/values that happen to match an enum
+    # name.
+    node_config_details = module.params.get("node_config_details") or {}
+    pod_network_option_details = node_config_details.get(
+        "node_pool_pod_network_option_details"
+    )
+    if pod_network_option_details:
+        node_config_details["node_pool_pod_network_option_details"] = (
+            normalize_enum_values(pod_network_option_details, ENUM_KEYS)
+        )
     OciOkeNodePoolModule(module).execute_resource_module()
 
 

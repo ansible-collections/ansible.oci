@@ -12,7 +12,9 @@
       loop: "{{ oci_oke_np_cleanup_ids | default([]) | unique | list }}"
       when: item | default('') | length > 0
       register: oci_cleanup_node_pools
-      retries: 3
+      until: oci_cleanup_node_pools is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Delete leaked cluster during cleanup
@@ -21,16 +23,24 @@
         cluster_id: "{{ oci_oke_np_cluster_id }}"
       when: oci_oke_np_cluster_id | default('') | length > 0
       register: oci_cleanup_cluster
-      retries: 3
+      until: oci_cleanup_cluster is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
+    # The node pool's worker instances, and the cluster's endpoint VNIC, can
+    # take a bit longer to fully release from the subnet than their own delete
+    # work requests take to report success, so poll past that window instead
+    # of failing on the first attempt.
     - name: Delete leaked subnet during cleanup
       ansible.oci.oci_network_subnet:
         state: absent
         subnet_id: "{{ oci_oke_np_subnet_id }}"
       when: oci_oke_np_subnet_id | default('') | length > 0
       register: oci_cleanup_subnet
-      retries: 3
+      until: oci_cleanup_subnet is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Delete leaked route table during cleanup
@@ -39,7 +49,9 @@
         route_table_id: "{{ oci_oke_np_route_table_id }}"
       when: oci_oke_np_route_table_id | default('') | length > 0
       register: oci_cleanup_route_table
-      retries: 3
+      until: oci_cleanup_route_table is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Delete leaked security list during cleanup
@@ -48,7 +60,9 @@
         security_list_id: "{{ oci_oke_np_security_list_id }}"
       when: oci_oke_np_security_list_id | default('') | length > 0
       register: oci_cleanup_security_list
-      retries: 3
+      until: oci_cleanup_security_list is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Delete leaked internet gateway during cleanup
@@ -57,7 +71,9 @@
         internet_gateway_id: "{{ oci_oke_np_igw_id }}"
       when: oci_oke_np_igw_id | default('') | length > 0
       register: oci_cleanup_igw
-      retries: 3
+      until: oci_cleanup_igw is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Delete leaked VCN during cleanup
@@ -66,7 +82,9 @@
         vcn_id: "{{ oci_oke_np_vcn_id }}"
       when: oci_oke_np_vcn_id | default('') | length > 0
       register: oci_cleanup_vcn
-      retries: 3
+      until: oci_cleanup_vcn is succeeded
+      retries: 10
+      delay: 30
       ignore_errors: true
 
     - name: Verify resource cleanup succeeded
