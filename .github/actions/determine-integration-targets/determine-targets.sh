@@ -3,6 +3,7 @@ set -euo pipefail
 
 collection_path="${1:?collection-path argument is required}"
 base_sha="${2:?base-sha argument is required}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Use a disposable checkout. Keep the base and PR head on separate local branches.
 cd "${collection_path}"
@@ -12,11 +13,15 @@ merge_base="$(git merge-base ci-base HEAD)"
 changed_files="$(git diff --name-only "${merge_base}" HEAD)"
 
 run_all=false
+runtime_changed=false
 while IFS= read -r file_path; do
   case "${file_path}" in
     Makefile|requirements.txt)
       # Native collection selection ignores these files.
       run_all=true
+      ;;
+    meta/runtime.yml)
+      runtime_changed=true
       ;;
   esac
 done <<< "${changed_files}"
@@ -32,6 +37,17 @@ selection_args=(--changed --base-branch ci-base)
 if [[ "${run_all}" == true ]]; then
   echo "Shared infrastructure or a removed utility requires all integration targets."
   selection_args=()
+elif [[ "${runtime_changed}" == true ]]; then
+  filtered_files="$(printf '%s\n' "${changed_files}" |
+    python3 "${script_dir}/filter_changed_paths.py" "${merge_base}")"
+  if [[ "${filtered_files}" != "${changed_files}" ]]; then
+    changed_paths_file="$(mktemp)"
+    trap 'rm -f -- "${changed_paths_file}"' EXIT
+    printf '%s\n' "${filtered_files}" > "${changed_paths_file}"
+    selection_args=(--changed-from "${changed_paths_file}")
+  else
+    selection_args=()
+  fi
 fi
 
 selected="$(ansible-test integration --list-targets --allow-destructive "${selection_args[@]}")"
