@@ -29,6 +29,8 @@ options:
       - File on the Ansible host to write the wallet zip to.
       - The parent directory must already exist.
       - A newly created file gets mode C(0600) unless O(mode) is set.
+      - If O(dest) is a symlink, the wallet is written to the link target and
+        file attributes are applied to the target. The link itself is kept.
     type: path
     required: true
   password:
@@ -64,8 +66,9 @@ options:
     type: bool
     default: false
 notes:
-  - Check mode does not contact OCI. It reports a change when a wallet would be
-    downloaded.
+  - Check mode does not request a wallet from OCI. It reports a change when a
+    wallet would be downloaded. The OCI client is still configured, so
+    authentication settings must be valid.
 """
 
 EXAMPLES = r"""
@@ -130,12 +133,15 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
         """
         return oci.database.DatabaseClient
 
-    def validate_arguments(self):
-        """Fail the module when ``dest`` cannot hold the wallet file."""
-        destination = self.module.params["dest"]
+    def validate_arguments(self, destination):
+        """Fail the module when ``destination`` cannot hold the wallet file.
+
+        Args:
+            destination (str): Resolved local path for the wallet zip.
+        """
         if os.path.isdir(destination):
             self.module.fail_json(msg="dest must be a file path, not a directory")
-        parent = os.path.dirname(os.path.abspath(destination))
+        parent = os.path.dirname(destination)
         if not os.path.isdir(parent):
             self.module.fail_json(msg=f"Destination directory {parent} does not exist")
 
@@ -165,48 +171,72 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
         """Stream a new wallet to a temporary file and move it to ``destination``.
 
         Args:
-            destination (str): Local path for the wallet zip.
-
-        Raises:
-            oci.exceptions.ServiceError: If OCI rejects the wallet request.
+            destination (str): Resolved local path for the wallet zip.
         """
-        response = self.generate_wallet()
+        try:
+            response = self.generate_wallet()
+        except oci.exceptions.ServiceError as exc:
+            self.module.fail_json(
+                msg=f"Failed to generate the Autonomous Database wallet: {exc}"
+            )
+        try:
+            self.write_wallet(response.data, destination)
+        finally:
+            response.data.close()
+
+    def write_wallet(self, body, destination):
+        """Write a streamed wallet body to ``destination`` with private permissions.
+
+        Args:
+            body: Streamed wallet response body.
+            destination (str): Resolved local path for the wallet zip.
+        """
         # Stage beside the destination so the final move stays atomic.
         file_descriptor, temporary = tempfile.mkstemp(
             prefix=".ansible-oci-wallet-",
-            dir=os.path.dirname(os.path.abspath(destination)),
+            dir=os.path.dirname(destination),
         )
         try:
             with os.fdopen(file_descriptor, "wb") as output:
-                for chunk in response.data.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                for chunk in body.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                     output.write(chunk)
+            creating = not os.path.exists(destination)
             # atomic_move gives a newly created file the umask-based default
-            # mode, so tighten the umask to keep the wallet private.
+            # mode. Tighten the umask so the wallet is never readable by others
+            # during the move, then set the mode explicitly afterwards.
             previous_umask = os.umask(0o077)
             try:
-                self.module.atomic_move(temporary, destination)
+                self.module.atomic_move(
+                    temporary,
+                    destination,
+                    unsafe_writes=self.module.params["unsafe_writes"],
+                )
             finally:
                 os.umask(previous_umask)
+            if creating:
+                os.chmod(destination, 0o600)
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
     def execute_module(self):
         """Download the wallet unless ``dest`` exists, then apply file attributes."""
-        self.validate_arguments()
         params = self.module.params
-        destination = params["dest"]
+        # Follow symlinks so the wallet replaces the link target, not the link.
+        # A dangling link resolves to its missing target, which is downloaded.
+        destination = os.path.realpath(params["dest"])
+        self.validate_arguments(destination)
 
         changed = False
-        if params["force"] or not os.path.lexists(destination):
+        if params["force"] or not os.path.exists(destination):
             changed = True
             if not self.module.check_mode:
                 self.download_wallet(destination)
 
-        file_args = self.module.load_file_common_arguments(params)
+        file_args = self.module.load_file_common_arguments(params, path=destination)
         if not (changed and self.module.check_mode):
             changed = self.module.set_fs_attributes_if_different(file_args, changed)
-        self.module.exit_json(changed=changed, dest=destination)
+        self.module.exit_json(changed=changed, dest=params["dest"])
 
 
 def main():

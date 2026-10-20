@@ -25,7 +25,12 @@ WALLET_CHUNKS = (b"PK\x03\x04", b"wallet-body")
 class FileModule(DummyModule):
     """DummyModule with stand-ins for the AnsibleModule file helpers."""
 
-    def atomic_move(self, src, dest):
+    def __init__(self, params=None, check_mode=False):
+        super().__init__(params, check_mode=check_mode)
+        self.unsafe_writes = []
+
+    def atomic_move(self, src, dest, unsafe_writes=False):
+        self.unsafe_writes.append(unsafe_writes)
         creating = not os.path.exists(dest)
         os.replace(src, dest)
         if creating:
@@ -34,8 +39,8 @@ class FileModule(DummyModule):
             os.umask(umask)
             os.chmod(dest, 0o666 & ~umask)
 
-    def load_file_common_arguments(self, params):
-        return {"path": params["dest"], "mode": params.get("mode")}
+    def load_file_common_arguments(self, params, path=None):
+        return {"path": path or params["dest"], "mode": params.get("mode")}
 
     def set_fs_attributes_if_different(self, file_args, changed):
         mode = file_args["mode"]
@@ -53,32 +58,46 @@ class WalletBody:
     def __init__(self, chunks, error=None):
         self.chunks = chunks
         self.error = error
+        self.closed = False
 
     def iter_content(self, chunk_size):
-        for chunk in self.chunks:
-            yield chunk
+        yield from self.chunks
         if self.error is not None:
             raise self.error
 
+    def close(self):
+        self.closed = True
+
 
 class DatabaseClient:
-    def __init__(self, chunks=WALLET_CHUNKS, error=None):
+    def __init__(self, chunks=WALLET_CHUNKS, error=None, service_error=None):
         self.chunks = chunks
         self.error = error
+        self.service_error = service_error
         self.requests = []
+        self.bodies = []
 
     def generate_autonomous_database_wallet(self, **kwargs):
         self.requests.append(kwargs)
-        return FakeResponse(WalletBody(self.chunks, self.error))
+        if self.service_error is not None:
+            raise self.service_error
+        body = WalletBody(self.chunks, self.error)
+        self.bodies.append(body)
+        return FakeResponse(body)
 
 
 def load_wallet_module(monkeypatch):
-    oci_module, _service_error = install_fake_oci(monkeypatch)
+    module_obj, _service_error = load_wallet_module_with_errors(monkeypatch)
+    return module_obj
+
+
+def load_wallet_module_with_errors(monkeypatch):
+    oci_module, service_error = install_fake_oci(monkeypatch)
     oci_module.database = types.SimpleNamespace(
         DatabaseClient=type("FakeDatabaseClient", (), {}),
         models=types.SimpleNamespace(GenerateAutonomousDatabaseWalletDetails=FakeModel),
     )
-    return load_collection_module("oci_autonomous_database_wallet")
+    return load_collection_module("oci_autonomous_database_wallet"), service_error
 
 
 def base_params(destination, **kwargs):
@@ -90,12 +109,13 @@ def base_params(destination, **kwargs):
         "is_regional": None,
         "force": False,
         "mode": None,
+        "unsafe_writes": False,
     }
     params.update(kwargs)
     return params
 
 
-def run(module_obj, monkeypatch, client, params, check_mode=False):
+def run(module_obj, monkeypatch, client, params, check_mode=False, file_module=FileModule):
     instance = make_module_instance(
         module_obj,
         "OciAutonomousDatabaseWalletModule",
@@ -103,7 +123,7 @@ def run(module_obj, monkeypatch, client, params, check_mode=False):
         client=client,
         check_mode=check_mode,
     )
-    instance.module = FileModule(params, check_mode=check_mode)
+    instance.module = file_module(params, check_mode=check_mode)
     monkeypatch.setattr(
         instance, "call_with_retry", lambda fn, *args, **kwargs: fn(*args, **kwargs)
     )
@@ -266,6 +286,105 @@ def test_failed_download_preserves_dest_and_removes_temporary_file(monkeypatch, 
 
     assert destination.read_bytes() == b"existing"
     assert not list(tmp_path.glob(".ansible-oci-wallet-*"))
+    assert client.bodies[0].closed is True
+
+
+def test_successful_download_closes_response_body(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    client = DatabaseClient()
+
+    run(module_obj, monkeypatch, client, base_params(tmp_path / "wallet.zip"))
+
+    assert client.bodies[0].closed is True
+
+
+def test_service_error_fails_cleanly(monkeypatch, tmp_path):
+    module_obj, service_error = load_wallet_module_with_errors(monkeypatch)
+    destination = tmp_path / "wallet.zip"
+    client = DatabaseClient(service_error=service_error(400, "invalid password"))
+
+    with pytest.raises(FailJsonCalled) as result:
+        run(module_obj, monkeypatch, client, base_params(destination))
+
+    assert result.value.payload["msg"] == (
+        "Failed to generate the Autonomous Database wallet: invalid password"
+    )
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".ansible-oci-wallet-*"))
+
+
+def test_unsafe_writes_is_passed_to_atomic_move(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    modules = []
+
+    class RecordingFileModule(FileModule):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            modules.append(self)
+
+    run(
+        module_obj,
+        monkeypatch,
+        DatabaseClient(),
+        base_params(tmp_path / "wallet.zip", unsafe_writes=True),
+        file_module=RecordingFileModule,
+    )
+
+    assert modules[0].unsafe_writes == [True]
+
+
+def test_new_wallet_is_private_even_if_atomic_move_ignores_umask(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    destination = tmp_path / "wallet.zip"
+
+    class PermissiveFileModule(FileModule):
+        def atomic_move(self, src, dest, unsafe_writes=False):
+            os.replace(src, dest)
+            os.chmod(dest, 0o644)
+
+    run(
+        module_obj,
+        monkeypatch,
+        DatabaseClient(),
+        base_params(destination),
+        file_module=PermissiveFileModule,
+    )
+
+    assert file_mode(destination) == 0o600
+
+
+def test_force_writes_through_symlink(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    target = tmp_path / "wallets" / "current.zip"
+    target.parent.mkdir()
+    target.write_bytes(b"existing")
+    link = tmp_path / "wallet.zip"
+    link.symlink_to(target)
+
+    result = run(
+        module_obj, monkeypatch, DatabaseClient(), base_params(link, force=True, mode="0640")
+    )
+
+    assert result == {"changed": True, "dest": str(link)}
+    assert link.is_symlink()
+    assert target.read_bytes() == b"".join(WALLET_CHUNKS)
+    assert file_mode(target) == 0o640
+
+
+def test_dangling_symlink_downloads_to_target(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    target = tmp_path / "current.zip"
+    link = tmp_path / "wallet.zip"
+    link.symlink_to(target)
+    client = DatabaseClient()
+
+    result = run(module_obj, monkeypatch, client, base_params(link))
+
+    assert result["changed"] is True
+    assert link.is_symlink()
+    assert target.read_bytes() == b"".join(WALLET_CHUNKS)
+    assert file_mode(target) == 0o600
+    assert len(client.requests) == 1
 
 
 def test_directory_dest_fails(monkeypatch, tmp_path):
