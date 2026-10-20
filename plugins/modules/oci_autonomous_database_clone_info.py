@@ -16,6 +16,7 @@ author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:
   - ansible.oci.oci_auth_options
+  - ansible.oci.oci_info_filter_options
 notes:
   - Use M(ansible.oci.oci_autonomous_database_info) to retrieve a single clone
     by its OCID.
@@ -30,14 +31,6 @@ options:
       - The OCID of the source Autonomous Database whose clones are listed.
     type: str
     required: true
-  name:
-    description:
-      - Return only clones with this exact display name.
-    type: str
-  lifecycle_state:
-    description:
-      - Return only clones in this lifecycle state, for example C(AVAILABLE).
-    type: str
   refreshable_only:
     description:
       - Whether to return only refreshable clones.
