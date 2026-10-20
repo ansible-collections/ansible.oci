@@ -28,8 +28,6 @@ jobs:
   determine-integration-targets:
     name: Determine integration targets
     runs-on: ubuntu-latest
-    environment:
-      name: oci-integration
     permissions:
       contents: read
     outputs:
@@ -86,6 +84,19 @@ jobs:
       OCI_USER_KEY_CONTENT: ${{ secrets.OCI_USER_KEY_CONTENT }}
       OCI_CONFIG_PROFILE: ${{ vars.OCI_CONFIG_PROFILE }}
     steps:
+      - name: Validate selected integration targets
+        id: validate-targets
+        env:
+          SELECTED_TARGETS: ${{ needs.determine-integration-targets.outputs.targets }}
+        shell: bash
+        run: |
+          target_pattern='^[a-zA-Z0-9_][a-zA-Z0-9_.-]*( [a-zA-Z0-9_][a-zA-Z0-9_.-]*)*$'
+          if [[ ! "${SELECTED_TARGETS}" =~ ${target_pattern} ]]; then
+            echo "Invalid integration target list." >&2
+            exit 1
+          fi
+          printf 'targets=%s\n' "${SELECTED_TARGETS}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout base ref
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -95,7 +106,7 @@ jobs:
         uses: ./.github/actions/run-oci-integration
         with:
           ansible-ref: ${{ env.INTEGRATION_ANSIBLE_REF }}
-          integration-targets: ${{ needs.determine-integration-targets.outputs.targets }}
+          integration-targets: ${{ steps.validate-targets.outputs.targets }}
           python-version: ${{ env.INTEGRATION_PYTHON_VERSION }}
 
   integration-pr-check:

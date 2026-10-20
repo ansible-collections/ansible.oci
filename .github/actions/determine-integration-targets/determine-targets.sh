@@ -9,7 +9,12 @@ cd "${collection_path}"
 git branch -f ci-base "${base_sha}"
 git checkout -B ci-head HEAD
 merge_base="$(git merge-base ci-base HEAD)"
-changed_files="$(git diff --name-only "${merge_base}" HEAD)"
+changed_paths_file="$(mktemp)"
+trap 'rm -f -- "${changed_paths_file}"' EXIT
+
+# Metadata changes do not select integration tests for this collection.
+git diff --name-only "${merge_base}" HEAD \
+  -- . ':(top,exclude,literal)meta/runtime.yml' > "${changed_paths_file}"
 
 run_all=false
 while IFS= read -r file_path; do
@@ -19,7 +24,7 @@ while IFS= read -r file_path; do
       run_all=true
       ;;
   esac
-done <<< "${changed_files}"
+done < "${changed_paths_file}"
 
 # Include renames as deletions. The old utility imports are absent from the PR head.
 deleted_utils="$(git diff --name-only --no-renames --diff-filter=D \
@@ -28,7 +33,7 @@ if [[ -n "${deleted_utils}" ]]; then
   run_all=true
 fi
 
-selection_args=(--changed --base-branch ci-base)
+selection_args=(--changed-from "${changed_paths_file}")
 if [[ "${run_all}" == true ]]; then
   echo "Shared infrastructure or a removed utility requires all integration targets."
   selection_args=()
