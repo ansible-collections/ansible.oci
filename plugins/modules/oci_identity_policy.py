@@ -212,12 +212,9 @@ def validate_policy_parameters(module):
             msg="The statements parameter must contain non-empty statements."
         )
     version_date = module.params.get("version_date")
-    if version_date in (None, ""):
-        return
     try:
-        if len(version_date) != 10 or version_date[4] != "-" or version_date[7] != "-":
+        if version_date not in (None, "") and date.fromisoformat(version_date).isoformat() != version_date:
             raise ValueError("Invalid date format")
-        date.fromisoformat(version_date)
     except (TypeError, ValueError):
         module.fail_json(msg="version_date must use YYYY-MM-DD format or be empty.")
 
