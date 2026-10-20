@@ -104,3 +104,5 @@ action_groups:
         - oci_oke_node_pool_options_info
         - oci_autonomous_database
         - oci_autonomous_database_info
+        - oci_autonomous_database_clone
+        - oci_autonomous_database_clone_info

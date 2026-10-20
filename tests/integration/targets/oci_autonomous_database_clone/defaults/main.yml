@@ -1,0 +1,24 @@
+---
+oci_adb_clone_integration_source_name: "oci-adb-clone-source"
+oci_adb_clone_integration_metadata_name: "oci-adb-clone-metadata"
+oci_adb_clone_integration_metadata_renamed: "oci-adb-clone-metadata-renamed"
+oci_adb_clone_integration_refreshable_name: "oci-adb-clone-refreshable"
+# db_name allows only letters and numbers and must start with a letter; each is
+# finalized with the per-run suffix in tasks/main.yml.
+oci_adb_clone_integration_source_db_name_prefix: "adbcsrc"
+oci_adb_clone_integration_metadata_db_name_prefix: "adbcmeta"
+oci_adb_clone_integration_refreshable_db_name_prefix: "adbcref"
+# Test-only admin password. Meets the serverless rules (12-30 chars, upper,
+# lower, and number, no "admin" substring, no double quote).
+oci_adb_clone_integration_admin_password: "AnsibleOciTest1234"
+oci_adb_clone_integration_compute_model: "ecpu"
+oci_adb_clone_integration_compute_count: 2
+oci_adb_clone_integration_data_storage_size_in_tbs: 1
+# Clones can take longer than the default 20 minute wait to provision.
+oci_adb_clone_integration_wait_timeout: 3600
+oci_adb_clone_integration_create_tags:
+  phase: create
+  role: integration
+oci_adb_clone_integration_update_tags:
+  phase: update
+  role: integration
