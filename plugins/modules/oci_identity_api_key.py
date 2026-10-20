@@ -51,7 +51,10 @@ EXAMPLES = r"""
   ansible.oci.oci_identity_api_key:
     domain_id: ocid1.domain.oc1..example
     user_id: 0123456789abcdef
-    key: "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+    key: |
+      -----BEGIN PUBLIC KEY-----
+      ...
+      -----END PUBLIC KEY-----
 
 - name: Remove an identity domain API key
   ansible.oci.oci_identity_api_key:
@@ -193,7 +196,7 @@ class OciIdentityApiKeyModule(OciIdentityDomainResourceBase):
             Ansible module failure when the key is empty.
         """
         super(OciIdentityApiKeyModule, self).validate_create_request()
-        if not self.module.params["key"].strip():
+        if not (self.module.params.get("key") or "").strip():
             self.module.fail_json(msg="Creating an API key requires a nonempty key")
 
     def validate_delete_request(self):
