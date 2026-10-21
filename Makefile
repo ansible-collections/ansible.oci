@@ -21,15 +21,12 @@ IN_COLLECTION_TREE :=
 endif
 
 .PHONY: generate-integration-runtime
-generate-integration-runtime: install-collection
+generate-integration-runtime:
 	chmod +x "$(COLLECTION_ROOT)/tests/integration/generate_integration_runtime.sh"
 	PYTHON_BIN="$(PYTHON_BIN)" "$(COLLECTION_ROOT)/tests/integration/generate_integration_runtime.sh"
 
-.PHONY: upgrade-collections
-upgrade-collections: install-integration-reqs generate-integration-runtime
-
 .PHONY: install-integration-reqs
-install-integration-reqs: install-collection-python-reqs
+install-integration-reqs:
 ifndef IN_COLLECTION_TREE
 	pip install -r tests/integration/requirements.txt; \
 	ansible-galaxy collection install --upgrade -p ~/.ansible/collections -r tests/integration/requirements.yml
@@ -49,7 +46,7 @@ integration-ci: generate-integration-runtime install-integration-reqs upgrade-co
 	ansible-test integration --allow-destructive $(INTEGRATION_TARGETS)
 
 .PHONY: units
-units: upgrade-collection
+units: upgrade-collections
 	cd $(COLLECTION_ROOT); \
 	ansible-test units --docker --python $(UNIT_PYTHON_VERSION) --coverage $(UNIT_TARGETS); \
 	ansible-test coverage combine --requirements --export tests/output/coverage/; \
@@ -62,7 +59,7 @@ units-coverage: units
 	cp tests/output/reports/coverage.xml $(CURDIR)/coverage-units.xml;
 
 .PHONY: sanity
-sanity: upgrade-collection
+sanity: upgrade-collections
 	cd $(COLLECTION_ROOT); \
 	ansible-test sanity -v --color --coverage --junit \
 		--docker default; \
