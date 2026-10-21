@@ -1,0 +1,56 @@
+---
+- name: Test dual-stack create on the configured subnet
+  ansible.builtin.include_tasks: scenario.yml
+  vars:
+    oci_nlb_case_name: "{{ oci_nlb_integration_ipv6_name }}"
+    oci_nlb_case_operation:
+      compartment_id: "{{ oci_integration_compartment_id }}"
+      name: "{{ oci_nlb_integration_ipv6_name }}"
+      subnet_id: "{{ oci_nlb_integration_ipv6_subnet_id }}"
+      is_private: false
+      ip_mode: ipv6
+    oci_nlb_case_expected:
+      ip_mode: IPV4_AND_IPV6
+      is_private: false
+
+- name: Test a switch to IPv4 before dual-stack update
+  ansible.builtin.include_tasks: scenario.yml
+  vars:
+    oci_nlb_case_name: "{{ oci_nlb_integration_ipv6_name }}"
+    oci_nlb_case_operation:
+      network_load_balancer_id: "{{ oci_nlb_id }}"
+      ip_mode: ipv4
+    oci_nlb_case_expected:
+      ip_mode: IPV4
+
+- name: Test dual-stack update with configured reserved IPv6 address
+  ansible.builtin.include_tasks: scenario.yml
+  vars:
+    oci_nlb_case_name: "{{ oci_nlb_integration_ipv6_name }}"
+    oci_nlb_case_operation:
+      network_load_balancer_id: "{{ oci_nlb_id }}"
+      ip_mode: ipv6
+      reserved_ips: [{id: "{{ oci_nlb_integration_ipv6_reserved_ip_id }}"}]
+    oci_nlb_case_expected:
+      ip_mode: IPV4_AND_IPV6
+  when: oci_nlb_integration_ipv6_reserved_ip_id | length > 0
+
+- name: Test dual-stack update without reserved IPv6 address
+  ansible.builtin.include_tasks: scenario.yml
+  vars:
+    oci_nlb_case_name: "{{ oci_nlb_integration_ipv6_name }}"
+    oci_nlb_case_operation:
+      network_load_balancer_id: "{{ oci_nlb_id }}"
+      ip_mode: ipv6
+    oci_nlb_case_expected:
+      ip_mode: IPV4_AND_IPV6
+  when: oci_nlb_integration_ipv6_reserved_ip_id | length == 0
+
+- name: Test dual-stack resource deletion
+  ansible.builtin.include_tasks: scenario.yml
+  vars:
+    oci_nlb_case_name: "{{ oci_nlb_integration_ipv6_name }}"
+    oci_nlb_case_operation:
+      state: absent
+      network_load_balancer_id: "{{ oci_nlb_id }}"
+    oci_nlb_case_expected: {}

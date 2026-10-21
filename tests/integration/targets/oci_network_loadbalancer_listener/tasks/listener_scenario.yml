@@ -1,0 +1,68 @@
+---
+- name: Read listener before the scenario
+  ansible.oci.oci_network_loadbalancer_listener_info: &oci_nlb_listener_probe
+    network_load_balancer_id: "{{ oci_nlb_test_id }}"
+    name: "{{ oci_nlb_test_listener }}"
+  register: oci_nlb_listener_before
+
+- name: Predict listener change
+  ansible.oci.oci_network_loadbalancer_listener: &oci_nlb_listener_operation
+    network_load_balancer_id: "{{ oci_nlb_test_id }}"
+    state: "{{ oci_nlb_listener_state }}"
+    name: "{{ oci_nlb_listener_options.name }}"
+    default_backend_set_name: "{{ oci_nlb_listener_options.default_backend_set_name | default(omit) }}"
+    port: "{{ oci_nlb_listener_options.port | default(omit) }}"
+    protocol: "{{ oci_nlb_listener_options.protocol | default(omit) }}"
+  check_mode: true
+  register: oci_nlb_listener_prediction
+
+- name: Read listener after check mode
+  ansible.oci.oci_network_loadbalancer_listener_info:
+    <<: *oci_nlb_listener_probe
+  register: oci_nlb_listener_after_prediction
+
+- name: Check the predicted listener change
+  ansible.builtin.assert:
+    that:
+      - oci_nlb_listener_prediction.changed | bool
+      - oci_nlb_listener_before.listeners == oci_nlb_listener_after_prediction.listeners
+
+- name: Apply listener change
+  ansible.oci.oci_network_loadbalancer_listener:
+    <<: *oci_nlb_listener_operation
+  register: oci_nlb_listener_applied
+
+- name: Read listener after apply
+  ansible.oci.oci_network_loadbalancer_listener_info:
+    <<: *oci_nlb_listener_probe
+  register: oci_nlb_listener_after
+
+- name: Check listener state
+  ansible.builtin.assert:
+    that:
+      - oci_nlb_listener_applied.changed | bool
+      - (oci_nlb_listener_state == 'absent' and oci_nlb_listener_after.listeners | length == 0) or (oci_nlb_listener_state == 'present' and oci_nlb_listener_after.listeners | length == 1)
+
+- name: Check listener settings
+  ansible.builtin.assert:
+    that:
+      - oci_nlb_listener_after.listeners[0][item.key] == item.value
+  loop: "{{ oci_nlb_listener_expected | dict2items }}"
+  when: oci_nlb_listener_state == 'present'
+
+- name: Repeat listener change in normal mode
+  ansible.oci.oci_network_loadbalancer_listener:
+    <<: *oci_nlb_listener_operation
+  register: oci_nlb_listener_repeat
+
+- name: Repeat listener change in check mode
+  ansible.oci.oci_network_loadbalancer_listener:
+    <<: *oci_nlb_listener_operation
+  check_mode: true
+  register: oci_nlb_listener_repeat_check
+
+- name: Check listener idempotency
+  ansible.builtin.assert:
+    that:
+      - not oci_nlb_listener_repeat.changed | bool
+      - not oci_nlb_listener_repeat_check.changed | bool

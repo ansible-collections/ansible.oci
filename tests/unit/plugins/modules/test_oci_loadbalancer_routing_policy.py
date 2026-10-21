@@ -29,7 +29,7 @@ def _policy_module(params, *, check_mode=False, client=None):
         module,
         "OciLoadBalancerRoutingPolicyModule",
         params,
-        client=client or types.SimpleNamespace(),
+        client=client,
         check_mode=check_mode,
     )
 
