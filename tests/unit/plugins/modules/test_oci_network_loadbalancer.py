@@ -208,10 +208,9 @@ def test_private_ipv4_does_not_match_a_public_address():
     resource = FakeModel(
         id="nlb", ip_addresses=[{"ip_address": "192.0.2.5", "is_public": True}]
     )
+    helper = make_parent({"assigned_private_ipv4": "192.0.2.5"}, resource)
     with pytest.raises(FailJsonCalled):
-        make_parent({"assigned_private_ipv4": "192.0.2.5"}, resource).needs_update(
-            resource
-        )
+        helper.needs_update(resource)
 
 
 @pytest.mark.parametrize("wait", [False, True])
