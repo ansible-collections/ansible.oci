@@ -39,7 +39,7 @@ ifndef IN_COLLECTION_TREE
 endif
 
 .PHONY: integration-ci
-integration-ci: generate-integration-runtime install-integration-reqs upgrade-collections
+integration-ci: install-integration-reqs upgrade-collections generate-integration-runtime
 	cd "$(COLLECTION_ROOT)"; \
 	ansible --version; \
 	ansible-test --version; \
