@@ -1,5 +1,0 @@
----
-oci_identity_api_key_integration_home_region: "us-sanjose-1"
-oci_identity_api_key_integration_domain_name: "oci-api-key-integration-domain"
-oci_identity_api_key_integration_domain_description: "OCI API key integration test domain"
-oci_identity_api_key_integration_user_name: "oci-api-key-integration"
