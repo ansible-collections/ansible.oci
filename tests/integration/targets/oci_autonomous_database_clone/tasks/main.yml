@@ -218,6 +218,7 @@
         open_mode: read_only
         compute_model: "{{ oci_adb_clone_integration_compute_model }}"
         compute_count: "{{ oci_adb_clone_integration_compute_count }}"
+        data_storage_size_in_tbs: "{{ oci_adb_clone_integration_data_storage_size_in_tbs }}"
         freeform_tags: "{{ oci_adb_clone_integration_create_tags }}"
         wait_timeout: "{{ oci_adb_clone_integration_wait_timeout }}"
       check_mode: true
