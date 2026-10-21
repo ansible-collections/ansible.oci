@@ -11,6 +11,7 @@ from .conftest import (
     ExitJsonCalled,
     FakeModel,
     FakeResponse,
+    FailJsonCalled,
     load_collection_module,
     make_module_instance,
 )
@@ -89,10 +90,10 @@ def test_backend_set_rejects_duplicate_membership_names():
     )
     current = FakeModel(backends=[])
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(FailJsonCalled) as exc:
         helper.build_update_plan(current)
 
-    assert "unique" in str(getattr(exc.value, "payload", {}))
+    assert exc.value.payload["msg"] == "Each backend name must be unique in backends."
 
 
 def test_backend_requires_locator_and_keeps_creation_identity_immutable():
@@ -103,9 +104,9 @@ def test_backend_requires_locator_and_keeps_creation_identity_immutable():
         "OciNetworkLoadBalancerBackendModule",
         {"name": "backend-a", "port": 8080},
     )
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(FailJsonCalled) as exc:
         helper.validate_create_request()
-    assert "ip_address or target_id" in str(getattr(exc.value, "payload", {}))
+    assert exc.value.payload["msg"] == "Backend backend-a requires ip_address or target_id."
 
     names = {spec.param_name: spec.is_mutable for spec in helper.update_field_specs}
     assert names["ip_address"] is False
@@ -163,10 +164,12 @@ def test_health_checker_fails_clearly_when_backend_set_is_missing():
         ),
     )
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(FailJsonCalled) as exc:
         helper.resolve_target_resource()
 
-    assert "Backend set missing was not found" in str(getattr(exc.value, "payload", {}))
+    assert exc.value.payload["msg"] == (
+        "Backend set missing was not found on network load balancer nlb."
+    )
 
 
 def test_info_get_and_list_return_named_results():
