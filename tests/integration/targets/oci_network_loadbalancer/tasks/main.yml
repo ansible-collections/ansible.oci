@@ -1,0 +1,183 @@
+---
+- name: Validate OCI integration compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Set unique network load balancer names
+  ansible.builtin.set_fact:
+    oci_nlb_cleanup_ids: []
+    oci_nlb_integration_vcn_name: "{{ oci_nlb_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_nlb_integration_public_subnet_name: "{{ oci_nlb_integration_public_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_nlb_integration_private_subnet_name: "{{ oci_nlb_integration_private_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_nlb_integration_public_name: "{{ oci_nlb_integration_public_name }}-{{ oci_integration_rpfx }}"
+    oci_nlb_integration_updated_name: "{{ oci_nlb_integration_updated_name }}-{{ oci_integration_rpfx }}"
+    oci_nlb_integration_private_name: "{{ oci_nlb_integration_private_name }}-{{ oci_integration_rpfx }}"
+    oci_nlb_integration_ipv6_name: "{{ oci_nlb_integration_ipv6_name }}-{{ oci_integration_rpfx }}"
+
+- name: Test network load balancer lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN
+      ansible.oci.oci_network_vcn:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_nlb_integration_vcn_name }}"
+        cidr_blocks: ["{{ oci_nlb_integration_vcn_cidr }}"]
+      register: oci_nlb_vcn
+
+    - name: Save VCN identifier
+      ansible.builtin.set_fact:
+        oci_nlb_vcn_id: "{{ oci_nlb_vcn.resource.id }}"
+
+    - name: Create public test subnet
+      ansible.oci.oci_network_subnet:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_nlb_vcn_id }}"
+        name: "{{ oci_nlb_integration_public_subnet_name }}"
+        cidr_block: "{{ oci_nlb_integration_public_subnet_cidr }}"
+      register: oci_nlb_public_subnet
+
+    - name: Save public subnet identifier
+      ansible.builtin.set_fact:
+        oci_nlb_public_subnet_id: "{{ oci_nlb_public_subnet.resource.id }}"
+
+    - name: Create private test subnet
+      ansible.oci.oci_network_subnet:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_nlb_vcn_id }}"
+        name: "{{ oci_nlb_integration_private_subnet_name }}"
+        cidr_block: "{{ oci_nlb_integration_private_subnet_cidr }}"
+        prohibit_public_ip_on_vnic: true
+      register: oci_nlb_private_subnet
+
+    - name: Save private subnet identifier
+      ansible.builtin.set_fact:
+        oci_nlb_private_subnet_id: "{{ oci_nlb_private_subnet.resource.id }}"
+
+    - name: Create test network security group
+      ansible.oci.oci_network_security_group:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_nlb_vcn_id }}"
+        name: "oci-nlb-nsg-{{ oci_integration_rpfx }}"
+      register: oci_nlb_nsg
+
+    - name: Save network security group identifier
+      ansible.builtin.set_fact:
+        oci_nlb_nsg_id: "{{ oci_nlb_nsg.resource.id }}"
+
+    - name: Test public resource create
+      ansible.builtin.include_tasks: scenario.yml
+      vars:
+        oci_nlb_case_name: "{{ oci_nlb_integration_public_name }}"
+        oci_nlb_case_operation:
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_nlb_integration_public_name }}"
+          subnet_id: "{{ oci_nlb_public_subnet_id }}"
+          is_private: false
+          ip_mode: ipv4
+          freeform_tags: {phase: create}
+        oci_nlb_case_expected:
+          name: "{{ oci_nlb_integration_public_name }}"
+          is_private: false
+          ip_mode: IPV4
+          freeform_tags: {phase: create}
+
+    - name: List active network load balancers by scoped name
+      ansible.oci.oci_network_loadbalancer_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_nlb_integration_public_name }}"
+        lifecycle_state: active
+      register: oci_nlb_list
+
+    - name: Check the scoped list result
+      ansible.builtin.assert:
+        that:
+          - not oci_nlb_list.changed | bool
+          - oci_nlb_list.network_load_balancers | length == 1
+          - oci_nlb_list.network_load_balancers[0].id == oci_nlb_id
+
+    - name: Test parent setting and metadata update
+      ansible.builtin.include_tasks: scenario.yml
+      vars:
+        oci_nlb_case_name: "{{ oci_nlb_integration_public_name }}"
+        oci_nlb_case_operation:
+          network_load_balancer_id: "{{ oci_nlb_id }}"
+          name: "{{ oci_nlb_integration_updated_name }}"
+          is_preserve_source_destination: true
+          is_symmetric_hash_enabled: true
+          freeform_tags: {phase: update}
+        oci_nlb_case_expected:
+          name: "{{ oci_nlb_integration_updated_name }}"
+          is_preserve_source_destination: true
+          is_symmetric_hash_enabled: true
+          freeform_tags: {phase: update}
+
+    - name: Test network security group update
+      ansible.builtin.include_tasks: scenario.yml
+      vars:
+        oci_nlb_case_name: "{{ oci_nlb_integration_updated_name }}"
+        oci_nlb_case_operation:
+          network_load_balancer_id: "{{ oci_nlb_id }}"
+          network_security_group_ids: ["{{ oci_nlb_nsg_id }}"]
+        oci_nlb_case_expected:
+          network_security_group_ids: ["{{ oci_nlb_nsg_id }}"]
+
+    - name: Test network security group detach update
+      ansible.builtin.include_tasks: scenario.yml
+      vars:
+        oci_nlb_case_name: "{{ oci_nlb_integration_updated_name }}"
+        oci_nlb_case_operation:
+          network_load_balancer_id: "{{ oci_nlb_id }}"
+          network_security_group_ids: []
+        oci_nlb_case_expected:
+          network_security_group_ids: []
+
+    - name: Test public resource deletion by scoped name
+      ansible.builtin.include_tasks: scenario.yml
+      vars:
+        oci_nlb_case_name: "{{ oci_nlb_integration_updated_name }}"
+        oci_nlb_case_operation:
+          state: absent
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_nlb_integration_updated_name }}"
+        oci_nlb_case_expected: {}
+
+    - name: Test private resource create
+      ansible.builtin.include_tasks: scenario.yml
+      vars:
+        oci_nlb_case_name: "{{ oci_nlb_integration_private_name }}"
+        oci_nlb_case_operation:
+          compartment_id: "{{ oci_integration_compartment_id }}"
+          name: "{{ oci_nlb_integration_private_name }}"
+          subnet_id: "{{ oci_nlb_private_subnet_id }}"
+          is_private: true
+          ip_mode: ipv4
+        oci_nlb_case_expected:
+          name: "{{ oci_nlb_integration_private_name }}"
+          is_private: true
+          ip_mode: IPV4
+
+    - name: Test private resource deletion by ID
+      ansible.builtin.include_tasks: scenario.yml
+      vars:
+        oci_nlb_case_name: "{{ oci_nlb_integration_private_name }}"
+        oci_nlb_case_operation:
+          state: absent
+          network_load_balancer_id: "{{ oci_nlb_id }}"
+        oci_nlb_case_expected: {}
+
+    - name: Test optional IPv6 fixture
+      ansible.builtin.include_tasks: ipv6.yml
+      when: oci_nlb_integration_ipv6_subnet_id | length > 0
+
+    - name: Report missing IPv6 fixture
+      ansible.builtin.debug:
+        msg: IPv6 scenarios skipped; set OCI_LOADBALANCER_IPV6_SUBNET_ID.
+      when: oci_nlb_integration_ipv6_subnet_id | length == 0
+
+  always:
+    - name: Clean up integration resources
+      ansible.builtin.include_tasks: cleanup.yml

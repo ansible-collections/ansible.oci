@@ -19,11 +19,22 @@ UpdateFieldSpec = load_collection_module("oci_resource").UpdateFieldSpec
 
 
 def _load_helper(monkeypatch):
+    """Load the LB adapter and replace its client factory for isolated tests.
+
+    Args:
+        monkeypatch: Pytest patch fixture.
+
+    Returns:
+        The module with a local SDK and a fake client factory.
+    """
     helper = load_collection_module("oci_loadbalancer")
     # Other module utility tests temporarily replace sys.modules['oci']; keep
     # this model-construction and serialization coverage on the installed SDK.
     monkeypatch.setattr(helper, "oci", oci)
-    oci_module_base = helper.OciResourceBase.__mro__[1]
+    oci_module_base = next(
+        base for base in helper.OciLoadBalancerSubresourceBase.__mro__
+        if base.__name__ == "OciModuleBase"
+    )
     monkeypatch.setitem(
         oci_module_base.__init__.__globals__,
         "create_service_client",
@@ -294,38 +305,6 @@ def test_routing_model_building_preserves_sdk_instances_and_order(
     assert fields == original
 
 
-def test_merge_load_balancer_fields_preserves_unsupplied_values_and_replaces_lists():
-    helper = load_collection_module("oci_loadbalancer")
-
-    merged = helper.merge_load_balancer_fields(
-        {
-            "policy": "ROUND_ROBIN",
-            "backend_max_connections": 100,
-            "health_checker": {
-                "protocol": "HTTP",
-                "port": 80,
-                "url_path": "/old",
-            },
-            "backends": [{"ip_address": "10.0.0.1", "port": 80}],
-        },
-        {
-            "health_checker": {"url_path": "/ready", "port": None},
-            "backends": [{"ip_address": "10.0.0.2", "port": 80}],
-        },
-    )
-
-    assert merged == {
-        "policy": "ROUND_ROBIN",
-        "backend_max_connections": 100,
-        "health_checker": {
-            "protocol": "HTTP",
-            "port": 80,
-            "url_path": "/ready",
-        },
-        "backends": [{"ip_address": "10.0.0.2", "port": 80}],
-    }
-
-
 @pytest.mark.parametrize(
     "protocol", ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3", "TLSv9.9", "tlsv1.2"]
 )
@@ -340,37 +319,12 @@ def test_tls_protocol_strings_pass_unchanged_to_sdk(monkeypatch, protocol):
     assert fields == original
 
 
-@pytest.mark.parametrize(
-    "current,desired,expected",
-    [
-        (None, {"enabled": False}, {"enabled": False}),
-        ({"port": 80}, None, {"port": 80}),
-        ({"port": 80}, [], {"port": 80}),
-        ([], {"port": 0}, {"port": 0}),
-        (None, None, {}),
-        (
-            {"nested": {"enabled": True, "port": 80}, "items": [1]},
-            {"nested": {"enabled": False, "port": 0}, "items": []},
-            {"nested": {"enabled": False, "port": 0}, "items": []},
-        ),
-    ],
-)
-def test_merge_preserves_input_data_and_explicit_values(current, desired, expected):
-    helper = load_collection_module("oci_loadbalancer")
-    original_current = copy.deepcopy(current)
-    original_desired = copy.deepcopy(desired)
-
-    result = helper.merge_load_balancer_fields(current, desired)
-
-    assert result == expected
-    assert current == original_current
-    assert desired == original_desired
-
-
 def test_subset_comparison_treats_lowercase_nested_enums_as_oci_values(monkeypatch):
     helper = _load_helper(monkeypatch)
 
     class BackendSet(helper.OciLoadBalancerSubresourceBase):
+        update_field_specs = ()
+
         def get_resource_response(self, resource_id):
             raise AssertionError("comparison should not fetch a resource")
 
@@ -397,6 +351,8 @@ def test_subset_comparison_preserves_case_sensitive_names_ciphers_and_cookies(mo
     helper = _load_helper(monkeypatch)
 
     class BackendSet(helper.OciLoadBalancerSubresourceBase):
+        update_field_specs = ()
+
         def get_resource_response(self, resource_id):
             raise AssertionError("comparison should not fetch a resource")
 
@@ -858,3 +814,46 @@ def test_composite_timeout_fails_with_operation_context(monkeypatch):
     assert "update" in exc.value.payload["msg"]
     assert "work-request-43" in exc.value.payload["msg"]
     assert "timed out" in exc.value.payload["msg"].lower()
+
+
+@pytest.mark.parametrize("message", [None, "Invalid backend configuration"])
+def test_work_request_failure_with_optional_error_details(monkeypatch, message):
+    """Report SDK work requests when optional error details are absent."""
+    helper = _load_helper(monkeypatch)
+
+    class BackendSet(helper.OciLoadBalancerSubresourceBase):
+        update_field_specs = ()
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("Failure reporting must not read a resource.")
+
+    adapter = BackendSet(DummyModule({"load_balancer_id": "lb1"}))
+    response = oci.response.Response(
+        200,
+        {},
+        oci.load_balancer.models.WorkRequest(
+            id="request1", lifecycle_state="FAILED", message=message
+        ),
+        None,
+    )
+    with pytest.raises(FailJsonCalled) as caught:
+        adapter._check_work_request_result(response, "update")
+    assert "request1" in caught.value.payload["msg"]
+    if message:
+        assert message in caught.value.payload["msg"]
+
+
+def test_composite_response_without_work_request_data(monkeypatch):
+    """Accept an immediate SDK response without a work request header."""
+    helper = _load_helper(monkeypatch)
+
+    class BackendSet(helper.OciLoadBalancerSubresourceBase):
+        update_field_specs = ()
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("Response validation must not read a resource.")
+
+    adapter = BackendSet(DummyModule({"load_balancer_id": "lb1"}))
+    response = oci.response.Response(204, {}, None, None)
+    adapter._check_work_request_result(response, "delete")
+    assert adapter._work_request_id(response) is None

@@ -1,0 +1,94 @@
+---
+- name: Read the network load balancer before the scenario
+  ansible.oci.oci_network_loadbalancer_info: &oci_nlb_probe
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_nlb_case_name }}"
+    network_load_balancer_id: "{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}"
+  register: oci_nlb_before
+
+- name: Run the scenario in check mode
+  ansible.oci.oci_network_loadbalancer: &oci_nlb_operation
+    state: "{{ oci_nlb_case_operation.state | default('present') }}"
+    network_load_balancer_id: "{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}"
+    compartment_id: "{{ oci_nlb_case_operation.compartment_id | default(omit) }}"
+    name: "{{ oci_nlb_case_operation.name | default(omit) }}"
+    subnet_id: "{{ oci_nlb_case_operation.subnet_id | default(omit) }}"
+    is_private: "{{ oci_nlb_case_operation.is_private | default(omit) }}"
+    ip_mode: "{{ oci_nlb_case_operation.ip_mode | default(omit) }}"
+    assigned_private_ipv4: "{{ oci_nlb_case_operation.assigned_private_ipv4 | default(omit) }}"
+    assigned_ipv6: "{{ oci_nlb_case_operation.assigned_ipv6 | default(omit) }}"
+    subnet_ipv6_cidr: "{{ oci_nlb_case_operation.subnet_ipv6_cidr | default(omit) }}"
+    reserved_ips: "{{ oci_nlb_case_operation.reserved_ips | default(omit) }}"
+    network_security_group_ids: "{{ oci_nlb_case_operation.network_security_group_ids | default(omit) }}"
+    is_preserve_source_destination: "{{ oci_nlb_case_operation.is_preserve_source_destination | default(omit) }}"
+    is_symmetric_hash_enabled: "{{ oci_nlb_case_operation.is_symmetric_hash_enabled | default(omit) }}"
+    freeform_tags: "{{ oci_nlb_case_operation.freeform_tags | default(omit) }}"
+    defined_tags: "{{ oci_nlb_case_operation.defined_tags | default(omit) }}"
+    security_attributes: "{{ oci_nlb_case_operation.security_attributes | default(omit) }}"
+    wait: true
+  check_mode: true
+  register: oci_nlb_prediction
+
+- name: Read the resource after check mode
+  ansible.oci.oci_network_loadbalancer_info:
+    <<: *oci_nlb_probe
+  register: oci_nlb_after_prediction
+
+- name: Check that check mode predicts change without changing OCI
+  ansible.builtin.assert:
+    that:
+      - oci_nlb_prediction.changed | bool
+      - oci_nlb_after_prediction.network_load_balancers == oci_nlb_before.network_load_balancers
+
+- name: Apply the scenario
+  ansible.oci.oci_network_loadbalancer:
+    <<: *oci_nlb_operation
+  register: oci_nlb_applied
+
+- name: Save network load balancer identifier
+  ansible.builtin.set_fact:
+    oci_nlb_id: "{{ oci_nlb_applied.resource.id }}"
+    oci_nlb_cleanup_ids: "{{ (oci_nlb_cleanup_ids | default([])) + [oci_nlb_applied.resource.id] }}"
+  when: oci_nlb_case_operation.state | default('present') == 'present'
+
+- name: Read the resource after apply
+  ansible.oci.oci_network_loadbalancer_info:
+    network_load_balancer_id: "{{ oci_nlb_id }}"
+  register: oci_nlb_after
+
+- name: Check the resource state after apply
+  ansible.builtin.assert:
+    that:
+      - oci_nlb_applied.changed | bool
+      - >-
+        (oci_nlb_case_operation.state | default('present') == 'absent'
+        and (oci_nlb_after.network_load_balancers | length == 0
+        or oci_nlb_after.network_load_balancers[0].lifecycle_state == 'DELETED'))
+        or (oci_nlb_case_operation.state | default('present') == 'present'
+        and oci_nlb_after.network_load_balancers | length == 1
+        and oci_nlb_after.network_load_balancers[0].id == oci_nlb_id
+        and oci_nlb_after.network_load_balancers[0].lifecycle_state == 'ACTIVE')
+
+- name: Check expected settings
+  ansible.builtin.assert:
+    that:
+      - oci_nlb_after.network_load_balancers[0][item.key] == item.value
+  loop: "{{ oci_nlb_case_expected | dict2items }}"
+  when: oci_nlb_case_operation.state | default('present') == 'present'
+
+- name: Repeat the scenario in normal mode
+  ansible.oci.oci_network_loadbalancer:
+    <<: *oci_nlb_operation
+  register: oci_nlb_rerun
+
+- name: Repeat the scenario in check mode
+  ansible.oci.oci_network_loadbalancer:
+    <<: *oci_nlb_operation
+  check_mode: true
+  register: oci_nlb_check_rerun
+
+- name: Check normal and check mode idempotency
+  ansible.builtin.assert:
+    that:
+      - not oci_nlb_rerun.changed | bool
+      - not oci_nlb_check_rerun.changed | bool

@@ -431,6 +431,7 @@ def test_health_checker_update_calls_composite_with_backend_set_scope(monkeypatc
             wait_interval=2,
         ),
         client=types.SimpleNamespace(
+            retry_strategy=None,
             get_health_checker=lambda **kwargs: FakeResponse(updated)
         ),
     )

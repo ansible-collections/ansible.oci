@@ -1,0 +1,13 @@
+---
+oci_nlb_integration_vcn_name: oci-nlb-vcn
+oci_nlb_integration_public_subnet_name: oci-nlb-public-subnet
+oci_nlb_integration_private_subnet_name: oci-nlb-private-subnet
+oci_nlb_integration_public_name: oci-nlb-public
+oci_nlb_integration_updated_name: oci-nlb-updated
+oci_nlb_integration_private_name: oci-nlb-private
+oci_nlb_integration_ipv6_name: oci-nlb-ipv6
+oci_nlb_integration_vcn_cidr: 10.250.0.0/16
+oci_nlb_integration_public_subnet_cidr: 10.250.1.0/24
+oci_nlb_integration_private_subnet_cidr: 10.250.2.0/24
+oci_nlb_integration_ipv6_subnet_id: "{{ lookup('env', 'OCI_LOADBALANCER_IPV6_SUBNET_ID') }}"
+oci_nlb_integration_ipv6_reserved_ip_id: "{{ lookup('env', 'OCI_LOADBALANCER_IPV6_RESERVED_IP_ID') }}"

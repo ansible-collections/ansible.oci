@@ -285,6 +285,8 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer import (
     OciLoadBalancerSubresourceBase,
     build_load_balancer_model,
+)
+from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer_common import (
     merge_load_balancer_fields,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
@@ -307,34 +309,27 @@ class OciLoadBalancerBackendSetModule(OciLoadBalancerSubresourceBase):
     create_resource_name = "load balancer backend set"
     create_required_fields = ("name", "policy", "health_checker")
 
-    @property
-    def update_field_specs(self):
-        """Define mutable resource fields.
-
-        Returns:
-            The update field specifications.
-        """
-        return (
-            UpdateFieldSpec(
-                param_name="policy", is_mutable=True, strategy="plan_enum_update"
-            ),
-            UpdateFieldSpec(
-                param_name="health_checker", is_mutable=True, compare="subset_dict"
-            ),
-            UpdateFieldSpec(
-                param_name="ssl_configuration", is_mutable=True, compare="subset_dict"
-            ),
-            UpdateFieldSpec(
-                param_name="session_persistence_configuration",
-                is_mutable=True,
-                compare="subset_dict",
-            ),
-            UpdateFieldSpec(
-                param_name="lb_cookie_session_persistence_configuration",
-                is_mutable=True,
-                compare="subset_dict",
-            ),
-        )
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="policy", is_mutable=True, strategy="plan_enum_update"
+        ),
+        UpdateFieldSpec(
+            param_name="health_checker", is_mutable=True, compare="subset_dict"
+        ),
+        UpdateFieldSpec(
+            param_name="ssl_configuration", is_mutable=True, compare="subset_dict"
+        ),
+        UpdateFieldSpec(
+            param_name="session_persistence_configuration",
+            is_mutable=True,
+            compare="subset_dict",
+        ),
+        UpdateFieldSpec(
+            param_name="lb_cookie_session_persistence_configuration",
+            is_mutable=True,
+            compare="subset_dict",
+        ),
+    )
 
     def get_resource_response(self, resource_id):
         """Fetch the named backend set.

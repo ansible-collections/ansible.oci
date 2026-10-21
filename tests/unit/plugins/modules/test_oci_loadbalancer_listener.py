@@ -406,6 +406,7 @@ def test_listener_create_uses_typed_sdk_details_and_waited_composite(monkeypatch
             "wait_interval": 3,
         },
         client=types.SimpleNamespace(
+            retry_strategy=None,
             get_load_balancer=lambda **kwargs: FakeResponse(
                 types.SimpleNamespace(listeners={"web": listener})
             )
