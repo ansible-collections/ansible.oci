@@ -25,13 +25,6 @@ generate-integration-runtime:
 	chmod +x "$(COLLECTION_ROOT)/tests/integration/generate_integration_runtime.sh"
 	PYTHON_BIN="$(PYTHON_BIN)" "$(COLLECTION_ROOT)/tests/integration/generate_integration_runtime.sh"
 
-.PHONY: install-integration-reqs
-install-integration-reqs:
-ifndef IN_COLLECTION_TREE
-	pip install -r tests/integration/requirements.txt; \
-	ansible-galaxy collection install --upgrade -p ~/.ansible/collections -r tests/integration/requirements.yml
-endif
-
 .PHONY: upgrade-collections
 upgrade-collections:
 ifndef IN_COLLECTION_TREE
@@ -39,7 +32,7 @@ ifndef IN_COLLECTION_TREE
 endif
 
 .PHONY: integration-ci
-integration-ci: install-integration-reqs upgrade-collections generate-integration-runtime
+integration-ci: upgrade-collections generate-integration-runtime
 	cd "$(COLLECTION_ROOT)"; \
 	ansible --version; \
 	ansible-test --version; \
