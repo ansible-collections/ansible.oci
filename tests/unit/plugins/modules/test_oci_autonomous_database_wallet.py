@@ -281,9 +281,13 @@ def test_failed_download_preserves_dest_and_removes_temporary_file(monkeypatch, 
     destination.write_bytes(b"existing")
     client = DatabaseClient(error=ConnectionError("stream interrupted"))
 
-    with pytest.raises(ConnectionError):
+    with pytest.raises(FailJsonCalled) as result:
         run(module_obj, monkeypatch, client, base_params(destination, force=True))
 
+    assert result.value.payload["msg"] == (
+        f"Failed to write the Autonomous Database wallet to {destination}: "
+        "stream interrupted"
+    )
     assert destination.read_bytes() == b"existing"
     assert not list(tmp_path.glob(".ansible-oci-wallet-*"))
     assert client.bodies[0].closed is True
@@ -326,7 +330,7 @@ def test_unsafe_writes_is_passed_to_atomic_move(monkeypatch, tmp_path):
         module_obj,
         monkeypatch,
         DatabaseClient(),
-        base_params(tmp_path / "wallet.zip", unsafe_writes=True),
+        base_params(tmp_path / "wallet.zip", force=True, unsafe_writes=True),
         file_module=RecordingFileModule,
     )
 
@@ -346,7 +350,7 @@ def test_new_wallet_is_private_even_if_atomic_move_ignores_umask(monkeypatch, tm
         module_obj,
         monkeypatch,
         DatabaseClient(),
-        base_params(destination),
+        base_params(destination, force=True),
         file_module=PermissiveFileModule,
     )
 
@@ -407,3 +411,63 @@ def test_missing_parent_directory_fails(monkeypatch, tmp_path):
         f"Destination directory {tmp_path / 'missing'} does not exist"
     )
     assert not destination.parent.exists()
+
+
+def test_temporary_file_creation_error_fails_cleanly(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    destination = tmp_path / "wallet.zip"
+    client = DatabaseClient()
+
+    def deny(*args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(module_obj.tempfile, "mkstemp", deny)
+
+    with pytest.raises(FailJsonCalled) as result:
+        run(module_obj, monkeypatch, client, base_params(destination))
+
+    assert result.value.payload["msg"] == (
+        f"Failed to write the Autonomous Database wallet to {destination}: "
+        "[Errno 13] Permission denied"
+    )
+    assert not destination.exists()
+    assert client.bodies[0].closed is True
+
+
+def test_dest_created_during_download_is_kept_without_force(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    destination = tmp_path / "wallet.zip"
+
+    def chunks_racing_another_writer():
+        yield WALLET_CHUNKS[0]
+        destination.write_bytes(b"created by another task")
+        yield WALLET_CHUNKS[1]
+
+    class FailingMoveFileModule(FileModule):
+        def atomic_move(self, src, dest, unsafe_writes=False):
+            raise AssertionError("atomic_move must not replace dest when force is false")
+
+    result = run(
+        module_obj,
+        monkeypatch,
+        DatabaseClient(chunks=chunks_racing_another_writer()),
+        base_params(destination),
+        file_module=FailingMoveFileModule,
+    )
+
+    assert result == {"changed": False, "dest": str(destination)}
+    assert destination.read_bytes() == b"created by another task"
+    assert not list(tmp_path.glob(".ansible-oci-wallet-*"))
+
+
+def test_new_wallet_without_force_is_private_regardless_of_umask(monkeypatch, tmp_path):
+    module_obj = load_wallet_module(monkeypatch)
+    destination = tmp_path / "wallet.zip"
+    previous_umask = os.umask(0)
+    try:
+        run(module_obj, monkeypatch, DatabaseClient(), base_params(destination))
+    finally:
+        os.umask(previous_umask)
+
+    assert file_mode(destination) == 0o600
+    assert os.stat(destination).st_nlink == 1

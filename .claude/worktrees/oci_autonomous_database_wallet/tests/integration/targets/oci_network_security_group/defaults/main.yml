@@ -1,0 +1,12 @@
+---
+oci_network_security_group_integration_vcn_name: "oci-network-security-group-integration-vcn"
+oci_network_security_group_integration_name: "oci-network-security-group-integration"
+oci_network_security_group_integration_updated_name: "oci-network-security-group-integration-updated"
+oci_network_security_group_integration_vcn_cidr_block: "10.254.0.0/16"
+oci_network_security_group_integration_vcn_dns_label: "ocinsgvcn"
+oci_network_security_group_integration_create_tags:
+  phase: create
+  role: integration
+oci_network_security_group_integration_update_tags:
+  phase: update
+  role: integration

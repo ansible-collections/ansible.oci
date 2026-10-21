@@ -1,0 +1,12 @@
+---
+oci_service_gateway_integration_vcn_name: "oci-sgw-integration-vcn"
+oci_service_gateway_integration_gateway_name: "oci-sgw-integration-gateway"
+oci_service_gateway_integration_updated_gateway_name: "oci-sgw-integration-gateway-updated"
+oci_service_gateway_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_service_gateway_integration_vcn_dns_label: "ocisgwv"
+oci_service_gateway_integration_create_tags:
+  phase: create
+  role: integration
+oci_service_gateway_integration_update_tags:
+  phase: update
+  role: integration

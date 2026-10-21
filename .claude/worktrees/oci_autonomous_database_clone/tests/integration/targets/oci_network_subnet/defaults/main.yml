@@ -1,0 +1,15 @@
+---
+oci_subnet_integration_vcn_name: "oci-subnet-integration-vcn"
+oci_subnet_integration_subnet_name: "oci-subnet-integration-subnet"
+oci_subnet_integration_updated_subnet_name: "oci-subnet-integration-subnet-updated"
+oci_subnet_integration_vcn_cidr_block: "10.251.0.0/16"
+oci_subnet_integration_subnet_cidr_block: "10.251.1.0/25"
+oci_subnet_integration_updated_subnet_cidr_block: "10.251.1.0/24"
+oci_subnet_integration_vcn_dns_label: "ocisubnetv"
+oci_subnet_integration_subnet_dns_label: "ocisubnets"
+oci_subnet_integration_create_tags:
+  phase: create
+  role: integration
+oci_subnet_integration_update_tags:
+  phase: update
+  role: integration

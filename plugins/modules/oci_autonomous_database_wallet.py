@@ -59,6 +59,9 @@ options:
       - Whether to download a new wallet when O(dest) already exists.
       - When false, an existing O(dest) is never replaced, regardless of its
         content. File attributes such as O(mode) are still applied.
+      - When false and another process creates O(dest) while the wallet is
+        downloading, the new wallet is discarded and the task reports no change.
+        This requires a filesystem that supports hard links.
       - When true, a new wallet is always generated and replaces O(dest), so the
         task always reports a change.
       - OCI generates new keys every time a wallet is downloaded, so the content
@@ -172,6 +175,9 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
 
         Args:
             destination (str): Resolved local path for the wallet zip.
+
+        Returns:
+            bool: Whether ``destination`` was written.
         """
         try:
             response = self.generate_wallet()
@@ -180,7 +186,13 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
                 msg=f"Failed to generate the Autonomous Database wallet: {exc}"
             )
         try:
-            self.write_wallet(response.data, destination)
+            return self.write_wallet(response.data, destination)
+        except OSError as exc:
+            # Covers local file errors (permissions, disk full) and interrupted
+            # downloads, since requests' stream errors derive from OSError.
+            self.module.fail_json(
+                msg=f"Failed to write the Autonomous Database wallet to {destination}: {exc}"
+            )
         finally:
             response.data.close()
 
@@ -190,8 +202,13 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
         Args:
             body: Streamed wallet response body.
             destination (str): Resolved local path for the wallet zip.
+
+        Returns:
+            bool: Whether ``destination`` was written. False when O(force) is
+            false and another process created ``destination`` during the download.
         """
         # Stage beside the destination so the final move stays atomic.
+        # mkstemp creates the file with mode 0600.
         file_descriptor, temporary = tempfile.mkstemp(
             prefix=".ansible-oci-wallet-",
             dir=os.path.dirname(destination),
@@ -200,6 +217,13 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
             with os.fdopen(file_descriptor, "wb") as output:
                 for chunk in body.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                     output.write(chunk)
+            if not self.module.params["force"]:
+                # Linking refuses to overwrite a destination created during the download.
+                try:
+                    os.link(temporary, destination)
+                except FileExistsError:
+                    return False
+                return True
             creating = not os.path.exists(destination)
             # atomic_move gives a newly created file the umask-based default
             # mode. Tighten the umask so the wallet is never readable by others
@@ -215,6 +239,7 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
                 os.umask(previous_umask)
             if creating:
                 os.chmod(destination, 0o600)
+            return True
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
@@ -231,7 +256,7 @@ class OciAutonomousDatabaseWalletModule(OciModuleBase):
         if params["force"] or not os.path.exists(destination):
             changed = True
             if not self.module.check_mode:
-                self.download_wallet(destination)
+                changed = self.download_wallet(destination)
 
         file_args = self.module.load_file_common_arguments(params, path=destination)
         if not (changed and self.module.check_mode):

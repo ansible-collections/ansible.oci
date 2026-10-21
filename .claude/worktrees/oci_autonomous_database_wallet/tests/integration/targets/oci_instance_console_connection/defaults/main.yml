@@ -1,0 +1,36 @@
+---
+# A throwaway RSA public key used to create a real console connection
+# against the instance launched below. OCI rejects other SSH key types
+# (for example ssh-ed25519) on create_instance_console_connection.
+# No corresponding private key is committed or needed: this target
+# verifies the console connection resource lifecycle and its discovery
+# through oci_instance_console_connection_info, not actual SSH
+# connectivity to the console.
+oci_instance_console_connection_integration_public_key: >-
+  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0e9sw7AgE2UThMW6Fy1qIqLu3cvdPVJ531TXnjB3ztFrQ7MpRzo7B0iA23bFD2/yN+Am5mifYrOsQbDvnP6UJy3UAQ6d/UZgeg729aFihaawdlmeG9syRsA/h3S2tnSsTCKpc+Sc9XmLylCZnj9EvMoWrQNcVrmuci/TYuZzY3S4KQrc9SjGvd5ozeY3JbKKbBG0RIZzkww1cijkl95DZoEad3hI9bifjPE8wrjb5iPLX3oEQVVe/gnZTCgEbf1aR27jTSAcumlLGAXcnyheEdQnm5NMxuNHbOVOJ6oWt2xSWWPV2d8zrfCUBVVAc0OMa7vypCqArZ2lIC3YXsbO7 integration-test
+
+# oci_instance_console_connection_integration_availability_domain is
+# tenancy-specific (AD names are not portable across OCI accounts), matching
+# the value used by the oci_instance integration target for the same CI
+# tenancy/region.
+oci_instance_console_connection_integration_availability_domain: "gzqB:US-SANJOSE-1-AD-1"
+# Image OCID is discovered at run time via oci_image_info (tasks/main.yml),
+# filtered by these values, rather than pinned here. Oracle periodically
+# deprecates/rotates platform images, so a hardcoded OCID would go stale.
+oci_instance_console_connection_integration_operating_system: "Oracle Linux"
+oci_instance_console_connection_integration_operating_system_version: "9"
+oci_instance_console_connection_integration_shape: "VM.Standard.E4.Flex"
+oci_instance_console_connection_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_instance_console_connection_integration_vcn_name: "oci-instance-console-connection-integration-vcn"
+oci_instance_console_connection_integration_subnet_name: "oci-instance-console-connection-integration-subnet"
+oci_instance_console_connection_integration_instance_name: "oci-instance-console-connection-integration-instance"
+oci_instance_console_connection_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_instance_console_connection_integration_subnet_cidr_block: "10.252.1.0/24"
+oci_instance_console_connection_integration_create_tags:
+  phase: create
+  role: integration
+oci_instance_console_connection_integration_update_tags:
+  phase: update
+  role: integration

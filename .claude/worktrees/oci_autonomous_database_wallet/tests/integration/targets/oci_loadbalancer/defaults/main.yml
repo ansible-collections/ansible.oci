@@ -1,0 +1,22 @@
+---
+oci_loadbalancer_integration_vcn_name: oci-loadbalancer-vcn
+oci_loadbalancer_integration_subnet_name: oci-loadbalancer-subnet
+oci_loadbalancer_integration_name: oci-loadbalancer-public
+oci_loadbalancer_integration_updated_name: oci-loadbalancer-updated
+oci_loadbalancer_integration_private_name: oci-loadbalancer-private
+oci_loadbalancer_integration_ipv6_name: oci-loadbalancer-ipv6
+oci_loadbalancer_integration_reserved_ip_name: oci-loadbalancer-reserved-ip
+oci_loadbalancer_integration_vcn_cidr: 10.251.0.0/16
+oci_loadbalancer_integration_subnet_cidr: 10.251.1.0/24
+oci_loadbalancer_integration_ipv6_subnet_id: "{{ lookup('env', 'OCI_LOADBALANCER_IPV6_SUBNET_ID') }}"
+# Optional, unassigned reserved IPv6 address in the configured IPv6 subnet.
+oci_loadbalancer_integration_ipv6_reserved_ip_id: "{{ lookup('env', 'OCI_LOADBALANCER_IPV6_RESERVED_IP_ID') }}"
+oci_loadbalancer_integration_create_shape:
+  minimum_bandwidth_in_mbps: 10
+  maximum_bandwidth_in_mbps: 10
+oci_loadbalancer_integration_update_shape:
+  minimum_bandwidth_in_mbps: 10
+  maximum_bandwidth_in_mbps: 20
+oci_loadbalancer_integration_combined_shape:
+  minimum_bandwidth_in_mbps: 10
+  maximum_bandwidth_in_mbps: 30

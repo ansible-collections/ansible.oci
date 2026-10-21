@@ -1,0 +1,281 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI Network Security Group rule integration tests require
+      oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_network_security_group_rule_vcn_name: "{{ oci_network_security_group_rule_vcn_name }}-{{ oci_integration_rpfx }}"
+    oci_network_security_group_rule_nsg_name: "{{ oci_network_security_group_rule_nsg_name }}-{{ oci_integration_rpfx }}"
+    oci_network_security_group_rule_peer_nsg_name: "{{ oci_network_security_group_rule_peer_nsg_name }}-{{ oci_integration_rpfx }}"
+    oci_network_security_group_rule_vcn_dns_label: "nsgr{{ oci_integration_rpfx }}"
+
+- name: Exercise Network Security Group rule lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create test VCN
+      ansible.oci.oci_network_vcn:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_network_security_group_rule_vcn_name }}"
+        cidr_blocks:
+          - "{{ oci_network_security_group_rule_vcn_cidr }}"
+        dns_label: "{{ oci_network_security_group_rule_vcn_dns_label }}"
+      register: oci_network_security_group_rule_vcn_create
+
+    - name: Capture test VCN identifier
+      ansible.builtin.set_fact:
+        oci_network_security_group_rule_vcn_id: "{{ oci_network_security_group_rule_vcn_create.resource.id }}"
+
+    - name: Create test Network Security Group
+      ansible.oci.oci_network_security_group:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_network_security_group_rule_vcn_id }}"
+        name: "{{ oci_network_security_group_rule_nsg_name }}"
+      register: oci_network_security_group_rule_nsg_create
+
+    - name: Capture test Network Security Group identifier
+      ansible.builtin.set_fact:
+        oci_network_security_group_rule_nsg_id: "{{ oci_network_security_group_rule_nsg_create.resource.id }}"
+
+    - name: Create peer Network Security Group
+      ansible.oci.oci_network_security_group:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_network_security_group_rule_vcn_id }}"
+        name: "{{ oci_network_security_group_rule_peer_nsg_name }}"
+      register: oci_network_security_group_rule_peer_nsg_create
+
+    - name: Capture peer Network Security Group identifier
+      ansible.builtin.set_fact:
+        oci_network_security_group_rule_peer_nsg_id: "{{ oci_network_security_group_rule_peer_nsg_create.resource.id }}"
+
+    - name: Add ingress rule from peer Network Security Group
+      ansible.oci.oci_network_security_group_rule: &peer_nsg_rule_create
+        state: present
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        direction: ingress
+        protocol: all
+        source: "{{ oci_network_security_group_rule_peer_nsg_id }}"
+        source_type: network_security_group
+        description: Allow traffic from peer Network Security Group
+      register: oci_network_security_group_rule_peer_nsg_rule_create
+
+    - name: Capture peer Network Security Group rule identifier
+      ansible.builtin.set_fact:
+        oci_network_security_group_rule_peer_nsg_rule_id: "{{ oci_network_security_group_rule_peer_nsg_rule_create.resource.id }}"
+
+    - name: Assert peer Network Security Group rule was created
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_peer_nsg_rule_create.changed | bool
+          - oci_network_security_group_rule_peer_nsg_rule_create.resource.direction == "ingress"
+          - oci_network_security_group_rule_peer_nsg_rule_create.resource.source == oci_network_security_group_rule_peer_nsg_id
+          - oci_network_security_group_rule_peer_nsg_rule_create.resource.source_type == "network_security_group"
+
+    - name: Reapply peer Network Security Group rule without its identifier
+      ansible.oci.oci_network_security_group_rule:
+        <<: *peer_nsg_rule_create
+      register: oci_network_security_group_rule_peer_nsg_rule_rerun
+
+    - name: Assert peer Network Security Group rule is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_rule_peer_nsg_rule_rerun.changed | bool
+          - oci_network_security_group_rule_peer_nsg_rule_rerun.resource.id == oci_network_security_group_rule_peer_nsg_rule_id
+
+    - name: Add ingress rule in check mode
+      ansible.oci.oci_network_security_group_rule: &ingress_rule_create
+        state: present
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        direction: ingress
+        protocol: "6"
+        source: "10.0.0.0/24"
+        description: Allow SSH
+        tcp_options:
+          destination_port_min: 22
+          destination_port_max: 22
+      check_mode: true
+      register: oci_network_security_group_rule_ingress_check
+
+    - name: Assert ingress create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_ingress_check.changed | bool
+
+    - name: Add ingress rule
+      ansible.oci.oci_network_security_group_rule:
+        <<: *ingress_rule_create
+      register: oci_network_security_group_rule_ingress_create
+
+    - name: Capture ingress rule identifier
+      ansible.builtin.set_fact:
+        oci_network_security_group_rule_ingress_id: "{{ oci_network_security_group_rule_ingress_create.resource.id }}"
+
+    - name: Assert ingress rule was created
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_ingress_create.changed | bool
+          - oci_network_security_group_rule_ingress_create.resource.direction == "ingress"
+          - oci_network_security_group_rule_ingress_create.resource.source == "10.0.0.0/24"
+          - oci_network_security_group_rule_ingress_create.resource.source_type == "cidr_block"
+          - oci_network_security_group_rule_ingress_create.resource.tcp_options.destination_port_range.min == 22
+
+    - name: Reapply ingress rule without its identifier
+      ansible.oci.oci_network_security_group_rule:
+        <<: *ingress_rule_create
+      register: oci_network_security_group_rule_ingress_rerun
+
+    - name: Assert content-based create is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_rule_ingress_rerun.changed | bool
+          - oci_network_security_group_rule_ingress_rerun.resource.id == oci_network_security_group_rule_ingress_id
+
+    - name: Update ingress rule in check mode
+      ansible.oci.oci_network_security_group_rule: &ingress_rule_update
+        state: present
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        security_rule_id: "{{ oci_network_security_group_rule_ingress_id }}"
+        description: Allow HTTPS
+        tcp_options:
+          destination_port_min: 443
+          destination_port_max: 443
+      check_mode: true
+      register: oci_network_security_group_rule_update_check
+
+    - name: Assert update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_update_check.changed | bool
+
+    - name: Update ingress rule
+      ansible.oci.oci_network_security_group_rule:
+        <<: *ingress_rule_update
+      register: oci_network_security_group_rule_update
+
+    - name: Assert partial update retained and changed expected fields
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_update.changed | bool
+          - oci_network_security_group_rule_update.resource.direction == "ingress"
+          - oci_network_security_group_rule_update.resource.source == "10.0.0.0/24"
+          - oci_network_security_group_rule_update.resource.description == "Allow HTTPS"
+          - oci_network_security_group_rule_update.resource.tcp_options.destination_port_range.min == 443
+
+    - name: Reapply ingress rule update
+      ansible.oci.oci_network_security_group_rule:
+        <<: *ingress_rule_update
+      register: oci_network_security_group_rule_update_rerun
+
+    - name: Assert ingress rule update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_rule_update_rerun.changed | bool
+
+    - name: Add egress UDP rule
+      ansible.oci.oci_network_security_group_rule: &egress_rule_create
+        state: present
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        direction: egress
+        protocol: "17"
+        destination: "0.0.0.0/0"
+        description: Allow DNS
+        udp_options:
+          destination_port_min: 53
+          destination_port_max: 53
+      register: oci_network_security_group_rule_egress_create
+
+    - name: Capture egress rule identifier
+      ansible.builtin.set_fact:
+        oci_network_security_group_rule_egress_id: "{{ oci_network_security_group_rule_egress_create.resource.id }}"
+
+    - name: Assert egress rule was created
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_egress_create.changed | bool
+          - oci_network_security_group_rule_egress_create.resource.direction == "egress"
+          - oci_network_security_group_rule_egress_create.resource.destination == "0.0.0.0/0"
+          - oci_network_security_group_rule_egress_create.resource.destination_type == "cidr_block"
+          - oci_network_security_group_rule_egress_create.resource.udp_options.destination_port_range.min == 53
+
+    - name: Reapply egress rule without its identifier
+      ansible.oci.oci_network_security_group_rule:
+        <<: *egress_rule_create
+      register: oci_network_security_group_rule_egress_rerun
+
+    - name: Assert egress create is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_rule_egress_rerun.changed | bool
+          - oci_network_security_group_rule_egress_rerun.resource.id == oci_network_security_group_rule_egress_id
+
+    - name: Delete egress rule
+      ansible.oci.oci_network_security_group_rule:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        security_rule_id: "{{ oci_network_security_group_rule_egress_id }}"
+      register: oci_network_security_group_rule_egress_delete
+
+    - name: Assert egress deletion reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_egress_delete.changed | bool
+
+    - name: Delete peer Network Security Group rule
+      ansible.oci.oci_network_security_group_rule:
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        security_rule_id: "{{ oci_network_security_group_rule_peer_nsg_rule_id }}"
+      register: oci_network_security_group_rule_peer_nsg_rule_delete
+
+    - name: Assert peer Network Security Group rule deletion reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_peer_nsg_rule_delete.changed | bool
+
+    - name: Delete ingress rule in check mode
+      ansible.oci.oci_network_security_group_rule: &ingress_rule_delete
+        state: absent
+        network_security_group_id: "{{ oci_network_security_group_rule_nsg_id }}"
+        security_rule_id: "{{ oci_network_security_group_rule_ingress_id }}"
+      check_mode: true
+      register: oci_network_security_group_rule_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_delete_check.changed | bool
+
+    - name: Delete ingress rule
+      ansible.oci.oci_network_security_group_rule:
+        <<: *ingress_rule_delete
+      register: oci_network_security_group_rule_delete
+
+    - name: Assert ingress deletion reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_rule_delete.changed | bool
+
+    - name: Delete ingress rule again
+      ansible.oci.oci_network_security_group_rule:
+        <<: *ingress_rule_delete
+      register: oci_network_security_group_rule_delete_rerun
+
+    - name: Assert repeated delete is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_rule_delete_rerun.changed | bool
+
+  always:
+    - name: Run Network Security Group rule cleanup
+      ansible.builtin.include_tasks: cleanup.yml

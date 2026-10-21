@@ -1,0 +1,4 @@
+---
+- name: Generate a unique resource-name suffix for this run
+  ansible.builtin.set_fact:
+    oci_integration_rpfx: "{{ 9999999999 | random }}"

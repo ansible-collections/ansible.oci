@@ -1,0 +1,13 @@
+exclude_paths:
+  - changelogs/
+  - CHANGELOG.rst
+  - tests/
+  - skills/
+  - .agents/
+  - .venv/
+  - .lola/
+  - .opencode/
+  - .cursor/
+  - .gemini/
+  - .claude/
+  - .github/

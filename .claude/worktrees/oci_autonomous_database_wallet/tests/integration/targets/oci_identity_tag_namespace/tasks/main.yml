@@ -1,0 +1,597 @@
+---
+- name: Validate the test compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: Define oci_integration_compartment_id in the integration configuration.
+
+- name: Set unique namespace names
+  ansible.builtin.set_fact:
+    oci_identity_tag_namespace_integration_name: '{{ oci_identity_tag_namespace_integration_name }}-{{ oci_integration_rpfx }}'
+    oci_identity_tag_namespace_integration_retired_name: '{{ oci_identity_tag_namespace_integration_retired_name }}-{{ oci_integration_rpfx }}'
+    oci_identity_tag_namespace_active_id: ''
+    oci_identity_tag_namespace_retired_id: ''
+    oci_identity_tag_namespace_cleanup_name: '{{ oci_identity_tag_namespace_integration_name }}-{{ oci_integration_rpfx }}'
+    oci_identity_tag_namespace_cleanup_retired_name: '{{ oci_identity_tag_namespace_integration_retired_name }}-{{ oci_integration_rpfx }}'
+
+- name: Test the namespace lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+    - name: Read the namespace before active namespace creation
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_create_before
+
+    - name: Create an active namespace in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_create_options
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+        description: '{{ oci_identity_tag_namespace_integration_description }}'
+        freeform_tags: '{{ oci_identity_tag_namespace_integration_create_tags }}'
+      check_mode: true
+      register: oci_identity_tag_namespace_create_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_create_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_create_check.changed
+          - oci_identity_tag_namespace_create_after_check.tag_namespaces == oci_identity_tag_namespace_create_before.tag_namespaces
+
+    - name: Create an active namespace
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_create_options
+      register: oci_identity_tag_namespace_create_result
+
+    - name: Save the active namespace ID
+      ansible.builtin.set_fact:
+        oci_identity_tag_namespace_active_id: '{{ oci_identity_tag_namespace_create_result.resource.id }}'
+
+    - name: Read the namespace after active namespace creation
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_create_info
+
+    - name: Verify active namespace creation changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_create_result.changed
+          - oci_identity_tag_namespace_create_info.tag_namespaces | length == 1
+
+    - name: Verify the namespace fields after active namespace creation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_create_info.tag_namespaces[0].name == oci_identity_tag_namespace_integration_name
+          - oci_identity_tag_namespace_create_info.tag_namespaces[0].description == oci_identity_tag_namespace_integration_description
+          - oci_identity_tag_namespace_create_info.tag_namespaces[0].is_retired == false
+          - oci_identity_tag_namespace_create_info.tag_namespaces[0].lifecycle_state == "ACTIVE"
+          - oci_identity_tag_namespace_create_info.tag_namespaces[0].freeform_tags == oci_identity_tag_namespace_integration_create_tags
+
+    - name: Repeat active namespace creation
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_create_options
+      register: oci_identity_tag_namespace_create_repeat
+
+    - name: Repeat active namespace creation in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_create_options
+      check_mode: true
+      register: oci_identity_tag_namespace_create_repeat_check
+
+    - name: Verify repeated active namespace creation is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_create_repeat.changed
+          - not oci_identity_tag_namespace_create_repeat_check.changed
+
+    - name: Read the namespace before namespace description and tag update
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_update_before
+
+    - name: Update the namespace description and tags in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_update_options
+        tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
+        description: '{{ oci_identity_tag_namespace_integration_update_description }}'
+        freeform_tags: '{{ oci_identity_tag_namespace_integration_update_tags }}'
+      check_mode: true
+      register: oci_identity_tag_namespace_update_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_update_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_update_check.changed
+          - oci_identity_tag_namespace_update_after_check.tag_namespaces == oci_identity_tag_namespace_update_before.tag_namespaces
+
+    - name: Update the namespace description and tags
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_update_options
+      register: oci_identity_tag_namespace_update_result
+
+    - name: Read the namespace after namespace description and tag update
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_update_info
+
+    - name: Verify namespace description and tag update changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_update_result.changed
+          - oci_identity_tag_namespace_update_info.tag_namespaces | length == 1
+
+    - name: Verify the namespace fields after namespace description and tag update
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_update_info.tag_namespaces[0].name == oci_identity_tag_namespace_integration_name
+          - oci_identity_tag_namespace_update_info.tag_namespaces[0].description == oci_identity_tag_namespace_integration_update_description
+          - oci_identity_tag_namespace_update_info.tag_namespaces[0].is_retired == false
+          - oci_identity_tag_namespace_update_info.tag_namespaces[0].lifecycle_state == "ACTIVE"
+          - oci_identity_tag_namespace_update_info.tag_namespaces[0].freeform_tags == oci_identity_tag_namespace_integration_update_tags
+
+    - name: Repeat namespace description and tag update
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_update_options
+      register: oci_identity_tag_namespace_update_repeat
+
+    - name: Repeat namespace description and tag update in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_update_options
+      check_mode: true
+      register: oci_identity_tag_namespace_update_repeat_check
+
+    - name: Verify repeated namespace description and tag update is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_update_repeat.changed
+          - not oci_identity_tag_namespace_update_repeat_check.changed
+
+    - name: Read the namespace before namespace retirement
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_retire_before
+
+    - name: Retire the namespace in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_retire_options
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
+        is_retired: true
+      check_mode: true
+      register: oci_identity_tag_namespace_retire_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_retire_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_retire_check.changed
+          - oci_identity_tag_namespace_retire_after_check.tag_namespaces == oci_identity_tag_namespace_retire_before.tag_namespaces
+
+    - name: Retire the namespace
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_retire_options
+      register: oci_identity_tag_namespace_retire_result
+
+    - name: Read the namespace after namespace retirement
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_retire_info
+
+    - name: Verify namespace retirement changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_retire_result.changed
+          - oci_identity_tag_namespace_retire_info.tag_namespaces | length == 1
+
+    - name: Verify the namespace fields after namespace retirement
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_retire_info.tag_namespaces[0].is_retired == true
+          - oci_identity_tag_namespace_retire_info.tag_namespaces[0].lifecycle_state == "INACTIVE"
+          - oci_identity_tag_namespace_retire_info.tag_namespaces[0].description == oci_identity_tag_namespace_integration_update_description
+
+    - name: Repeat namespace retirement
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_retire_options
+      register: oci_identity_tag_namespace_retire_repeat
+
+    - name: Repeat namespace retirement in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_retire_options
+      check_mode: true
+      register: oci_identity_tag_namespace_retire_repeat_check
+
+    - name: Verify repeated namespace retirement is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_retire_repeat.changed
+          - not oci_identity_tag_namespace_retire_repeat_check.changed
+
+    - name: Read the namespace before retired namespace description update
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_retired_update_before
+
+    - name: Update the retired namespace description in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_retired_update_options
+        tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
+        description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
+      check_mode: true
+      register: oci_identity_tag_namespace_retired_update_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_retired_update_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_retired_update_check.changed
+          - oci_identity_tag_namespace_retired_update_after_check.tag_namespaces == oci_identity_tag_namespace_retired_update_before.tag_namespaces
+
+    - name: Update the retired namespace description
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_retired_update_options
+      register: oci_identity_tag_namespace_retired_update_result
+
+    - name: Read the namespace after retired namespace description update
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_retired_update_info
+
+    - name: Verify retired namespace description update changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_retired_update_result.changed
+          - oci_identity_tag_namespace_retired_update_info.tag_namespaces | length == 1
+
+    - name: Verify the namespace fields after retired namespace description update
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_retired_update_info.tag_namespaces[0].is_retired == true
+          - oci_identity_tag_namespace_retired_update_info.tag_namespaces[0].lifecycle_state == "INACTIVE"
+          - oci_identity_tag_namespace_retired_update_info.tag_namespaces[0].description == oci_identity_tag_namespace_integration_retired_description
+
+    - name: Repeat retired namespace description update
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_retired_update_options
+      register: oci_identity_tag_namespace_retired_update_repeat
+
+    - name: Repeat retired namespace description update in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_retired_update_options
+      check_mode: true
+      register: oci_identity_tag_namespace_retired_update_repeat_check
+
+    - name: Verify repeated retired namespace description update is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_retired_update_repeat.changed
+          - not oci_identity_tag_namespace_retired_update_repeat_check.changed
+
+    - name: Read the namespace before namespace activation
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_activate_before
+
+    - name: Activate the namespace in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_activate_options
+        tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
+        is_retired: false
+      check_mode: true
+      register: oci_identity_tag_namespace_activate_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_activate_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_activate_check.changed
+          - oci_identity_tag_namespace_activate_after_check.tag_namespaces == oci_identity_tag_namespace_activate_before.tag_namespaces
+
+    - name: Activate the namespace
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_activate_options
+      register: oci_identity_tag_namespace_activate_result
+
+    - name: Read the namespace after namespace activation
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_activate_info
+
+    - name: Verify namespace activation changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_activate_result.changed
+          - oci_identity_tag_namespace_activate_info.tag_namespaces | length == 1
+
+    - name: Verify the namespace fields after namespace activation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_activate_info.tag_namespaces[0].is_retired == false
+          - oci_identity_tag_namespace_activate_info.tag_namespaces[0].lifecycle_state == "ACTIVE"
+          - oci_identity_tag_namespace_activate_info.tag_namespaces[0].description == oci_identity_tag_namespace_integration_retired_description
+
+    - name: Repeat namespace activation
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_activate_options
+      register: oci_identity_tag_namespace_activate_repeat
+
+    - name: Repeat namespace activation in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_activate_options
+      check_mode: true
+      register: oci_identity_tag_namespace_activate_repeat_check
+
+    - name: Verify repeated namespace activation is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_activate_repeat.changed
+          - not oci_identity_tag_namespace_activate_repeat_check.changed
+
+    - name: Read the namespace before retired namespace creation
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
+      register: oci_identity_tag_namespace_create_retired_before
+
+    - name: Create a retired namespace in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_create_retired_options
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
+        description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
+        is_retired: true
+      check_mode: true
+      register: oci_identity_tag_namespace_create_retired_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
+      register: oci_identity_tag_namespace_create_retired_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_create_retired_check.changed
+          - oci_identity_tag_namespace_create_retired_after_check.tag_namespaces == oci_identity_tag_namespace_create_retired_before.tag_namespaces
+
+    - name: Create a retired namespace
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_create_retired_options
+      register: oci_identity_tag_namespace_create_retired_result
+
+    - name: Save the retired namespace ID
+      ansible.builtin.set_fact:
+        oci_identity_tag_namespace_retired_id: '{{ oci_identity_tag_namespace_create_retired_result.resource.id }}'
+
+    - name: Read the namespace after retired namespace creation
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
+      register: oci_identity_tag_namespace_create_retired_info
+
+    - name: Verify retired namespace creation changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_create_retired_result.changed
+          - oci_identity_tag_namespace_create_retired_info.tag_namespaces | length == 1
+
+    - name: Verify the namespace fields after retired namespace creation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_create_retired_info.tag_namespaces[0].is_retired == true
+          - oci_identity_tag_namespace_create_retired_info.tag_namespaces[0].lifecycle_state == "INACTIVE"
+          - oci_identity_tag_namespace_create_retired_info.tag_namespaces[0].description == oci_identity_tag_namespace_integration_retired_description
+
+    - name: Repeat retired namespace creation
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_create_retired_options
+      register: oci_identity_tag_namespace_create_retired_repeat
+
+    - name: Repeat retired namespace creation in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_create_retired_options
+      check_mode: true
+      register: oci_identity_tag_namespace_create_retired_repeat_check
+
+    - name: Verify repeated retired namespace creation is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_create_retired_repeat.changed
+          - not oci_identity_tag_namespace_create_retired_repeat_check.changed
+
+    - name: Get a namespace by ID in check mode
+      ansible.oci.oci_identity_tag_namespace_info:
+        tag_namespace_id: '{{ oci_identity_tag_namespace_retired_id }}'
+      check_mode: true
+      register: oci_identity_tag_namespace_get
+
+    - name: Verify the namespace returned by ID
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_get.changed
+          - oci_identity_tag_namespace_get.tag_namespaces | length == 1
+          - oci_identity_tag_namespace_get.tag_namespaces[0].id == oci_identity_tag_namespace_retired_id
+          - oci_identity_tag_namespace_get.tag_namespaces[0].is_retired
+
+    - name: List inactive namespaces with lowercase filters
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name | upper }}'
+        lifecycle_state: inactive
+        include_subcompartments: false
+      register: oci_identity_tag_namespace_list
+
+    - name: Verify namespace list filters
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_list.changed
+          - oci_identity_tag_namespace_list.tag_namespaces | length == 1
+          - oci_identity_tag_namespace_list.tag_namespaces[0].id == oci_identity_tag_namespace_retired_id
+
+    - name: Read the namespace before active namespace deletion
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_delete_before
+
+    - name: Delete the active empty namespace in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_delete_options
+        state: absent
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
+      check_mode: true
+      register: oci_identity_tag_namespace_delete_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_delete_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_delete_check.changed
+          - oci_identity_tag_namespace_delete_after_check.tag_namespaces == oci_identity_tag_namespace_delete_before.tag_namespaces
+
+    - name: Delete the active empty namespace
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_delete_options
+      register: oci_identity_tag_namespace_delete_result
+
+    - name: Read the namespace after active namespace deletion
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_name }}'
+      register: oci_identity_tag_namespace_delete_info
+
+    - name: Verify active namespace deletion changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_delete_result.changed
+          - oci_identity_tag_namespace_delete_info.tag_namespaces | rejectattr('lifecycle_state', 'equalto', 'DELETED') | list | length == 0
+
+    - name: Repeat active namespace deletion
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_delete_options
+      register: oci_identity_tag_namespace_delete_repeat
+
+    - name: Repeat active namespace deletion in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_delete_options
+      check_mode: true
+      register: oci_identity_tag_namespace_delete_repeat_check
+
+    - name: Verify repeated active namespace deletion is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_delete_repeat.changed
+          - not oci_identity_tag_namespace_delete_repeat_check.changed
+
+    - name: Clear cleanup values after active namespace deletion
+      ansible.builtin.set_fact:
+        oci_identity_tag_namespace_active_id: ''
+        oci_identity_tag_namespace_cleanup_name: ''
+
+    - name: Read the namespace before retired namespace deletion
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
+      register: oci_identity_tag_namespace_delete_retired_before
+
+    - name: Delete the retired empty namespace in check mode
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_delete_retired_options
+        state: absent
+        tag_namespace_id: '{{ oci_identity_tag_namespace_retired_id }}'
+      check_mode: true
+      register: oci_identity_tag_namespace_delete_retired_check
+
+    - name: Read the namespace after the check
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
+      register: oci_identity_tag_namespace_delete_retired_after_check
+
+    - name: Verify check mode predicts a change without a mutation
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_delete_retired_check.changed
+          - oci_identity_tag_namespace_delete_retired_after_check.tag_namespaces == oci_identity_tag_namespace_delete_retired_before.tag_namespaces
+
+    - name: Delete the retired empty namespace
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_delete_retired_options
+      register: oci_identity_tag_namespace_delete_retired_result
+
+    - name: Read the namespace after retired namespace deletion
+      ansible.oci.oci_identity_tag_namespace_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
+      register: oci_identity_tag_namespace_delete_retired_info
+
+    - name: Verify retired namespace deletion changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_identity_tag_namespace_delete_retired_result.changed
+          - oci_identity_tag_namespace_delete_retired_info.tag_namespaces | rejectattr('lifecycle_state', 'equalto', 'DELETED') | list | length == 0
+
+    - name: Repeat retired namespace deletion
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_delete_retired_options
+      register: oci_identity_tag_namespace_delete_retired_repeat
+
+    - name: Repeat retired namespace deletion in check mode
+      ansible.oci.oci_identity_tag_namespace:
+        <<: *oci_identity_tag_namespace_delete_retired_options
+      check_mode: true
+      register: oci_identity_tag_namespace_delete_retired_repeat_check
+
+    - name: Verify repeated retired namespace deletion is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_identity_tag_namespace_delete_retired_repeat.changed
+          - not oci_identity_tag_namespace_delete_retired_repeat_check.changed
+
+    - name: Clear cleanup values after retired namespace deletion
+      ansible.builtin.set_fact:
+        oci_identity_tag_namespace_retired_id: ''
+        oci_identity_tag_namespace_cleanup_retired_name: ''
+  always:
+    - name: Run tag namespace cleanup
+      ansible.builtin.include_tasks: cleanup.yml

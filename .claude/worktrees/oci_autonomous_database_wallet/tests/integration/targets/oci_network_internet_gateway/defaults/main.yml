@@ -1,0 +1,12 @@
+---
+oci_internet_gateway_integration_vcn_name: "oci-ig-integration-vcn"
+oci_internet_gateway_integration_ig_name: "oci-ig-integration-ig"
+oci_internet_gateway_integration_updated_ig_name: "oci-ig-integration-ig-updated"
+oci_internet_gateway_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_internet_gateway_integration_vcn_dns_label: "ociigv"
+oci_internet_gateway_integration_create_tags:
+  phase: create
+  role: integration
+oci_internet_gateway_integration_update_tags:
+  phase: update
+  role: integration

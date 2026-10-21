@@ -1,0 +1,6 @@
+[${OCI_CONFIG_PROFILE}]
+user=${OCI_USER_ID}
+fingerprint=${OCI_USER_FINGERPRINT}
+tenancy=${OCI_TENANCY_ID}
+region=${OCI_REGION}
+key_file=${OCI_RUNTIME_KEY_FILE}

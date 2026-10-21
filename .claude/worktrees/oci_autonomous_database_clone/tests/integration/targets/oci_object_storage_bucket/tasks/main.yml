@@ -1,0 +1,216 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      Object Storage bucket integration tests require
+      oci_integration_compartment_id in tests/integration/integration_config.yml.
+
+- name: Choose a unique bucket name for this run
+  ansible.builtin.set_fact:
+    oci_object_storage_bucket_name: >-
+      {{ oci_object_storage_bucket_integration_name ~ '-' ~ oci_integration_rpfx }}
+    oci_object_storage_bucket_cleanup_name: ""
+
+- name: Exercise Object Storage bucket lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Check bucket creation without changing OCI
+      ansible.oci.oci_object_storage_bucket: &bucket_create
+        state: present
+        name: "{{ oci_object_storage_bucket_name }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        storage_tier: Standard
+        public_access_type: NoPublicAccess
+        versioning: Disabled
+        metadata:
+          phase: create
+        object_events_enabled: false
+        auto_tiering: Disabled
+        freeform_tags:
+          phase: create
+      check_mode: true
+      register: bucket_create_check
+
+    - name: Verify create check mode left the bucket absent
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: "{{ oci_object_storage_bucket_name }}"
+      register: bucket_create_probe
+      failed_when: >-
+        not bucket_create_check.changed or bucket_create_probe.buckets | length != 0
+
+    - name: Create bucket
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_create
+      register: bucket_create
+
+    - name: Remember bucket for cleanup
+      ansible.builtin.set_fact:
+        oci_object_storage_bucket_cleanup_name: "{{ oci_object_storage_bucket_name }}"
+
+    - name: Verify created bucket
+      ansible.builtin.assert:
+        that:
+          - bucket_create.changed | bool
+          - bucket_create.resource.name == oci_object_storage_bucket_name
+          - bucket_create.resource.compartment_id == oci_integration_compartment_id
+          - bucket_create.resource.storage_tier == 'Standard'
+          - bucket_create.resource.public_access_type == 'NoPublicAccess'
+          - bucket_create.resource.versioning == 'Disabled'
+          - bucket_create.resource.metadata.phase == 'create'
+          - not bucket_create.resource.object_events_enabled | bool
+          - bucket_create.resource.auto_tiering == 'Disabled'
+          - bucket_create.resource.freeform_tags.phase == 'create'
+
+    - name: Read full bucket details
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: "{{ oci_object_storage_bucket_name }}"
+      register: bucket_by_name
+
+    - name: List the bucket by compartment and name
+      ansible.oci.oci_object_storage_bucket_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_object_storage_bucket_name }}"
+      register: bucket_by_compartment
+
+    - name: Verify bucket info lookups
+      ansible.builtin.assert:
+        that:
+          - bucket_by_name.buckets | length == 1
+          - bucket_by_name.buckets[0].name == oci_object_storage_bucket_name
+          - bucket_by_compartment.buckets | length == 1
+          - bucket_by_compartment.buckets[0].name == oci_object_storage_bucket_name
+
+    - name: Reconcile created bucket in check mode
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_create
+      check_mode: true
+      register: bucket_create_check_rerun
+
+    - name: Reconcile created bucket again
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_create
+      register: bucket_create_rerun
+
+    - name: Verify bucket creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not bucket_create_check_rerun.changed | bool
+          - not bucket_create_rerun.changed | bool
+
+    - name: Check bucket update without changing OCI
+      ansible.oci.oci_object_storage_bucket: &bucket_update
+        state: present
+        name: "{{ oci_object_storage_bucket_name }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        versioning: Enabled
+        metadata:
+          phase: update
+        object_events_enabled: true
+        auto_tiering: InfrequentAccess
+        freeform_tags:
+          phase: update
+      check_mode: true
+      register: bucket_update_check
+
+    - name: Read bucket after update check mode
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: "{{ oci_object_storage_bucket_name }}"
+      register: bucket_update_probe
+
+    - name: Verify update check mode left bucket settings unchanged
+      ansible.builtin.assert:
+        that:
+          - bucket_update_check.changed | bool
+          - bucket_update_probe.buckets[0].versioning == 'Disabled'
+          - bucket_update_probe.buckets[0].metadata.phase == 'create'
+          - not bucket_update_probe.buckets[0].object_events_enabled | bool
+          - bucket_update_probe.buckets[0].auto_tiering == 'Disabled'
+          - bucket_update_probe.buckets[0].freeform_tags.phase == 'create'
+
+    - name: Update bucket
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_update
+      register: bucket_update
+
+    - name: Verify updated bucket
+      ansible.builtin.assert:
+        that:
+          - bucket_update.changed | bool
+          - bucket_update.resource.versioning == 'Enabled'
+          - bucket_update.resource.metadata.phase == 'update'
+          - bucket_update.resource.object_events_enabled | bool
+          - bucket_update.resource.auto_tiering == 'InfrequentAccess'
+          - bucket_update.resource.freeform_tags.phase == 'update'
+
+    - name: Reconcile updated bucket in check mode
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_update
+      check_mode: true
+      register: bucket_update_check_rerun
+
+    - name: Reconcile updated bucket again
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_update
+      register: bucket_update_rerun
+
+    - name: Verify bucket update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not bucket_update_check_rerun.changed | bool
+          - not bucket_update_rerun.changed | bool
+
+    - name: Check bucket deletion without changing OCI
+      ansible.oci.oci_object_storage_bucket: &bucket_delete
+        state: absent
+        name: "{{ oci_object_storage_bucket_name }}"
+      check_mode: true
+      register: bucket_delete_check
+
+    - name: Read bucket after delete check mode
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: "{{ oci_object_storage_bucket_name }}"
+      register: bucket_delete_probe
+      failed_when: >-
+        not bucket_delete_check.changed or bucket_delete_probe.buckets | length != 1
+
+    - name: Delete bucket
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_delete
+      register: bucket_delete
+
+    - name: Read bucket after deletion
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: "{{ oci_object_storage_bucket_name }}"
+      register: bucket_deleted_info
+
+    - name: Verify bucket was deleted
+      ansible.builtin.assert:
+        that:
+          - bucket_delete.changed | bool
+          - bucket_deleted_info.buckets | length == 0
+
+    - name: Check repeated bucket deletion
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_delete
+      check_mode: true
+      register: bucket_delete_check_rerun
+
+    - name: Repeat bucket deletion
+      ansible.oci.oci_object_storage_bucket:
+        <<: *bucket_delete
+      register: bucket_delete_rerun
+
+    - name: Verify bucket deletion is idempotent
+      ansible.builtin.assert:
+        that:
+          - not bucket_delete_check_rerun.changed | bool
+          - not bucket_delete_rerun.changed | bool
+
+  always:
+    - name: Clean up Object Storage bucket
+      ansible.builtin.include_tasks: cleanup.yml

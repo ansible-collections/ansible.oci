@@ -1,0 +1,19 @@
+---
+# The compute instance the volume is attached to is tenancy-specific; its
+# availability domain and image are discovered at run time (tasks/main.yml)
+# rather than pinned here, mirroring the oci_instance integration target.
+oci_volume_attachment_integration_operating_system: "Oracle Linux"
+oci_volume_attachment_integration_operating_system_version: "9"
+oci_volume_attachment_integration_shape: "VM.Standard.E4.Flex"
+oci_volume_attachment_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_volume_attachment_integration_vcn_name: "oci-volume-attachment-integration-vcn"
+oci_volume_attachment_integration_subnet_name: "oci-volume-attachment-integration-subnet"
+oci_volume_attachment_integration_instance_name: "oci-volume-attachment-integration-instance"
+oci_volume_attachment_integration_volume_name: "oci-volume-attachment-integration-volume"
+oci_volume_attachment_integration_attachment_name: "oci-volume-attachment-integration-attachment"
+oci_volume_attachment_integration_vcn_cidr_block: "10.254.0.0/16"
+oci_volume_attachment_integration_subnet_cidr_block: "10.254.1.0/24"
+oci_volume_attachment_integration_size_in_gbs: 50
+oci_volume_attachment_integration_type: "paravirtualized"

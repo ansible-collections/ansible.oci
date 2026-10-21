@@ -1,0 +1,93 @@
+---
+- name: Read the cluster before the test
+  ansible.oci.oci_oke_cluster_info: &oci_oke_probe_options
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_oke_lookup_name }}"
+    cluster_id: "{{ oci_oke_operation.cluster_id | default(omit) }}"
+  register: oci_oke_before
+
+- name: Run the scenario in check mode
+  ansible.oci.oci_oke_cluster: &oci_oke_operation_options
+    state: "{{ oci_oke_operation.state | default('present') }}"
+    cluster_id: "{{ oci_oke_operation.cluster_id | default(omit) }}"
+    compartment_id: "{{ oci_oke_operation.compartment_id | default(omit) }}"
+    name: "{{ oci_oke_operation.name | default(omit) }}"
+    vcn_id: "{{ oci_oke_operation.vcn_id | default(omit) }}"
+    kubernetes_version: "{{ oci_oke_operation.kubernetes_version | default(omit) }}"
+    type: "{{ oci_oke_operation.type | default(omit) }}"
+    endpoint_config: "{{ oci_oke_operation.endpoint_config | default(omit) }}"
+    freeform_tags: "{{ oci_oke_operation.freeform_tags | default(omit) }}"
+    wait: true
+  check_mode: true
+  register: oci_oke_prediction
+
+- name: Read the cluster after check mode
+  ansible.oci.oci_oke_cluster_info:
+    <<: *oci_oke_probe_options
+  register: oci_oke_after_prediction
+
+- name: Check that check mode predicts a change without changing the cluster
+  ansible.builtin.assert:
+    that:
+      - oci_oke_prediction.changed | bool
+      - oci_oke_after_prediction.clusters == oci_oke_before.clusters
+
+- name: Run the scenario
+  ansible.oci.oci_oke_cluster:
+    <<: *oci_oke_operation_options
+  register: oci_oke_applied
+
+- name: Save the cluster ID
+  ansible.builtin.set_fact:
+    oci_oke_cluster_id: "{{ oci_oke_applied.resource.id }}"
+    oci_oke_cleanup_ids: "{{ (oci_oke_cleanup_ids | default([])) + [oci_oke_applied.resource.id] }}"
+  when: oci_oke_operation.state | default('present') == 'present'
+
+- name: Read the cluster after the change
+  ansible.oci.oci_oke_cluster_info:
+    cluster_id: "{{ oci_oke_cluster_id }}"
+  register: oci_oke_after
+
+- name: Check the cluster state
+  ansible.builtin.assert:
+    that:
+      - oci_oke_applied.changed | bool
+      - >-
+        (oci_oke_operation.state | default('present') == 'absent'
+        and (oci_oke_after.clusters | length == 0
+        or oci_oke_after.clusters[0].lifecycle_state == 'DELETED'))
+        or (oci_oke_operation.state | default('present') == 'present'
+        and oci_oke_after.clusters | length == 1
+        and oci_oke_after.clusters[0].id == oci_oke_cluster_id
+        and oci_oke_after.clusters[0].lifecycle_state == 'ACTIVE')
+
+- name: Check the cluster settings
+  ansible.builtin.assert:
+    that:
+      - oci_oke_after.clusters[0][item.key] == item.value
+  loop: "{{ oci_oke_expected | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Run the scenario again
+  ansible.oci.oci_oke_cluster:
+    <<: *oci_oke_operation_options
+  register: oci_oke_rerun
+
+- name: Run the scenario again in check mode
+  ansible.oci.oci_oke_cluster:
+    <<: *oci_oke_operation_options
+  check_mode: true
+  register: oci_oke_check_rerun
+
+- name: Read the cluster after both reruns
+  ansible.oci.oci_oke_cluster_info:
+    cluster_id: "{{ oci_oke_cluster_id }}"
+  register: oci_oke_after_reruns
+
+- name: Check both reruns leave the cluster unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_oke_rerun.changed | bool
+      - not oci_oke_check_rerun.changed | bool
+      - oci_oke_after_reruns.clusters == oci_oke_after.clusters

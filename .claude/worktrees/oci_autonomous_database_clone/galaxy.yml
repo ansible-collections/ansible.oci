@@ -1,0 +1,49 @@
+---
+# See https://docs.ansible.com/projects/ansible/latest/dev_guide/collections_galaxy_meta.html
+
+namespace: ansible
+name: oci
+version: 1.1.0
+readme: README.md
+authors:
+  - Ron Gershburg (github.com/ronger4)
+  - Ansible Eco Content Team (github.com/eco-ansible-content)
+description: Oracle Cloud Infrastructure collection for Ansible
+license:
+  - GPL-3.0-or-later
+tags:
+  - oracle
+  - oci
+  - cloud
+  - infrastructure
+  - networking
+  - storage
+  - security
+repository: https://github.com/ansible-collections/ansible.oci
+documentation: https://github.com/ansible-collections/ansible.oci
+homepage: https://github.com/ansible-collections/ansible.oci
+issues: https://github.com/ansible-collections/ansible.oci/issues
+build_ignore:
+  # https://docs.ansible.com/projects/ansible/devel/dev_guide/developing_collections_distributing.html#ignoring-files-and-folders
+  - .AGENTS
+  - .agents
+  - .ansible-lint
+  - .github
+  - .gitignore
+  - .vscode
+  - MAINTAINERS
+  - MAINTAINING.md
+  - REVIEW_CHECKLIST.md
+  - antsibull-nox.toml
+  - changelogs/.plugin-cache.yaml
+  - codecov.yml
+  - noxfile.py
+  - tests/integration/integration_config.yml
+  - tests/integration/.runtime
+  - sonar-project.properties
+  - playbooks
+  - .claude
+  - .cursor
+  - playbooks
+  - .pytest_cache
+  - .nox

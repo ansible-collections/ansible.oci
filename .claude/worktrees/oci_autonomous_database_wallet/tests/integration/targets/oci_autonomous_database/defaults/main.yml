@@ -1,0 +1,22 @@
+---
+oci_adb_integration_display_name: "oci-adb-integration"
+# db_name allows only letters and numbers and must start with a letter; it is
+# finalized with the per-run suffix in tasks/main.yml.
+oci_adb_integration_db_name_prefix: "adbint"
+# Test-only admin password. Meets the serverless rules (12-30 chars, upper,
+# lower, and number, no "admin" substring, no double quote).
+oci_adb_integration_admin_password: "AnsibleOciTest1234"
+# Test-only wallet password. Meets the wallet rules (8+ chars, a letter, and a
+# number or special character).
+oci_adb_integration_wallet_password: "AnsibleWallet1234"
+oci_adb_integration_db_workload: "oltp"
+oci_adb_integration_compute_model: "ecpu"
+oci_adb_integration_create_compute_count: 2
+oci_adb_integration_update_compute_count: 4
+oci_adb_integration_data_storage_size_in_tbs: 1
+oci_adb_integration_create_tags:
+  phase: create
+  role: integration
+oci_adb_integration_update_tags:
+  phase: update
+  role: integration

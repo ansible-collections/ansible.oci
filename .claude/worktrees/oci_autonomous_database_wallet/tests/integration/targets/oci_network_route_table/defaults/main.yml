@@ -1,0 +1,13 @@
+---
+oci_route_table_integration_vcn_name: "oci-route-table-integration-vcn"
+oci_route_table_integration_ig_name: "oci-route-table-integration-ig"
+oci_route_table_integration_route_table_name: "oci-route-table-integration-rt"
+oci_route_table_integration_updated_route_table_name: "oci-route-table-integration-rt-updated"
+oci_route_table_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_route_table_integration_vcn_dns_label: "ocirtvcn"
+oci_route_table_integration_create_tags:
+  phase: create
+  role: integration
+oci_route_table_integration_update_tags:
+  phase: update
+  role: integration

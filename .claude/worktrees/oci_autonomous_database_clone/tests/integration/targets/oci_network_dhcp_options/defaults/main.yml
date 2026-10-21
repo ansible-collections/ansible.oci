@@ -1,0 +1,12 @@
+---
+oci_dhcp_options_integration_vcn_name: "oci-dhcp-options-integration-vcn"
+oci_dhcp_options_integration_dhcp_options_name: "oci-dhcp-options-integration-dhcp"
+oci_dhcp_options_integration_updated_dhcp_options_name: "oci-dhcp-options-integration-dhcp-updated"
+oci_dhcp_options_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_dhcp_options_integration_vcn_dns_label: "ocidhcpoptv"
+oci_dhcp_options_integration_create_tags:
+  phase: create
+  role: integration
+oci_dhcp_options_integration_update_tags:
+  phase: update
+  role: integration

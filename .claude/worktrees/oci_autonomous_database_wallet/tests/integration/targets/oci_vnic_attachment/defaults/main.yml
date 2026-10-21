@@ -1,0 +1,14 @@
+---
+oci_vnic_attachment_integration_operating_system: "Oracle Linux"
+oci_vnic_attachment_integration_operating_system_version: "9"
+oci_vnic_attachment_integration_shape: "VM.Standard.E4.Flex"
+oci_vnic_attachment_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_vnic_attachment_integration_vcn_name: "oci-vnic-attachment-integration-vcn"
+oci_vnic_attachment_integration_subnet_name: "oci-vnic-attachment-integration-subnet"
+oci_vnic_attachment_integration_instance_name: "oci-vnic-attachment-integration-instance"
+oci_vnic_attachment_integration_attachment_name: "oci-vnic-attachment-integration-attachment"
+oci_vnic_attachment_integration_vnic_name: "oci-vnic-attachment-integration-vnic"
+oci_vnic_attachment_integration_vcn_cidr_block: "10.249.0.0/16"
+oci_vnic_attachment_integration_subnet_cidr_block: "10.249.1.0/24"

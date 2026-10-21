@@ -1,0 +1,12 @@
+---
+oci_security_list_integration_vcn_name: "oci-security-list-integration-vcn"
+oci_security_list_integration_security_list_name: "oci-security-list-integration-sl"
+oci_security_list_integration_updated_security_list_name: "oci-security-list-integration-sl-updated"
+oci_security_list_integration_vcn_cidr_block: "10.253.0.0/16"
+oci_security_list_integration_vcn_dns_label: "ocislvcn"
+oci_security_list_integration_create_tags:
+  phase: create
+  role: integration
+oci_security_list_integration_update_tags:
+  phase: update
+  role: integration

@@ -1,0 +1,16 @@
+---
+oci_lpg_integration_vcn_name: "oci-lpg-integration-vcn"
+oci_lpg_integration_peer_vcn_name: "oci-lpg-integration-peer-vcn"
+oci_lpg_integration_lpg_name: "oci-lpg-integration-lpg"
+oci_lpg_integration_updated_lpg_name: "oci-lpg-integration-lpg-updated"
+oci_lpg_integration_peer_lpg_name: "oci-lpg-integration-peer-lpg"
+oci_lpg_integration_vcn_cidr_block: "10.254.0.0/16"
+oci_lpg_integration_peer_vcn_cidr_block: "10.255.0.0/16"
+oci_lpg_integration_vcn_dns_label: "ocilpgvcn"
+oci_lpg_integration_peer_vcn_dns_label: "ocilpgpeer"
+oci_lpg_integration_create_tags:
+  phase: create
+  role: integration
+oci_lpg_integration_update_tags:
+  phase: update
+  role: integration

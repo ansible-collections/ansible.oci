@@ -1,0 +1,27 @@
+---
+# oci_image_integration_availability_domain is tenancy-specific (AD names are
+# not portable across OCI accounts).
+oci_image_integration_availability_domain: "gzqB:US-SANJOSE-1-AD-1"
+# The source image OCID is discovered at run time via oci_image_info
+# (tasks/main.yml), filtered by these values, rather than pinned here. Oracle
+# periodically deprecates/rotates platform images, so a hardcoded OCID would go
+# stale.
+oci_image_integration_operating_system: "Oracle Linux"
+oci_image_integration_operating_system_version: "9"
+oci_image_integration_shape: "VM.Standard.E4.Flex"
+oci_image_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_image_integration_vcn_name: "oci-image-integration-vcn"
+oci_image_integration_subnet_name: "oci-image-integration-subnet"
+oci_image_integration_instance_name: "oci-image-integration-source-instance"
+oci_image_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_image_integration_subnet_cidr_block: "10.252.1.0/24"
+oci_image_integration_image_name: "oci-image-integration-image"
+oci_image_integration_updated_image_name: "oci-image-integration-image-updated"
+oci_image_integration_create_tags:
+  phase: create
+  role: integration
+oci_image_integration_update_tags:
+  phase: update
+  role: integration

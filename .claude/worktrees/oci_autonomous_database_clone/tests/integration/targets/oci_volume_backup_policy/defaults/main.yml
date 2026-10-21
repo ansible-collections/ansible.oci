@@ -1,0 +1,26 @@
+---
+oci_volume_backup_policy_integration_name: >-
+  oci-volume-backup-policy-integration
+oci_volume_backup_policy_integration_updated_name: >-
+  oci-volume-backup-policy-integration-updated
+oci_volume_backup_policy_integration_create_schedule:
+  - backup_type: incremental
+    period: one_day
+    offset_type: structured
+    hour_of_day: 2
+    retention_seconds: 604800
+    time_zone: utc
+oci_volume_backup_policy_integration_update_schedule:
+  - backup_type: full
+    period: one_week
+    offset_type: structured
+    hour_of_day: 3
+    day_of_week: sunday
+    retention_seconds: 1209600
+    time_zone: utc
+oci_volume_backup_policy_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_backup_policy_integration_update_tags:
+  phase: update
+  role: integration
