@@ -8,10 +8,11 @@ from collections.abc import Mapping
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
     normalize_enum_values,
-    serialize_oci_model,
 )
-from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
-    OciResourceBase,
+from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer_common import (
+    OciLoadBalancerSubresourceCommonBase,
+    OciLoadBalancerInfoCommonBase,
+    build_nested_model,
 )
 
 imported_oci_sdk = import_oci_sdk()
@@ -28,6 +29,8 @@ _NESTED_MODEL_NAMES = {
     ),
 }
 
+_LIST_MODEL_NAMES = {"backends": "BackendDetails", "rules": "RoutingRule"}
+
 _LOAD_BALANCER_ENUM_KEYS = frozenset(
     ("policy", "protocol", "server_order_preference")
 )
@@ -42,15 +45,12 @@ def normalize_load_balancer_fields(fields):
         fields: Input fields or a serialized resource.
 
     Returns:
-        Normalized fields, or the original value for nonmapping input.
+        A new mapping with normalized fields.
     """
-    if not isinstance(fields, Mapping):
-        return fields
-
-    normalized = normalize_enum_values(dict(fields), _LOAD_BALANCER_ENUM_KEYS)
+    normalized = normalize_enum_values(dict(fields or {}), _LOAD_BALANCER_ENUM_KEYS)
 
     rules = normalized.get("rules")
-    if isinstance(rules, (list, tuple)):
+    if rules is not None:
         normalized["rules"] = [
             _normalize_routing_rule(rule) if isinstance(rule, Mapping) else rule
             for rule in rules
@@ -70,7 +70,7 @@ def _normalize_routing_rule(rule):
     """
     result = dict(rule)
     actions = result.get("actions")
-    if isinstance(actions, (list, tuple)):
+    if actions is not None:
         result["actions"] = []
         for action in actions:
             if isinstance(action, Mapping):
@@ -81,77 +81,49 @@ def _normalize_routing_rule(rule):
     return result
 
 
-def _build_model_field(model_name, field_name, value):
-    """Build nested SDK models for a supported field.
+def _build_routing_actions(field_name, value):
+    """Convert supported routing actions to SDK models.
 
     Args:
-        model_name: Name of the containing SDK model class.
-        field_name: Name of the supported field.
-        value: Field value to convert.
+        field_name: Field in a routing rule.
+        value: Supplied field value.
 
     Returns:
-        The converted value, or the original value if no conversion applies.
+        Typed forward actions, or the original value for other fields.
     """
-    nested_model_name = _NESTED_MODEL_NAMES.get(field_name)
-    if nested_model_name and isinstance(value, Mapping):
-        value = _build_model(nested_model_name, value)
-    elif field_name == "backends" and isinstance(value, (list, tuple)):
-        value = [
-            _build_model("BackendDetails", backend)
-            if isinstance(backend, Mapping)
-            else backend
-            for backend in value
-            if backend is not None
-        ]
-    elif (
-        model_name == "RoutingRule"
-        and field_name == "actions"
-        and isinstance(value, (list, tuple))
-    ):
-        value = [
+    if field_name == "actions":
+        return [
             _build_model("ForwardToBackendSet", action)
             if isinstance(action, Mapping)
             and action.get("name") == "FORWARD_TO_BACKENDSET"
             else action
             for action in value
         ]
-    elif field_name == "rules" and isinstance(value, (list, tuple)):
-        value = [
-            _build_model("RoutingRule", rule) if isinstance(rule, Mapping) else rule
-            for rule in value
-        ]
     return value
 
 
 def _build_model(model_name, fields):
-    """Build an SDK model from supported fields.
-
-    Skip unsupported fields and None values.
-    Use condition language V1 for new routing policies when the field is absent.
+    """Build an LB model through the shared nested model builder.
 
     Args:
-        model_name: Name of the SDK model class.
-        fields: Fields used to build the model.
+        model_name: SDK model name.
+        fields: Normalized source fields.
 
     Returns:
-        The SDK model with supported fields set.
+        The typed SDK model with routing defaults applied.
     """
-    model_class = getattr(oci.load_balancer.models, model_name)
-    model_template = model_class()
-    supported_fields = getattr(model_template, "swagger_types", {})
-    values = {}
-
-    model_fields = dict(fields or {})
+    model_fields = dict(fields)
     if model_name == "CreateRoutingPolicyDetails":
         model_fields.setdefault("condition_language_version", "V1")
-
-    for field_name, value in model_fields.items():
-        if field_name not in supported_fields or value is None:
-            continue
-
-        values[field_name] = _build_model_field(model_name, field_name, value)
-
-    return model_class(**values)
+    return build_nested_model(
+        getattr(oci.load_balancer.models, model_name),
+        model_fields,
+        _NESTED_MODEL_NAMES,
+        _LIST_MODEL_NAMES,
+        _build_model,
+        skip_none_items=("backends",),
+        convert_field=_build_routing_actions if model_name == "RoutingRule" else None,
+    )
 
 
 def build_load_balancer_model(model_name, fields):
@@ -167,50 +139,7 @@ def build_load_balancer_model(model_name, fields):
     return _build_model(model_name, normalize_load_balancer_fields(fields))
 
 
-def _merge_load_balancer_mappings(existing, supplied):
-    """Merge supplied fields into existing fields.
-
-    Merge nested mappings, skip None values, and replace lists.
-
-    Args:
-        existing: Current fields, if available.
-        supplied: Fields supplied for the update.
-
-    Returns:
-        Merged fields without changes to the input data.
-    """
-    if not isinstance(existing, Mapping):
-        existing = {}
-    if not isinstance(supplied, Mapping):
-        return dict(existing)
-
-    result = dict(existing)
-    for key, value in supplied.items():
-        if value is None:
-            continue
-        if isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
-            result[key] = _merge_load_balancer_mappings(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
-def merge_load_balancer_fields(current, desired):
-    """Serialize and merge resource fields for an update.
-
-    Args:
-        current: Current SDK resource or field mapping.
-        desired: Requested fields or SDK model.
-
-    Returns:
-        Merged fields with omitted settings preserved.
-    """
-    current = serialize_oci_model(current)
-    desired = serialize_oci_model(desired)
-    return _merge_load_balancer_mappings(current, desired)
-
-
-class OciLoadBalancerSubresourceBase(OciResourceBase):
+class OciLoadBalancerSubresourceBase(OciLoadBalancerSubresourceCommonBase):
     """Common create, update, and delete behavior for Load Balancer children."""
 
     @property
@@ -222,47 +151,8 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
         """
         return oci.load_balancer.LoadBalancerClient
 
-    resource_id_param = None
-    name_response_field = "name"
-    create_model_name = None
-    create_method_name = None
-    create_details_name = None
-    update_model_name = None
-    update_method_name = None
-    update_details_name = None
-    delete_method_name = None
-    common_update_field_specs = ()
-    create_resource_name = "load balancer subresource"
-
-    @property
-    def update_field_specs(self):
-        """Return the default update field specifications.
-
-        Returns:
-            An empty tuple; child modules define their update fields.
-        """
-        return ()
-
-    @property
-    def resource_name(self):
-        """Return the configured child resource name.
-
-        Returns:
-            The name parameter, or None if it is absent.
-        """
-        return self.module.params.get("name")
-
-    def resolve_target_resource(self):
-        """Find the named child resource under the load balancer.
-
-        Returns:
-            The child resource, or None if its name or resource is absent.
-        """
-        if self.resource_name is None:
-            return None
-        return self.get_resource_by_id(self.resource_name)
-
-    def plan_enum_update(self, resource, resource_dict, spec, desired_value):
+    @staticmethod
+    def plan_enum_update(resource, resource_dict, spec, desired_value):
         """Plan an update when an enum value differs.
 
         Args:
@@ -312,7 +202,7 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
             True if the field values differ.
         """
         if compare == "subset_dict":
-            desired_value = normalize_load_balancer_fields(desired_value or {})
+            desired_value = normalize_load_balancer_fields(desired_value)
         return super(OciLoadBalancerSubresourceBase, self).compare_update_field_values(
             current_value, desired_value, compare=compare
         )
@@ -326,52 +216,73 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
         Returns:
             The arguments shared by child API calls.
         """
-        return {"load_balancer_id": self.module.params.get("load_balancer_id")}
+        return {"load_balancer_id": self.module.params["load_balancer_id"]}
 
-    @property
-    def _should_wait(self):
-        """Return whether operations should wait for completion.
+    @staticmethod
+    def build_resource_model(model_name, fields):
+        """Build a load balancer model from supported fields.
+
+        Args:
+            model_name: SDK model name.
+            fields: Source fields.
 
         Returns:
-            The wait setting, or True if the setting is absent.
+            The typed SDK model.
         """
-        return self.module.params.get("wait", True)
+        return build_load_balancer_model(model_name, fields)
 
-    def _work_request_id(self, response):
+    def invoke_resource_operation(self, operation, method_name, **kwargs):
+        """Invoke a composite child operation and check its work request.
+
+        Args:
+            operation: Lifecycle operation name.
+            method_name: Composite operation method name.
+            **kwargs: SDK operation arguments.
+
+        Returns:
+            The immediate or waited SDK response.
+        """
+        response = self._composite_call(operation, method_name, **kwargs)
+        if self._should_wait:
+            self._check_work_request_result(response, operation)
+        return response
+
+    @staticmethod
+    def _work_request_id(response):
         """Read the work request ID from a response.
 
         Args:
-            response: SDK response or work request model.
+            response: SDK response.
 
         Returns:
             The ID from the response data or headers, or None.
         """
-        data = getattr(response, "data", response)
+        data = response.data
         return (
             getattr(data, "id", None)
-            or (getattr(response, "headers", None) or {}).get("opc-work-request-id")
+            or response.headers.get("opc-work-request-id")
         )
 
     def _work_request_failure_message(self, response):
         """Build a message for a failed work request.
 
         Args:
-            response: SDK response or work request model.
+            response: SDK response.
 
         Returns:
             A message with the request ID and available error details.
         """
         work_request_id = self._work_request_id(response) or "ID unavailable"
-        data = getattr(response, "data", response)
-        error_details = getattr(data, "error_details", None) or []
+        data = response.data
+        error_details = data.error_details or []
         messages = []
         for detail in error_details:
-            code = getattr(detail, "error_code", None)
-            message = getattr(detail, "message", None)
+            code = detail.error_code
+            message = detail.message
             part = ": ".join(item for item in (code, message) if item)
             if part:
                 messages.append(part)
-        reason = "; ".join(messages) or getattr(data, "message", None)
+        reason = "; ".join(messages) or data.message
         return "Work request {0} failed{1}".format(
             work_request_id,
             ": {0}".format(reason) if reason else "",
@@ -381,10 +292,11 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
         """Fail if a work request did not succeed.
 
         Args:
-            response: SDK response or work request model.
+            response: SDK response.
             operation: Create, update, or delete operation.
         """
-        data = getattr(response, "data", response)
+        data = response.data
+        # An immediate composite response can have no work request data.
         state = getattr(data, "lifecycle_state", None)
         work_request_id = self._work_request_id(response)
         if state == "FAILED":
@@ -426,11 +338,11 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
                 "max_interval_seconds": self.module.params.get("wait_interval", 30),
             }
 
-        operation_kwargs = kwargs.pop("operation_kwargs", {}) or {}
+        operation_kwargs = kwargs.pop("operation_kwargs", {})
         operation_kwargs.setdefault(
             "retry_strategy", oci.retry.DEFAULT_RETRY_STRATEGY
         )
-        previous_retry_strategy = getattr(self.client, "retry_strategy", None)
+        previous_retry_strategy = self.client.retry_strategy
         self.client.retry_strategy = oci.retry.DEFAULT_RETRY_STRATEGY
         try:
             return getattr(composite, method_name)(
@@ -440,13 +352,11 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
                 **kwargs
             )
         except oci.exceptions.CompositeOperationError as exc:
-            partial_results = getattr(exc, "partial_results", None) or []
+            partial_results = exc.partial_results
             work_request_id = None
             if partial_results:
-                work_request_id = (
-                    getattr(partial_results[-1], "headers", None) or {}
-                ).get("opc-work-request-id")
-            cause = getattr(exc, "cause", None) or exc
+                work_request_id = partial_results[-1].headers.get("opc-work-request-id")
+            cause = exc.cause or exc
             self.module.fail_json(
                 msg="Failed to {0} {1}; work request {2}: {3}".format(
                     operation,
@@ -470,125 +380,11 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
         finally:
             self.client.retry_strategy = previous_retry_strategy
 
-    def _read_after_operation(self, operation):
-        """Read the child resource after a create or update operation.
 
-        Args:
-            operation: Operation name used in error messages.
+class OciLoadBalancerInfoBase(OciLoadBalancerInfoCommonBase):
+    """Select the SDK client for scoped LB info requests."""
 
-        Returns:
-            The resource, or a mapping with its name if it is not visible
-            and waiting is disabled.
-        """
-        try:
-            resource = self.get_resource_by_id(self.resource_name)
-        except oci.exceptions.ServiceError as exc:
-            self.module.fail_json(
-                msg="Failed to read {0} after {1}: {2}".format(
-                    self.create_resource_name, operation, exc
-                )
-            )
-
-        if resource is not None:
-            return resource
-        if self._should_wait:
-            self.module.fail_json(
-                msg=(
-                    "OCI finished {0} {1}, but the child resource {2} could not "
-                    "be retrieved."
-                ).format(operation, self.create_resource_name, self.resource_name)
-            )
-        return {self.name_response_field: self.resource_name}
-
-    def create_resource(self):
-        """Create the child resource and apply the configured wait settings.
-
-        Returns:
-            The resource, or a mapping with its name if it is not visible
-            and waiting is disabled.
-        """
-        if not (
-            self.create_model_name
-            and self.create_method_name
-            and self.create_details_name
-        ):
-            self.module.fail_json(
-                msg="Creating {0} is not supported.".format(self.create_resource_name)
-            )
-        details = build_load_balancer_model(
-            self.create_model_name, self.module.params
-        )
-        kwargs = self.mutation_kwargs("create")
-        kwargs[self.create_details_name] = details
-        response = self._composite_call(
-            "create", self.create_method_name, **kwargs
-        )
-        if self._should_wait:
-            self._check_work_request_result(response, "create")
-        return self._read_after_operation("create")
-
-    def build_update_details(self, update_model_fields, resource=None):
-        """Build SDK update details with omitted fields preserved.
-
-        Args:
-            update_model_fields: Fields selected for update.
-            resource: Current resource, if available.
-
-        Returns:
-            The SDK update model.
-        """
-        fields = update_model_fields
-        if resource is not None:
-            fields = merge_load_balancer_fields(resource, update_model_fields)
-        return build_load_balancer_model(self.update_model_name, fields)
-
-    def update_resource(self, resource):
-        """Update the child resource and apply the configured wait settings.
-
-        Args:
-            resource: Current child resource.
-
-        Returns:
-            The current or updated resource, or a mapping with its name
-            if it is not visible and waiting is disabled.
-        """
-        if not self.update_method_name or not self.update_details_name:
-            self.module.fail_json(
-                msg="Updating {0} is not supported.".format(self.create_resource_name)
-            )
-        update_plan = self.get_update_plan(resource)
-        update_model_fields = update_plan["update_model_fields"]
-        if not update_model_fields:
-            return resource
-
-        details = self.build_update_details(update_model_fields, resource)
-        kwargs = self.mutation_kwargs("update")
-        kwargs[self.update_details_name] = details
-        response = self._composite_call(
-            "update", self.update_method_name, **kwargs
-        )
-        if self._should_wait:
-            self._check_work_request_result(response, "update")
-        return self._read_after_operation("update")
-
-    def delete_resource(self, resource):
-        """Delete the child resource and apply the configured wait settings.
-
-        Args:
-            resource: Current child resource; deletion uses the configured name.
-
-        Returns:
-            The immediate or waited SDK response.
-        """
-        if not self.delete_method_name:
-            self.module.fail_json(
-                msg="Deleting {0} is not supported.".format(self.create_resource_name)
-            )
-        response = self._composite_call(
-            "delete",
-            self.delete_method_name,
-            **self.mutation_kwargs("delete")
-        )
-        if self._should_wait:
-            self._check_work_request_result(response, "delete")
-        return response
+    @property
+    def client_class(self):
+        """Return the LB SDK client class."""
+        return oci.load_balancer.LoadBalancerClient

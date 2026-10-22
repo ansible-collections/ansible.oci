@@ -178,29 +178,22 @@ class OciLoadBalancerBackendModule(OciLoadBalancerSubresourceBase):
     create_resource_name = "load balancer backend"
     create_required_fields = ("ip_address", "port")
 
-    @property
-    def update_field_specs(self):
-        """Define mutable resource fields.
-
-        Returns:
-            The update field specifications.
-        """
-        return (
-            UpdateFieldSpec(
-                param_name="ip_address",
-                is_mutable=False,
-                immutable_reason="OCI uses the backend IP address as creation identity",
-            ),
-            UpdateFieldSpec(
-                param_name="port",
-                is_mutable=False,
-                immutable_reason="OCI uses the backend port as creation identity",
-            ),
-            UpdateFieldSpec(param_name="weight", is_mutable=True),
-            UpdateFieldSpec(param_name="backup", is_mutable=True),
-            UpdateFieldSpec(param_name="drain", is_mutable=True),
-            UpdateFieldSpec(param_name="offline", is_mutable=True),
-        )
+    update_field_specs = (
+        UpdateFieldSpec(
+            param_name="ip_address",
+            is_mutable=False,
+            immutable_reason="OCI uses the backend IP address as creation identity",
+        ),
+        UpdateFieldSpec(
+            param_name="port",
+            is_mutable=False,
+            immutable_reason="OCI uses the backend port as creation identity",
+        ),
+        UpdateFieldSpec(param_name="weight", is_mutable=True),
+        UpdateFieldSpec(param_name="backup", is_mutable=True),
+        UpdateFieldSpec(param_name="drain", is_mutable=True),
+        UpdateFieldSpec(param_name="offline", is_mutable=True),
+    )
 
     def validate_create_request(self):
         """Validate required fields and the backend IP:port name."""

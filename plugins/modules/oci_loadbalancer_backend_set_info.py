@@ -69,48 +69,22 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
 )
-from ansible_collections.ansible.oci.plugins.module_utils.oci_base import oci
-from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
+from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer import (
+    OciLoadBalancerInfoBase,
+)
 
 
-class OciLoadBalancerBackendSetInfoModule(OciInfoBase):
+class OciLoadBalancerBackendSetInfoModule(OciLoadBalancerInfoBase):
     """Read one backend set or list backend sets for a load balancer."""
 
-    @property
-    def client_class(self):
-        """Return the load balancer SDK client.
-
-        Returns:
-            The LoadBalancerClient class.
-        """
-        return oci.load_balancer.LoadBalancerClient
-
     results_key = "backend_sets"
-
-    def fetch_resources(self):
-        """Fetch the named backend set or list all backend sets.
-
-        Returns:
-            The matching SDK models, or an empty list when missing.
-        """
-        load_balancer_id = self.module.params.get("load_balancer_id")
-        backend_set_name = self.module.params.get("name")
-        if backend_set_name:
-            return self.get_resource_by_id(
-                backend_set_name,
-                self.client.get_backend_set,
-                load_balancer_id=load_balancer_id,
-                backend_set_name=backend_set_name,
-            )
-        try:
-            return self.list_all_resources(
-                self.client.list_backend_sets,
-                load_balancer_id=load_balancer_id,
-            )
-        except Exception as exc:
-            if getattr(exc, "status", None) == 404:
-                return []
-            raise
+    resource_id_param = "name"
+    resource_id_kwarg = "backend_set_name"
+    resource_get_method = "get_backend_set"
+    name_response_field = "name"
+    get_scope_params = ("load_balancer_id",)
+    list_resource_method = "list_backend_sets"
+    list_filter_params = ("load_balancer_id",)
 
 
 def main():

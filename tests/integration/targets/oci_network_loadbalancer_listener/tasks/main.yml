@@ -1,0 +1,83 @@
+---
+- name: Test network load balancer listener lifecycle
+  block:
+    - name: Prepare the parent network load balancer
+      ansible.builtin.include_role:
+        name: prepare_oci_network_loadbalancer_subresources
+      vars:
+        oci_nlb_test_suffix: listener
+
+    - name: Create the prerequisite backend set
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: "{{ oci_nlb_test_id }}"
+        name: "{{ oci_nlb_test_backend_set }}"
+        policy: five_tuple
+        health_checker:
+          protocol: tcp
+          port: 80
+
+    - name: Create and check the listener
+      ansible.builtin.include_tasks: listener_scenario.yml
+      vars:
+        oci_nlb_listener_state: present
+        oci_nlb_listener_options:
+          name: "{{ oci_nlb_test_listener }}"
+          default_backend_set_name: "{{ oci_nlb_test_backend_set }}"
+          port: 80
+          protocol: tcp
+        oci_nlb_listener_expected:
+          port: 80
+          protocol: TCP
+
+    - name: List listeners on the test parent
+      ansible.oci.oci_network_loadbalancer_listener_info:
+        network_load_balancer_id: "{{ oci_nlb_test_id }}"
+      register: oci_nlb_listener_list
+
+    - name: Check the listener list
+      ansible.builtin.assert:
+        that:
+          - oci_nlb_test_listener in (oci_nlb_listener_list.listeners | map(attribute='name') | list)
+
+    - name: Update the listener port
+      ansible.builtin.include_tasks: listener_scenario.yml
+      vars:
+        oci_nlb_listener_state: present
+        oci_nlb_listener_options:
+          name: "{{ oci_nlb_test_listener }}"
+          port: 81
+        oci_nlb_listener_expected:
+          port: 81
+          protocol: TCP
+          default_backend_set_name: "{{ oci_nlb_test_backend_set }}"
+
+    - name: Delete the listener
+      ansible.builtin.include_tasks: listener_scenario.yml
+      vars:
+        oci_nlb_listener_state: absent
+        oci_nlb_listener_options:
+          name: "{{ oci_nlb_test_listener }}"
+        oci_nlb_listener_expected: {}
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  always:
+    - name: Delete the listener before backend cleanup
+      ansible.oci.oci_network_loadbalancer_listener:
+        network_load_balancer_id: "{{ oci_nlb_test_id }}"
+        name: "{{ oci_nlb_test_listener }}"
+        state: absent
+      when: oci_nlb_test_id | default('', true) | length > 0
+
+    - name: Delete the prerequisite backend set
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: "{{ oci_nlb_test_id }}"
+        name: "{{ oci_nlb_test_backend_set }}"
+        state: absent
+      when: oci_nlb_test_id | default('', true) | length > 0
+
+    - name: Clean up the parent network load balancer
+      ansible.builtin.include_role:
+        name: prepare_oci_network_loadbalancer_subresources
+        tasks_from: cleanup

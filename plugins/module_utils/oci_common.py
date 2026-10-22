@@ -3,6 +3,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 
 from ansible.module_utils.common.parameters import env_fallback
@@ -182,6 +183,29 @@ def serialize_oci_model(resource):
             result[key] = _serialize_value(value)
         return result
     return resource
+
+
+def merge_mappings(existing, supplied):
+    """Merge supplied mappings without modifying either input.
+
+    Ignore supplied None values. Preserve explicit False, zero, and empty values.
+
+    Args:
+        existing: Current resource fields.
+        supplied: Fields requested by the caller.
+
+    Returns:
+        Merged fields. Nested mappings merge and lists replace current lists.
+    """
+    result = dict(existing)
+    for key, value in supplied.items():
+        if value is None:
+            continue
+        if isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
+            result[key] = merge_mappings(result[key], value)
+        else:
+            result[key] = value
+    return result
 
 
 def collect_list_filters(module_params, *param_groups):

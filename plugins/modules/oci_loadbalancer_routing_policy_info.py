@@ -59,54 +59,22 @@ routing_policies:
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import OCI_AUTH_ARGS
-from ansible_collections.ansible.oci.plugins.module_utils.oci_base import oci
-from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
+from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer import (
+    OciLoadBalancerInfoBase,
+)
 
 
-class OciLoadBalancerRoutingPolicyInfoModule(OciInfoBase):
+class OciLoadBalancerRoutingPolicyInfoModule(OciLoadBalancerInfoBase):
     """Read routing policies from a Load Balancer."""
 
-    @property
-    def client_class(self):
-        """Return the Load Balancer SDK client.
-
-        Returns:
-            The LoadBalancerClient class.
-        """
-        return oci.load_balancer.LoadBalancerClient
-
     results_key = "routing_policies"
-
-    def fetch_resources(self):
-        """Fetch the named policy or list policies for a Load Balancer.
-
-        This override passes the parent OCID to the named getter. The inherited
-        metadata path cannot add this required argument.
-
-        Returns:
-            Matching SDK models, or an empty list when the policy is missing.
-
-        Raises:
-            oci.exceptions.ServiceError: If OCI returns an error other than 404.
-        """
-        load_balancer_id = self.module.params.get("load_balancer_id")
-        routing_policy_name = self.module.params.get("name")
-        if routing_policy_name:
-            return self.get_resource_by_id(
-                routing_policy_name,
-                self.client.get_routing_policy,
-                load_balancer_id=load_balancer_id,
-                routing_policy_name=routing_policy_name,
-            )
-        try:
-            return self.list_all_resources(
-                self.client.list_routing_policies,
-                load_balancer_id=load_balancer_id,
-            )
-        except Exception as exc:
-            if getattr(exc, "status", None) == 404:
-                return []
-            raise
+    resource_id_param = "name"
+    resource_id_kwarg = "routing_policy_name"
+    resource_get_method = "get_routing_policy"
+    name_response_field = "name"
+    get_scope_params = ("load_balancer_id",)
+    list_resource_method = "list_routing_policies"
+    list_filter_params = ("load_balancer_id",)
 
 
 def main():
