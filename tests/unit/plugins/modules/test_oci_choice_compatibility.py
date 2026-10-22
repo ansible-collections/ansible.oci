@@ -114,8 +114,9 @@ def test_choice_validation_conversion_and_warnings(monkeypatch, module_name, pat
 @pytest.mark.parametrize("module_name,path,values", FIELDS)
 @pytest.mark.parametrize("invalid", ["invalid_choice", "CiDr_BlOcK"])
 def test_invalid_choices_fail_before_resource_operations(monkeypatch, capsys, module_name, path, values, invalid):
+    params = parameters_for(path, invalid)
     with pytest.raises(SystemExit) as result:
-        run_main(monkeypatch, module_name, parameters_for(path, invalid))
+        run_main(monkeypatch, module_name, params)
     assert result.value.code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["failed"] is True

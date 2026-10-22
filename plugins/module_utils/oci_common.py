@@ -271,6 +271,21 @@ def choice_values(value_map):
     return list(dict.fromkeys(list(value_map) + list(value_map.values())))
 
 
+def _apply_choice_at_path(container, remaining, convert):
+    """Apply a conversion to the selected parameter in dictionaries and lists."""
+    if isinstance(container, list):
+        for item in container:
+            _apply_choice_at_path(item, remaining, convert)
+        return
+    if not isinstance(container, dict):
+        return
+    key = remaining[0]
+    if len(remaining) > 1:
+        _apply_choice_at_path(container.get(key), remaining[1:], convert)
+        return
+    convert(container, key)
+
+
 def normalize_choice_parameters(module, choice_maps):
     """Warn about legacy choices and convert selected parameters to OCI values.
 
@@ -285,17 +300,7 @@ def normalize_choice_parameters(module, choice_maps):
         }
         warned_values = set()
 
-        def convert(container, remaining):
-            if isinstance(container, list):
-                for item in container:
-                    convert(item, remaining)
-                return
-            if not isinstance(container, dict):
-                return
-            key = remaining[0]
-            if len(remaining) > 1:
-                convert(container.get(key), remaining[1:])
-                return
+        def convert(container, key):
             value = container.get(key)
             if value in legacy_values and value not in warned_values:
                 module.deprecate(
@@ -308,7 +313,7 @@ def normalize_choice_parameters(module, choice_maps):
             if value in value_map:
                 container[key] = value_map[value]
 
-        convert(module.params, path)
+        _apply_choice_at_path(module.params, path, convert)
 
 
 def normalize_enum_values(value, enum_keys):
