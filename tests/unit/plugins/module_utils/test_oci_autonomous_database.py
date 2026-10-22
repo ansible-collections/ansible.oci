@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 import types
@@ -63,7 +64,9 @@ def test_get_resource_response_calls_get_autonomous_database(monkeypatch):
 
     client = types.SimpleNamespace(get_autonomous_database=get_autonomous_database)
     instance = make_adb_base(util, client)
-    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs), raising=False)
+    monkeypatch.setattr(
+        instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs), raising=False
+    )
 
     assert instance.get_resource_response("ocid1.adb") is response
     assert calls == ["ocid1.adb"]
@@ -73,7 +76,9 @@ def test_build_update_details_builds_update_model(monkeypatch):
     util = load_adb_util(monkeypatch)
     instance = make_adb_base(util)
 
-    details = instance.build_update_details({"compute_count": 4.0, "display_name": "adb"})
+    details = instance.build_update_details(
+        {"compute_count": 4.0, "display_name": "adb"}
+    )
 
     assert isinstance(details, FakeUpdateDetails)
     assert details.compute_count == 4.0
@@ -93,10 +98,11 @@ def test_delete_resource_deletes_by_resource_id_and_waits(monkeypatch):
         captured.update(resource=res, fn=fn, kwargs=kwargs)
         return terminated
 
-    monkeypatch.setattr(instance, "delete_resource_and_wait", delete_resource_and_wait, raising=False)
+    monkeypatch.setattr(
+        instance, "delete_resource_and_wait", delete_resource_and_wait, raising=False
+    )
 
     assert instance.delete_resource(resource) is terminated
     assert captured["resource"] is resource
     assert captured["fn"] is delete_fn
     assert captured["kwargs"] == {"autonomous_database_id": "ocid1.adb"}
-
