@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from ansible.module_utils import basic
+from ansible.module_utils.common import warnings as module_warnings
 
 from .conftest import load_collection_module
 
@@ -180,6 +181,11 @@ def test_omitted_nested_defaults_and_empty_lists_do_not_warn(monkeypatch, module
 
 
 def test_ansible_result_contains_choice_deprecation(monkeypatch, capsys):
+    # The pytest plugin loads Ansible in controller context.
+    # Use module context so deprecations appear in the JSON result.
+    internal = getattr(module_warnings, "_internal", None)
+    if internal is not None:
+        monkeypatch.setattr(internal, "is_controller", False, raising=False)
     unused_module, captured = run_main(
         monkeypatch, "oci_object_storage_bucket",
         {"name": "ExampleResource", "storage_tier": "Standard"}, record_warning=False,
