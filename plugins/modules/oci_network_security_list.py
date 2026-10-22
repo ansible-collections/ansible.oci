@@ -83,9 +83,12 @@ options:
       source_type:
         description:
           - The type of C(source).
+          - Uppercase and mixed-case choice values are deprecated.
+            Support for these values will be removed in ansible.oci 2.0.0.
+          - Use the lowercase choice values.
         type: str
-        choices: [CIDR_BLOCK, SERVICE_CIDR_BLOCK, NETWORK_SECURITY_GROUP]
-        default: CIDR_BLOCK
+        choices: [cidr_block, service_cidr_block, network_security_group, CIDR_BLOCK, SERVICE_CIDR_BLOCK, NETWORK_SECURITY_GROUP]
+        default: cidr_block
       protocol:
         description:
           - The transport protocol, as a decimal IANA protocol number string
@@ -165,9 +168,12 @@ options:
       destination_type:
         description:
           - The type of C(destination).
+          - Uppercase and mixed-case choice values are deprecated.
+            Support for these values will be removed in ansible.oci 2.0.0.
+          - Use the lowercase choice values.
         type: str
-        choices: [CIDR_BLOCK, SERVICE_CIDR_BLOCK, NETWORK_SECURITY_GROUP]
-        default: CIDR_BLOCK
+        choices: [cidr_block, service_cidr_block, network_security_group, CIDR_BLOCK, SERVICE_CIDR_BLOCK, NETWORK_SECURITY_GROUP]
+        default: cidr_block
       protocol:
         description:
           - The transport protocol, as a decimal IANA protocol number string
@@ -412,17 +418,31 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
+    choice_values,
     filter_none_values,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("ingress_security_rules", "source_type"): {
+        "cidr_block": "CIDR_BLOCK",
+        "service_cidr_block": "SERVICE_CIDR_BLOCK",
+        "network_security_group": "NETWORK_SECURITY_GROUP",
+    },
+    ("egress_security_rules", "destination_type"): {
+        "cidr_block": "CIDR_BLOCK",
+        "service_cidr_block": "SERVICE_CIDR_BLOCK",
+        "network_security_group": "NETWORK_SECURITY_GROUP",
+    },
+}
 
 CREATE_REQUIRED_FIELDS = [
     "compartment_id",
@@ -756,8 +776,8 @@ def main():
         source=dict(type="str", required=True),
         source_type=dict(
             type="str",
-            choices=["CIDR_BLOCK", "SERVICE_CIDR_BLOCK", "NETWORK_SECURITY_GROUP"],
-            default="CIDR_BLOCK",
+            choices=choice_values(CHOICE_VALUE_MAPS[("ingress_security_rules", "source_type")]),
+            default="cidr_block",
         ),
     )
     ingress_options.update(rule_common_suboptions)
@@ -766,8 +786,8 @@ def main():
         destination=dict(type="str", required=True),
         destination_type=dict(
             type="str",
-            choices=["CIDR_BLOCK", "SERVICE_CIDR_BLOCK", "NETWORK_SECURITY_GROUP"],
-            default="CIDR_BLOCK",
+            choices=choice_values(CHOICE_VALUE_MAPS[("egress_security_rules", "destination_type")]),
+            default="cidr_block",
         ),
     )
     egress_options.update(rule_common_suboptions)
@@ -793,6 +813,8 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
+
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
 
     OciNetworkSecurityListModule(module).execute_resource_module()
 

@@ -96,8 +96,11 @@ options:
     description:
       - The desired DNS proxy status of the bastion.
       - The module does not update this field after create.
+      - Uppercase and mixed-case choice values are deprecated.
+        Support for these values will be removed in ansible.oci 2.0.0.
+      - Use the lowercase choice values.
     type: str
-    choices: [ENABLED, DISABLED]
+    choices: [enabled, disabled, ENABLED, DISABLED]
   security_attributes:
     description:
       - Zero Trust Packet Routing (ZPR) security attributes applied to the
@@ -157,17 +160,25 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_ACTIVE,
     OCI_COMMON_ARGS,
+    choice_values,
     filter_none_values,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("dns_proxy_status",): {
+        "enabled": "ENABLED",
+        "disabled": "DISABLED",
+    },
+}
 
 CREATE_REQUIRED_FIELDS = [
     "compartment_id",
@@ -305,7 +316,7 @@ def main():
         max_session_ttl_in_seconds=dict(type="int"),
         phone_book_entry=dict(type="str"),
         static_jump_host_ip_addresses=dict(type="list", elements="str"),
-        dns_proxy_status=dict(type="str", choices=["ENABLED", "DISABLED"]),
+        dns_proxy_status=dict(type="str", choices=choice_values(CHOICE_VALUE_MAPS[("dns_proxy_status",)])),
         security_attributes=dict(type="dict"),
     )
 
@@ -313,6 +324,8 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
+
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
 
     OciBastionModule(module).execute_resource_module()
 

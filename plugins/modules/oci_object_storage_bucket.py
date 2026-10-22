@@ -46,13 +46,19 @@ options:
   public_access_type:
     description:
       - Public access level for the bucket.
+      - Uppercase and mixed-case choice values are deprecated.
+        Support for these values will be removed in ansible.oci 2.0.0.
+      - Use the lowercase choice values.
     type: str
-    choices: [NoPublicAccess, ObjectRead, ObjectReadWithoutList]
+    choices: [no_public_access, object_read, object_read_without_list, NoPublicAccess, ObjectRead, ObjectReadWithoutList]
   storage_tier:
     description:
       - Storage tier of the bucket. It cannot be changed after creation.
+      - Uppercase and mixed-case choice values are deprecated.
+        Support for these values will be removed in ansible.oci 2.0.0.
+      - Use the lowercase choice values.
     type: str
-    choices: [Standard, Archive]
+    choices: [standard, archive, Standard, Archive]
   metadata:
     description:
       - User-defined key-value metadata for the bucket.
@@ -64,16 +70,22 @@ options:
     type: bool
   auto_tiering:
     description:
-      - Whether to automatically move objects between Standard and Infrequent Access tiers.
+      - Whether to move objects automatically between the standard and infrequent access tiers.
+      - Uppercase and mixed-case choice values are deprecated.
+        Support for these values will be removed in ansible.oci 2.0.0.
+      - Use the lowercase choice values.
     type: str
-    choices: [Disabled, InfrequentAccess]
+    choices: [disabled, infrequent_access, Disabled, InfrequentAccess]
   versioning:
     description:
       - Versioning state of the bucket.
-      - C(Disabled) is available only before versioning has been enabled.
-      - C(Suspended) is available only after versioning has been enabled.
+      - C(disabled) is available only before versioning has been enabled.
+      - C(suspended) is available only after versioning has been enabled.
+      - Uppercase and mixed-case choice values are deprecated.
+        Support for these values will be removed in ansible.oci 2.0.0.
+      - Use the lowercase choice values.
     type: str
-    choices: [Disabled, Enabled, Suspended]
+    choices: [disabled, enabled, suspended, Disabled, Enabled, Suspended]
   kms_key_id:
     description:
       - OCID of a customer-managed KMS key for bucket encryption.
@@ -97,9 +109,9 @@ EXAMPLES = r"""
   ansible.oci.oci_object_storage_bucket:
     name: application-logs
     compartment_id: ocid1.compartment.oc1..example
-    storage_tier: Standard
-    public_access_type: NoPublicAccess
-    versioning: Enabled
+    storage_tier: standard
+    public_access_type: no_public_access
+    versioning: enabled
     freeform_tags:
       purpose: logs
   register: bucket
@@ -107,7 +119,7 @@ EXAMPLES = r"""
 - name: Suspend versioning on the bucket
   ansible.oci.oci_object_storage_bucket:
     name: application-logs
-    versioning: Suspended
+    versioning: suspended
 
 - name: Delete an empty bucket
   ansible.oci.oci_object_storage_bucket:
@@ -135,8 +147,10 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     OCI_TAG_ARGS,
+    choice_values,
     filter_none_values,
     import_oci_sdk,
+    normalize_choice_parameters,
     threaded_map,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_object_storage import (
@@ -148,6 +162,28 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
 )
 
 oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("public_access_type",): {
+        "no_public_access": "NoPublicAccess",
+        "object_read": "ObjectRead",
+        "object_read_without_list": "ObjectReadWithoutList",
+    },
+    ("storage_tier",): {
+        "standard": "Standard",
+        "archive": "Archive",
+    },
+    ("auto_tiering",): {
+        "disabled": "Disabled",
+        "infrequent_access": "InfrequentAccess",
+    },
+    ("versioning",): {
+        "disabled": "Disabled",
+        "enabled": "Enabled",
+        "suspended": "Suspended",
+    },
+}
 
 
 class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBase):
@@ -204,7 +240,7 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
         self.validate_kms_key_id()
         if self.module.params.get("versioning") == "Suspended":
             self.module.fail_json(
-                msg="versioning=Suspended is unavailable when creating a bucket"
+                msg="versioning=suspended is unavailable when creating a bucket"
             )
 
     def build_update_plan(self, resource):
@@ -221,11 +257,11 @@ class OciObjectStorageBucketModule(OciObjectStorageNamespaceMixin, OciResourceBa
         current_versioning = getattr(resource, "versioning", None)
         if desired_versioning == "Disabled" and current_versioning != "Disabled":
             self.module.fail_json(
-                msg="versioning cannot be Disabled after it has been enabled"
+                msg="versioning cannot be disabled after it has been enabled"
             )
         if desired_versioning == "Suspended" and current_versioning == "Disabled":
             self.module.fail_json(
-                msg="versioning cannot be Suspended before it has been enabled"
+                msg="versioning cannot be suspended before it has been enabled"
             )
         return super().build_update_plan(resource)
 
@@ -508,18 +544,20 @@ def main():
         compartment_id=dict(type="str"),
         public_access_type=dict(
             type="str",
-            choices=["NoPublicAccess", "ObjectRead", "ObjectReadWithoutList"],
+            choices=choice_values(CHOICE_VALUE_MAPS[("public_access_type",)]),
         ),
-        storage_tier=dict(type="str", choices=["Standard", "Archive"]),
+        storage_tier=dict(type="str", choices=choice_values(CHOICE_VALUE_MAPS[("storage_tier",)])),
         metadata=dict(type="dict"),
         object_events_enabled=dict(type="bool"),
-        auto_tiering=dict(type="str", choices=["Disabled", "InfrequentAccess"]),
-        versioning=dict(type="str", choices=["Disabled", "Enabled", "Suspended"]),
+        auto_tiering=dict(type="str", choices=choice_values(CHOICE_VALUE_MAPS[("auto_tiering",)])),
+        versioning=dict(type="str", choices=choice_values(CHOICE_VALUE_MAPS[("versioning",)])),
         kms_key_id=dict(type="str"),
         is_bucket_key_enabled=dict(type="bool"),
         force=dict(type="bool", default=False),
     )
     module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
+
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
     OciObjectStorageBucketModule(module).execute_resource_module()
 
 

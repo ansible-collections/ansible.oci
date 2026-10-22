@@ -50,11 +50,11 @@ def test_main_exposes_filters_and_check_mode(monkeypatch):
     assert argument_spec["compartment_id"] == {"type": "str"}
     assert argument_spec["node_pool_os_type"] == {
         "type": "str",
-        "choices": ["OL7", "OL8", "UBUNTU"],
+        "choices": ["ol7", "ol8", "ubuntu", "OL7", "OL8", "UBUNTU"],
     }
     assert argument_spec["node_pool_os_arch"] == {
         "type": "str",
-        "choices": ["X86_64", "AARCH64"],
+        "choices": ["x86_64", "aarch64", "X86_64", "AARCH64"],
     }
     assert argument_spec["node_pool_k8s_version"] == {"type": "str"}
 

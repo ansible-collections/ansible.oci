@@ -12,7 +12,7 @@ short_description: Manage a boot volume resource in Oracle Cloud Infrastructure
 description:
   - Create, update, and delete OCI boot volumes via the Block Storage service.
   - Restore a boot volume backup by creating a new boot volume with
-    C(source_details.type=bootVolumeBackup). This is CreateBootVolume, not a
+    C(source_details.type=boot_volume_backup). This is CreateBootVolume, not a
     backup-module API.
   - Use M(ansible.oci.oci_boot_volume_backup) to create the backup first, and
     M(ansible.oci.oci_boot_volume_info) to list or fetch boot volumes.
@@ -89,7 +89,7 @@ options:
   source_details:
     description:
       - The source used to provision the boot volume at create time.
-      - Set C(type) to C(bootVolumeBackup) and C(id) to a boot volume backup
+      - Set C(type) to C(boot_volume_backup) and C(id) to a boot volume backup
         OCID to restore from a backup.
       - Applied only at create time. Changing the source of an existing boot
         volume is not supported, so a change is rejected.
@@ -100,10 +100,13 @@ options:
       type:
         description:
           - The source type.
-          - C(bootVolumeBackup) restores from a boot volume backup.
+          - C(boot_volume_backup) restores from a boot volume backup.
+          - Uppercase and mixed-case choice values are deprecated.
+            Support for these values will be removed in ansible.oci 2.0.0.
+          - Use the lowercase choice values.
         type: str
         required: true
-        choices: [bootVolumeBackup]
+        choices: [boot_volume_backup, bootVolumeBackup]
       id:
         description:
           - The OCID of the source boot volume backup.
@@ -126,7 +129,7 @@ EXAMPLES = r"""
     availability_domain: Uocm:PHX-AD-1
     name: restored-boot-volume
     source_details:
-      type: bootVolumeBackup
+      type: boot_volume_backup
       id: ocid1.bootvolumebackup.oc1..example
   register: restored_boot_volume
 
@@ -312,17 +315,24 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     LIFECYCLE_FAILED,
     OCI_COMMON_ARGS,
+    choice_values,
     filter_none_values,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("source_details", "type"): {
+        "boot_volume_backup": "bootVolumeBackup",
+    },
+}
 
 CREATE_REQUIRED_FIELDS = [
     "compartment_id",
@@ -343,7 +353,7 @@ def build_source_details(source_details):
             id=source_id
         )
     raise ValueError(
-        "source_details.type must be bootVolumeBackup and source_details.id is required"
+        "source_details.type must be boot_volume_backup and source_details.id is required"
     )
 
 
@@ -504,7 +514,7 @@ def main():
                 type=dict(
                     type="str",
                     required=True,
-                    choices=["bootVolumeBackup"],
+                    choices=choice_values(CHOICE_VALUE_MAPS[("source_details", "type")]),
                 ),
                 id=dict(type="str", required=True),
             ),
@@ -515,6 +525,8 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
+
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
 
     OciBootVolumeModule(module).execute_resource_module()
 

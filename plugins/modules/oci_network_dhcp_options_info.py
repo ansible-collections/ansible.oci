@@ -154,9 +154,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
 
 # Mirrors the translation tables in oci_dhcp_options.py. Kept local rather
 # than imported, matching this collection's convention of self-contained

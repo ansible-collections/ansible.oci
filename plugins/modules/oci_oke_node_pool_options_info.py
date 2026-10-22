@@ -34,19 +34,22 @@ options:
   node_pool_os_type:
     description:
       - Restrict the returned images to this operating system.
+      - Uppercase and mixed-case choice values are deprecated.
+        Support for these values will be removed in ansible.oci 2.0.0.
+      - Use the lowercase choice values.
     type: str
     choices:
-      - OL7
-      - OL8
-      - UBUNTU
+      [ol7, ol8, ubuntu, OL7, OL8, UBUNTU]
   node_pool_os_arch:
     description:
       - Restrict the returned images to this operating system architecture.
       - The architecture also determines which C(shapes) an image can run on.
+      - Uppercase and mixed-case choice values are deprecated.
+        Support for these values will be removed in ansible.oci 2.0.0.
+      - Use the lowercase choice values.
     type: str
     choices:
-      - X86_64
-      - AARCH64
+      [x86_64, aarch64, X86_64, AARCH64]
   node_pool_k8s_version:
     description:
       - Restrict the returned images to those built for this Kubernetes version.
@@ -66,7 +69,7 @@ EXAMPLES = r"""
   ansible.oci.oci_oke_node_pool_options_info:
     node_pool_option_id: all
     compartment_id: ocid1.compartment.oc1..example
-    node_pool_os_arch: AARCH64
+    node_pool_os_arch: aarch64
     node_pool_k8s_version: v1.29.1
 """
 
@@ -122,11 +125,26 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
+    choice_values,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
 
 oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("node_pool_os_type",): {
+        "ol7": "OL7",
+        "ol8": "OL8",
+        "ubuntu": "UBUNTU",
+    },
+    ("node_pool_os_arch",): {
+        "x86_64": "X86_64",
+        "aarch64": "AARCH64",
+    },
+}
 
 
 class OciOkeNodePoolOptionsInfoModule(OciInfoBase):
@@ -175,14 +193,16 @@ def main():
         OCI_AUTH_ARGS,
         node_pool_option_id=dict(type="str", default="all"),
         compartment_id=dict(type="str"),
-        node_pool_os_type=dict(type="str", choices=["OL7", "OL8", "UBUNTU"]),
-        node_pool_os_arch=dict(type="str", choices=["X86_64", "AARCH64"]),
+        node_pool_os_type=dict(type="str", choices=choice_values(CHOICE_VALUE_MAPS[("node_pool_os_type",)])),
+        node_pool_os_arch=dict(type="str", choices=choice_values(CHOICE_VALUE_MAPS[("node_pool_os_arch",)])),
         node_pool_k8s_version=dict(type="str"),
     )
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
+
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
     OciOkeNodePoolOptionsInfoModule(module).execute_info_module()
 
 

@@ -37,7 +37,7 @@ SOURCE_DETAILS_ARGUMENT_SPEC = {
         "type": {
             "type": "str",
             "required": True,
-            "choices": ["volumeBackup", "volume"],
+            "choices": ["volume_backup", "volume", "volumeBackup"],
         },
         "id": {"type": "str", "required": True},
     },

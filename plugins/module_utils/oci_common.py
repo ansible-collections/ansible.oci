@@ -266,6 +266,51 @@ def build_model(source, model_class, keys=None, enum_keys=None):
     return model_class(**filter_none_values(selected))
 
 
+def choice_values(value_map):
+    """Return lowercase choices and legacy spellings for the transition."""
+    return list(dict.fromkeys(list(value_map) + list(value_map.values())))
+
+
+def normalize_choice_parameters(module, choice_maps):
+    """Warn about legacy choices and convert selected parameters to OCI values.
+
+    Each tuple in choice_maps identifies a parameter path.
+    Lists of dictionaries can occur along that path.
+    Each mapping contains lowercase choices and their exact OCI values.
+    Call this function once after Ansible validates the arguments.
+    """
+    for path, value_map in choice_maps.items():
+        legacy_values = {
+            value: name for name, value in value_map.items() if name != value
+        }
+        warned_values = set()
+
+        def convert(container, remaining):
+            if isinstance(container, list):
+                for item in container:
+                    convert(item, remaining)
+                return
+            if not isinstance(container, dict):
+                return
+            key = remaining[0]
+            if len(remaining) > 1:
+                convert(container.get(key), remaining[1:])
+                return
+            value = container.get(key)
+            if value in legacy_values and value not in warned_values:
+                module.deprecate(
+                    "The choice '%s' for '%s' is deprecated. Use '%s' instead."
+                    % (value, ".".join(path), legacy_values[value]),
+                    version="2.0.0",
+                    collection_name="ansible.oci",
+                )
+                warned_values.add(value)
+            if value in value_map:
+                container[key] = value_map[value]
+
+        convert(module.params, path)
+
+
 def normalize_enum_values(value, enum_keys):
     """Recursively upper-case string values under known OCI enum keys.
 

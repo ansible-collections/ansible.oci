@@ -1,0 +1,4 @@
+minor_changes:
+  - Modules now accept lowercase choice values for bastion DNS status, volume sources, network rules, bucket settings, and OKE image filters.
+deprecated_features:
+  - Uppercase and mixed-case choice values in these fields are deprecated and will be removed in ansible.oci 2.0.0. Use lowercase choices instead.
