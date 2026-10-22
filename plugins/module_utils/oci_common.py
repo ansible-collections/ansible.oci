@@ -271,19 +271,19 @@ def choice_values(value_map):
     return list(dict.fromkeys(list(value_map) + list(value_map.values())))
 
 
-def _apply_choice_at_path(container, remaining, convert):
-    """Apply a conversion to the selected parameter in dictionaries and lists."""
-    if isinstance(container, list):
-        for item in container:
-            _apply_choice_at_path(item, remaining, convert)
-        return
-    if not isinstance(container, dict):
-        return
-    key = remaining[0]
-    if len(remaining) > 1:
-        _apply_choice_at_path(container.get(key), remaining[1:], convert)
-        return
-    convert(container, key)
+def _choice_containers(params, path):
+    """Return dictionaries that contain the selected choice field."""
+    containers = [params]
+    for key in path[:-1]:
+        children = []
+        for container in containers:
+            value = container.get(key)
+            if isinstance(value, dict):
+                children.append(value)
+            elif isinstance(value, list):
+                children.extend(value)
+        containers = children
+    return containers
 
 
 def normalize_choice_parameters(module, choice_maps):
@@ -300,7 +300,8 @@ def normalize_choice_parameters(module, choice_maps):
         }
         warned_values = set()
 
-        def convert(container, key):
+        key = path[-1]
+        for container in _choice_containers(module.params, path):
             value = container.get(key)
             if value in legacy_values and value not in warned_values:
                 module.deprecate(
@@ -312,8 +313,6 @@ def normalize_choice_parameters(module, choice_maps):
                 warned_values.add(value)
             if value in value_map:
                 container[key] = value_map[value]
-
-        _apply_choice_at_path(module.params, path, convert)
 
 
 def normalize_enum_values(value, enum_keys):
