@@ -31,9 +31,11 @@ ifndef IN_COLLECTION_TREE
 	ansible-galaxy collection install --upgrade -p ~/.ansible/collections .
 endif
 
+# python reqs need to be installed manually since this is not using --docker
 .PHONY: integration-ci
 integration-ci: upgrade-collections generate-integration-runtime
 	cd "$(COLLECTION_ROOT)"; \
+	pip install -r requirements.txt; \
 	ansible --version; \
 	ansible-test --version; \
 	ansible-test integration --allow-destructive $(INTEGRATION_TARGETS)
