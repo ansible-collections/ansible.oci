@@ -118,6 +118,117 @@
         that:
           - oci_adb_info_list.autonomous_databases | selectattr('id', 'equalto', oci_adb_id) | list | length == 1
 
+    - name: Create temporary directory for the autonomous database wallet
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: oci_adb_wallet
+      register: oci_adb_wallet_dir
+
+    - name: Define autonomous database wallet parameters
+      ansible.builtin.set_fact:
+        oci_adb_wallet_dest: "{{ oci_adb_wallet_dir.path }}/wallet.zip"
+
+    - name: Download autonomous database wallet in check mode
+      ansible.oci.oci_autonomous_database_wallet: &oci_adb_wallet_module_options
+        autonomous_database_id: "{{ oci_adb_id }}"
+        dest: "{{ oci_adb_wallet_dest }}"
+        password: "{{ oci_adb_integration_wallet_password }}"
+      check_mode: true
+      register: oci_adb_wallet_check
+
+    - name: Read wallet file after download check mode
+      ansible.builtin.stat:
+        path: "{{ oci_adb_wallet_dest }}"
+      register: oci_adb_wallet_check_stat
+
+    - name: Assert download check mode reported a change without writing the wallet
+      ansible.builtin.assert:
+        that:
+          - oci_adb_wallet_check.changed | bool
+          - not oci_adb_wallet_check_stat.stat.exists
+
+    - name: Download autonomous database wallet
+      ansible.oci.oci_autonomous_database_wallet:
+        <<: *oci_adb_wallet_module_options
+      register: oci_adb_wallet_download
+
+    - name: Read wallet file after download
+      ansible.builtin.stat:
+        path: "{{ oci_adb_wallet_dest }}"
+        checksum_algorithm: sha256
+      register: oci_adb_wallet_download_stat
+
+    - name: Assert download wrote a private wallet file
+      ansible.builtin.assert:
+        that:
+          - oci_adb_wallet_download.changed | bool
+          - oci_adb_wallet_download.dest == oci_adb_wallet_dest
+          - oci_adb_wallet_download_stat.stat.exists
+          - oci_adb_wallet_download_stat.stat.size > 0
+          - oci_adb_wallet_download_stat.stat.mode == "0600"
+
+    - name: Rerun wallet download
+      ansible.oci.oci_autonomous_database_wallet:
+        <<: *oci_adb_wallet_module_options
+      register: oci_adb_wallet_rerun
+
+    - name: Rerun wallet download in check mode
+      ansible.oci.oci_autonomous_database_wallet:
+        <<: *oci_adb_wallet_module_options
+      check_mode: true
+      register: oci_adb_wallet_rerun_check
+
+    - name: Read wallet file after reruns
+      ansible.builtin.stat:
+        path: "{{ oci_adb_wallet_dest }}"
+        checksum_algorithm: sha256
+      register: oci_adb_wallet_rerun_stat
+
+    - name: Assert wallet download reruns are no-ops
+      ansible.builtin.assert:
+        that:
+          - not oci_adb_wallet_rerun.changed | bool
+          - not oci_adb_wallet_rerun_check.changed | bool
+          - oci_adb_wallet_rerun_stat.stat.checksum == oci_adb_wallet_download_stat.stat.checksum
+
+    - name: Force wallet download in check mode
+      ansible.oci.oci_autonomous_database_wallet:
+        <<: *oci_adb_wallet_module_options
+        force: true
+      check_mode: true
+      register: oci_adb_wallet_force_check
+
+    - name: Read wallet file after forced download check mode
+      ansible.builtin.stat:
+        path: "{{ oci_adb_wallet_dest }}"
+        checksum_algorithm: sha256
+      register: oci_adb_wallet_force_check_stat
+
+    - name: Assert forced download check mode reported a change without replacing the wallet
+      ansible.builtin.assert:
+        that:
+          - oci_adb_wallet_force_check.changed | bool
+          - oci_adb_wallet_force_check_stat.stat.checksum == oci_adb_wallet_download_stat.stat.checksum
+
+    - name: Force wallet download
+      ansible.oci.oci_autonomous_database_wallet:
+        <<: *oci_adb_wallet_module_options
+        force: true
+      register: oci_adb_wallet_force
+
+    - name: Read wallet file after forced download
+      ansible.builtin.stat:
+        path: "{{ oci_adb_wallet_dest }}"
+        checksum_algorithm: sha256
+      register: oci_adb_wallet_force_stat
+
+    - name: Assert forced download replaced the wallet
+      ansible.builtin.assert:
+        that:
+          - oci_adb_wallet_force.changed | bool
+          - oci_adb_wallet_force_stat.stat.checksum != oci_adb_wallet_download_stat.stat.checksum
+          - oci_adb_wallet_force_stat.stat.mode == "0600"
+
     - name: Assert created autonomous database is a no-op on rerun with unique name
       ansible.oci.oci_autonomous_database:
         <<: *oci_adb_create_module_options
@@ -310,5 +421,11 @@
         oci_adb_id: ""
 
   always:
+    - name: Remove temporary autonomous database wallet directory
+      ansible.builtin.file:
+        path: "{{ oci_adb_wallet_dir.path }}"
+        state: absent
+      when: oci_adb_wallet_dir.path is defined
+
     - name: Run autonomous database cleanup
       ansible.builtin.include_tasks: cleanup.yml
