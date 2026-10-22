@@ -135,6 +135,8 @@ def test_class_metadata(monkeypatch):
     module_obj = load_collection_module("oci_autonomous_database")
     cls = module_obj.OciAutonomousDatabaseModule
 
+    assert cls.__bases__[0].__name__ == "OciADBBase"
+    assert cls.create_required_fields == module_obj.CREATE_REQUIRED_FIELDS
     assert cls.resource_id_param == "autonomous_database_id"
     assert cls.list_resource_method == "list_autonomous_databases"
     assert cls.update_method_name == "update_autonomous_database"

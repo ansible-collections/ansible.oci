@@ -3,6 +3,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 DOCUMENTATION = r"""
@@ -349,13 +350,14 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
-    OciResourceBase,
     UpdateFieldSpec,
+)
+from ansible_collections.ansible.oci.plugins.module_utils.oci_autonomous_database import (
+    OciADBBase,
 )
 
 imported_oci_sdk = import_oci_sdk()
 oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
 
 CREATE_REQUIRED_FIELDS = [
     "compartment_id",
@@ -430,19 +432,11 @@ def build_create_autonomous_database_details(params):
     )
 
 
-class OciAutonomousDatabaseModule(OciResourceBase):
+class OciAutonomousDatabaseModule(OciADBBase):
     """Concrete resource adapter for serverless OCI Autonomous Databases."""
 
-    @property
-    def client_class(self):
-        return oci.database.DatabaseClient
-
-    resource_id_param = "autonomous_database_id"
-    list_resource_method = "list_autonomous_databases"
     create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "autonomous database"
-    update_method_name = "update_autonomous_database"
-    update_details_name = "update_autonomous_database_details"
     update_wait_states = WAIT_FOR_ADB_SETTLED
     update_field_specs = (
         UpdateFieldSpec(
@@ -497,34 +491,24 @@ class OciAutonomousDatabaseModule(OciResourceBase):
                 compute/storage selection is missing.
         """
         super(OciAutonomousDatabaseModule, self).validate_create_request()
-        if not any(self.module.params.get(field) is not None for field in COMPUTE_FIELDS):
+        if not any(
+            self.module.params.get(field) is not None for field in COMPUTE_FIELDS
+        ):
             self.module.fail_json(
                 msg=(
                     "Creating an autonomous database requires one of the "
                     f"following parameters: {', '.join(COMPUTE_FIELDS)}"
                 )
             )
-        if not any(self.module.params.get(field) is not None for field in STORAGE_FIELDS):
+        if not any(
+            self.module.params.get(field) is not None for field in STORAGE_FIELDS
+        ):
             self.module.fail_json(
                 msg=(
                     "Creating an autonomous database requires one of the "
                     f"following parameters: {', '.join(STORAGE_FIELDS)}"
                 )
             )
-
-    def get_resource_response(self, resource_id):
-        """Return the raw OCI get-response wrapper for one database.
-
-        Args:
-            resource_id: The OCID of the Autonomous Database.
-
-        Returns:
-            The OCI SDK response whose ``data`` is the ``AutonomousDatabase``.
-        """
-        return self.call_with_retry(
-            self.client.get_autonomous_database,
-            autonomous_database_id=resource_id,
-        )
 
     def create_resource(self):
         """Create the serverless Autonomous Database and return the model.
@@ -542,33 +526,6 @@ class OciAutonomousDatabaseModule(OciResourceBase):
             response.data,
             getattr(response.data, "id", None),
             WAIT_FOR_ADB_AVAILABLE,
-        )
-
-    def build_update_details(self, update_model_fields):
-        """Build the OCI update-details model from planned field changes.
-
-        Args:
-            update_model_fields: The fields the shared planner marked as changed.
-
-        Returns:
-            A populated ``UpdateAutonomousDatabaseDetails`` model.
-        """
-        return oci.database.models.UpdateAutonomousDatabaseDetails(**update_model_fields)
-
-    def delete_resource(self, resource):
-        """Terminate the Autonomous Database and wait for a terminal state.
-
-        Args:
-            resource: The current ``AutonomousDatabase`` model to terminate.
-
-        Returns:
-            The terminated resource model, or the raw response when waiting is
-            disabled.
-        """
-        return self.delete_resource_and_wait(
-            resource,
-            self.client.delete_autonomous_database,
-            autonomous_database_id=resource.id,
         )
 
     def desired_power_state(self):
@@ -640,9 +597,7 @@ class OciAutonomousDatabaseModule(OciResourceBase):
         # typically still PROVISIONING here and power_change_needed() would
         # skip the transition. Only chase the power state when waiting is
         # enabled; a wait=False run needs a follow-up run to reach it.
-        if self.module.params.get("wait", True) and self.power_change_needed(
-            resource
-        ):
+        if self.module.params.get("wait", True) and self.power_change_needed(resource):
             return self.apply_power_state(resource)
         return resource
 
