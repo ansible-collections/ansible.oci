@@ -9,9 +9,9 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     serialize_oci_model,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer_common import (
-    OciLoadBalancerSubresourceBase,
+    OciLoadBalancerSubresourceCommonBase,
     build_nested_model,
-    OciLoadBalancerInfoBase as OciLoadBalancerInfoCommonBase,
+    OciLoadBalancerInfoCommonBase,
 )
 
 oci = import_oci_sdk()[0]
@@ -151,7 +151,7 @@ def call_network_load_balancer_mutation(helper, method_name, wait=None, **kwargs
     return response
 
 
-class OciNetworkLoadBalancerSubresourceBase(OciLoadBalancerSubresourceBase):
+class OciNetworkLoadBalancerSubresourceBase(OciLoadBalancerSubresourceCommonBase):
     """Provide common model and mutation behavior for NLB child resources."""
 
     @property

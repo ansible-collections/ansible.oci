@@ -135,7 +135,9 @@ def test_incomplete_subresource_cannot_be_instantiated(missing_hook):
     }
     del declarations[missing_hook]
     incomplete = type(
-        "IncompleteSubresource", (helper.OciLoadBalancerSubresourceBase,), declarations
+        "IncompleteSubresource",
+        (helper.OciLoadBalancerSubresourceCommonBase,),
+        declarations,
     )
 
     with pytest.raises(TypeError, match=missing_hook):
@@ -172,7 +174,7 @@ def test_concrete_modules_define_fixed_update_fields(service, class_prefix, kind
 def _info_helper(params):
     """Create a scoped info helper without making an OCI client."""
     common = load_collection_module("oci_loadbalancer_common")
-    helper = object.__new__(common.OciLoadBalancerInfoBase)
+    helper = object.__new__(common.OciLoadBalancerInfoCommonBase)
     helper.module = types.SimpleNamespace(params=params)
     helper.get_scope_params = ("load_balancer_id", "backend_set_name")
     helper.resource_id_param = "name"
@@ -248,40 +250,6 @@ def test_info_only_suppresses_missing_resources(name, status):
         assert caught.value is error
 
 
-@pytest.mark.parametrize(
-    "current,desired,expected",
-    [
-        (None, {"enabled": False}, {"enabled": False}),
-        ({"port": 80}, None, {"port": 80}),
-        ({"nested": None}, {"nested": {"port": 0}}, {"nested": {"port": 0}}),
-        ({"items": [1]}, {"items": []}, {"items": []}),
-        (None, None, {}),
-        (
-            {"nested": {"enabled": True, "port": 80}, "items": [1]},
-            {"nested": {"enabled": False, "port": 0}, "items": []},
-            {"nested": {"enabled": False, "port": 0}, "items": []},
-        ),
-    ],
-)
-def test_merge_preserves_input_data_and_explicit_values(current, desired, expected):
-    """Check explicit values without changing either input mapping.
-
-    Args:
-        current: Existing fields.
-        desired: Requested fields.
-        expected: Expected merged fields.
-    """
-    helper = load_collection_module("oci_loadbalancer_common")
-    original_current = copy.deepcopy(current)
-    original_desired = copy.deepcopy(desired)
-
-    result = helper.merge_load_balancer_fields(current, desired)
-
-    assert result == expected
-    assert current == original_current
-    assert desired == original_desired
-
-
 def test_merge_load_balancer_fields_preserves_unsupplied_values_and_replaces_lists():
     """Preserve omitted fields and replace explicitly supplied lists."""
     helper = load_collection_module("oci_loadbalancer_common")
@@ -328,3 +296,33 @@ def test_info_does_not_hide_unrelated_errors_with_a_status_attribute():
     with pytest.raises(RuntimeError) as caught:
         helper.fetch_resources()
     assert caught.value is error
+
+
+@pytest.mark.parametrize(
+    "current,desired,expected",
+    [
+        (None, {"enabled": False}, {"enabled": False}),
+        ({"port": 80}, None, {"port": 80}),
+        (None, None, {}),
+    ],
+)
+def test_merge_load_balancer_fields_accepts_missing_models(current, desired, expected):
+    """Serialize missing resources before merging their fields."""
+    helper = load_collection_module("oci_loadbalancer_common")
+    assert helper.merge_load_balancer_fields(current, desired) == expected
+
+
+def test_merge_load_balancer_fields_serializes_sdk_models():
+    """Merge SDK model fields and preserve omitted current settings."""
+    helper = load_collection_module("oci_loadbalancer_common")
+    models = oci.network_load_balancer.models
+    current = models.HealthChecker(protocol="TCP", port=80, retries=3)
+    desired = models.HealthCheckerDetails(retries=4)
+
+    merged = helper.merge_load_balancer_fields(current, desired)
+
+    assert merged["protocol"] == "TCP"
+    assert merged["port"] == 80
+    assert merged["retries"] == 4
+    assert current.retries == 3
+    assert desired.port is None

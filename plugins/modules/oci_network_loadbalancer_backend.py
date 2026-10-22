@@ -31,8 +31,10 @@ options:
     type: str
     required: true
   ip_address:
-    description: IP address of the backend. Supply this or target_id when you create the backend. This
-      value cannot change after creation.
+    description:
+    - IP address of the backend. Supply this or target_id when you create the backend.
+    - Supply one address that matches the IP version of the parent backend set.
+    - This value cannot change after creation.
     type: str
   target_id:
     description: OCID of the backend target. Supply this or ip_address when you create the backend. This

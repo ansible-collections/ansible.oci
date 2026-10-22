@@ -30,14 +30,57 @@ EXAMPLES = r"""
 - name: List Network Load Balancer listener resources
   ansible.oci.oci_network_loadbalancer_listener_info:
     network_load_balancer_id: ocid1.networkloadbalancer.oc1..example
+
+- name: Get one Network Load Balancer listener
+  ansible.oci.oci_network_loadbalancer_listener_info:
+    network_load_balancer_id: ocid1.networkloadbalancer.oc1..example
+    name: application
 """
 
 RETURN = r"""
 listeners:
-  description: Matching listener resources.
+  description: Matching listeners. A missing resource returns an empty list.
   returned: always
   type: list
   elements: dict
+  contains:
+    name:
+      description: The resource name.
+      type: str
+    default_backend_set_name:
+      description: The name of the default backend set.
+      type: str
+    port:
+      description: The configured port.
+      type: int
+    protocol:
+      description: The configured protocol.
+      type: str
+    ip_version:
+      description: The IP version used by the resource.
+      type: str
+    is_ppv2_enabled:
+      description: Whether Proxy Protocol version 2 is enabled.
+      type: bool
+    tcp_idle_timeout:
+      description: The TCP idle timeout in seconds.
+      type: int
+    udp_idle_timeout:
+      description: The UDP idle timeout in seconds.
+      type: int
+    l3_ip_idle_timeout:
+      description: The L3IP idle timeout in seconds.
+      type: int
+  sample:
+  - name: application
+    default_backend_set_name: application
+    port: 8080
+    protocol: TCP
+    ip_version: IPV4
+    is_ppv2_enabled: false
+    tcp_idle_timeout: 360
+    udp_idle_timeout: 120
+    l3_ip_idle_timeout: 120
 """
 
 from ansible.module_utils.basic import AnsibleModule

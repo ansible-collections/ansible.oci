@@ -9,6 +9,7 @@ from collections.abc import Mapping
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     build_model,
+    merge_mappings,
     serialize_oci_model,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
@@ -64,27 +65,6 @@ def build_nested_model(
     return build_model(selected, model_class)
 
 
-def _merge_mappings(existing, supplied):
-    """Merge supplied mappings into current resource fields.
-
-    Args:
-        existing: Current resource fields.
-        supplied: Fields requested by the caller.
-
-    Returns:
-        Merged fields. Nested mappings merge and lists replace current lists.
-    """
-    result = dict(existing)
-    for key, value in supplied.items():
-        if value is None:
-            continue
-        if isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
-            result[key] = _merge_mappings(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
 def merge_load_balancer_fields(current, desired):
     """Serialize and merge load balancer fields for a partial update.
 
@@ -95,10 +75,10 @@ def merge_load_balancer_fields(current, desired):
     Returns:
         Merged fields with omitted settings preserved.
     """
-    return _merge_mappings(serialize_oci_model(current), serialize_oci_model(desired))
+    return merge_mappings(serialize_oci_model(current), serialize_oci_model(desired))
 
 
-class OciLoadBalancerSubresourceBase(OciResourceBase):
+class OciLoadBalancerSubresourceCommonBase(OciResourceBase):
     """Share child lookup and lifecycle flow across LB services."""
 
     resource_id_param = None
@@ -282,7 +262,7 @@ class OciLoadBalancerSubresourceBase(OciResourceBase):
         )
 
 
-class OciLoadBalancerInfoBase(OciInfoBase):
+class OciLoadBalancerInfoCommonBase(OciInfoBase):
     """Add parent identifiers to scoped info requests for either LB service."""
 
     get_scope_params = ()
@@ -302,7 +282,7 @@ class OciLoadBalancerInfoBase(OciInfoBase):
             value = self.module.params.get(name)
             if value is not None:
                 kwargs.setdefault(name, value)
-        return super(OciLoadBalancerInfoBase, self).get_resource_by_id(
+        return super(OciLoadBalancerInfoCommonBase, self).get_resource_by_id(
             resource_id, get_fn, **kwargs
         )
 
@@ -316,7 +296,7 @@ class OciLoadBalancerInfoBase(OciInfoBase):
             oci.exceptions.ServiceError: If a request fails with a status other than 404.
         """
         try:
-            return super(OciLoadBalancerInfoBase, self).fetch_resources()
+            return super(OciLoadBalancerInfoCommonBase, self).fetch_resources()
         except oci.exceptions.ServiceError as exc:
             if exc.status == 404:
                 return []

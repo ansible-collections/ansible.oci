@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+import copy
 from threading import Barrier, Event, Lock, get_ident
 
 import pytest
@@ -282,3 +283,38 @@ def test_oci_auth_args_define_defaults_and_env_fallbacks():
             env_fallback,
             env_vars,
         )
+
+
+@pytest.mark.parametrize(
+    "current,desired,expected",
+    [
+        ({}, {"enabled": False}, {"enabled": False}),
+        ({"port": 80}, {}, {"port": 80}),
+        ({"nested": None}, {"nested": {"port": 0}}, {"nested": {"port": 0}}),
+        ({"items": [1]}, {"items": []}, {"items": []}),
+        ({}, {}, {}),
+        ({"label": "old", "ignored": 1}, {"label": "", "ignored": None}, {"label": "", "ignored": 1}),
+        (
+            {"nested": {"enabled": True, "port": 80}, "items": [1]},
+            {"nested": {"enabled": False, "port": 0}, "items": []},
+            {"nested": {"enabled": False, "port": 0}, "items": []},
+        ),
+    ],
+)
+def test_merge_preserves_input_data_and_explicit_values(current, desired, expected):
+    """Check explicit values without changing either input mapping.
+
+    Args:
+        current: Existing fields.
+        desired: Requested fields.
+        expected: Expected merged fields.
+    """
+    helper = load_collection_module("oci_common")
+    original_current = copy.deepcopy(current)
+    original_desired = copy.deepcopy(desired)
+
+    result = helper.merge_mappings(current, desired)
+
+    assert result == expected
+    assert current == original_current
+    assert desired == original_desired

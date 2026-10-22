@@ -34,7 +34,11 @@ options:
     - three_tuple
     - five_tuple
   ip_version:
-    description: IP version used by this resource.
+    description:
+    - IP version used by this backend set.
+    - Each listener and its backend set must use the same IP version.
+    - For a parent with both IP versions, create separate IPv4 and IPv6 listeners and backend sets.
+    - See U(https://docs.oracle.com/en-us/iaas/Content/NetworkLoadBalancer/NetworkLoadBalancers/create-network-load-balancer.htm).
     type: str
     choices:
     - ipv4
@@ -115,7 +119,12 @@ options:
             choices:
             - in
             - ch
-            description: Class of DNS records to query.
+            description:
+            - Class of DNS records to query.
+            - C(in) is the Internet class, used for ordinary DNS records.
+            - C(ch) is the Chaos class. Use this class when the DNS server supports it.
+            - See U(https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-2)
+              and U(https://docs.oracle.com/iaas/api/#/en/networkloadbalancer/20200501/datatypes/DnsHealthCheckerDetails).
           query_type:
             type: str
             choices:
@@ -200,6 +209,25 @@ EXAMPLES = r"""
     backends:
       - name: app-a
         weight: 5
+
+- name: Create backend sets on an existing NLB with both IP versions
+  ansible.oci.oci_network_loadbalancer_backend_set:
+    network_load_balancer_id: ocid1.networkloadbalancer.oc1..example
+    name: "application-{{ item.version }}"
+    ip_version: "{{ item.version }}"
+    policy: five_tuple
+    health_checker:
+      protocol: tcp
+      port: 8080
+    backends:
+      - name: app-a
+        ip_address: "{{ item.address }}"
+        port: 8080
+  loop:
+    - version: ipv4
+      address: 10.0.0.10
+    - version: ipv6
+      address: "2001:db8::10"
 """
 
 RETURN = r"""
@@ -213,7 +241,9 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     OCI_WAIT_ARGS,
+    merge_mappings,
     serialize_oci_model,
+    values_differ_as_subset,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     UpdateFieldSpec,
@@ -274,21 +304,64 @@ class OciNetworkLoadBalancerBackendSetModule(OciNetworkLoadBalancerSubresourceBa
     def validate_create_request(self):
         """Validate backend membership before creating a backend set."""
         super(OciNetworkLoadBalancerBackendSetModule, self).validate_create_request()
-        self._validate_backend_names()
+        backends = self._index_requested_backends(self.module.params.get("backends") or [])
+        for backend in backends.values():
+            validate_network_load_balancer_backend(self.module, backend)
         checker = self.module.params["health_checker"]
         if checker.get("protocol") is None:
             self.module.fail_json(
                 msg="health_checker.protocol is required when creating a backend set."
             )
 
-    def _validate_backend_names(self):
-        """Reject duplicate names and invalid new backend entries."""
-        values = self.module.params.get("backends") or []
-        names = [item["name"] for item in values]
-        if len(names) != len(set(names)):
-            self.module.fail_json(msg="Each backend name must be unique in backends.")
-        for item in values:
-            validate_network_load_balancer_backend(self.module, item)
+    def _index_requested_backends(self, backends):
+        """Index requested backends by name and reject duplicate names.
+
+        Args:
+            backends: Requested backend dictionaries.
+
+        Returns:
+            Backend dictionaries indexed by name.
+        """
+        by_name = {}
+        for backend in backends:
+            name = backend["name"]
+            if name in by_name:
+                self.module.fail_json(msg="Each backend name must be unique in backends.")
+            by_name[name] = backend
+        return by_name
+
+    @staticmethod
+    def _backend_membership_changed(current_by_name, desired_by_name):
+        """Compare backend names and supplied fields.
+
+        Args:
+            current_by_name: Current backends indexed by name.
+            desired_by_name: Requested backends indexed by name.
+
+        Returns:
+            True when membership or a supplied field differs.
+        """
+        return set(current_by_name) != set(desired_by_name) or any(
+            values_differ_as_subset(current_by_name[name], backend)
+            for name, backend in desired_by_name.items()
+        )
+
+    def _merge_backend_membership(self, current_by_name, desired_by_name):
+        """Validate new backends and preserve omitted fields on existing backends.
+
+        Args:
+            current_by_name: Current backends indexed by name.
+            desired_by_name: Requested backends indexed by name.
+
+        Returns:
+            Merged backend dictionaries in the requested order.
+        """
+        merged = []
+        for name, backend in desired_by_name.items():
+            if name not in current_by_name:
+                validate_network_load_balancer_backend(self.module, backend)
+            merged.append(merge_mappings(current_by_name.get(name, {}), backend))
+        return merged
 
     update_field_specs = (
         UpdateFieldSpec(param_name="policy", is_mutable=True, compare="enum"),
@@ -325,42 +398,11 @@ class OciNetworkLoadBalancerBackendSetModule(OciNetworkLoadBalancerSubresourceBa
         desired = self.module.params.get("backends")
         if desired is None:
             return plan
-        desired_by_name = {}
-        for item in desired:
-            name = item["name"]
-            if name in desired_by_name:
-                self.module.fail_json(
-                    msg="Each backend name must be unique in backends."
-                )
-            desired_by_name[name] = item
+        desired_by_name = self._index_requested_backends(desired)
         current_items = serialize_oci_model(resource.backends or [])
         current_by_name = {item["name"]: item for item in current_items}
-        changed = set(current_by_name) != set(desired_by_name)
-        if not changed:
-            changed = any(
-                any(
-                    current_by_name[name].get(key) != value
-                    for key, value in item.items()
-                    if key != "name" and value is not None
-                )
-                for name, item in desired_by_name.items()
-            )
-        if changed:
-            merged = []
-            for name, item in desired_by_name.items():
-                old = current_by_name.get(name, {})
-                if name not in current_by_name:
-                    validate_network_load_balancer_backend(self.module, item)
-                merged.append(
-                    dict(
-                        old,
-                        **{
-                            key: value
-                            for key, value in item.items()
-                            if value is not None
-                        }
-                    )
-                )
+        if self._backend_membership_changed(current_by_name, desired_by_name):
+            merged = self._merge_backend_membership(current_by_name, desired_by_name)
             plan["update_needed"] = True
             plan["update_model_fields"]["backends"] = merged
         return plan
