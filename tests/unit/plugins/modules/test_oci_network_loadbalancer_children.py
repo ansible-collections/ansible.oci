@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+import copy
 import types
 
 import oci
@@ -543,3 +544,99 @@ def test_new_backend_requires_locator_and_port_in_both_interfaces(kind, fields):
     with pytest.raises(FailJsonCalled) as result:
         helper.validate_create_request()
     assert "requires" in result.value.payload["msg"]
+
+
+@pytest.mark.parametrize(
+    "desired,expected_names,expected_weight,expected_backup",
+    [
+        (
+            [
+                {"name": "a"},
+                {"name": "b"},
+                {"name": "c", "ip_address": "10.0.0.3", "port": 80},
+            ],
+            ["a", "b", "c"],
+            3,
+            True,
+        ),
+        ([{"name": "b"}], ["b"], 3, True),
+        (
+            [{"name": "b", "weight": 0, "is_backup": False, "port": None}, {"name": "a"}],
+            ["b", "a"],
+            0,
+            False,
+        ),
+    ],
+)
+def test_backend_set_membership_changes_preserve_order_and_inputs(
+    desired, expected_names, expected_weight, expected_backup
+):
+    """Add, remove, and update backends without modifying either input."""
+    module_obj = load_collection_module("oci_network_loadbalancer_backend_set")
+    current = FakeModel(
+        backends=[
+            FakeModel(name="a", ip_address="10.0.0.1", port=80, weight=2, is_backup=True),
+            FakeModel(name="b", ip_address="10.0.0.2", port=80, weight=3, is_backup=True),
+        ]
+    )
+    helper = make_child(
+        module_obj, "OciNetworkLoadBalancerBackendSetModule", {"backends": desired}
+    )
+    original_desired = copy.deepcopy(desired)
+    original_current = copy.deepcopy([vars(backend) for backend in current.backends])
+
+    plan = helper.build_update_plan(current)
+
+    assert plan["update_needed"] is True
+    backends = plan["update_model_fields"]["backends"]
+    assert [backend["name"] for backend in backends] == expected_names
+    assert all(backend["port"] == 80 for backend in backends)
+    backend_b = next(backend for backend in backends if backend["name"] == "b")
+    assert backend_b["weight"] == expected_weight
+    assert backend_b["is_backup"] is expected_backup
+    assert desired == original_desired
+    assert [vars(backend) for backend in current.backends] == original_current
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize(
+    "fields,message",
+    [
+        ({"port": 80}, "Backend new requires ip_address or target_id."),
+        ({"ip_address": "10.0.0.3"}, "Backend new requires port."),
+    ],
+)
+def test_backend_set_update_validates_new_members_before_mutation(check_mode, fields, message):
+    """Reject incomplete new members in normal and check mode."""
+    module_obj = load_collection_module("oci_network_loadbalancer_backend_set")
+    helper = make_child(
+        module_obj,
+        "OciNetworkLoadBalancerBackendSetModule",
+        {"name": "pool", "backends": [dict(name="new", **fields)]},
+        check_mode=check_mode,
+    )
+    helper.resolve_target_resource = lambda: FakeModel(backends=[])
+
+    with pytest.raises(FailJsonCalled) as result:
+        helper.execute_resource_module()
+
+    assert result.value.payload["msg"] == message
+
+
+def test_backend_set_create_rejects_duplicate_names_before_backend_validation():
+    """Use the same duplicate-name check during creation and updates."""
+    module_obj = load_collection_module("oci_network_loadbalancer_backend_set")
+    helper = make_child(
+        module_obj,
+        "OciNetworkLoadBalancerBackendSetModule",
+        {
+            "policy": "five_tuple",
+            "health_checker": {"protocol": "tcp"},
+            "backends": [{"name": "same"}, {"name": "same"}],
+        },
+    )
+
+    with pytest.raises(FailJsonCalled) as result:
+        helper.validate_create_request()
+
+    assert result.value.payload["msg"] == "Each backend name must be unique in backends."

@@ -35,14 +35,54 @@ EXAMPLES = r"""
   ansible.oci.oci_network_loadbalancer_backend_info:
     network_load_balancer_id: ocid1.networkloadbalancer.oc1..example
     backend_set_name: application
+
+- name: Get one Network Load Balancer backend
+  ansible.oci.oci_network_loadbalancer_backend_info:
+    network_load_balancer_id: ocid1.networkloadbalancer.oc1..example
+    backend_set_name: application
+    name: app-a
 """
 
 RETURN = r"""
 backends:
-  description: Matching backend resources.
+  description: Matching backend resources. A missing resource returns an empty list.
   returned: always
   type: list
   elements: dict
+  contains:
+    name:
+      description: The resource name.
+      type: str
+    ip_address:
+      description: The IP address.
+      type: str
+    target_id:
+      description: The OCID of the backend target, when configured.
+      type: str
+    port:
+      description: The configured port.
+      type: int
+    weight:
+      description: The weight used to distribute traffic to the backend.
+      type: int
+    is_drain:
+      description: Whether the backend stops receiving new connections.
+      type: bool
+    is_backup:
+      description: Whether the backend serves as a backup.
+      type: bool
+    is_offline:
+      description: Whether the backend stops receiving traffic.
+      type: bool
+  sample:
+  - name: app-a
+    ip_address: 10.0.0.10
+    target_id: null
+    port: 8080
+    weight: 2
+    is_drain: false
+    is_backup: false
+    is_offline: false
 """
 
 from ansible.module_utils.basic import AnsibleModule

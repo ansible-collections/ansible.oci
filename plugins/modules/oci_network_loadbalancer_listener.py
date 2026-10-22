@@ -40,7 +40,11 @@ options:
       U(https://docs.oracle.com/en-us/iaas/tools/python/latest/api/network_load_balancer/models/oci.network_load_balancer.models.CreateListenerDetails.html).
     type: str
   ip_version:
-    description: IP version used by this resource.
+    description:
+    - IP version used by this listener.
+    - Each listener and its backend set must use the same IP version.
+    - For a parent with both IP versions, create separate IPv4 and IPv6 listeners and backend sets.
+    - See U(https://docs.oracle.com/en-us/iaas/Content/NetworkLoadBalancer/NetworkLoadBalancers/create-network-load-balancer.htm).
     type: str
     choices:
     - ipv4
@@ -84,6 +88,18 @@ EXAMPLES = r"""
     network_load_balancer_id: ocid1.networkloadbalancer.oc1..example
     name: application
     port: 8081
+
+- name: Create listeners for existing backend sets with matching IP versions
+  ansible.oci.oci_network_loadbalancer_listener:
+    network_load_balancer_id: ocid1.networkloadbalancer.oc1..example
+    name: "application-{{ item }}"
+    default_backend_set_name: "application-{{ item }}"
+    ip_version: "{{ item }}"
+    port: 8080
+    protocol: tcp
+  loop:
+    - ipv4
+    - ipv6
 """
 
 RETURN = r"""

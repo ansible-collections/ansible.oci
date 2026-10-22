@@ -10,8 +10,8 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     normalize_enum_values,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer_common import (
-    OciLoadBalancerSubresourceBase as OciLoadBalancerSubresourceCommonBase,
-    OciLoadBalancerInfoBase as OciLoadBalancerInfoCommonBase,
+    OciLoadBalancerSubresourceCommonBase,
+    OciLoadBalancerInfoCommonBase,
     build_nested_model,
 )
 

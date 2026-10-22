@@ -36,10 +36,79 @@ EXAMPLES = r"""
 
 RETURN = r"""
 health_checkers:
-  description: Matching health checker resources.
+  description: Matching health checkers. A missing resource returns an empty list.
   returned: always
   type: list
   elements: dict
+  contains:
+    protocol:
+      description: The configured protocol.
+      type: str
+    port:
+      description: The configured port.
+      type: int
+    retries:
+      description: The number of retries before a backend changes health state.
+      type: int
+    timeout_in_millis:
+      description: The response timeout for each health check in milliseconds.
+      type: int
+    interval_in_millis:
+      description: The interval between health checks in milliseconds.
+      type: int
+    url_path:
+      description: The URL path requested by HTTP health checks.
+      type: str
+    response_body_regex:
+      description: The regular expression used to check an HTTP response body.
+      type: str
+    return_code:
+      description: The HTTP response code that indicates a healthy backend.
+      type: int
+    request_data:
+      description: The base64-encoded request data for TCP or UDP health checks.
+      type: str
+    response_data:
+      description: The base64-encoded response data for TCP or UDP health checks.
+      type: str
+    dns:
+      description: The DNS health check configuration.
+      type: dict
+      contains:
+        transport_protocol:
+          description: The transport protocol for DNS queries.
+          type: str
+        domain_name:
+          description: The domain name queried by the health check.
+          type: str
+        query_class:
+          description: The DNS query class, either C(IN) or C(CH).
+          type: str
+        query_type:
+          description: The DNS record type queried by the health check.
+          type: str
+        rcodes:
+          description: The DNS response codes that indicate a healthy backend.
+          type: list
+          elements: str
+  sample:
+  - protocol: DNS
+    port: 53
+    retries: 3
+    timeout_in_millis: 1000
+    interval_in_millis: 10000
+    url_path: null
+    response_body_regex: null
+    return_code: null
+    request_data: null
+    response_data: null
+    dns:
+      transport_protocol: UDP
+      domain_name: example.com
+      query_class: IN
+      query_type: A
+      rcodes:
+      - NOERROR
 """
 
 from ansible.module_utils.basic import AnsibleModule

@@ -78,7 +78,12 @@ options:
         choices:
         - in
         - ch
-        description: Class of DNS records to query.
+        description:
+        - Class of DNS records to query.
+        - C(in) is the Internet class, used for ordinary DNS records.
+        - C(ch) is the Chaos class. Use this class when the DNS server supports it.
+        - See U(https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-2)
+          and U(https://docs.oracle.com/iaas/api/#/en/networkloadbalancer/20200501/datatypes/DnsHealthCheckerDetails).
       query_type:
         type: str
         choices:
