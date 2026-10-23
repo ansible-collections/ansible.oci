@@ -82,9 +82,12 @@ options:
       destination_type:
         description:
           - Whether C(destination) is a CIDR block or an OCI service label.
+          - Uppercase and mixed-case choice values are deprecated.
+            Support for these values will be removed in ansible.oci 2.0.0.
+          - Use the lowercase choice values.
         type: str
-        choices: [CIDR_BLOCK, SERVICE_CIDR_BLOCK]
-        default: CIDR_BLOCK
+        choices: [cidr_block, service_cidr_block, CIDR_BLOCK, SERVICE_CIDR_BLOCK]
+        default: cidr_block
       network_entity_id:
         description:
           - The OCID of the target for matching traffic, such as an internet
@@ -127,7 +130,7 @@ EXAMPLES = r"""
     name: example-route-table
     route_rules:
       - destination: 0.0.0.0/0
-        destination_type: CIDR_BLOCK
+        destination_type: cidr_block
         network_entity_id: "{{ created_internet_gateway.resource.id }}"
   register: created_route_table
 
@@ -257,17 +260,25 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_AVAILABLE,
     OCI_COMMON_ARGS,
+    choice_values,
     filter_none_values,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("route_rules", "destination_type"): {
+        "cidr_block": "CIDR_BLOCK",
+        "service_cidr_block": "SERVICE_CIDR_BLOCK",
+    },
+}
 
 CREATE_REQUIRED_FIELDS = [
     "compartment_id",
@@ -428,8 +439,8 @@ def main():
                 destination=dict(type="str", required=True),
                 destination_type=dict(
                     type="str",
-                    choices=["CIDR_BLOCK", "SERVICE_CIDR_BLOCK"],
-                    default="CIDR_BLOCK",
+                    choices=choice_values(CHOICE_VALUE_MAPS[("route_rules", "destination_type")]),
+                    default="cidr_block",
                 ),
                 network_entity_id=dict(type="str", required=True),
                 description=dict(type="str"),
@@ -441,6 +452,8 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
+
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
 
     OciNetworkRouteTableModule(module).execute_resource_module()
 

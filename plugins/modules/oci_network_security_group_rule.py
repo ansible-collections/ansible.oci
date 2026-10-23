@@ -241,9 +241,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     UpdateFieldSpec,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
 
 DIRECTION_TO_OCI = {
     "ingress": "INGRESS",

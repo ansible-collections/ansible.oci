@@ -29,7 +29,7 @@ SOURCE_DETAILS_ARGUMENT_SPEC = {
         "type": {
             "type": "str",
             "required": True,
-            "choices": ["bootVolumeBackup"],
+            "choices": ["boot_volume_backup", "bootVolumeBackup"],
         },
         "id": {"type": "str", "required": True},
     },
@@ -130,7 +130,7 @@ def test_build_source_details_rejects_unknown_type(monkeypatch):
     install_fake_oci(monkeypatch)
 
     boot_volume_module = load_collection_module("oci_boot_volume")
-    with pytest.raises(ValueError, match="bootVolumeBackup"):
+    with pytest.raises(ValueError, match="boot_volume_backup"):
         boot_volume_module.build_source_details(
             {"type": "bootVolume", "id": "ocid1.bootvolume.oc1..example"}
         )

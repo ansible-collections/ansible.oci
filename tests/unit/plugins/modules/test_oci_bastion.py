@@ -88,7 +88,7 @@ def test_main_wires_argument_spec_and_runs_module(monkeypatch):
     assert captured["argument_spec"]["max_session_ttl_in_seconds"] == {"type": "int"}
     assert captured["argument_spec"]["dns_proxy_status"] == {
         "type": "str",
-        "choices": ["ENABLED", "DISABLED"],
+        "choices": ["enabled", "disabled", "ENABLED", "DISABLED"],
     }
     assert captured["argument_spec"]["security_attributes"] == {"type": "dict"}
     assert "display_name" not in captured["argument_spec"]

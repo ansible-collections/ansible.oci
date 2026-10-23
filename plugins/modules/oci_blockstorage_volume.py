@@ -153,7 +153,7 @@ options:
   source_details:
     description:
       - The source used to provision the volume at create time.
-      - Set C(type) to C(volumeBackup) and C(id) to a volume backup OCID to
+      - Set C(type) to C(volume_backup) and C(id) to a volume backup OCID to
         restore from a backup.
       - Set C(type) to C(volume) and C(id) to a volume OCID to clone an
         existing volume.
@@ -166,11 +166,14 @@ options:
       type:
         description:
           - The source type.
-          - C(volumeBackup) restores from a block volume backup.
+          - C(volume_backup) restores from a block volume backup.
           - C(volume) clones from an existing block volume.
+          - Uppercase and mixed-case choice values are deprecated.
+            Support for these values will be removed in ansible.oci 2.0.0.
+          - Use the lowercase choice values.
         type: str
         required: true
-        choices: [volumeBackup, volume]
+        choices: [volume_backup, volume, volumeBackup]
       id:
         description:
           - The OCID of the source volume backup or volume.
@@ -261,7 +264,7 @@ EXAMPLES = r"""
     availability_domain: Uocm:PHX-AD-1
     name: restored-volume
     source_details:
-      type: volumeBackup
+      type: volume_backup
       id: ocid1.volumebackup.oc1..example
   register: restored_volume
 
@@ -489,17 +492,25 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_FAILED,
     OCI_COMMON_ARGS,
     build_model,
+    choice_values,
     filter_none_values,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
-HAS_OCI_SDK = imported_oci_sdk[1]
+oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("source_details", "type"): {
+        "volume_backup": "volumeBackup",
+        "volume": "volume",
+    },
+}
 
 CREATE_REQUIRED_FIELDS = [
     "compartment_id",
@@ -929,7 +940,7 @@ def main():
                 type=dict(
                     type="str",
                     required=True,
-                    choices=["volumeBackup", "volume"],
+                    choices=choice_values(CHOICE_VALUE_MAPS[("source_details", "type")]),
                 ),
                 id=dict(type="str", required=True),
             ),
@@ -943,6 +954,8 @@ def main():
             ["performance_based_auto_tune", True, ["vpus_per_gb", "max_vpus_per_gb"]],
         ],
     )
+
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
 
     OciBlockstorageVolumeModule(module).execute_resource_module()
 

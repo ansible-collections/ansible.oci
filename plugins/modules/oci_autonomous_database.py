@@ -356,8 +356,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_autonomous_databas
     OciADBBase,
 )
 
-imported_oci_sdk = import_oci_sdk()
-oci = imported_oci_sdk[0]
+oci = import_oci_sdk()[0]
 
 CREATE_REQUIRED_FIELDS = [
     "compartment_id",
