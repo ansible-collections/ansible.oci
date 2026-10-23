@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 import types
@@ -15,7 +16,6 @@ from .conftest import (
     load_collection_module,
     make_module_instance,
 )
-
 
 ADB_MODEL_NAMES = (
     "CreateAutonomousDatabaseDetails",
@@ -135,6 +135,8 @@ def test_class_metadata(monkeypatch):
     module_obj = load_collection_module("oci_autonomous_database")
     cls = module_obj.OciAutonomousDatabaseModule
 
+    assert cls.__bases__[0].__name__ == "OciADBBase"
+    assert cls.create_required_fields == module_obj.CREATE_REQUIRED_FIELDS
     assert cls.resource_id_param == "autonomous_database_id"
     assert cls.list_resource_method == "list_autonomous_databases"
     assert cls.update_method_name == "update_autonomous_database"
@@ -376,8 +378,12 @@ def test_update_resource_uses_update_details_and_waits(monkeypatch):
     update_calls = []
     response = FakeResponse(data=FakeModel(id="ocid1.autonomousdatabase.oc1..example"))
 
-    def update_autonomous_database(autonomous_database_id, update_autonomous_database_details):
-        update_calls.append((autonomous_database_id, update_autonomous_database_details))
+    def update_autonomous_database(
+        autonomous_database_id, update_autonomous_database_details
+    ):
+        update_calls.append(
+            (autonomous_database_id, update_autonomous_database_details)
+        )
         return response
 
     resource = FakeModel(id="ocid1.autonomousdatabase.oc1..example", compute_count=2.0)

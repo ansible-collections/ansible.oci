@@ -1,0 +1,361 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI autonomous database clone integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_adb_clone_integration_source_name: "{{ oci_adb_clone_integration_source_name }}-{{ oci_integration_rpfx }}"
+    oci_adb_clone_integration_metadata_name: "{{ oci_adb_clone_integration_metadata_name }}-{{ oci_integration_rpfx }}"
+    oci_adb_clone_integration_metadata_renamed: "{{ oci_adb_clone_integration_metadata_renamed }}-{{ oci_integration_rpfx }}"
+    oci_adb_clone_integration_refreshable_name: "{{ oci_adb_clone_integration_refreshable_name }}-{{ oci_integration_rpfx }}"
+    # db_name must be alphanumeric, start with a letter, and be <= 30 chars.
+    oci_adb_clone_integration_source_db_name: >-
+      {{ (oci_adb_clone_integration_source_db_name_prefix ~ oci_integration_rpfx) | regex_replace('[^a-zA-Z0-9]', '') | truncate(30, true, '') }}
+    oci_adb_clone_integration_metadata_db_name: >-
+      {{ (oci_adb_clone_integration_metadata_db_name_prefix ~ oci_integration_rpfx) | regex_replace('[^a-zA-Z0-9]', '') | truncate(30, true, '') }}
+    oci_adb_clone_integration_refreshable_db_name: >-
+      {{ (oci_adb_clone_integration_refreshable_db_name_prefix ~ oci_integration_rpfx) | regex_replace('[^a-zA-Z0-9]', '') | truncate(30, true, '') }}
+
+- name: Exercise autonomous database clone module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create source autonomous database
+      ansible.oci.oci_autonomous_database:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_adb_clone_integration_source_name }}"
+        db_name: "{{ oci_adb_clone_integration_source_db_name }}"
+        admin_password: "{{ oci_adb_clone_integration_admin_password }}"
+        compute_model: "{{ oci_adb_clone_integration_compute_model }}"
+        compute_count: "{{ oci_adb_clone_integration_compute_count }}"
+        data_storage_size_in_tbs: "{{ oci_adb_clone_integration_data_storage_size_in_tbs }}"
+        wait_timeout: "{{ oci_adb_clone_integration_wait_timeout }}"
+      register: oci_adb_clone_source
+
+    - name: Capture source autonomous database id
+      ansible.builtin.set_fact:
+        oci_adb_clone_source_id: "{{ oci_adb_clone_source.resource.id }}"
+
+    - name: Assert source autonomous database is available
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_source.resource.lifecycle_state == "AVAILABLE"
+
+    - name: Refuse to manage the source database as a clone
+      ansible.oci.oci_autonomous_database_clone:
+        state: absent
+        autonomous_database_id: "{{ oci_adb_clone_source_id }}"
+      check_mode: true
+      register: oci_adb_clone_not_a_clone
+      ignore_errors: true
+
+    - name: Assert a non-clone database is rejected
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_not_a_clone is failed
+          - "'is not a clone' in oci_adb_clone_not_a_clone.msg"
+
+    # Metadata clone: create, update, and idempotency.
+    - name: Create metadata clone in check mode
+      ansible.oci.oci_autonomous_database_clone: &oci_adb_clone_metadata_create_options
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        name: "{{ oci_adb_clone_integration_metadata_name }}"
+        db_name: "{{ oci_adb_clone_integration_metadata_db_name }}"
+        admin_password: "{{ oci_adb_clone_integration_admin_password }}"
+        clone_type: metadata
+        compute_model: "{{ oci_adb_clone_integration_compute_model }}"
+        compute_count: "{{ oci_adb_clone_integration_compute_count }}"
+        data_storage_size_in_tbs: "{{ oci_adb_clone_integration_data_storage_size_in_tbs }}"
+        freeform_tags: "{{ oci_adb_clone_integration_create_tags }}"
+        wait_timeout: "{{ oci_adb_clone_integration_wait_timeout }}"
+      check_mode: true
+      register: oci_adb_clone_metadata_create_check
+
+    - name: Assert metadata clone create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_metadata_create_check.changed | bool
+
+    - name: List clones after metadata clone create check mode
+      ansible.oci.oci_autonomous_database_clone_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        name: "{{ oci_adb_clone_integration_metadata_name }}"
+      register: oci_adb_clone_metadata_create_check_probe
+
+    - name: Assert metadata clone is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_metadata_create_check_probe.autonomous_databases | length == 0
+
+    - name: Create metadata clone
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_metadata_create_options
+      register: oci_adb_clone_metadata_create
+
+    - name: Capture metadata clone id
+      ansible.builtin.set_fact:
+        oci_adb_clone_metadata_id: "{{ oci_adb_clone_metadata_create.resource.id }}"
+
+    - name: Assert metadata clone was created from the source
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_metadata_create.changed | bool
+          - oci_adb_clone_metadata_create.resource.lifecycle_state == "AVAILABLE"
+          - oci_adb_clone_metadata_create.resource.name == oci_adb_clone_integration_metadata_name
+          - oci_adb_clone_metadata_create.resource.source_id == oci_adb_clone_source_id
+          - oci_adb_clone_metadata_create.resource.clone_type == "METADATA"
+          - not oci_adb_clone_metadata_create.resource.is_refreshable_clone | bool
+
+    - name: Rerun metadata clone create
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_metadata_create_options
+      register: oci_adb_clone_metadata_create_rerun
+
+    - name: Rerun metadata clone create in check mode
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_metadata_create_options
+      check_mode: true
+      register: oci_adb_clone_metadata_create_rerun_check
+
+    - name: Assert metadata clone create is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_adb_clone_metadata_create_rerun.changed | bool
+          - oci_adb_clone_metadata_create_rerun.resource.id == oci_adb_clone_metadata_id
+          - not oci_adb_clone_metadata_create_rerun_check.changed | bool
+
+    - name: List clones of the source by name
+      ansible.oci.oci_autonomous_database_clone_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        name: "{{ oci_adb_clone_integration_metadata_name }}"
+      register: oci_adb_clone_info_metadata
+
+    - name: Assert clone info returned the metadata clone
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_info_metadata.autonomous_databases | length == 1
+          - oci_adb_clone_info_metadata.autonomous_databases[0].id == oci_adb_clone_metadata_id
+          - oci_adb_clone_info_metadata.autonomous_databases[0].source_id == oci_adb_clone_source_id
+
+    - name: Rename and retag metadata clone in check mode
+      ansible.oci.oci_autonomous_database_clone: &oci_adb_clone_metadata_update_options
+        state: present
+        autonomous_database_id: "{{ oci_adb_clone_metadata_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        name: "{{ oci_adb_clone_integration_metadata_renamed }}"
+        freeform_tags: "{{ oci_adb_clone_integration_update_tags }}"
+        wait_timeout: "{{ oci_adb_clone_integration_wait_timeout }}"
+      check_mode: true
+      register: oci_adb_clone_metadata_update_check
+
+    - name: Assert metadata clone update check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_metadata_update_check.changed | bool
+
+    - name: Read metadata clone after update check mode
+      ansible.oci.oci_autonomous_database_info:
+        autonomous_database_id: "{{ oci_adb_clone_metadata_id }}"
+      register: oci_adb_clone_metadata_update_check_probe
+
+    - name: Assert update check mode did not change the metadata clone
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_metadata_update_check_probe.autonomous_databases[0].name == oci_adb_clone_integration_metadata_name
+          - oci_adb_clone_metadata_update_check_probe.autonomous_databases[0].freeform_tags.phase == "create"
+
+    - name: Rename and retag metadata clone
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_metadata_update_options
+      register: oci_adb_clone_metadata_update
+
+    - name: Assert metadata clone update reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_metadata_update.changed | bool
+          - oci_adb_clone_metadata_update.resource.name == oci_adb_clone_integration_metadata_renamed
+          - oci_adb_clone_metadata_update.resource.freeform_tags.phase == "update"
+
+    - name: Rerun metadata clone update
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_metadata_update_options
+      register: oci_adb_clone_metadata_update_rerun
+
+    - name: Rerun metadata clone update in check mode
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_metadata_update_options
+      check_mode: true
+      register: oci_adb_clone_metadata_update_rerun_check
+
+    - name: Assert metadata clone update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_adb_clone_metadata_update_rerun.changed | bool
+          - oci_adb_clone_metadata_update_rerun.resource.name == oci_adb_clone_integration_metadata_renamed
+          - not oci_adb_clone_metadata_update_rerun_check.changed | bool
+
+    # Refreshable clone: create and idempotency.
+    - name: Create refreshable clone in check mode
+      ansible.oci.oci_autonomous_database_clone: &oci_adb_clone_refreshable_create_options
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        name: "{{ oci_adb_clone_integration_refreshable_name }}"
+        db_name: "{{ oci_adb_clone_integration_refreshable_db_name }}"
+        refreshable: true
+        refreshable_mode: manual
+        open_mode: read_only
+        compute_model: "{{ oci_adb_clone_integration_compute_model }}"
+        compute_count: "{{ oci_adb_clone_integration_compute_count }}"
+        data_storage_size_in_tbs: "{{ oci_adb_clone_integration_data_storage_size_in_tbs }}"
+        freeform_tags: "{{ oci_adb_clone_integration_create_tags }}"
+        wait_timeout: "{{ oci_adb_clone_integration_wait_timeout }}"
+      check_mode: true
+      register: oci_adb_clone_refreshable_create_check
+
+    - name: Assert refreshable clone create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_refreshable_create_check.changed | bool
+
+    - name: List refreshable clones after create check mode
+      ansible.oci.oci_autonomous_database_clone_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        refreshable_only: true
+      register: oci_adb_clone_refreshable_create_check_probe
+
+    - name: Assert refreshable clone is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_refreshable_create_check_probe.autonomous_databases | length == 0
+
+    - name: Create refreshable clone
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_refreshable_create_options
+      register: oci_adb_clone_refreshable_create
+
+    - name: Capture refreshable clone id
+      ansible.builtin.set_fact:
+        oci_adb_clone_refreshable_id: "{{ oci_adb_clone_refreshable_create.resource.id }}"
+
+    - name: Assert refreshable clone was created from the source
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_refreshable_create.changed | bool
+          - oci_adb_clone_refreshable_create.resource.lifecycle_state == "AVAILABLE"
+          - oci_adb_clone_refreshable_create.resource.source_id == oci_adb_clone_source_id
+          - oci_adb_clone_refreshable_create.resource.is_refreshable_clone | bool
+          - oci_adb_clone_refreshable_create.resource.refreshable_mode == "MANUAL"
+          - oci_adb_clone_refreshable_create.resource.open_mode == "READ_ONLY"
+
+    - name: Rerun refreshable clone create
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_refreshable_create_options
+      register: oci_adb_clone_refreshable_create_rerun
+
+    - name: Rerun refreshable clone create in check mode
+      ansible.oci.oci_autonomous_database_clone:
+        <<: *oci_adb_clone_refreshable_create_options
+      check_mode: true
+      register: oci_adb_clone_refreshable_create_rerun_check
+
+    - name: Assert refreshable clone create is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_adb_clone_refreshable_create_rerun.changed | bool
+          - oci_adb_clone_refreshable_create_rerun.resource.id == oci_adb_clone_refreshable_id
+          - not oci_adb_clone_refreshable_create_rerun_check.changed | bool
+
+    - name: List refreshable clones of the source
+      ansible.oci.oci_autonomous_database_clone_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        refreshable_only: true
+      register: oci_adb_clone_info_refreshable
+
+    - name: Assert refreshable filter returned only the refreshable clone
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_info_refreshable.autonomous_databases | map(attribute='id') | list == [oci_adb_clone_refreshable_id]
+
+    # Delete both clones.
+    - name: Delete clones in check mode
+      ansible.oci.oci_autonomous_database_clone:
+        state: absent
+        autonomous_database_id: "{{ item }}"
+      check_mode: true
+      loop:
+        - "{{ oci_adb_clone_metadata_id }}"
+        - "{{ oci_adb_clone_refreshable_id }}"
+      register: oci_adb_clone_delete_check
+
+    - name: List clones after delete check mode
+      ansible.oci.oci_autonomous_database_clone_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        source_id: "{{ oci_adb_clone_source_id }}"
+        lifecycle_state: AVAILABLE
+      register: oci_adb_clone_delete_check_probe
+
+    - name: Assert delete check mode reported changes and kept both clones
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_delete_check.results | map(attribute='changed') | list == [true, true]
+          - oci_adb_clone_metadata_id in (oci_adb_clone_delete_check_probe.autonomous_databases | map(attribute='id') | list)
+          - oci_adb_clone_refreshable_id in (oci_adb_clone_delete_check_probe.autonomous_databases | map(attribute='id') | list)
+
+    - name: Delete clones
+      ansible.oci.oci_autonomous_database_clone:
+        state: absent
+        autonomous_database_id: "{{ item }}"
+        wait_timeout: "{{ oci_adb_clone_integration_wait_timeout }}"
+      loop:
+        - "{{ oci_adb_clone_metadata_id }}"
+        - "{{ oci_adb_clone_refreshable_id }}"
+      register: oci_adb_clone_delete
+
+    - name: Rerun clone delete
+      ansible.oci.oci_autonomous_database_clone:
+        state: absent
+        autonomous_database_id: "{{ item }}"
+      loop:
+        - "{{ oci_adb_clone_metadata_id }}"
+        - "{{ oci_adb_clone_refreshable_id }}"
+      register: oci_adb_clone_delete_rerun
+
+    - name: Rerun clone delete in check mode
+      ansible.oci.oci_autonomous_database_clone:
+        state: absent
+        autonomous_database_id: "{{ item }}"
+      check_mode: true
+      loop:
+        - "{{ oci_adb_clone_metadata_id }}"
+        - "{{ oci_adb_clone_refreshable_id }}"
+      register: oci_adb_clone_delete_rerun_check
+
+    - name: Assert clone delete changed once and is idempotent
+      ansible.builtin.assert:
+        that:
+          - oci_adb_clone_delete.results | map(attribute='changed') | list == [true, true]
+          - oci_adb_clone_delete_rerun.results | map(attribute='changed') | list == [false, false]
+          - oci_adb_clone_delete_rerun_check.results | map(attribute='changed') | list == [false, false]
+
+    - name: Clear clone ids after successful delete
+      ansible.builtin.set_fact:
+        oci_adb_clone_metadata_id: ""
+        oci_adb_clone_refreshable_id: ""
+
+  always:
+    - name: Run autonomous database clone cleanup
+      ansible.builtin.include_tasks: cleanup.yml
