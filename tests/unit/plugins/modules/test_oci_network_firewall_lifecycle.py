@@ -169,8 +169,9 @@ def test_failed_work_request_stops_the_operation(
         with pytest.raises(RuntimeError, match="Work request FAILED"):
             instance.create_resource()
     else:
+        operation_method = getattr(instance, operation + "_resource")
         with pytest.raises(RuntimeError, match="Work request FAILED"):
-            getattr(instance, operation + "_resource")(current)
+            operation_method(current)
     assert len(calls) == 1
 
 

@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2026, Ansible Content Engineering Team
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
+
+
 DOCUMENTATION = r"""
 ---
 module: oci_network_firewall
@@ -72,6 +75,7 @@ options:
 notes:
   - When C(wait=false), the module returns the immediate response or the resource ID without polling.
 """
+
 EXAMPLES = r"""
 - name: Create a Network Firewall
   ansible.oci.oci_network_firewall:
@@ -91,6 +95,7 @@ EXAMPLES = r"""
     state: absent
     network_firewall_id: ocid1.networkfirewall.oc1..example
 """
+
 RETURN = r"""
 resource:
   description: The Network Firewall resource. The name field maps to the OCI display name.
@@ -186,6 +191,7 @@ resource:
     system_tags: {}
     security_attributes: {}
 """
+
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     LIFECYCLE_ACTIVE,

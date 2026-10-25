@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2026, Ansible Content Engineering Team
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
+
+
 DOCUMENTATION = r"""
 ---
 module: oci_network_firewall_policy_info
@@ -41,6 +44,7 @@ options:
       - failed
       - needs_attention
 """
+
 EXAMPLES = r"""
 - name: List Network Firewall policies
   ansible.oci.oci_network_firewall_policy_info:
@@ -50,9 +54,12 @@ EXAMPLES = r"""
   ansible.oci.oci_network_firewall_policy_info:
     network_firewall_policy_id: ocid1.networkfirewallpolicy.oc1..example
 """
+
 RETURN = r"""
 network_firewall_policies:
-  description: Matching Network Firewall policies. An OCID lookup returns full details. A list query returns summary details.
+  description: >-
+    Matching Network Firewall policies. An OCID lookup returns full details. A list query returns
+    summary details.
   returned: always
   type: list
   elements: dict
@@ -79,7 +86,8 @@ network_firewall_policies:
       description: Details about the lifecycle state.
       type: str
     attached_network_firewall_count:
-      description: The number of attached Network Firewalls. This field can be absent in list summaries.
+      description: >-
+        The number of attached Network Firewalls. This field can be absent in list summaries.
       type: int
     description:
       description: The policy description.
@@ -94,19 +102,20 @@ network_firewall_policies:
       description: System tags for the resource.
       type: dict
   sample:
-      - id: ocid1.networkfirewallpolicy.oc1..example
-        compartment_id: ocid1.compartment.oc1..example
-        name: example-policy
-        time_created: '2026-01-01T00:00:00+00:00'
-        time_updated: '2026-01-01T00:00:00+00:00'
-        lifecycle_state: ACTIVE
-        lifecycle_details: null
-        attached_network_firewall_count: 0
-        description: Example policy
-        freeform_tags: {}
-        defined_tags: {}
-        system_tags: {}
+    - id: ocid1.networkfirewallpolicy.oc1..example
+      compartment_id: ocid1.compartment.oc1..example
+      name: example-policy
+      time_created: '2026-01-01T00:00:00+00:00'
+      time_updated: '2026-01-01T00:00:00+00:00'
+      lifecycle_state: ACTIVE
+      lifecycle_details: null
+      attached_network_firewall_count: 0
+      description: Example policy
+      freeform_tags: {}
+      defined_tags: {}
+      system_tags: {}
 """
+
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,

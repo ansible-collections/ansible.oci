@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
+
 from .conftest import install_fake_oci, load_collection_module, make_module_instance
 
 

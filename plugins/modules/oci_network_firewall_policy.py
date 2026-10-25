@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2026, Ansible Content Engineering Team
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
+
 
 DOCUMENTATION = r"""
 ---
@@ -47,6 +49,7 @@ options:
 notes:
   - When C(wait=false), the module returns the immediate response or the resource ID without polling.
 """
+
 EXAMPLES = r"""
 - name: Create a Network Firewall policy
   ansible.oci.oci_network_firewall_policy:
@@ -70,9 +73,12 @@ EXAMPLES = r"""
     state: absent
     network_firewall_policy_id: ocid1.networkfirewallpolicy.oc1..example
 """
+
 RETURN = r"""
 resource:
-  description: The Network Firewall policy. The name field maps to the OCI display name. With C(wait=false), the result can contain only C(id).
+  description: >-
+    The Network Firewall policy. The name field maps to the OCI display name. With C(wait=false),
+    the result can contain only C(id).
   returned: when state is present, except when check mode predicts a change
   type: dict
   contains:
@@ -113,18 +119,18 @@ resource:
       description: System tags for the resource.
       type: dict
   sample:
-      id: ocid1.networkfirewallpolicy.oc1..example
-      compartment_id: ocid1.compartment.oc1..example
-      name: example-policy
-      time_created: '2026-01-01T00:00:00+00:00'
-      time_updated: '2026-01-01T00:00:00+00:00'
-      lifecycle_state: ACTIVE
-      lifecycle_details: null
-      attached_network_firewall_count: 0
-      description: Example policy
-      freeform_tags: {}
-      defined_tags: {}
-      system_tags: {}
+    id: ocid1.networkfirewallpolicy.oc1..example
+    compartment_id: ocid1.compartment.oc1..example
+    name: example-policy
+    time_created: '2026-01-01T00:00:00+00:00'
+    time_updated: '2026-01-01T00:00:00+00:00'
+    lifecycle_state: ACTIVE
+    lifecycle_details: null
+    attached_network_firewall_count: 0
+    description: Example policy
+    freeform_tags: {}
+    defined_tags: {}
+    system_tags: {}
 """
 
 from ansible.module_utils.basic import AnsibleModule

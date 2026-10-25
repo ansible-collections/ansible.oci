@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2026, Ansible Content Engineering Team
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
+
+
 DOCUMENTATION = r"""
 ---
 module: oci_network_firewall_info
@@ -41,6 +44,7 @@ options:
       - failed
       - needs_attention
 """
+
 EXAMPLES = r"""
 - name: List Network Firewalls
   ansible.oci.oci_network_firewall_info:
@@ -50,9 +54,12 @@ EXAMPLES = r"""
   ansible.oci.oci_network_firewall_info:
     network_firewall_id: ocid1.networkfirewall.oc1..example
 """
+
 RETURN = r"""
 network_firewalls:
-  description: Matching Network Firewalls. An OCID lookup returns full details. A list query returns summary details.
+  description: >-
+    Matching Network Firewalls. An OCID lookup returns full details. A list query returns summary
+    details.
   returned: always
   type: list
   elements: dict
@@ -124,28 +131,29 @@ network_firewalls:
       description: Security attributes for the resource.
       type: dict
   sample:
-      - id: ocid1.networkfirewall.oc1..example
-        compartment_id: ocid1.compartment.oc1..example
-        name: example-firewall
-        subnet_id: ocid1.subnet.oc1..example
-        ipv4_address: 10.0.0.10
-        ipv6_address: null
-        network_firewall_policy_id: ocid1.networkfirewallpolicy.oc1..example
-        availability_domain: Uocm:PHX-AD-1
-        nat_configuration:
-          must_enable_private_nat: false
-          nat_ip_address_list: []
-        shape: null
-        time_created: '2026-01-01T00:00:00+00:00'
-        time_updated: '2026-01-01T00:00:00+00:00'
-        lifecycle_state: ACTIVE
-        lifecycle_details: null
-        network_security_group_ids: []
-        freeform_tags: {}
-        defined_tags: {}
-        system_tags: {}
-        security_attributes: {}
+    - id: ocid1.networkfirewall.oc1..example
+      compartment_id: ocid1.compartment.oc1..example
+      name: example-firewall
+      subnet_id: ocid1.subnet.oc1..example
+      ipv4_address: 10.0.0.10
+      ipv6_address: null
+      network_firewall_policy_id: ocid1.networkfirewallpolicy.oc1..example
+      availability_domain: Uocm:PHX-AD-1
+      nat_configuration:
+        must_enable_private_nat: false
+        nat_ip_address_list: []
+      shape: null
+      time_created: '2026-01-01T00:00:00+00:00'
+      time_updated: '2026-01-01T00:00:00+00:00'
+      lifecycle_state: ACTIVE
+      lifecycle_details: null
+      network_security_group_ids: []
+      freeform_tags: {}
+      defined_tags: {}
+      system_tags: {}
+      security_attributes: {}
 """
+
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
