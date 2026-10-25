@@ -277,3 +277,120 @@ def test_info_lists_and_filters_exact_names(
     assert calls == [
         (method, {"compartment_id": "compartment", "lifecycle_state": state})
     ]
+
+
+@pytest.mark.parametrize("module_name,class_name,id_param,required", RESOURCES)
+@pytest.mark.parametrize(
+    "operation,with_data",
+    (
+        ("create", True),
+        ("update", True),
+        ("update", False),
+        ("delete", True),
+        ("delete", False),
+    ),
+)
+@pytest.mark.parametrize(
+    "response_kind", ("work_request", "empty_headers", "missing_headers")
+)
+@pytest.mark.parametrize("wait", (False, True))
+def test_mutation_response_handling(
+    monkeypatch,
+    module_name,
+    class_name,
+    id_param,
+    required,
+    operation,
+    with_data,
+    response_kind,
+    wait,
+):
+    """Preserve immediate results and both wait methods for each operation."""
+    module = load_collection_module(module_name)
+    params = dict(required, compartment_id="compartment", name="desired", wait=wait)
+    current = FakeModel(
+        **dict(required, id="resource", display_name="current", compartment_id="compartment")
+    )
+    immediate = FakeModel(id="resource") if with_data else None
+    refreshed = FakeModel(id="resource", display_name="desired")
+    response = (
+        types.SimpleNamespace(data=immediate)
+        if response_kind == "missing_headers"
+        else FakeResponse(
+            data=immediate,
+            headers=(
+                {"opc-work-request-id": "request"}
+                if response_kind == "work_request"
+                else {}
+            ),
+        )
+    )
+    calls = []
+    suffix = module_name.removeprefix("oci_")
+    client = types.SimpleNamespace(
+        **{operation + "_" + suffix: lambda **kw: calls.append(kw) or response}
+    )
+    instance = make_module_instance(module, class_name, params, client=client)
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kw: fn(**kw))
+    work_waits = []
+    resource_waits = []
+    reads = []
+    monkeypatch.setattr(
+        instance,
+        "wait_for_work_request",
+        lambda service, request: work_waits.append((service, request)),
+    )
+    monkeypatch.setattr(
+        instance,
+        "wait_for_resource_id",
+        lambda resource_id, states: resource_waits.append((resource_id, states))
+        or refreshed,
+    )
+    monkeypatch.setattr(
+        instance,
+        "get_resource_by_id",
+        lambda resource_id: reads.append(resource_id) or refreshed,
+    )
+    operation_method = getattr(instance, operation + "_resource")
+    result = operation_method() if operation == "create" else operation_method(current)
+
+    work_request_wait = wait and response_kind == "work_request"
+    if not wait or (work_request_wait and operation == "delete"):
+        if with_data:
+            assert result is immediate
+        else:
+            assert result == {"id": "resource"}
+    else:
+        assert result is refreshed
+    assert work_waits == ([(client, "request")] if work_request_wait else [])
+    assert reads == (
+        ["resource"] if work_request_wait and operation != "delete" else []
+    )
+    expected_states = (
+        tuple(instance.dead_states)
+        if operation == "delete"
+        else instance.update_wait_states
+    )
+    assert resource_waits == (
+        [("resource", expected_states)] if wait and not work_request_wait else []
+    )
+    assert len(calls) == 1
+    if operation != "create":
+        assert calls[0][id_param] == "resource"
+    if operation == "update":
+        assert calls[0][instance.update_details_name].display_name == "desired"
+
+
+@pytest.mark.parametrize("module_name,class_name,id_param,required", RESOURCES)
+def test_unchanged_update_does_not_call_sdk(
+    monkeypatch, module_name, class_name, id_param, required
+):
+    """Return an unchanged resource without an SDK call or polling."""
+    module = load_collection_module(module_name)
+    instance = make_module_instance(module, class_name, {"name": "desired"})
+    current = FakeModel(id="resource", display_name="desired")
+    for method in ("call_with_retry", "wait_for_work_request", "wait_for_resource_id"):
+        monkeypatch.setattr(
+            instance, method, raising(AssertionError("Unchanged update sent a request"))
+        )
+    assert instance.update_resource(current) is current

@@ -199,8 +199,10 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     filter_none_values,
     import_oci_sdk,
 )
+from ansible_collections.ansible.oci.plugins.module_utils.oci_network_firewall import (
+    OciNetworkFirewallResourceBase,
+)
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
-    OciResourceBase,
     UpdateFieldSpec,
 )
 
@@ -241,7 +243,7 @@ def build_create_network_firewall_details(params):
     return oci.network_firewall.models.CreateNetworkFirewallDetails(**details)
 
 
-class OciNetworkFirewallModule(OciResourceBase):
+class OciNetworkFirewallModule(OciNetworkFirewallResourceBase):
     """Manage OCI Network Firewalls."""
 
     @property
@@ -328,54 +330,6 @@ class OciNetworkFirewallModule(OciResourceBase):
         return oci.network_firewall.models.UpdateNetworkFirewallDetails(
             **update_model_fields
         )
-
-    def _wait_for_mutation(self, response, resource_id, deleting=False):
-        """Wait for a Network Firewall work request and return its resource.
-
-        Args:
-            response: OCI response returned by a mutation.
-            resource_id: OCID of the affected firewall.
-            deleting: Whether the mutation deletes the firewall.
-
-        Returns:
-            The refreshed resource, the immediate response data, or its OCID.
-        """
-        if not self.module.params.get("wait", True):
-            return response.data or {"id": resource_id}
-        work_request_id = getattr(response, "headers", {}).get("opc-work-request-id")
-        if work_request_id:
-            self.wait_for_work_request(self.client, work_request_id)
-            if deleting:
-                return response.data or {"id": resource_id}
-            return self.get_resource_by_id(resource_id)
-        return self.get_mutation_result(
-            response.data,
-            resource_id,
-            tuple(self.dead_states) if deleting else WAIT_FOR_NETWORK_FIREWALL_STATES,
-        )
-
-    def update_resource(self, resource):
-        """Apply the update plan and wait for its asynchronous operation.
-
-        The inherited update method cannot wait for the returned work request.
-
-        Args:
-            resource: The current OCI resource model.
-
-        Returns:
-            The updated resource or its immediate snapshot.
-        """
-        update_plan = self.get_update_plan(resource)
-        if not update_plan["update_model_fields"]:
-            return resource
-        response = self.call_with_retry(
-            self.client.update_network_firewall,
-            network_firewall_id=resource.id,
-            update_network_firewall_details=self.build_update_details(
-                update_plan["update_model_fields"]
-            ),
-        )
-        return self._wait_for_mutation(response, resource.id)
 
     def delete_resource(self, resource):
         """Delete the resource and apply the configured wait.

@@ -229,9 +229,21 @@ class OciResourceBase(OciModuleBase, ABC):
                 self.update_details_name: update_details,
             },
         )
+        return self.get_update_result(response, resource.id)
+
+    def get_update_result(self, response, resource_id):
+        """Return the resource after an update.
+
+        Args:
+            response: The complete OCI response from the update operation.
+            resource_id: The OCID of the resource.
+
+        Returns:
+            The immediate resource or the result from the resource waiter.
+        """
         return self.get_mutation_result(
             response.data,
-            resource.id,
+            resource_id,
             self.update_wait_states,
         )
 
