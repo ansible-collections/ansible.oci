@@ -117,3 +117,7 @@ action_groups:
         - oci_network_loadbalancer_listener_info
         - oci_network_loadbalancer_health_checker
         - oci_network_loadbalancer_health_checker_info
+        - oci_network_firewall_policy
+        - oci_network_firewall_policy_info
+        - oci_network_firewall
+        - oci_network_firewall_info
