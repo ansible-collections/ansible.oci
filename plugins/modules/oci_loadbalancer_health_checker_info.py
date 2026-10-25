@@ -82,39 +82,21 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
-    import_oci_sdk,
 )
-from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
+from ansible_collections.ansible.oci.plugins.module_utils.oci_loadbalancer import (
+    OciLoadBalancerInfoBase,
+)
 
-oci = import_oci_sdk()[0]
 
-
-class OciLoadBalancerHealthCheckerInfoModule(OciInfoBase):
+class OciLoadBalancerHealthCheckerInfoModule(OciLoadBalancerInfoBase):
     """Read a health checker using its Load Balancer and backend set scope."""
 
-    @property
-    def client_class(self):
-        """Return the load balancer SDK client.
-
-        Returns:
-            The LoadBalancerClient class.
-        """
-        return oci.load_balancer.LoadBalancerClient
-
     results_key = "health_checkers"
-
-    def fetch_resources(self):
-        """Fetch the backend set health checker.
-
-        Returns:
-            The matching SDK models, or an empty list when missing.
-        """
-        return self.get_resource_by_id(
-            self.module.params["name"],
-            self.client.get_health_checker,
-            load_balancer_id=self.module.params["load_balancer_id"],
-            backend_set_name=self.module.params["name"],
-        )
+    resource_id_param = "name"
+    resource_id_kwarg = "backend_set_name"
+    resource_get_method = "get_health_checker"
+    name_response_field = "name"
+    get_scope_params = ("load_balancer_id",)
 
 
 def main():

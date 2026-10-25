@@ -1,0 +1,52 @@
+---
+- name: Delete known test network load balancer names
+  ansible.oci.oci_network_loadbalancer:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ oci_nlb_integration_public_name }}"
+    - "{{ oci_nlb_integration_updated_name }}"
+    - "{{ oci_nlb_integration_private_name }}"
+    - "{{ oci_nlb_integration_ipv6_name }}"
+  register: oci_nlb_cleanup_by_name
+  until: oci_nlb_cleanup_by_name is succeeded
+  retries: 10
+  delay: 30
+
+- name: Delete test network load balancers
+  ansible.oci.oci_network_loadbalancer:
+    network_load_balancer_id: "{{ item }}"
+    state: absent
+  loop: "{{ oci_nlb_cleanup_ids | default([]) | unique }}"
+  register: oci_nlb_cleanup
+  until: oci_nlb_cleanup is succeeded
+  retries: 10
+  delay: 30
+
+- name: Delete the test network security group
+  ansible.oci.oci_network_security_group:
+    network_security_group_id: "{{ oci_nlb_nsg_id }}"
+    state: absent
+  when: oci_nlb_nsg_id | default('', true) | length > 0
+
+- name: Delete the private test subnet
+  ansible.oci.oci_network_subnet:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    subnet_id: "{{ oci_nlb_private_subnet_id }}"
+    state: absent
+  when: oci_nlb_private_subnet_id | default('', true) | length > 0
+
+- name: Delete the public test subnet
+  ansible.oci.oci_network_subnet:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    subnet_id: "{{ oci_nlb_public_subnet_id }}"
+    state: absent
+  when: oci_nlb_public_subnet_id | default('', true) | length > 0
+
+- name: Delete the test VCN
+  ansible.oci.oci_network_vcn:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    vcn_id: "{{ oci_nlb_vcn_id }}"
+    state: absent
+  when: oci_nlb_vcn_id | default('', true) | length > 0

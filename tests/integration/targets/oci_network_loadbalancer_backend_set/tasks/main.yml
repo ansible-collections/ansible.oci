@@ -1,0 +1,254 @@
+---
+- name: Exercise Network Load Balancer backend set lifecycle
+  block:
+    - name: Prepare the parent network load balancer
+      ansible.builtin.include_role:
+        name: prepare_oci_network_loadbalancer_subresources
+
+    - name: Read backend set before create
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: before
+
+    - name: Predict backend set create
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        policy: five_tuple
+        health_checker: { protocol: tcp, port: 80 }
+        backends:
+          - { name: backend-a, ip_address: 10.252.1.10, port: 8080, weight: 2, is_backup: true }
+          - { name: backend-b, ip_address: 10.252.1.11, port: 8080, weight: 1 }
+      check_mode: true
+      register: prediction
+
+    - name: Assert create prediction
+      ansible.builtin.assert:
+        that: [prediction.changed | bool]
+
+    - name: Read backend set after create check
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: after_check
+
+    - name: Assert create check preserved state
+      ansible.builtin.assert:
+        that: [before.backend_sets == after_check.backend_sets]
+
+    - name: Create backend set
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        policy: five_tuple
+        health_checker: { protocol: tcp, port: 80 }
+        backends:
+          - { name: backend-a, ip_address: 10.252.1.10, port: 8080, weight: 2, is_backup: true }
+          - { name: backend-b, ip_address: 10.252.1.11, port: 8080, weight: 1 }
+      register: applied
+
+    - name: Assert create changed state
+      ansible.builtin.assert:
+        that: [applied.changed | bool]
+
+    - name: Read created backend set
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: created
+
+    - name: Assert backend set members
+      ansible.builtin.assert:
+        that:
+          - created.backend_sets | length == 1
+          - created.backend_sets[0].policy == 'FIVE_TUPLE'
+          - created.backend_sets[0].backends | length == 2
+          - (created.backend_sets[0].backends | selectattr('name', 'equalto', 'backend-a') | first).is_backup | bool
+
+    - name: Repeat create in normal mode with reversed membership order
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        policy: five_tuple
+        health_checker: { protocol: tcp, port: 80 }
+        backends:
+          - { name: backend-b, ip_address: 10.252.1.11, port: 8080, weight: 1 }
+          - { name: backend-a, ip_address: 10.252.1.10, port: 8080, weight: 2, is_backup: true }
+      register: repeat
+
+    - name: Repeat create in check mode with reversed membership order
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        policy: five_tuple
+        health_checker: { protocol: tcp, port: 80 }
+        backends:
+          - { name: backend-b, ip_address: 10.252.1.11, port: 8080, weight: 1 }
+          - { name: backend-a, ip_address: 10.252.1.10, port: 8080, weight: 2, is_backup: true }
+      check_mode: true
+      register: repeat_check
+
+    - name: Assert create idempotency
+      ansible.builtin.assert:
+        that:
+          - not repeat.changed | bool
+          - not repeat_check.changed | bool
+
+    - name: Read backend set before update
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: before_update
+
+    - name: Predict backend set update
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        backends:
+          - { name: backend-a, weight: 7 }
+          - { name: backend-b }
+      check_mode: true
+      register: update_prediction
+
+    - name: Assert update prediction
+      ansible.builtin.assert:
+        that: [update_prediction.changed | bool]
+
+    - name: Read backend set after update check
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: after_update_check
+
+    - name: Assert update check preserved state
+      ansible.builtin.assert:
+        that: [before_update.backend_sets == after_update_check.backend_sets]
+
+    - name: Update one backend member
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        backends:
+          - { name: backend-a, weight: 7 }
+          - { name: backend-b }
+      register: update_applied
+
+    - name: Assert update changed state
+      ansible.builtin.assert:
+        that: [update_applied.changed | bool]
+
+    - name: Read updated backend set
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: updated
+
+    - name: Assert partial update preserved omitted values
+      ansible.builtin.assert:
+        that:
+          - (updated.backend_sets[0].backends | selectattr('name', 'equalto', 'backend-a') | first).weight == 7
+          - (updated.backend_sets[0].backends | selectattr('name', 'equalto', 'backend-a') | first).is_backup | bool
+          - (updated.backend_sets[0].backends | selectattr('name', 'equalto', 'backend-b') | first).weight == 1
+
+    - name: Repeat update in normal mode
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        backends: [{ name: backend-a, weight: 7 }, { name: backend-b }]
+      register: update_repeat
+
+    - name: Repeat update in check mode
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        backends: [{ name: backend-a, weight: 7 }, { name: backend-b }]
+      check_mode: true
+      register: update_repeat_check
+
+    - name: Assert update idempotency
+      ansible.builtin.assert:
+        that:
+          - not update_repeat.changed | bool
+          - not update_repeat_check.changed | bool
+
+    - name: Read backend set before delete
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: before_delete
+
+    - name: Predict backend set delete
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        state: absent
+      check_mode: true
+      register: delete_prediction
+
+    - name: Assert delete prediction and resource exists
+      ansible.builtin.assert:
+        that: [delete_prediction.changed | bool]
+
+    - name: Read backend set after delete check
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: after_delete_check
+
+    - name: Assert delete check preserved state
+      ansible.builtin.assert:
+        that: [before_delete.backend_sets == after_delete_check.backend_sets]
+
+    - name: Delete backend set
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        state: absent
+      register: deleted
+
+    - name: Assert backend set was deleted
+      ansible.builtin.assert:
+        that: [deleted.changed | bool]
+
+    - name: Repeat backend set delete in normal mode
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        state: absent
+      register: delete_repeat
+
+    - name: Repeat backend set delete in check mode
+      ansible.oci.oci_network_loadbalancer_backend_set:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+        state: absent
+      check_mode: true
+      register: delete_repeat_check
+
+    - name: Assert delete idempotency
+      ansible.builtin.assert:
+        that:
+          - not delete_repeat.changed | bool
+          - not delete_repeat_check.changed | bool
+
+    - name: Read final backend set state
+      ansible.oci.oci_network_loadbalancer_backend_set_info:
+        network_load_balancer_id: '{{ oci_nlb_test_id }}'
+        name: '{{ oci_nlb_test_backend_set }}'
+      register: final
+
+    - name: Assert final backend set state is absent
+      ansible.builtin.assert:
+        that: [final.backend_sets | length == 0]
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  vars:
+    oci_nlb_test_suffix: backend-set
+  always:
+    - name: Clean up test-owned Network Load Balancer resources
+      ansible.builtin.include_role:
+        name: prepare_oci_network_loadbalancer_subresources
+        tasks_from: cleanup

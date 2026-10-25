@@ -135,7 +135,7 @@ def make_module_instance(
 ):
     instance = object.__new__(getattr(module_obj, class_name))
     instance.module = DummyModule(params, check_mode=check_mode)
-    instance.client = client or types.SimpleNamespace()
+    instance.client = client or types.SimpleNamespace(retry_strategy=None)
     instance.check_mode = check_mode
     for attr_name, value in extra_attrs.items():
         setattr(instance, attr_name, value)

@@ -52,7 +52,7 @@ def _backend_set(params, *, check_mode=False, client=None):
         module,
         "OciLoadBalancerBackendSetModule",
         params,
-        client=client or types.SimpleNamespace(),
+        client=client,
         check_mode=check_mode,
     )
     return instance
@@ -872,9 +872,6 @@ def test_backend_set_info_get_list_and_not_found_are_scoped():
     backend_set = FakeModel(name="pool-a", policy="ROUND_ROBIN")
     calls = []
 
-    class NotFound(Exception):
-        status = 404
-
     client = types.SimpleNamespace(
         get_backend_set=lambda **kwargs: calls.append(("get", kwargs))
         or FakeResponse(backend_set),
@@ -911,7 +908,7 @@ def test_backend_set_info_get_list_and_not_found_are_scoped():
         {"load_balancer_id": "lb-ocid", "name": "missing"},
         client=types.SimpleNamespace(
             get_backend_set=lambda **kwargs: (_unused for _unused in ()).throw(
-                NotFound("missing")
+                oci.exceptions.ServiceError(404, "NotFound", {}, "missing")
             )
         ),
     )
@@ -925,12 +922,11 @@ def test_backend_set_info_get_list_and_not_found_are_scoped():
         client=types.SimpleNamespace(list_backend_sets=lambda **kwargs: None),
     )
     missing_parent_instance.list_all_resources = lambda fn, **kwargs: (_unused for _unused in ()).throw(
-        NotFound("missing parent")
+        oci.exceptions.ServiceError(404, "NotFound", {}, "missing parent")
     )
     assert missing_parent_instance.fetch_resources() == []
 
-    service_error = NotFound("service unavailable")
-    service_error.status = 503
+    service_error = oci.exceptions.ServiceError(503, "Unavailable", {}, "service unavailable")
     failing_instance = make_module_instance(
         module,
         "OciLoadBalancerBackendSetInfoModule",
@@ -940,5 +936,5 @@ def test_backend_set_info_get_list_and_not_found_are_scoped():
     failing_instance.list_all_resources = lambda fn, **kwargs: (_unused for _unused in ()).throw(
         service_error
     )
-    with pytest.raises(NotFound):
+    with pytest.raises(oci.exceptions.ServiceError):
         failing_instance.fetch_resources()
