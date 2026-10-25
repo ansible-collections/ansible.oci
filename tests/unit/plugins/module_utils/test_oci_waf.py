@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import copy
+import types
 
 import oci
 import pytest
@@ -214,3 +215,46 @@ def test_empty_sections_match_absent_server_defaults():
     assert not helper.waf_subset_differs(None, {"rules": None})
     assert not helper.waf_subset_differs({}, {"rules": []})
     assert helper.waf_subset_differs({"rules": [{"name": "Existing"}]}, {"rules": []})
+
+
+def test_normalization_preserves_nulls_and_nested_values():
+    """Normalize SDK models and plain objects without changing user values."""
+    helper = load_collection_module("oci_waf")
+    rule = oci.waf.models.AccessControlRule(
+        name="MixedCase",
+        action_name="Allow",
+        condition_language="JMESPATH",
+        condition="KeepCase",
+    )
+    plain = types.SimpleNamespace(
+        name="PlainName",
+        type="CHECK",
+        nested=[None, {"condition_language": "JMESPATH", "text": "KeepCase"}],
+        _private="hidden",
+        attribute_map={"name": "name"},
+    )
+    value = {"rules": [rule], "plain": plain, "missing": None}
+    original = copy.deepcopy(value)
+
+    normalized = helper.normalize_waf(value)
+
+    assert helper.normalize_waf(None) is None
+    assert normalized == {
+        "rules": [
+            {
+                "type": "access_control",
+                "name": "MixedCase",
+                "action_name": "Allow",
+                "condition_language": "jmespath",
+                "condition": "KeepCase",
+            }
+        ],
+        "plain": {
+            "name": "PlainName",
+            "type": "check",
+            "nested": [None, {"condition_language": "jmespath", "text": "KeepCase"}],
+        },
+        "missing": None,
+    }
+    assert value == original
+    assert not helper.waf_subset_differs(value, normalized)

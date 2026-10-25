@@ -2,7 +2,14 @@ from __future__ import absolute_import, division, print_function
 
 import types
 
-from .conftest import make_module_instance, load_collection_module
+import pytest
+
+from .conftest import (
+    DummyModule,
+    FailJsonCalled,
+    make_module_instance,
+    load_collection_module,
+)
 
 
 def test_real_sdk_builds_nested_policy_models():
@@ -165,12 +172,14 @@ def test_nested_arguments_reject_missing_required_values(monkeypatch):
     module = load_collection_module("oci_waf_web_app_firewall_policy")
     captured = {}
     monkeypatch.setattr(
-        module, "AnsibleModule", lambda **kwargs: captured.update(kwargs) or object()
+        module,
+        "AnsibleModule",
+        lambda **kwargs: captured.update(kwargs) or DummyModule(),
     )
     monkeypatch.setattr(
         module,
         "OciWafWebAppFirewallPolicyModule",
-        lambda _: types.SimpleNamespace(execute_resource_module=lambda: None),
+        lambda instance: types.SimpleNamespace(execute_resource_module=lambda: None),
     )
     module.main()
     validator = ArgumentSpecValidator(captured["argument_spec"])
@@ -232,3 +241,173 @@ def test_nested_arguments_reject_missing_required_values(monkeypatch):
     )
     for params in invalid:
         assert validator.validate(params).error_messages, params
+
+
+@pytest.fixture
+def policy_argument_validator(monkeypatch):
+    """Return the validator for the policy module argument specification."""
+    from ansible.module_utils.common.arg_spec import ArgumentSpecValidator
+
+    module = load_collection_module("oci_waf_web_app_firewall_policy")
+    captured = {}
+    monkeypatch.setattr(
+        module,
+        "AnsibleModule",
+        lambda **kwargs: captured.update(kwargs) or DummyModule(),
+    )
+    monkeypatch.setattr(
+        module,
+        "OciWafWebAppFirewallPolicyModule",
+        lambda instance: types.SimpleNamespace(execute_resource_module=lambda: None),
+    )
+    module.main()
+    return ArgumentSpecValidator(captured["argument_spec"])
+
+
+@pytest.mark.parametrize("section", ("request_protection", "response_protection"))
+def test_public_capability_keys_remain_in_results(policy_argument_validator, section):
+    """Keep public capability identifiers unchanged after Ansible result filtering."""
+    import oci
+    from ansible.module_utils.common.parameters import remove_values
+    from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
+        serialize_oci_model,
+    )
+    from ansible_collections.ansible.oci.plugins.module_utils.oci_waf import (
+        build_policy_fields,
+    )
+
+    capability = {
+        "key": "942100",
+        "version": 1,
+        "collaborative_weights": [{"key": "942110", "weight": 2}],
+    }
+    result = policy_argument_validator.validate(
+        {
+            section: {
+                "rules": [
+                    {
+                        "name": "Protect",
+                        "action_name": "Check",
+                        "protection_capabilities": [capability],
+                    }
+                ]
+            }
+        }
+    )
+    assert not result.error_messages
+    fields = build_policy_fields(oci.waf.models, result.validated_parameters)
+    filtered = remove_values(serialize_oci_model(fields), result._no_log_values)
+    returned = filtered[section]["rules"][0]["protection_capabilities"][0]
+    assert returned["key"] == "942100"
+    assert returned["collaborative_weights"] == [{"key": "942110", "weight": 2}]
+
+
+@pytest.mark.parametrize("enabled", (True, False))
+@pytest.mark.parametrize("section", ("request_protection", "response_protection"))
+def test_body_inspection_is_request_only(policy_argument_validator, section, enabled):
+    """Accept body inspection only in request protection rules."""
+    result = policy_argument_validator.validate(
+        {
+            section: {
+                "rules": [
+                    {
+                        "name": "Protect",
+                        "action_name": "Check",
+                        "protection_capabilities": [{"key": "942100", "version": 1}],
+                        "is_body_inspection_enabled": enabled,
+                    }
+                ]
+            }
+        }
+    )
+    if section == "request_protection":
+        assert not result.error_messages
+        assert (
+            result.validated_parameters[section]["rules"][0][
+                "is_body_inspection_enabled"
+            ]
+            is enabled
+        )
+    else:
+        assert any(
+            "is_body_inspection_enabled" in message
+            and "Supported parameters include" in message
+            for message in result.error_messages
+        )
+
+
+@pytest.mark.parametrize("action_type", ("allow", "check"))
+@pytest.mark.parametrize(
+    "field, value",
+    (
+        ("code", 403),
+        ("headers", [{"name": "X-Test", "value": "Value"}]),
+        ("headers", []),
+        ("body", {"type": "static_text", "text": "Denied"}),
+        ("body", {}),
+    ),
+)
+@pytest.mark.parametrize("check_mode", (True, False))
+def test_incompatible_action_fields_fail_before_client_creation(
+    monkeypatch, action_type, field, value, check_mode
+):
+    """Reject incompatible action fields before client creation, including check mode."""
+    module = load_collection_module("oci_waf_web_app_firewall_policy")
+    action = {"name": "Invalid", "type": action_type, field: value}
+    dummy = DummyModule(
+        {"actions": [{"name": "Valid", "type": "allow"}, action]},
+        check_mode=check_mode,
+    )
+    monkeypatch.setattr(module, "AnsibleModule", lambda **kwargs: dummy)
+    monkeypatch.setattr(
+        module,
+        "OciWafWebAppFirewallPolicyModule",
+        lambda instance: pytest.fail("Client construction must not occur"),
+    )
+    with pytest.raises(FailJsonCalled) as exc:
+        module.main()
+    message = exc.value.payload["msg"]
+    assert "actions[1]" in message
+    assert "type=%s" % action_type in message
+    assert field in message
+    assert "require type=return_http_response" in message
+
+
+def test_action_error_lists_all_incompatible_fields():
+    """List all incompatible fields in one validation error."""
+    module = load_collection_module("oci_waf_web_app_firewall_policy")
+    dummy = DummyModule(
+        {
+            "actions": [
+                {
+                    "name": "Allow",
+                    "type": "allow",
+                    "code": 403,
+                    "headers": [],
+                    "body": {},
+                }
+            ]
+        }
+    )
+    with pytest.raises(FailJsonCalled) as exc:
+        module.validate_action_options(dummy)
+    assert "does not support: code, headers, body." in exc.value.payload["msg"]
+
+
+@pytest.mark.parametrize("action_type", ("allow", "check", "return_http_response"))
+def test_valid_actions_pass_validation_and_build_models(action_type):
+    """Accept valid actions with the optional null fields supplied by Ansible."""
+    import oci
+
+    module = load_collection_module("oci_waf_web_app_firewall_policy")
+    action = {
+        "name": "Action",
+        "type": action_type,
+        "code": 403 if action_type == "return_http_response" else None,
+        "headers": None,
+        "body": None,
+    }
+    module.validate_action_options(DummyModule({"actions": [action]}))
+    details = module.build_create_web_app_firewall_policy_details({"actions": [action]})
+    assert isinstance(details.actions[0], oci.waf.models.Action)
+    assert details.actions[0].type == action_type.upper()

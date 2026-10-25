@@ -169,7 +169,7 @@ web_app_firewall_policies:
               allowed_http_methods:
                 - GET
                 - POST
-            is_body_inspection_enabled: true
+            is_body_inspection_enabled: false
       freeform_tags:
         environment: test
       defined_tags:
@@ -693,10 +693,10 @@ web_app_firewall_policies:
                     - GET
                     - POST
             is_body_inspection_enabled:
-              description: Whether the rule inspects the response body.
+              description: The request body inspection flag. Response protection rules cannot enable body inspection.
               type: bool
               returned: when available
-              sample: true
+              sample: false
     freeform_tags:
       description: Free-form tags for the policy.
       type: dict

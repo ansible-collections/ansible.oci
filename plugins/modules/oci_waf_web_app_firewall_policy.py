@@ -55,11 +55,11 @@ options:
         required: true
 
       code:
-        description: The HTTP response code. Required when the action type is C(return_http_response).
+        description: The HTTP response code. Required and supported only when the action type is C(return_http_response).
         type: int
 
       headers:
-        description: HTTP headers returned by this action.
+        description: HTTP headers returned by this action. Supported only when the action type is C(return_http_response).
         type: list
         elements: dict
         suboptions:
@@ -74,7 +74,7 @@ options:
             required: true
 
       body:
-        description: The static HTTP response body returned by this action.
+        description: The static HTTP response body. Supported only when the action type is C(return_http_response).
         type: dict
         suboptions:
           type:
@@ -444,10 +444,6 @@ options:
                 type: list
                 elements: str
 
-          is_body_inspection_enabled:
-            description: Whether protection rules inspect the request body.
-            type: bool
-
   system_tags:
     description: Oracle system tags applied to the policy.
     type: dict
@@ -615,7 +611,7 @@ resource:
             allowed_http_methods:
               - GET
               - POST
-          is_body_inspection_enabled: true
+          is_body_inspection_enabled: false
     freeform_tags:
       environment: test
     defined_tags:
@@ -1139,10 +1135,10 @@ resource:
                     - GET
                     - POST
             is_body_inspection_enabled:
-              description: Whether the rule inspects the response body.
+              description: The request body inspection flag. Response protection rules cannot enable body inspection.
               type: bool
               returned: when available
-              sample: true
+              sample: false
     freeform_tags:
       description: Free-form tags for the policy.
       type: dict
@@ -1419,6 +1415,24 @@ def dict_to_models_params(values):
     return params
 
 
+def validate_action_options(module):
+    """Reject response fields for actions that do not return an HTTP response."""
+    for index, action in enumerate(module.params.get("actions") or []):
+        if action["type"] == "return_http_response":
+            continue
+        incompatible = [
+            field
+            for field in ("code", "headers", "body")
+            if action.get(field) is not None
+        ]
+        if incompatible:
+            module.fail_json(
+                msg="actions[%s] with type=%s does not support: %s. "
+                "These fields require type=return_http_response."
+                % (index, action["type"], ", ".join(incompatible))
+            )
+
+
 def main():
     """Build the argument specification and execute the module."""
     action_options = dict(
@@ -1472,7 +1486,7 @@ def main():
             elements="dict",
             required=True,
             options=dict(
-                key=dict(type="str", no_log=True, required=True),
+                key=dict(type="str", no_log=False, required=True),
                 version=dict(type="int", required=True),
                 exclusions=dict(
                     type="dict",
@@ -1487,7 +1501,7 @@ def main():
                     type="list",
                     elements="dict",
                     options=dict(
-                        key=dict(type="str", no_log=True, required=True),
+                        key=dict(type="str", no_log=False, required=True),
                         weight=dict(type="int", required=True),
                     ),
                 ),
@@ -1504,7 +1518,6 @@ def main():
                 allowed_http_methods=dict(type="list", elements="str"),
             ),
         ),
-        is_body_inspection_enabled=dict(type="bool"),
     )
     access_section = dict(
         type="dict",
@@ -1522,7 +1535,14 @@ def main():
     request_protection_section = dict(
         type="dict",
         options=dict(
-            rules=dict(type="list", elements="dict", options=protection_rule_options),
+            rules=dict(
+                type="list",
+                elements="dict",
+                options=dict(
+                    protection_rule_options,
+                    is_body_inspection_enabled=dict(type="bool"),
+                ),
+            ),
             body_inspection_size_limit_in_bytes=dict(type="int"),
             body_inspection_size_limit_exceeded_action_name=dict(type="str"),
         ),
@@ -1556,6 +1576,7 @@ def main():
         system_tags=dict(type="dict"),
     )
     module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
+    validate_action_options(module)
     OciWafWebAppFirewallPolicyModule(module).execute_resource_module()
 
 

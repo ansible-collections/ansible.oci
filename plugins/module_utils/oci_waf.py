@@ -7,6 +7,7 @@ __metaclass__ = type
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     build_model,
     normalize_enum_values,
+    serialize_oci_model,
 )
 
 
@@ -59,6 +60,10 @@ def build_action(models, value):
         "CHECK": "CheckAction",
         "RETURN_HTTP_RESPONSE": "ReturnHttpResponseAction",
     }[action_type]
+    if action_type != "RETURN_HTTP_RESPONSE":
+        return _model(
+            models, model_name, {"type": action_type, "name": value.get("name")}
+        )
     headers = value.get("headers")
     if headers is not None:
         headers = [_model(models, "ResponseHeader", item) for item in headers]
@@ -233,14 +238,7 @@ def normalize_waf(value, field_name=None):
     if isinstance(value, dict):
         return {key: normalize_waf(item, key) for key, item in value.items()}
     if hasattr(value, "swagger_types") or hasattr(value, "__dict__"):
-        fields = getattr(value, "swagger_types", {})
-        if not fields:
-            fields = {
-                key: item
-                for key, item in vars(value).items()
-                if not key.startswith("_")
-            }
-        return {key: normalize_waf(getattr(value, key, None), key) for key in fields}
+        return normalize_waf(serialize_oci_model(value), field_name)
     if field_name in ("type", "condition_language") and isinstance(value, str):
         return value.lower()
     return value
