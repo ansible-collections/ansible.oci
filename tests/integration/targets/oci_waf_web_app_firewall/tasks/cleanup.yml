@@ -1,0 +1,78 @@
+---
+- name: Run WAF cleanup with shared OCI authentication defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+
+  block:
+    - name: Delete the test firewall during cleanup
+      ansible.oci.oci_waf_web_app_firewall:
+        state: absent
+        web_app_firewall_id: "{{ oci_waf_firewall_cleanup_id }}"
+      when: oci_waf_firewall_cleanup_id | default('') | length > 0
+      register: oci_cleanup_waf_firewall
+      retries: 3
+      until: oci_cleanup_waf_firewall is succeeded
+      ignore_errors: true
+
+    - name: Delete the test replacement policy during cleanup
+      ansible.oci.oci_waf_web_app_firewall_policy:
+        state: absent
+        web_app_firewall_policy_id: "{{ oci_waf_policy_replacement.resource.id }}"
+      when: oci_waf_policy_replacement.resource.id | default('') | length > 0
+      register: oci_cleanup_waf_replacement_policy
+      retries: 3
+      until: oci_cleanup_waf_replacement_policy is succeeded
+      ignore_errors: true
+
+    - name: Delete the test policy during cleanup
+      ansible.oci.oci_waf_web_app_firewall_policy:
+        state: absent
+        web_app_firewall_policy_id: "{{ oci_waf_policy_cleanup_id }}"
+      when: oci_waf_policy_cleanup_id | default('') | length > 0
+      register: oci_cleanup_waf_policy
+      retries: 3
+      until: oci_cleanup_waf_policy is succeeded
+      ignore_errors: true
+
+    - name: Delete the test load balancer during cleanup
+      ansible.oci.oci_loadbalancer:
+        state: absent
+        load_balancer_id: "{{ oci_waf_firewall_load_balancer.resource.id }}"
+      when: oci_waf_firewall_load_balancer.resource.id | default('') | length > 0
+      register: oci_cleanup_waf_load_balancer
+      retries: 3
+      until: oci_cleanup_waf_load_balancer is succeeded
+      ignore_errors: true
+
+    - name: Delete the test subnet during cleanup
+      ansible.oci.oci_network_subnet:
+        state: absent
+        subnet_id: "{{ oci_waf_firewall_subnet.resource.id }}"
+      when: oci_waf_firewall_subnet.resource.id | default('') | length > 0
+      register: oci_cleanup_waf_subnet
+      retries: 3
+      until: oci_cleanup_waf_subnet is succeeded
+      ignore_errors: true
+
+    - name: Delete the test VCN during cleanup
+      ansible.oci.oci_network_vcn:
+        state: absent
+        vcn_id: "{{ oci_waf_firewall_vcn.resource.id }}"
+      when: oci_waf_firewall_vcn.resource.id | default('') | length > 0
+      register: oci_cleanup_waf_vcn
+      retries: 3
+      until: oci_cleanup_waf_vcn is succeeded
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_waf_firewall is not failed
+          - oci_cleanup_waf_replacement_policy is not failed
+          - oci_cleanup_waf_policy is not failed
+          - oci_cleanup_waf_load_balancer is not failed
+          - oci_cleanup_waf_subnet is not failed
+          - oci_cleanup_waf_vcn is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
