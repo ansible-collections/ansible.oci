@@ -1,0 +1,48 @@
+---
+- name: Check topic deletion
+  ansible.oci.oci_notification_topic: &topic_delete
+    topic_id: "{{ topic_create.resource.topic_id }}"
+    state: absent
+  check_mode: true
+  register: topic_delete_check
+  failed_when: not topic_delete_check.changed
+
+- name: Verify deletion check left topic present
+  ansible.oci.oci_notification_topic_info:
+    topic_id: "{{ topic_create.resource.topic_id }}"
+  register: topic_delete_check_info
+  failed_when: topic_delete_check_info.topics | length != 1
+
+- name: Delete topic
+  ansible.oci.oci_notification_topic:
+    <<: *topic_delete
+  register: topic_delete
+  failed_when: not topic_delete.changed
+
+- name: Wait until topic is absent from the active list
+  ansible.oci.oci_notification_topic_info:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_notification_topic_integration_name }}"
+    lifecycle_state: active
+  register: topic_after_delete
+  until: topic_after_delete.topics | length == 0
+  retries: 12
+  delay: 5
+
+- name: Verify topic deletion is idempotent
+  ansible.oci.oci_notification_topic:
+    <<: *topic_delete
+  register: topic_delete_rerun
+  failed_when: topic_delete_rerun.changed
+
+- name: Verify topic deletion is idempotent in check mode
+  ansible.oci.oci_notification_topic:
+    <<: *topic_delete
+  check_mode: true
+  register: topic_delete_check_rerun
+  failed_when: topic_delete_check_rerun.changed
+
+- name: Clear topic cleanup markers after verified delete
+  ansible.builtin.set_fact:
+    oci_notification_topic_cleanup_id: ""
+    oci_notification_topic_cleanup_name: ""

@@ -1,9 +1,6 @@
 ---
-# TODO: replace this placeholder with a notification topic created by the
-# upcoming notification topic module. OCI requires every alarm to have a
-# destination, so until then set this to the OCID of an existing topic to run
-# this target; when empty the target is a no-op.
-oci_alarm_integration_destination_id: ""
+oci_notification_topic_integration_name: "oci-topic-integration"
+oci_notification_topic_integration_description: "OCI notification topic integration test"
 oci_alarm_integration_alarm_name: "oci-alarm-integration-alarm"
 oci_alarm_integration_namespace: "oci_computeagent"
 oci_alarm_integration_query: "CpuUtilization[1m].mean() > 90"
