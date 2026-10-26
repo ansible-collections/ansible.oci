@@ -111,7 +111,6 @@ from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
-    normalize_enum_values,
     import_oci_sdk,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
@@ -138,6 +137,22 @@ class OciNotificationTopicInfoModule(OciInfoBase):
     name_response_field = "name"
     list_filter_params = ["compartment_id", "lifecycle_state"]
 
+    def collect_list_filters(self, *param_groups):
+        """Convert the lifecycle filter to the SDK enum spelling.
+
+        Args:
+            *param_groups: Parameter groups to collect.
+
+        Returns:
+            SDK list filters with an uppercase lifecycle state.
+        """
+        filters = super(OciNotificationTopicInfoModule, self).collect_list_filters(
+            *param_groups
+        )
+        if "lifecycle_state" in filters:
+            filters["lifecycle_state"] = filters["lifecycle_state"].upper()
+        return filters
+
 
 def main():
     """Build the Ansible argument spec and run the topic info module."""
@@ -156,12 +171,6 @@ def main():
         supports_check_mode=True,
         required_one_of=[["compartment_id", "topic_id"]],
     )
-    lifecycle_state = module.params.get("lifecycle_state")
-    if lifecycle_state:
-        normalized = normalize_enum_values(
-            {"lifecycle_state": lifecycle_state}, {"lifecycle_state"}
-        )
-        module.params["lifecycle_state"] = normalized["lifecycle_state"]
     OciNotificationTopicInfoModule(module).execute_info_module()
 
 

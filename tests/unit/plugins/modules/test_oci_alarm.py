@@ -83,7 +83,7 @@ def test_main_wires_argument_spec_and_normalizes_choices(monkeypatch):
     assert captured["run_called"] is True
     assert captured["supports_check_mode"] is True
     assert spec["alarm_id"] == {"type": "str"}
-    assert spec["is_enabled"] == {"type": "bool", "default": True}
+    assert spec["is_enabled"] == {"type": "bool"}
     assert spec["severity"]["choices"] == ["critical", "error", "warning", "info"]
     assert spec["message_format"]["choices"] == ["raw", "pretty_json", "ons_optimized"]
     assert spec["destinations"] == {"type": "list", "elements": "str"}
@@ -150,6 +150,26 @@ def test_build_create_alarm_details_maps_fields_and_overrides(monkeypatch):
     assert override.severity == "WARNING"
     assert override.query == "q"
     assert not hasattr(override, "body")
+
+
+def test_build_create_alarm_details_enables_alarm_by_default(monkeypatch):
+    alarm_module = load_alarm_module(monkeypatch)
+
+    details = alarm_module.build_create_alarm_details(
+        {"name": "high-cpu", "is_enabled": None}
+    )
+
+    assert details.is_enabled is True
+
+
+def test_build_create_alarm_details_keeps_disabled_alarm(monkeypatch):
+    alarm_module = load_alarm_module(monkeypatch)
+
+    details = alarm_module.build_create_alarm_details(
+        {"name": "high-cpu", "is_enabled": False}
+    )
+
+    assert details.is_enabled is False
 
 
 def test_create_resource_calls_create_alarm(monkeypatch):
@@ -300,6 +320,15 @@ def test_update_sends_only_changed_fields(monkeypatch):
     assert details.display_name == "renamed"
     assert details.is_enabled is False
     assert vars(details).keys() == {"display_name", "is_enabled"}
+
+
+def test_needs_update_ignores_omitted_is_enabled(monkeypatch):
+    alarm_module = load_alarm_module(monkeypatch)
+    instance = make_alarm_module(
+        alarm_module, dict(MATCHING_PARAMS, is_enabled=None)
+    )
+
+    assert instance.needs_update(matching_resource(is_enabled=False)) is False
 
 
 def test_update_builds_override_models(monkeypatch):

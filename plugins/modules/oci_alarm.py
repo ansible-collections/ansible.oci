@@ -120,11 +120,9 @@ options:
   is_enabled:
     description:
       - Whether the alarm is enabled.
-      - Defaults to C(true), so omitting this option re-enables an alarm that
-        was disabled outside of this module. Set it to C(false) to keep an
-        alarm disabled.
+      - New alarms are enabled when this option is not set. When updating an
+        existing alarm, omitting this option leaves its current state unchanged.
     type: bool
-    default: true
   overrides:
     description:
       - Rule overrides applied to the alarm.
@@ -227,6 +225,101 @@ resource:
       as C(severity) are returned as OCI uppercase values.
   returned: when state != absent
   type: dict
+  contains:
+    id:
+      description: The OCID of the alarm.
+      type: str
+      sample: ocid1.alarm.oc1..example
+    name:
+      description: The display name of the alarm.
+      type: str
+      sample: example-alarm
+    compartment_id:
+      description: The OCID of the compartment containing the alarm.
+      type: str
+      sample: ocid1.compartment.oc1..example
+    metric_compartment_id:
+      description: The OCID of the compartment containing the metric being evaluated.
+      type: str
+      sample: ocid1.compartment.oc1..example
+    metric_compartment_id_in_subtree:
+      description: Whether metrics in sub-compartments of C(metric_compartment_id) are evaluated.
+      type: bool
+      sample: false
+    namespace:
+      description: The source service or application emitting the metric.
+      type: str
+      sample: oci_computeagent
+    resource_group:
+      description: The resource group the metric belongs to.
+      type: str
+      sample: null
+    query:
+      description: The Monitoring Query Language expression evaluated by the alarm.
+      type: str
+      sample: CpuUtilization[1m].mean() > 90
+    severity:
+      description: The perceived severity of the alarm.
+      type: str
+      sample: CRITICAL
+    body:
+      description: The human-readable content of the notification delivered.
+      type: str
+      sample: CPU is high
+    pending_duration:
+      description: The period of time the condition must hold before the alarm fires, in ISO 8601 format.
+      type: str
+      sample: PT5M
+    resolution:
+      description: The time between calculated aggregation windows.
+      type: str
+      sample: 1m
+    message_format:
+      description: The format of the notification message.
+      type: str
+      sample: ONS_OPTIMIZED
+    destinations:
+      description: The OCIDs of the notification destinations.
+      type: list
+      elements: str
+      sample: ["ocid1.onstopic.oc1..example"]
+    repeat_notification_duration:
+      description: The period of time between repeated notifications, in ISO 8601 format.
+      type: str
+      sample: null
+    is_enabled:
+      description: Whether the alarm is enabled.
+      type: bool
+      sample: true
+    is_notifications_per_metric_dimension_enabled:
+      description: Whether a separate notification is sent for each metric stream.
+      type: bool
+      sample: true
+    overrides:
+      description: Rule overrides that apply to the alarm.
+      type: list
+      elements: dict
+      sample: []
+    lifecycle_state:
+      description: The current lifecycle state of the alarm.
+      type: str
+      sample: ACTIVE
+    freeform_tags:
+      description: Free-form tags applied to the alarm.
+      type: dict
+      sample: {"environment": "production"}
+    defined_tags:
+      description: Defined tags applied to the alarm.
+      type: dict
+      sample: {"Operations": {"CostCenter": "42"}}
+    time_created:
+      description: The date and time the alarm was created, in RFC3339 format.
+      type: str
+      sample: "2026-01-01T00:00:00.000Z"
+    time_updated:
+      description: The date and time the alarm was last updated, in RFC3339 format.
+      type: str
+      sample: "2026-01-01T00:00:00.000Z"
 """
 
 from ansible.module_utils.basic import AnsibleModule
@@ -336,6 +429,9 @@ def build_create_alarm_details(params):
             **{field: params.get(field) for field in ALARM_FIELDS},
         }
     )
+    # OCI requires is_enabled on create; default it here rather than in the
+    # argument spec so that updates leave the current state alone.
+    details.setdefault("is_enabled", True)
     return oci.monitoring.models.CreateAlarmDetails(**details)
 
 
@@ -490,7 +586,7 @@ def main():
         ),
         destinations=dict(type="list", elements="str"),
         repeat_notification_duration=dict(type="str"),
-        is_enabled=dict(type="bool", default=True),
+        is_enabled=dict(type="bool"),
         overrides=dict(
             type="list",
             elements="dict",

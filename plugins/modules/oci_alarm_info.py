@@ -48,6 +48,15 @@ options:
       - OCI only allows this when C(compartment_id) is the tenancy OCID.
       - Only used when C(compartment_id) is provided.
     type: bool
+  include_details:
+    description:
+      - When true, fetch each listed alarm individually to return the full set
+        of alarm fields instead of alarm summaries.
+      - This makes one additional API call per matching alarm.
+      - Only used when C(compartment_id) is provided. Alarms fetched with
+        C(alarm_id) always include full details.
+    type: bool
+    default: false
 """
 
 EXAMPLES = r"""
@@ -65,6 +74,11 @@ EXAMPLES = r"""
     compartment_id: ocid1.tenancy.oc1..example
     compartment_id_in_subtree: true
 
+- name: List alarms in a compartment with full details
+  ansible.oci.oci_alarm_info:
+    compartment_id: ocid1.compartment.oc1..example
+    include_details: true
+
 - name: Get a specific alarm
   ansible.oci.oci_alarm_info:
     alarm_id: ocid1.alarm.oc1..example
@@ -74,10 +88,11 @@ RETURN = r"""
 alarms:
   description:
     - List of alarms that matched the query.
-    - Listing returns alarm summaries. Some fields, such as C(body), C(resolution),
-      C(pending_duration), C(message_format), C(repeat_notification_duration),
-      C(metric_compartment_id_in_subtree), C(time_created) and C(time_updated),
-      are only returned when C(alarm_id) is used.
+    - Listing returns alarm summaries unless C(include_details) is true. Some fields,
+      such as C(body), C(resolution), C(pending_duration), C(message_format),
+      C(repeat_notification_duration), C(metric_compartment_id_in_subtree),
+      C(time_created) and C(time_updated), are only returned when C(alarm_id) is
+      used or C(include_details) is true.
   returned: always
   type: list
   elements: dict
@@ -233,6 +248,32 @@ class OciAlarmInfoModule(OciInfoBase):
             filters["lifecycle_state"] = filters["lifecycle_state"].upper()
         return filters
 
+    def fetch_resources(self):
+        """Return alarm models, optionally fetching full details for listed alarms.
+
+        Listing only returns alarm summaries, so when ``include_details`` is
+        set each listed alarm is fetched by ID to include the full set of alarm
+        fields. Alarms that disappear between the list and get calls are
+        skipped.
+
+        Returns:
+            Alarm models that matched the query.
+        """
+        resources = super(OciAlarmInfoModule, self).fetch_resources()
+        if self.module.params.get(self.resource_id_param) or not self.module.params.get("include_details"):
+            return resources
+
+        alarms = []
+        for summary in resources:
+            alarms.extend(
+                self.get_resource_by_id(
+                    summary.id,
+                    self.client.get_alarm,
+                    alarm_id=summary.id,
+                )
+            )
+        return alarms
+
 
 def main():
     """Build the argument spec and run the info module."""
@@ -243,6 +284,7 @@ def main():
         name=dict(type="str"),
         lifecycle_state=dict(type="str", choices=["active", "deleting", "deleted"]),
         compartment_id_in_subtree=dict(type="bool"),
+        include_details=dict(type="bool", default=False),
     )
 
     module = AnsibleModule(

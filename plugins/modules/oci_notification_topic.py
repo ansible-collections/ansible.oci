@@ -233,6 +233,9 @@ class OciNotificationTopicModule(OciResourceBase):
     def create_resource(self):
         """Create a topic and wait for its active state.
 
+        Topic names are unique across the tenancy, but name lookup only
+        searches compartment_id, so a 409 is translated into a clear failure.
+
         Returns:
             The created topic model after the configured wait.
         """
@@ -247,9 +250,22 @@ class OciNotificationTopicModule(OciResourceBase):
             },
             oci.ons.models.CreateTopicDetails,
         )
-        response = self.call_with_retry(
-            self.client.create_topic, create_topic_details=details
-        )
+        try:
+            response = self.call_with_retry(
+                self.client.create_topic, create_topic_details=details
+            )
+        except Exception as exc:
+            if getattr(exc, "status", None) == 409:
+                self.module.fail_json(
+                    msg=(
+                        f"Cannot create topic {params.get('name')!r}: a topic "
+                        "with this name already exists in the tenancy, possibly "
+                        "in a compartment other than "
+                        f"{params.get('compartment_id')}. Topic names must be "
+                        f"unique across the tenancy: {exc}"
+                    )
+                )
+            raise
         return self.get_mutation_result(
             response.data,
             getattr(response.data, "topic_id", None),

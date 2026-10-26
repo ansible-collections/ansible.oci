@@ -66,22 +66,6 @@ def test_main_argument_spec_contract(monkeypatch):
     assert spec["lifecycle_state"]["choices"] == ["active", "deleting", "creating"]
 
 
-def test_lifecycle_state_is_mapped_to_sdk_case(monkeypatch):
-    """Map the lowercase user lifecycle state to the SDK enum value."""
-    module_obj = load_topic_info_module(monkeypatch)
-    captured = {}
-    dummy = DummyModule({"compartment_id": "c", "lifecycle_state": "active"})
-    monkeypatch.setattr(module_obj, "AnsibleModule", lambda **kwargs: dummy)
-    monkeypatch.setattr(
-        module_obj,
-        "OciNotificationTopicInfoModule",
-        lambda module: captured.update(params=module.params)
-        or types.SimpleNamespace(execute_info_module=lambda: None),
-    )
-    module_obj.main()
-    assert captured["params"]["lifecycle_state"] == "ACTIVE"
-
-
 def test_class_metadata_and_client_class(monkeypatch):
     """Declare the Notifications client and get/list metadata."""
     module_obj = load_topic_info_module(monkeypatch)
@@ -146,14 +130,14 @@ def test_get_404_returns_empty_and_other_errors_propagate(monkeypatch):
 
 
 def test_list_scoped_by_compartment_and_lifecycle_with_exact_name(monkeypatch):
-    """Pass list filters to OCI and filter results by exact topic name."""
+    """Pass SDK-cased list filters to OCI and filter by exact topic name."""
     module_obj = load_topic_info_module(monkeypatch)
     client = types.SimpleNamespace(list_topics=object())
     instance = make_topic_info(
         module_obj,
         {
             "compartment_id": "compartment1",
-            "lifecycle_state": "ACTIVE",
+            "lifecycle_state": "active",
             "name": "alerts",
         },
         client,

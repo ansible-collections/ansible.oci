@@ -191,6 +191,34 @@ def test_create_without_wait_does_not_poll(monkeypatch):
     assert instance.create_resource().topic_id == "t1"
 
 
+def test_create_name_conflict_fails_with_tenancy_message(monkeypatch):
+    """Translate a 409 from create_topic into a tenancy-wide name conflict."""
+    module_obj = load_topic_module(monkeypatch)
+    conflict = RuntimeError("conflict")
+    conflict.status = 409
+    client = types.SimpleNamespace(create_topic=raising(conflict))
+    instance = make_topic(module_obj, {"compartment_id": "c1", "name": "alerts"}, client)
+    passthrough_retry(monkeypatch, instance)
+    with pytest.raises(FailJsonCalled) as failure:
+        instance.create_resource()
+    msg = failure.value.payload["msg"]
+    assert "'alerts'" in msg
+    assert "unique across the tenancy" in msg
+    assert "c1" in msg
+
+
+def test_create_other_errors_are_reraised(monkeypatch):
+    """Re-raise create_topic errors that are not name conflicts."""
+    module_obj = load_topic_module(monkeypatch)
+    error = RuntimeError("boom")
+    error.status = 500
+    client = types.SimpleNamespace(create_topic=raising(error))
+    instance = make_topic(module_obj, {"compartment_id": "c1", "name": "alerts"}, client)
+    passthrough_retry(monkeypatch, instance)
+    with pytest.raises(RuntimeError, match="boom"):
+        instance.create_resource()
+
+
 def test_create_in_check_mode_does_not_call_api(monkeypatch):
     """Report a change for a new topic without calling create."""
     module_obj = load_topic_module(monkeypatch)

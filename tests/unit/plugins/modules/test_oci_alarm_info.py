@@ -50,6 +50,7 @@ def test_main_wiring(monkeypatch):
     assert spec["name"] == {"type": "str"}
     assert spec["compartment_id"] == {"type": "str"}
     assert spec["compartment_id_in_subtree"] == {"type": "bool"}
+    assert spec["include_details"] == {"type": "bool", "default": False}
     assert spec["lifecycle_state"] == {
         "type": "str",
         "choices": ["active", "deleting", "deleted"],
@@ -151,6 +152,61 @@ def test_fetch_resources_passes_filters_and_filters_by_name(monkeypatch):
             "compartment_id_in_subtree": True,
         }
     ]
+
+
+def test_fetch_resources_fetches_details_for_listed_alarms(monkeypatch):
+    service_error = install_fake_oci(monkeypatch)[1]
+
+    info_module = load_collection_module("oci_alarm_info")
+    summaries = [
+        FakeModel(id="ocid1.alarm.oc1..a", display_name="first"),
+        FakeModel(id="ocid1.alarm.oc1..gone", display_name="second"),
+    ]
+    detailed = FakeModel(id="ocid1.alarm.oc1..a", display_name="first", body="CPU is high")
+    get_calls = []
+
+    def get_alarm(alarm_id):
+        get_calls.append(alarm_id)
+        if alarm_id == "ocid1.alarm.oc1..gone":
+            raise service_error(404)
+        return types.SimpleNamespace(data=detailed)
+
+    instance = make_module_instance(
+        info_module,
+        "OciAlarmInfoModule",
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "alarm_id": None,
+            "include_details": True,
+        },
+        client=types.SimpleNamespace(list_alarms=object(), get_alarm=get_alarm),
+    )
+    monkeypatch.setattr(instance, "list_all_resources", lambda fn, **kwargs: summaries)
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+
+    assert instance.fetch_resources() == [detailed]
+    assert get_calls == ["ocid1.alarm.oc1..a", "ocid1.alarm.oc1..gone"]
+
+
+def test_fetch_resources_skips_details_by_default(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_alarm_info")
+    summary = FakeModel(id="ocid1.alarm.oc1..a", display_name="first")
+
+    instance = make_module_instance(
+        info_module,
+        "OciAlarmInfoModule",
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "alarm_id": None,
+            "include_details": False,
+        },
+        client=types.SimpleNamespace(list_alarms=object(), get_alarm=raising(AssertionError())),
+    )
+    monkeypatch.setattr(instance, "list_all_resources", lambda fn, **kwargs: [summary])
+
+    assert instance.fetch_resources() == [summary]
 
 
 def test_execute_info_module_exits_with_serialized_alarms(monkeypatch):
