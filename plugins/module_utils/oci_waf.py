@@ -267,29 +267,34 @@ def waf_subset_differs(current, desired, _field_name=None):
             for key, value in desired.items()
         )
     if isinstance(desired, list):
-        if current is None:
-            current = []
-        if not isinstance(current, list):
-            return True
-        if (
-            _field_name == "actions"
-            and desired
-            and all(isinstance(item, dict) and "name" in item for item in desired)
-        ):
-            current_by_name = {
-                item.get("name"): item for item in current if isinstance(item, dict)
-            }
-            desired_names = {item["name"] for item in desired}
-            return (
-                len(current) != len(desired)
-                or set(current_by_name) != desired_names
-                or any(
-                    waf_subset_differs(current_by_name[item["name"]], item, _field_name)
-                    for item in desired
-                )
-            )
-        return len(current) != len(desired) or any(
-            waf_subset_differs(current_item, desired_item, _field_name)
-            for current_item, desired_item in zip(current, desired)
-        )
+        return _waf_lists_differ(current, desired, _field_name)
     return current != desired
+
+
+def _waf_lists_differ(current, desired, field_name):
+    """Compare actions by name and other lists by position."""
+    if current is None:
+        current = []
+    if not isinstance(current, list):
+        return True
+    if (
+        field_name == "actions"
+        and desired
+        and all(isinstance(item, dict) and "name" in item for item in desired)
+    ):
+        current_by_name = {
+            item.get("name"): item for item in current if isinstance(item, dict)
+        }
+        desired_names = {item["name"] for item in desired}
+        return (
+            len(current) != len(desired)
+            or set(current_by_name) != desired_names
+            or any(
+                waf_subset_differs(current_by_name[item["name"]], item, field_name)
+                for item in desired
+            )
+        )
+    return len(current) != len(desired) or any(
+        waf_subset_differs(current_item, desired_item, field_name)
+        for current_item, desired_item in zip(current, desired)
+    )
