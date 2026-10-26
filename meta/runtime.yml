@@ -129,3 +129,5 @@ action_groups:
         - oci_waf_web_app_firewall_policy_info
         - oci_waf_web_app_firewall
         - oci_waf_web_app_firewall_info
+        - oci_notification_topic
+        - oci_notification_topic_info

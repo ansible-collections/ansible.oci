@@ -1,0 +1,3 @@
+---
+oci_notification_topic_integration_name: "oci-topic-integration"
+oci_notification_topic_integration_description: "OCI notification topic integration test"

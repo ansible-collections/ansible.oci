@@ -2417,3 +2417,122 @@ def test_oci_resource_base_wait_for_resource_id_uses_dead_states_for_not_found_h
     result = instance.wait_for_resource_id("resource-ocid", ("REMOVED",))
 
     assert result is None
+
+
+def _topic_style_resource_class(oci_resource, update_calls=None):
+    """Build a resource subclass whose OCID lives in ``topic_id``."""
+
+    class FakeUpdateDetails:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class TopicResource(oci_resource.OciResourceBase):
+        client_class = object
+        resource_id_param = "topic_id"
+        resource_id_field = "topic_id"
+        create_resource_name = "topic"
+        update_method_name = "update_topic"
+        update_details_name = "topic_attributes_details"
+        update_wait_states = ("ACTIVE",)
+        update_field_specs = (
+            oci_resource.UpdateFieldSpec(param_name="description", is_mutable=True),
+        )
+
+        def resolve_target_resource(self):
+            raise AssertionError("get_resource should not be called")
+
+        def get_resource_response(self, resource_id):
+            raise AssertionError("get_resource_response should not be called")
+
+        def create_resource(self):
+            raise AssertionError("create_resource should not be called")
+
+        def build_update_details(self, update_model_fields):
+            return FakeUpdateDetails(**update_model_fields)
+
+        def delete_resource(self, resource):
+            raise AssertionError("delete_resource should not be called")
+
+    return TopicResource
+
+
+def test_oci_resource_base_default_update_resource_uses_resource_id_field(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    update_calls = []
+    waits = []
+    patch_create_service_client(
+        monkeypatch,
+        oci_resource,
+        lambda module, client_class: types.SimpleNamespace(
+            update_topic=lambda topic_id, topic_attributes_details: update_calls.append(
+                (topic_id, topic_attributes_details)
+            )
+            or types.SimpleNamespace(data=types.SimpleNamespace(topic_id="ocid1.topic.oc1..updated"))
+        ),
+    )
+    resource = _topic_style_resource_class(oci_resource)(
+        DummyModule({"description": "new", "wait": True})
+    )
+    monkeypatch.setattr(resource, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+    monkeypatch.setattr(
+        resource,
+        "wait_for_resource_id",
+        lambda resource_id, states: waits.append((resource_id, states))
+        or types.SimpleNamespace(topic_id=resource_id),
+    )
+
+    current = types.SimpleNamespace(topic_id="ocid1.topic.oc1..123", description="old")
+    assert not hasattr(current, "id")
+    updated = resource.update_resource(current)
+
+    assert update_calls[0][0] == "ocid1.topic.oc1..123"
+    assert update_calls[0][1].description == "new"
+    assert waits == [("ocid1.topic.oc1..123", ("ACTIVE",))]
+    assert updated.topic_id == "ocid1.topic.oc1..123"
+
+
+def test_oci_resource_base_delete_and_wait_uses_resource_id_field(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(monkeypatch, oci_resource, lambda module, client_class: "client")
+    delete_calls = []
+    waits = []
+    resource = _topic_style_resource_class(oci_resource)(DummyModule({"wait": True}))
+    monkeypatch.setattr(resource, "call_with_retry", lambda fn, **kwargs: fn(**kwargs))
+    monkeypatch.setattr(
+        resource,
+        "wait_for_resource_id",
+        lambda resource_id, states: waits.append((resource_id, states)) or None,
+    )
+
+    def delete_topic(topic_id):
+        delete_calls.append(topic_id)
+        return types.SimpleNamespace(data=None)
+
+    resource.delete_resource_and_wait(
+        types.SimpleNamespace(topic_id="ocid1.topic.oc1..123"),
+        delete_topic,
+        topic_id="ocid1.topic.oc1..123",
+    )
+
+    assert delete_calls == ["ocid1.topic.oc1..123"]
+    assert waits[0][0] == "ocid1.topic.oc1..123"
+
+
+def test_oci_resource_base_delete_conflict_message_uses_resource_id_field(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    patch_create_service_client(monkeypatch, oci_resource, lambda module, client_class: "client")
+
+    class ConflictError(Exception):
+        status = 409
+
+    resource = _topic_style_resource_class(oci_resource)(DummyModule({"wait": True}))
+    monkeypatch.setattr(resource, "call_with_retry", raising(ConflictError("dependency exists")))
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        resource.delete_resource_and_wait(
+            types.SimpleNamespace(topic_id="ocid1.topic.oc1..123"),
+            object(),
+            topic_id="ocid1.topic.oc1..123",
+        )
+
+    assert "Cannot delete topic ocid1.topic.oc1..123" in exc_info.value.payload["msg"]
