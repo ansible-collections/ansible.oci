@@ -1,0 +1,23 @@
+---
+# TODO: replace this placeholder with a notification topic created by the
+# upcoming notification topic module. OCI requires every alarm to have a
+# destination, so until then set this to the OCID of an existing topic to run
+# this target; when empty the target is a no-op.
+oci_alarm_integration_destination_id: ""
+oci_alarm_integration_alarm_name: "oci-alarm-integration-alarm"
+oci_alarm_integration_namespace: "oci_computeagent"
+oci_alarm_integration_query: "CpuUtilization[1m].mean() > 90"
+oci_alarm_integration_override_rule_name: "integration-override"
+oci_alarm_integration_override_query: "CpuUtilization[1m].mean() > 95"
+oci_alarm_integration_create_severity: "warning"
+oci_alarm_integration_update_severity: "critical"
+oci_alarm_integration_create_body: "Integration alarm create body"
+oci_alarm_integration_update_body: "Integration alarm update body"
+oci_alarm_integration_create_pending_duration: "PT5M"
+oci_alarm_integration_update_pending_duration: "PT10M"
+oci_alarm_integration_create_tags:
+  phase: create
+  role: integration
+oci_alarm_integration_update_tags:
+  phase: update
+  role: integration
