@@ -1,0 +1,561 @@
+---
+- name: Validate OCI integration input
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_integration_config_file_location | default('', true) | length > 0
+    fail_msg: OCI IPSec integration requires the compartment and OCI config values.
+
+- name: Compute unique names
+  ansible.builtin.set_fact:
+    oci_ipsec_cpe_name: "{{ oci_ipsec_integration_cpe_name }}-{{ oci_integration_rpfx }}"
+    oci_ipsec_cpe_updated_name: "{{ oci_ipsec_integration_cpe_updated_name }}-{{ oci_integration_rpfx }}"
+    oci_ipsec_connection_name: "{{ oci_ipsec_integration_connection_name }}-{{ oci_integration_rpfx }}"
+    oci_ipsec_connection_updated_name: "{{ oci_ipsec_integration_connection_updated_name }}-{{ oci_integration_rpfx }}"
+    oci_ipsec_tunnel_name: "{{ oci_ipsec_integration_tunnel_name }}-{{ oci_integration_rpfx }}"
+    oci_ipsec_tunnel_updated_name: "{{ oci_ipsec_integration_tunnel_updated_name }}-{{ oci_integration_rpfx }}"
+    oci_ipsec_drg_name: "oci-ipsec-drg-{{ oci_integration_rpfx }}"
+
+- name: Exercise CPE, connection, and tunnel lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create DRG for the IPSec connection
+      ansible.oci.oci_network_drg:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_drg_name }}"
+      register: oci_ipsec_drg
+
+    - name: Save DRG identifier
+      ansible.builtin.set_fact:
+        oci_ipsec_drg_id: "{{ oci_ipsec_drg.resource.id }}"
+
+    - name: Check CPE creation
+      ansible.oci.oci_network_cpe: &oci_ipsec_cpe_create
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_cpe_name }}"
+        ip_address: "{{ oci_ipsec_integration_cpe_ip_address }}"
+        freeform_tags: "{{ oci_ipsec_integration_create_tags }}"
+      check_mode: true
+      register: oci_ipsec_cpe_create_check
+
+    - name: Assert CPE check mode predicts a change
+      ansible.builtin.assert:
+        that: oci_ipsec_cpe_create_check.changed | bool
+
+    - name: Verify CPE check mode did not create a resource
+      ansible.oci.oci_network_cpe_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_cpe_name }}"
+      register: oci_ipsec_cpe_check_probe
+
+    - name: Assert CPE is absent after check mode
+      ansible.builtin.assert:
+        that: oci_ipsec_cpe_check_probe.cpes | length == 0
+
+    - name: Create CPE
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_create
+      register: oci_ipsec_cpe
+
+    - name: Save CPE identifier
+      ansible.builtin.set_fact:
+        oci_ipsec_cpe_id: "{{ oci_ipsec_cpe.resource.id }}"
+
+    - name: Assert CPE creation changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_ipsec_cpe.changed | bool
+          - oci_ipsec_cpe_id | length > 0
+
+    - name: Verify CPE creation is idempotent
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_create
+      register: oci_ipsec_cpe_rerun
+
+    - name: Assert CPE rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_cpe_rerun.changed | bool
+
+    - name: Check CPE creation rerun
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_create
+      check_mode: true
+      register: oci_ipsec_cpe_create_check_rerun
+
+    - name: Assert CPE creation check rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_cpe_create_check_rerun.changed | bool
+
+    - name: Check CPE update
+      ansible.oci.oci_network_cpe: &oci_ipsec_cpe_update
+        state: present
+        cpe_id: "{{ oci_ipsec_cpe_id }}"
+        name: "{{ oci_ipsec_cpe_updated_name }}"
+        freeform_tags: "{{ oci_ipsec_integration_update_tags }}"
+      check_mode: true
+      register: oci_ipsec_cpe_update_check
+
+    - name: Assert CPE update check mode predicts a change
+      ansible.builtin.assert:
+        that: oci_ipsec_cpe_update_check.changed | bool
+
+    - name: Verify CPE update check mode did not change the resource
+      ansible.oci.oci_network_cpe_info:
+        cpe_id: "{{ oci_ipsec_cpe_id }}"
+      register: oci_ipsec_cpe_update_check_probe
+
+    - name: Assert CPE remains unchanged after update check mode
+      ansible.builtin.assert:
+        that:
+          - oci_ipsec_cpe_update_check_probe.cpes | length == 1
+          - oci_ipsec_cpe_update_check_probe.cpes[0].name == oci_ipsec_cpe_name
+
+    - name: Update CPE
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_update
+      register: oci_ipsec_cpe_updated
+
+    - name: Assert CPE update changed the resource
+      ansible.builtin.assert:
+        that: oci_ipsec_cpe_updated.changed | bool
+
+    - name: Verify CPE update is idempotent
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_update
+      register: oci_ipsec_cpe_update_rerun
+
+    - name: Assert CPE update rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_cpe_update_rerun.changed | bool
+
+    - name: Check CPE update rerun
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_update
+      check_mode: true
+      register: oci_ipsec_cpe_update_check_rerun
+
+    - name: Assert CPE update check rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_cpe_update_check_rerun.changed | bool
+
+    - name: Create IPSec connection in check mode
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_connection_create
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_connection_name }}"
+        cpe_id: "{{ oci_ipsec_cpe_id }}"
+        drg_id: "{{ oci_ipsec_drg_id }}"
+        static_routes: ["10.0.0.0/16"]
+        tunnel_configuration:
+          - name: "{{ oci_ipsec_tunnel_name }}"
+            routing: static
+            ike_version: v2
+            dpd_config:
+              dpd_mode: initiate_and_respond
+              dpd_timeout_in_sec: 20
+      check_mode: true
+      register: oci_ipsec_connection_create_check
+
+    - name: Assert connection check mode predicts a change
+      ansible.builtin.assert:
+        that: oci_ipsec_connection_create_check.changed | bool
+
+    - name: Verify connection check mode did not create a resource
+      ansible.oci.oci_network_ipsec_connection_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_connection_name }}"
+      register: oci_ipsec_connection_check_probe
+
+    - name: Assert connection is absent after check mode
+      ansible.builtin.assert:
+        that: oci_ipsec_connection_check_probe.ipsec_connections | length == 0
+
+    - name: Create IPSec connection
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_connection_create
+      register: oci_ipsec_connection
+
+    - name: Save connection identifier
+      ansible.builtin.set_fact:
+        oci_ipsec_connection_id: "{{ oci_ipsec_connection.resource.id }}"
+
+    - name: Assert connection creation changed the resource
+      ansible.builtin.assert:
+        that:
+          - oci_ipsec_connection.changed | bool
+          - oci_ipsec_connection_id | length > 0
+
+    - name: Read connection and tunnels
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        include_tunnels: true
+      register: oci_ipsec_connection_info
+
+    - name: Assert connection info contains a tunnel
+      ansible.builtin.assert:
+        that:
+          - oci_ipsec_connection_info.ipsec_connections | length == 1
+          - oci_ipsec_connection_info.ipsec_connections[0].tunnels | length >= 1
+
+    - name: Save tunnel identifier
+      ansible.builtin.set_fact:
+        oci_ipsec_tunnel_id: >-
+          {{ (oci_ipsec_connection_info.ipsec_connections[0].tunnels
+          | selectattr('name', 'equalto', oci_ipsec_tunnel_name) | list | first).id }}
+
+    - name: Verify default connection info omits tunnel shared secrets
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        include_tunnels: true
+      register: oci_ipsec_connection_without_secret
+
+    - name: Assert default tunnel info omits shared secrets
+      ansible.builtin.assert:
+        that:
+          - >-
+            (oci_ipsec_connection_without_secret.ipsec_connections[0].tunnels
+            | selectattr('id', 'equalto', oci_ipsec_tunnel_id) | map(attribute='shared_secret') | list | first | default(none, true)) is none
+
+    - name: Verify parent create rerun does not replace tunnel settings
+      ansible.oci.oci_network_ipsec_connection:
+        state: present
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        name: "{{ oci_ipsec_connection_name }}"
+      register: oci_ipsec_connection_rerun
+
+    - name: Assert parent create rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_connection_rerun.changed | bool
+
+    - name: Check parent create rerun
+      ansible.oci.oci_network_ipsec_connection:
+        state: present
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        name: "{{ oci_ipsec_connection_name }}"
+      check_mode: true
+      register: oci_ipsec_connection_create_check_rerun
+
+    - name: Assert parent create check rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_connection_create_check_rerun.changed | bool
+
+    - name: Check tunnel and connection update
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_connection_update
+        state: present
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        name: "{{ oci_ipsec_connection_updated_name }}"
+        freeform_tags: "{{ oci_ipsec_integration_update_tags }}"
+        tunnels:
+          - tunnel_id: "{{ oci_ipsec_tunnel_id }}"
+            name: "{{ oci_ipsec_tunnel_updated_name }}"
+            routing: static
+            phase_one_config:
+              is_custom_phase_one_config: true
+              authentication_algorithm: sha2_256
+              encryption_algorithm: aes_256_cbc
+              diffie_helman_group: group14
+              lifetime_in_seconds: 28800
+            phase_two_config:
+              is_custom_phase_two_config: true
+              authentication_algorithm: hmac_sha2_256_128
+              encryption_algorithm: aes_256_gcm
+              is_pfs_enabled: true
+              pfs_dh_group: group14
+              lifetime_in_seconds: 3600
+            dpd_config:
+              dpd_mode: respond_only
+              dpd_timeout_in_sec: 30
+            shared_secret: "ociIntegrationSecret123"
+      check_mode: true
+      register: oci_ipsec_connection_update_check
+      no_log: true
+
+    - name: Assert tunnel and connection check mode predicts a change
+      ansible.builtin.assert:
+        that: oci_ipsec_connection_update_check.changed | bool
+
+    - name: Verify tunnel and connection update check mode did not mutate OCI
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        include_tunnels: true
+      register: oci_ipsec_connection_update_check_probe
+
+    - name: Assert parent name and tunnel name remain unchanged after check mode
+      ansible.builtin.assert:
+        that:
+          - oci_ipsec_connection_update_check_probe.ipsec_connections[0].name == oci_ipsec_connection_name
+          - (oci_ipsec_connection_update_check_probe.ipsec_connections[0].tunnels | selectattr('id', 'equalto', oci_ipsec_tunnel_id) | map(attribute='name') | first) == oci_ipsec_tunnel_name
+
+    - name: Apply tunnel and connection update
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_connection_update
+      register: oci_ipsec_connection_updated
+      no_log: true
+
+    - name: Assert tunnel and connection update changed resources
+      ansible.builtin.assert:
+        that: oci_ipsec_connection_updated.changed | bool
+
+    - name: Read updated tunnel settings
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        include_tunnels: true
+      register: oci_ipsec_connection_tunnel_updated_info
+
+    - name: Assert tunnel field mappings are applied
+      ansible.builtin.assert:
+        that:
+          - >-
+            (oci_ipsec_connection_tunnel_updated_info.ipsec_connections[0].tunnels
+            | selectattr('id', 'equalto', oci_ipsec_tunnel_id) | map(attribute='name') | first)
+            == oci_ipsec_tunnel_updated_name
+          - >-
+            (oci_ipsec_connection_tunnel_updated_info.ipsec_connections[0].tunnels
+            | selectattr('id', 'equalto', oci_ipsec_tunnel_id) | map(attribute='dpd_mode') | first)
+            == 'RESPOND_ONLY'
+          - >-
+            (oci_ipsec_connection_tunnel_updated_info.ipsec_connections[0].tunnels
+            | selectattr('id', 'equalto', oci_ipsec_tunnel_id) | map(attribute='dpd_timeout_in_sec') | first)
+            == 30
+          - >-
+            (oci_ipsec_connection_tunnel_updated_info.ipsec_connections[0].tunnels
+            | selectattr('id', 'equalto', oci_ipsec_tunnel_id)
+            | map(attribute='phase_one_details.custom_authentication_algorithm') | first)
+            == 'SHA2_256'
+
+    - name: Verify tunnel and connection update is idempotent
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_connection_update
+      register: oci_ipsec_connection_update_rerun
+      no_log: true
+
+    - name: Assert tunnel and connection update rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_connection_update_rerun.changed | bool
+
+    - name: Check combined tunnel settings and secret rerun
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_connection_update
+      check_mode: true
+      register: oci_ipsec_connection_update_check_rerun
+      no_log: true
+
+    - name: Assert combined tunnel settings and secret check rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_connection_update_check_rerun.changed | bool
+      no_log: true
+
+    - name: Read connection with shared secret
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        include_shared_secret: true
+      register: oci_ipsec_connection_with_secret
+      no_log: true
+
+    - name: Assert connection info includes tunnel secret
+      ansible.builtin.assert:
+        that:
+          - oci_ipsec_connection_with_secret.ipsec_connections | length == 1
+          - >-
+            (oci_ipsec_connection_with_secret.ipsec_connections[0].tunnels
+            | selectattr('id', 'equalto', oci_ipsec_tunnel_id) | map(attribute='shared_secret') | first)
+            == 'ociIntegrationSecret123'
+      no_log: true
+
+    - name: Verify parent create rerun preserves child tunnel changes
+      ansible.oci.oci_network_ipsec_connection:
+        state: present
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        name: "{{ oci_ipsec_connection_updated_name }}"
+      register: oci_ipsec_connection_post_child_rerun
+
+    - name: Assert parent create rerun after child changes is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_connection_post_child_rerun.changed | bool
+
+    - name: Check secret-only tunnel update
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_secret_only_update
+        state: present
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        tunnels:
+          - tunnel_id: "{{ oci_ipsec_tunnel_id }}"
+            shared_secret: "ociIntegrationSecret456"
+      check_mode: true
+      register: oci_ipsec_secret_only_check
+      no_log: true
+
+    - name: Assert secret-only check predicts a change
+      ansible.builtin.assert:
+        that: oci_ipsec_secret_only_check.changed | bool
+      no_log: true
+
+    - name: Read secret after secret-only check mode
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+        include_shared_secret: true
+      register: oci_ipsec_secret_only_check_probe
+      no_log: true
+
+    - name: Assert secret-only check mode did not change the secret
+      ansible.builtin.assert:
+        that:
+          - >-
+            (oci_ipsec_secret_only_check_probe.ipsec_connections[0].tunnels
+            | selectattr('id', 'equalto', oci_ipsec_tunnel_id) | map(attribute='shared_secret') | first)
+            == 'ociIntegrationSecret123'
+      no_log: true
+
+    - name: Apply secret-only tunnel update
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_secret_only_update
+      register: oci_ipsec_secret_only_result
+      no_log: true
+
+    - name: Assert secret-only update changed the resource
+      ansible.builtin.assert:
+        that: oci_ipsec_secret_only_result.changed | bool
+      no_log: true
+
+    - name: Verify secret-only update is idempotent
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_secret_only_update
+      register: oci_ipsec_secret_only_rerun
+      no_log: true
+
+    - name: Assert secret-only rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_secret_only_rerun.changed | bool
+      no_log: true
+
+    - name: Check secret-only update rerun
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_secret_only_update
+      check_mode: true
+      register: oci_ipsec_secret_only_check_rerun
+      no_log: true
+
+    - name: Assert secret-only check rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_secret_only_check_rerun.changed | bool
+      no_log: true
+
+    - name: Check connection deletion
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_connection_delete
+        state: absent
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+      check_mode: true
+      register: oci_ipsec_connection_delete_check
+
+    - name: Assert connection delete check mode predicts a change
+      ansible.builtin.assert:
+        that: oci_ipsec_connection_delete_check.changed | bool
+
+    - name: Verify connection remains after delete check mode
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+      register: oci_ipsec_connection_delete_probe
+
+    - name: Assert connection remains after delete check mode
+      ansible.builtin.assert:
+        that: oci_ipsec_connection_delete_probe.ipsec_connections | length == 1
+
+    - name: Delete IPSec connection
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_connection_delete
+      register: oci_ipsec_connection_deleted
+
+    - name: Assert connection deletion changed the resource
+      ansible.builtin.assert:
+        that: oci_ipsec_connection_deleted.changed | bool
+
+    - name: Wait until deleted connection is absent
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+      register: oci_ipsec_connection_deleted_probe
+      until: oci_ipsec_connection_deleted_probe.ipsec_connections | length == 0
+      retries: 20
+      delay: 15
+
+    - name: Verify connection delete is idempotent
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_connection_delete
+      register: oci_ipsec_connection_delete_rerun
+
+    - name: Assert connection delete rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_connection_delete_rerun.changed | bool
+
+    - name: Check repeated connection deletion
+      ansible.oci.oci_network_ipsec_connection:
+        <<: *oci_ipsec_connection_delete
+      check_mode: true
+      register: oci_ipsec_connection_delete_check_rerun
+
+    - name: Assert repeated connection deletion is unchanged in check mode
+      ansible.builtin.assert:
+        that: not oci_ipsec_connection_delete_check_rerun.changed | bool
+
+    - name: Check CPE deletion
+      ansible.oci.oci_network_cpe: &oci_ipsec_cpe_delete
+        state: absent
+        cpe_id: "{{ oci_ipsec_cpe_id }}"
+      check_mode: true
+      register: oci_ipsec_cpe_delete_check
+
+    - name: Assert CPE delete check mode predicts a change
+      ansible.builtin.assert:
+        that: oci_ipsec_cpe_delete_check.changed | bool
+
+    - name: Verify CPE remains after delete check mode
+      ansible.oci.oci_network_cpe_info:
+        cpe_id: "{{ oci_ipsec_cpe_id }}"
+      register: oci_ipsec_cpe_delete_probe
+
+    - name: Assert CPE remains after delete check mode
+      ansible.builtin.assert:
+        that: oci_ipsec_cpe_delete_probe.cpes | length == 1
+
+    - name: Delete CPE
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_delete
+      register: oci_ipsec_cpe_deleted
+
+    - name: Assert CPE deletion changed the resource
+      ansible.builtin.assert:
+        that: oci_ipsec_cpe_deleted.changed | bool
+
+    - name: Wait until deleted CPE is absent
+      ansible.oci.oci_network_cpe_info:
+        cpe_id: "{{ oci_ipsec_cpe_id }}"
+      register: oci_ipsec_cpe_deleted_probe
+      until: oci_ipsec_cpe_deleted_probe.cpes | length == 0
+      retries: 20
+      delay: 15
+
+    - name: Verify CPE deletion is idempotent
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_delete
+      register: oci_ipsec_cpe_delete_rerun
+
+    - name: Assert CPE delete rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_ipsec_cpe_delete_rerun.changed | bool
+
+    - name: Check repeated CPE deletion
+      ansible.oci.oci_network_cpe:
+        <<: *oci_ipsec_cpe_delete
+      check_mode: true
+      register: oci_ipsec_cpe_delete_check_rerun
+
+    - name: Assert repeated CPE deletion is unchanged in check mode
+      ansible.builtin.assert:
+        that: not oci_ipsec_cpe_delete_check_rerun.changed | bool
+
+  always:
+    - name: Run IPSec cleanup
+      ansible.builtin.include_tasks: cleanup.yml
