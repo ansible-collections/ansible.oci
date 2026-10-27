@@ -13,8 +13,6 @@ description:
   - Create, update, rotate, schedule for deletion, and restore OCI Vault master encryption keys.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
-  - Key operations are served by the management endpoint of the vault that holds
-    the key. Provide either C(vault_id) or C(management_endpoint).
 version_added: "1.2.0"
 author:
   - Mike Morency (@mikemorency)
@@ -39,13 +37,16 @@ options:
   vault_id:
     description:
       - The OCID of the vault that holds the key.
-      - The module looks up the vault's management endpoint with this value.
-      - Mutually exclusive with I(management_endpoint). One of the two is required.
+      - The module looks up the vault's management endpoint with this value if
+        O(management_endpoint) is not provided.
+      - Mutually exclusive with O(management_endpoint). One of the two is required.
     type: str
   management_endpoint:
     description:
       - The management endpoint of the vault that holds the key.
-      - Mutually exclusive with I(vault_id). One of the two is required.
+      - The module looks up the vault's management endpoint with O(vault_id) if
+        this parameter is not provided.
+      - Mutually exclusive with O(vault_id). One of the two is required.
     type: str
   key_id:
     description:
