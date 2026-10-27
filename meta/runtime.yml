@@ -133,3 +133,5 @@ action_groups:
         - oci_waf_web_app_firewall_info
         - oci_notification_topic
         - oci_notification_topic_info
+        - oci_vault_key
+        - oci_vault_key_info

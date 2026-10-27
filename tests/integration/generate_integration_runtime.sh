@@ -11,6 +11,8 @@ OCI_RUNTIME_CONFIG_FILE="${RUNTIME_DIR}/config"
 OCI_RUNTIME_KEY_FILE="${RUNTIME_DIR}/oci_api_key.pem"
 OCI_CONFIG_PROFILE="${OCI_CONFIG_PROFILE:-DEFAULT}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+# Optional: an existing vault used by the Vault key integration target.
+OCI_TEST_VAULT_ID="${OCI_TEST_VAULT_ID:-}"
 
 # Fail fast when the workflow did not provide the OCI auth inputs we need.
 required_vars=(
@@ -43,6 +45,7 @@ printf '%s\n' "${OCI_USER_KEY_CONTENT}" > "${OCI_RUNTIME_KEY_FILE}"
 export OCI_RUNTIME_CONFIG_FILE
 export OCI_RUNTIME_KEY_FILE
 export OCI_CONFIG_PROFILE
+export OCI_TEST_VAULT_ID
 export OCI_CONFIG_TEMPLATE_FILE
 export INTEGRATION_CONFIG_TEMPLATE_FILE
 export INTEGRATION_CONFIG_OUTPUT_FILE
