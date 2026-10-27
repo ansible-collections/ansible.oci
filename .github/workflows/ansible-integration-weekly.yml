@@ -37,7 +37,6 @@ jobs:
           - { ansible-ref: devel, python-version: "3.13" }
     env:
       OCI_TEST_COMPARTMENT_ID: ${{ secrets.OCI_TEST_COMPARTMENT_ID }}
-      OCI_TEST_VAULT_ID: ${{ secrets.OCI_TEST_VAULT_ID }}
       OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
       OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
       OCI_REGION: ${{ vars.OCI_REGION }}
