@@ -1,0 +1,23 @@
+---
+- name: Run vault key cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Schedule leaked vault key for deletion during cleanup
+      ansible.oci.oci_vault_key:
+        state: absent
+        vault_id: "{{ oci_integration_vault_id }}"
+        key_id: "{{ oci_vault_key_id }}"
+        deletion_days: "{{ oci_vault_key_integration_deletion_days }}"
+      when: oci_vault_key_id | default('') | length > 0
+      register: oci_cleanup_vault_key
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify resource cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_vault_key is not failed
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup task above.

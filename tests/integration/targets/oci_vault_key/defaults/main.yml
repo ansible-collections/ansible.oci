@@ -1,0 +1,13 @@
+---
+oci_vault_key_integration_key_name: "oci-vault-key-integration"
+oci_vault_key_integration_renamed_key_name: "oci-vault-key-integration-renamed"
+oci_vault_key_integration_key_shape:
+  algorithm: aes
+  length: 32
+oci_vault_key_integration_deletion_days: 7
+oci_vault_key_integration_create_tags:
+  phase: create
+  role: integration
+oci_vault_key_integration_update_tags:
+  phase: update
+  role: integration
