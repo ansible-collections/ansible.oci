@@ -1,4 +1,6 @@
 ---
+# Long-lived vault shared by every run. The first run creates it; later runs find it by name and leave it unchanged.
+oci_vault_integration_vault_name: "ansible-oci-integration-vault"
 oci_vault_key_integration_key_name: "oci-vault-key-integration"
 oci_vault_key_integration_renamed_key_name: "oci-vault-key-integration-renamed"
 oci_vault_key_integration_key_shape:

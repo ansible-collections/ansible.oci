@@ -8,10 +8,12 @@
     - name: Schedule leaked vault key for deletion during cleanup
       ansible.oci.oci_vault_key:
         state: absent
-        vault_id: "{{ oci_integration_vault_id }}"
+        vault_id: "{{ oci_vault_id }}"
         key_id: "{{ oci_vault_key_id }}"
         deletion_days: "{{ oci_vault_key_integration_deletion_days }}"
-      when: oci_vault_key_id | default('') | length > 0
+      when:
+        - oci_vault_id | default('') | length > 0
+        - oci_vault_key_id | default('') | length > 0
       register: oci_cleanup_vault_key
       retries: 3
       ignore_errors: true
