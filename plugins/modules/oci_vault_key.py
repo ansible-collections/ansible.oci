@@ -246,8 +246,6 @@ resource:
       returned: always
 """
 
-from datetime import datetime, timedelta, timezone
-
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
@@ -264,6 +262,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_vault import (
     OCI_VAULT_ENDPOINT_ARGS,
     OCI_VAULT_ENDPOINT_MUTUALLY_EXCLUSIVE,
     OCI_VAULT_ENDPOINT_REQUIRED_ONE_OF,
+    OciScheduledDeletionMixin,
     OciVaultManagementMixin,
 )
 
@@ -295,14 +294,8 @@ CREATE_REQUIRED_FIELDS = [
 ]
 KEY_STATE_ENABLED = "ENABLED"
 KEY_STATE_DISABLED = "DISABLED"
-KEY_STATE_PENDING_DELETION = "PENDING_DELETION"
-KEY_STATE_SCHEDULING_DELETION = "SCHEDULING_DELETION"
-KEY_STATE_DELETING = "DELETING"
-KEY_STATE_DELETED = "DELETED"
 CREATE_WAIT_STATES = (KEY_STATE_ENABLED,)
 READY_STATES = (KEY_STATE_ENABLED, KEY_STATE_DISABLED)
-MIN_DELETION_DAYS = 7
-MAX_DELETION_DAYS = 30
 
 
 def build_create_key_details(params):
@@ -347,7 +340,7 @@ def build_create_key_details(params):
     return models.CreateKeyDetails(**details)
 
 
-class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
+class OciVaultKeyModule(OciVaultManagementMixin, OciScheduledDeletionMixin, OciResourceBase):
     """Concrete resource adapter for OCI Vault master encryption keys."""
 
     resource_id_param = "key_id"
@@ -388,26 +381,6 @@ class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
             is_mutable=False,
         ),
     )
-
-    @property
-    def dead_states(self):
-        """Return the lifecycle states that count as "no such key".
-
-        A key scheduled for deletion is not really gone: it can be restored
-        until OCI deletes it. The inherited fixed set therefore cannot serve
-        both states. For ``state=absent`` a key that is pending deletion is
-        already as deleted as OCI allows, which keeps the task idempotent and
-        makes ``delete_resource_and_wait`` wait for ``PENDING_DELETION``. For
-        ``state=present`` a pending key must still be found so its deletion can
-        be cancelled instead of a duplicate key being created.
-
-        Returns:
-            A frozenset of lifecycle state names.
-        """
-        dead_states = {KEY_STATE_DELETED, KEY_STATE_DELETING}
-        if self.module.params.get("state", "present") == "absent":
-            dead_states |= {KEY_STATE_PENDING_DELETION, KEY_STATE_SCHEDULING_DELETION}
-        return frozenset(dead_states)
 
     def get_resource_response(self, resource_id):
         """Return the raw ``get_key`` response for ``resource_id``.
@@ -471,19 +444,7 @@ class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
             )
         return oci.key_management.models.UpdateKeyDetails(**fields)
 
-    @staticmethod
-    def is_pending_deletion(resource):
-        """Return ``True`` when ``resource`` is scheduled for deletion.
-
-        Args:
-            resource: The current key.
-
-        Returns:
-            Whether the key is in ``PENDING_DELETION``.
-        """
-        return getattr(resource, "lifecycle_state", None) == KEY_STATE_PENDING_DELETION
-
-    def cancel_key_deletion(self, resource):
+    def cancel_deletion(self, resource):
         """Cancel the scheduled deletion of ``resource``.
 
         OCI restores the state the key had before deletion was scheduled, so
@@ -501,27 +462,11 @@ class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
         )
         return self.get_mutation_result(response.data, resource.id, READY_STATES)
 
-    def update_resource(self, resource):
-        """Restore a key pending deletion, then apply the shared update plan.
-
-        The inherited implementation calls ``update_key``, which OCI rejects
-        for a key that is pending deletion, so the deletion is cancelled first.
-
-        Args:
-            resource: The current key.
-
-        Returns:
-            The updated key.
-        """
-        if self.is_pending_deletion(resource):
-            resource = self.cancel_key_deletion(resource)
-        return super(OciVaultKeyModule, self).update_resource(resource)
-
     def extra_change_needed(self, resource):
         """Report whether a deletion must be cancelled or a rotation created.
 
-        Neither is an update-field difference, so the shared update planner
-        cannot see them.
+        Extends the inherited cancellation check because rotation is not an
+        update-field difference either.
 
         Args:
             resource: The current key.
@@ -529,14 +474,15 @@ class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
         Returns:
             ``True`` when the key is pending deletion or ``rotate`` is set.
         """
-        return self.is_pending_deletion(resource) or bool(self.module.params.get("rotate"))
+        return (
+            super(OciVaultKeyModule, self).extra_change_needed(resource)
+            or bool(self.module.params.get("rotate"))
+        )
 
     def apply_extra_change(self, resource):
         """Cancel a pending deletion that is still outstanding and rotate the key.
 
-        The base flow calls this after ``update_resource``, which has already
-        restored a pending key when an update was needed, so cancellation only
-        happens here when no update ran.
+        Extends the inherited cancellation with the requested rotation.
 
         Args:
             resource: The current key.
@@ -544,8 +490,7 @@ class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
         Returns:
             The key after cancellation and, when requested, rotation.
         """
-        if self.is_pending_deletion(resource):
-            resource = self.cancel_key_deletion(resource)
+        resource = super(OciVaultKeyModule, self).apply_extra_change(resource)
         if not self.module.params.get("rotate"):
             return resource
         response = self.call_with_retry(self.client.create_key_version, key_id=resource.id)
@@ -577,24 +522,6 @@ class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
             max_interval_seconds=self.module.params.get("wait_interval", 30),
         )
 
-    def validate_delete_request(self):
-        """Validate the target and ``deletion_days`` before scheduling deletion.
-
-        The inherited check knows nothing about ``deletion_days``, whose range
-        OCI enforces only after the request is sent.
-        """
-        super(OciVaultKeyModule, self).validate_delete_request()
-        deletion_days = self.module.params.get("deletion_days")
-        if deletion_days is not None and not (
-            MIN_DELETION_DAYS <= deletion_days <= MAX_DELETION_DAYS
-        ):
-            self.module.fail_json(
-                msg=(
-                    f"deletion_days must be between {MIN_DELETION_DAYS} and "
-                    f"{MAX_DELETION_DAYS}, got {deletion_days}"
-                )
-            )
-
     def delete_resource(self, resource):
         """Schedule ``resource`` for deletion and wait until it is pending.
 
@@ -604,19 +531,15 @@ class OciVaultKeyModule(OciVaultManagementMixin, OciResourceBase):
         Returns:
             The key in ``PENDING_DELETION``, or the raw response data when not waiting.
         """
-        deletion_details = {}
-        deletion_days = self.module.params.get("deletion_days")
-        if deletion_days is not None:
-            deletion_details["time_of_deletion"] = (
-                datetime.now(timezone.utc) + timedelta(days=deletion_days)
-            )
         return self.delete_resource_and_wait(
             resource,
             self.client.schedule_key_deletion,
             action_verb="schedule deletion of",
             key_id=resource.id,
             schedule_key_deletion_details=(
-                oci.key_management.models.ScheduleKeyDeletionDetails(**deletion_details)
+                oci.key_management.models.ScheduleKeyDeletionDetails(
+                    **self.build_deletion_schedule()
+                )
             ),
         )
 
