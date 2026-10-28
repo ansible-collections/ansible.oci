@@ -226,6 +226,6 @@ def test_service_errors_propagate(module_obj, operation):
     error = Exception("service failure")
     error.status = 403
     getattr(helper.client, operation).side_effect = error
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(Exception, match="^service failure$") as exc:
         helper.execute_resource_module()
     assert exc.value is error

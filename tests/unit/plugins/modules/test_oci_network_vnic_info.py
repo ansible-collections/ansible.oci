@@ -65,7 +65,7 @@ def test_info_get_and_errors(monkeypatch, check_mode, status):
         error.status = status
         instance.client.get_vnic.side_effect = error
     if status in (403, 500):
-        with pytest.raises(Exception) as exc:
+        with pytest.raises(Exception, match="^service error$") as exc:
             instance.execute_info_module()
         assert exc.value is error
     else:
