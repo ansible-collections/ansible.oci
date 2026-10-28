@@ -36,6 +36,8 @@ action_groups:
         - oci_blockstorage_volume_info
         - oci_volume_attachment
         - oci_volume_attachment_info
+        - oci_network_vnic_update
+        - oci_network_vnic_info
         - oci_vnic_attachment
         - oci_vnic_attachment_info
         - oci_network_nat_gateway
