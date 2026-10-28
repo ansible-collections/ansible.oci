@@ -49,14 +49,17 @@ def test_main_argument_spec_contract(monkeypatch):
     monkeypatch.setattr(
         module_obj,
         "AnsibleModule",
-        lambda **kwargs: captured.update(kwargs) or DummyModule({}),
+        lambda **kwargs: captured.update(kwargs)
+        or DummyModule({"lifecycle_state": "active"}),
     )
     monkeypatch.setattr(
         module_obj,
         "OciNotificationTopicInfoModule",
-        lambda module: types.SimpleNamespace(execute_info_module=lambda: None),
+        lambda module: captured.update(module=module)
+        or types.SimpleNamespace(execute_info_module=lambda: None),
     )
     module_obj.main()
+    assert captured["module"].params["lifecycle_state"] == "ACTIVE"
     assert captured["required_one_of"] == [["compartment_id", "topic_id"]]
     assert captured["supports_check_mode"] is True
     spec = captured["argument_spec"]
@@ -137,7 +140,7 @@ def test_list_scoped_by_compartment_and_lifecycle_with_exact_name(monkeypatch):
         module_obj,
         {
             "compartment_id": "compartment1",
-            "lifecycle_state": "active",
+            "lifecycle_state": "ACTIVE",
             "name": "alerts",
         },
         client,

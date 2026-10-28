@@ -33,15 +33,19 @@ def test_main_wiring(monkeypatch):
     class FakeAnsibleModule:
         def __init__(self, **kwargs):
             captured.update(kwargs)
+            self.params = {"lifecycle_state": "deleted"}
 
     monkeypatch.setattr(info_module, "AnsibleModule", FakeAnsibleModule)
     monkeypatch.setattr(
         info_module,
         "OciAlarmInfoModule",
-        lambda module: types.SimpleNamespace(execute_info_module=lambda: None),
+        lambda module: captured.update(module=module)
+        or types.SimpleNamespace(execute_info_module=lambda: None),
     )
 
     info_module.main()
+
+    assert captured["module"].params["lifecycle_state"] == "DELETED"
 
     spec = captured["argument_spec"]
     assert captured["required_one_of"] == [["compartment_id", "alarm_id"]]
@@ -132,7 +136,7 @@ def test_fetch_resources_passes_filters_and_filters_by_name(monkeypatch):
             "compartment_id": "ocid1.tenancy.oc1..example",
             "alarm_id": None,
             "name": "wanted",
-            "lifecycle_state": "deleted",
+            "lifecycle_state": "DELETED",
             "compartment_id_in_subtree": True,
         },
         client=types.SimpleNamespace(list_alarms=object()),

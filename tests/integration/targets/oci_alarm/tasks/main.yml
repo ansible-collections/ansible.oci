@@ -10,6 +10,7 @@
 - name: Compute unique resource names and initialize cleanup markers
   ansible.builtin.set_fact:
     oci_alarm_id: ""
+    oci_alarm_cleanup_name: "{{ oci_alarm_integration_alarm_name }}-{{ oci_integration_rpfx }}"
     oci_alarm_integration_alarm_name: "{{ oci_alarm_integration_alarm_name }}-{{ oci_integration_rpfx }}"
     oci_notification_topic_cleanup_id: ""
     oci_notification_topic_cleanup_name: "{{ oci_notification_topic_integration_name }}-{{ oci_integration_rpfx }}"

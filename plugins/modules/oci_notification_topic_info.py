@@ -112,10 +112,20 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
 
 oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("lifecycle_state",): {
+        "active": "ACTIVE",
+        "deleting": "DELETING",
+        "creating": "CREATING",
+    },
+}
 
 
 class OciNotificationTopicInfoModule(OciInfoBase):
@@ -137,22 +147,6 @@ class OciNotificationTopicInfoModule(OciInfoBase):
     name_response_field = "name"
     list_filter_params = ["compartment_id", "lifecycle_state"]
 
-    def collect_list_filters(self, *param_groups):
-        """Convert the lifecycle filter to the SDK enum spelling.
-
-        Args:
-            *param_groups: Parameter groups to collect.
-
-        Returns:
-            SDK list filters with an uppercase lifecycle state.
-        """
-        filters = super(OciNotificationTopicInfoModule, self).collect_list_filters(
-            *param_groups
-        )
-        if "lifecycle_state" in filters:
-            filters["lifecycle_state"] = filters["lifecycle_state"].upper()
-        return filters
-
 
 def main():
     """Build the Ansible argument spec and run the topic info module."""
@@ -163,7 +157,7 @@ def main():
         name=dict(type="str"),
         lifecycle_state=dict(
             type="str",
-            choices=["active", "deleting", "creating"],
+            choices=list(CHOICE_VALUE_MAPS[("lifecycle_state",)]),
         ),
     )
     module = AnsibleModule(
@@ -171,6 +165,7 @@ def main():
         supports_check_mode=True,
         required_one_of=[["compartment_id", "topic_id"]],
     )
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
     OciNotificationTopicInfoModule(module).execute_info_module()
 
 

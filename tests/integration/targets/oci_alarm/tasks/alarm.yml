@@ -302,6 +302,7 @@
       - not oci_alarm_delete_rerun.changed | bool
       - not oci_alarm_delete_rerun_check.changed | bool
 
-- name: Clear alarm id after successful delete
+- name: Clear alarm cleanup markers after successful delete
   ansible.builtin.set_fact:
     oci_alarm_id: ""
+    oci_alarm_cleanup_name: ""

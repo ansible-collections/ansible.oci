@@ -209,12 +209,22 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
+    normalize_choice_parameters,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import (
     OciInfoBase,
 )
 
 oci = import_oci_sdk()[0]
+
+
+CHOICE_VALUE_MAPS = {
+    ("lifecycle_state",): {
+        "active": "ACTIVE",
+        "deleting": "DELETING",
+        "deleted": "DELETED",
+    },
+}
 
 
 class OciAlarmInfoModule(OciInfoBase):
@@ -233,20 +243,6 @@ class OciAlarmInfoModule(OciInfoBase):
         "lifecycle_state",
         "compartment_id_in_subtree",
     )
-
-    def collect_list_filters(self, *param_groups):
-        """Convert the lifecycle filter to the SDK enum spelling.
-
-        Args:
-            *param_groups: Parameter groups to collect.
-
-        Returns:
-            SDK list filters with an uppercase lifecycle state.
-        """
-        filters = super(OciAlarmInfoModule, self).collect_list_filters(*param_groups)
-        if "lifecycle_state" in filters:
-            filters["lifecycle_state"] = filters["lifecycle_state"].upper()
-        return filters
 
     def fetch_resources(self):
         """Return alarm models, optionally fetching full details for listed alarms.
@@ -282,7 +278,9 @@ def main():
         compartment_id=dict(type="str"),
         alarm_id=dict(type="str"),
         name=dict(type="str"),
-        lifecycle_state=dict(type="str", choices=["active", "deleting", "deleted"]),
+        lifecycle_state=dict(
+            type="str", choices=list(CHOICE_VALUE_MAPS[("lifecycle_state",)])
+        ),
         compartment_id_in_subtree=dict(type="bool"),
         include_details=dict(type="bool", default=False),
     )
@@ -293,6 +291,7 @@ def main():
         required_one_of=[["compartment_id", "alarm_id"]],
     )
 
+    normalize_choice_parameters(module, CHOICE_VALUE_MAPS)
     OciAlarmInfoModule(module).execute_info_module()
 
 

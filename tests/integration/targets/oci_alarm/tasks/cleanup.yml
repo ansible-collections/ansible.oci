@@ -6,12 +6,24 @@
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
     # The alarm references the topic, so remove it first.
-    - name: Delete leaked alarm during cleanup
+    - name: Delete leaked alarm by id
       ansible.oci.oci_alarm:
         state: absent
         alarm_id: "{{ oci_alarm_id }}"
       when: oci_alarm_id | default('') | length > 0
-      register: oci_cleanup_alarm
+      register: oci_cleanup_alarm_by_id
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete leaked alarm by exact scoped name when no id was captured
+      ansible.oci.oci_alarm:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_alarm_cleanup_name }}"
+      when:
+        - oci_alarm_id | default('') | length == 0
+        - oci_alarm_cleanup_name | default('') | length > 0
+      register: oci_cleanup_alarm_by_name
       retries: 3
       ignore_errors: true
 
@@ -39,7 +51,8 @@
     - name: Verify resource cleanup succeeded
       ansible.builtin.assert:
         that:
-          - oci_cleanup_alarm is not failed
+          - oci_cleanup_alarm_by_id is not failed
+          - oci_cleanup_alarm_by_name is not failed
           - oci_cleanup_topic_by_id is not failed
           - oci_cleanup_topic_by_name is not failed
         fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
