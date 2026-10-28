@@ -1,0 +1,5 @@
+destructive
+time=90m
+oci_waf_web_app_firewall_info
+oci_waf_web_app_firewall_policy
+oci_waf_web_app_firewall_policy_info
