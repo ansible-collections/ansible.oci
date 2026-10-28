@@ -855,6 +855,21 @@ def test_oci_resource_base_default_update_resource_uses_class_metadata(monkeypat
     assert update_calls[0][1].display_name == "updated-name"
     assert updated_resource.id == "ocid1.example.oc1..updated"
 
+    hook_calls = []
+    hook_result = object()
+    monkeypatch.setattr(
+        resource,
+        "get_update_result",
+        lambda sdk_response, resource_id: (
+            hook_calls.append((sdk_response, resource_id)) or hook_result
+        ),
+    )
+    result = resource.update_resource(
+        types.SimpleNamespace(id="ocid1.example.oc1..123", display_name="current-name")
+    )
+    assert result is hook_result
+    assert hook_calls == [(response, "ocid1.example.oc1..123")]
+
 
 def test_incomplete_oci_resource_subclass_cannot_be_instantiated(monkeypatch):
     oci_resource = load_collection_module("oci_resource")

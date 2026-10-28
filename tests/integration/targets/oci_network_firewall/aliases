@@ -1,0 +1,5 @@
+destructive
+time=90m
+oci_network_firewall_info
+oci_network_firewall_policy
+oci_network_firewall_policy_info

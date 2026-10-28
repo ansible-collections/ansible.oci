@@ -1,0 +1,337 @@
+---
+- name: Check the test compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Initialize the test names and cleanup IDs
+  ansible.builtin.set_fact:
+    oci_firewall_test_name: oci-network-firewall-{{ oci_integration_rpfx }}
+    oci_firewall_policy_test_name: oci-network-firewall-policy-{{ oci_integration_rpfx }}
+    oci_firewall_policy_cleanup_id: ''
+
+- name: Test the policy lifecycle and firewall check mode
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+    - name: Check policy creation
+      ansible.oci.oci_network_firewall_policy:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_policy_test_name }}'
+        freeform_tags:
+          phase: create
+        description: Network firewall integration policy
+      check_mode: true
+      register: policy_create_check
+
+    - name: Read policies after the creation check
+      ansible.oci.oci_network_firewall_policy_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_policy_test_name }}'
+      register: policy_before_create
+
+    - name: Verify the creation check left the policy absent
+      ansible.builtin.assert:
+        that:
+          - policy_create_check.changed
+          - policy_before_create.network_firewall_policies | length == 0
+
+    - name: Create the policy
+      ansible.oci.oci_network_firewall_policy:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_policy_test_name }}'
+        freeform_tags:
+          phase: create
+        description: Network firewall integration policy
+      register: policy_create
+
+    - name: Save the policy ID for cleanup
+      ansible.builtin.set_fact:
+        oci_firewall_policy_cleanup_id: '{{ policy_create.resource.id }}'
+
+    - name: Verify the created policy
+      ansible.builtin.assert:
+        that:
+          - policy_create.changed
+          - policy_create.resource.id | length > 0
+          - policy_create.resource.name == oci_firewall_policy_test_name
+          - policy_create.resource.compartment_id == oci_integration_compartment_id
+          - policy_create.resource.lifecycle_state == 'ACTIVE'
+          - policy_create.resource.freeform_tags.phase == 'create'
+
+    - name: Wait for the policy to appear in the active list
+      ansible.oci.oci_network_firewall_policy_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_policy_test_name }}'
+        lifecycle_state: active
+      register: policy_list
+      until: policy_list.network_firewall_policies | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Verify the list result
+      ansible.builtin.assert:
+        that:
+          - not policy_list.changed
+          - policy_list.network_firewall_policies[0].id == oci_firewall_policy_cleanup_id
+
+    - name: Retrieve the policy by ID
+      ansible.oci.oci_network_firewall_policy_info:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+      register: policy_by_id
+
+    - name: Verify the ID result
+      ansible.builtin.assert:
+        that:
+          - not policy_by_id.changed
+          - policy_by_id.network_firewall_policies | length == 1
+          - policy_by_id.network_firewall_policies[0].id == oci_firewall_policy_cleanup_id
+
+    - name: Verify creation is unchanged
+      ansible.oci.oci_network_firewall_policy:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_policy_test_name }}'
+        freeform_tags:
+          phase: create
+        description: Network firewall integration policy
+      check_mode: false
+      register: policy_create_repeat
+      failed_when: >-
+        policy_create_repeat.changed or
+        policy_create_repeat.resource.id != oci_firewall_policy_cleanup_id
+
+    - name: Verify creation is unchanged in check mode
+      ansible.oci.oci_network_firewall_policy:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_policy_test_name }}'
+        freeform_tags:
+          phase: create
+        description: Network firewall integration policy
+      check_mode: true
+      register: policy_create_repeat
+      failed_when: >-
+        policy_create_repeat.changed or
+        policy_create_repeat.resource.id != oci_firewall_policy_cleanup_id
+
+    - name: Read the policy before update 1
+      ansible.oci.oci_network_firewall_policy_info:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+      register: policy_before_update
+
+    - name: Check policy update 1
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        name: '{{ oci_firewall_policy_test_name }}-updated'
+        description: Updated network firewall integration policy
+        freeform_tags:
+          phase: update
+      check_mode: true
+      register: policy_update_check
+
+    - name: Read the policy after the update check
+      ansible.oci.oci_network_firewall_policy_info:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+      register: policy_after_update_check
+
+    - name: Verify the update check left the policy unchanged
+      ansible.builtin.assert:
+        that:
+          - policy_update_check.changed
+          - >-
+            policy_after_update_check.network_firewall_policies ==
+            policy_before_update.network_firewall_policies
+
+    - name: Update the policy
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        name: '{{ oci_firewall_policy_test_name }}-updated'
+        description: Updated network firewall integration policy
+        freeform_tags:
+          phase: update
+      register: policy_update
+
+    - name: Verify the updated policy
+      ansible.builtin.assert:
+        that:
+          - policy_update.changed
+          - policy_update.resource.lifecycle_state == 'ACTIVE'
+          - policy_update.resource.name == oci_firewall_policy_test_name + "-updated"
+          - policy_update.resource.description == 'Updated network firewall integration policy'
+          - >-
+            policy_update.resource.freeform_tags == {'phase': 'update'}
+
+    - name: Verify update is unchanged
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        name: '{{ oci_firewall_policy_test_name }}-updated'
+        description: Updated network firewall integration policy
+        freeform_tags:
+          phase: update
+      check_mode: false
+      register: policy_update_repeat
+      failed_when: >-
+        policy_update_repeat.changed or
+        policy_update_repeat.resource.id != oci_firewall_policy_cleanup_id
+
+    - name: Verify the unchanged policy settings
+      ansible.builtin.assert:
+        that:
+          - policy_update_repeat.resource.name == oci_firewall_policy_test_name + "-updated"
+          - >-
+            policy_update_repeat.resource.description ==
+            'Updated network firewall integration policy'
+          - >-
+            policy_update_repeat.resource.freeform_tags == {'phase': 'update'}
+
+    - name: Verify update is unchanged in check mode
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        name: '{{ oci_firewall_policy_test_name }}-updated'
+        description: Updated network firewall integration policy
+        freeform_tags:
+          phase: update
+      check_mode: true
+      register: policy_update_repeat
+      failed_when: >-
+        policy_update_repeat.changed or
+        policy_update_repeat.resource.id != oci_firewall_policy_cleanup_id
+
+    - name: Verify the unchanged policy settings
+      ansible.builtin.assert:
+        that:
+          - policy_update_repeat.resource.name == oci_firewall_policy_test_name + "-updated"
+          - >-
+            policy_update_repeat.resource.description ==
+            'Updated network firewall integration policy'
+          - >-
+            policy_update_repeat.resource.freeform_tags == {'phase': 'update'}
+
+    - name: Create the test VCN
+      ansible.oci.oci_network_vcn:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_test_name }}-vcn'
+        cidr_blocks:
+          - 10.247.0.0/16
+      register: firewall_vcn
+
+    - name: Create the test subnet
+      ansible.oci.oci_network_subnet:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_test_name }}-subnet'
+        vcn_id: '{{ firewall_vcn.resource.id }}'
+        cidr_block: 10.247.1.0/24
+      register: firewall_subnet
+
+    - name: Check firewall creation
+      ansible.oci.oci_network_firewall:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_test_name }}'
+        freeform_tags:
+          phase: create
+        subnet_id: '{{ firewall_subnet.resource.id }}'
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+      check_mode: true
+      register: firewall_create_check
+
+    - name: Read firewalls after the creation check
+      ansible.oci.oci_network_firewall_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_test_name }}'
+      register: firewall_before_create
+
+    - name: Verify the creation check left the firewall absent
+      ansible.builtin.assert:
+        that:
+          - firewall_create_check.changed
+          - firewall_before_create.network_firewalls | length == 0
+
+    # OCI firewall creation can take more than 30 minutes. Keep creation in check mode.
+    - name: Read active firewalls with the test name
+      ansible.oci.oci_network_firewall_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_test_name }}'
+        lifecycle_state: active
+      register: firewall_active_list
+
+    - name: Verify the firewall list results
+      ansible.builtin.assert:
+        that:
+          - not firewall_before_create.changed
+          - not firewall_active_list.changed
+          - firewall_active_list.network_firewalls | length == 0
+
+    - name: Verify deletion of an absent firewall is unchanged in check mode
+      ansible.oci.oci_network_firewall:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_test_name }}'
+        state: absent
+      check_mode: true
+      register: firewall_delete_check
+      failed_when: firewall_delete_check.changed
+
+    - name: Verify deletion of an absent firewall is unchanged
+      ansible.oci.oci_network_firewall:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_firewall_test_name }}'
+        state: absent
+      check_mode: false
+      register: firewall_delete_repeat
+      failed_when: firewall_delete_repeat.changed
+
+    - name: Check policy deletion
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        state: absent
+      check_mode: true
+      register: policy_delete_check
+
+    - name: Read the policy after the deletion check
+      ansible.oci.oci_network_firewall_policy_info:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+      register: policy_after_delete_check
+
+    - name: Verify the deletion check left the policy present
+      ansible.builtin.assert:
+        that:
+          - policy_delete_check.changed
+          - policy_after_delete_check.network_firewall_policies | length == 1
+          - policy_after_delete_check.network_firewall_policies[0].lifecycle_state == 'ACTIVE'
+
+    - name: Delete the policy
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        state: absent
+      register: policy_delete
+      failed_when: not policy_delete.changed
+
+    - name: Wait until the policy is absent from the active list
+      ansible.oci.oci_network_firewall_policy_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        lifecycle_state: active
+      register: policy_after_delete
+      until: policy_after_delete.network_firewall_policies | selectattr('id', 'equalto', oci_firewall_policy_cleanup_id)
+        | list | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify deletion is unchanged
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        state: absent
+      check_mode: false
+      register: policy_delete_repeat
+      failed_when: policy_delete_repeat.changed
+
+    - name: Verify deletion is unchanged in check mode
+      ansible.oci.oci_network_firewall_policy:
+        network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+        state: absent
+      check_mode: true
+      register: policy_delete_repeat
+      failed_when: policy_delete_repeat.changed
+
+  always:
+    - name: Run Network Firewall cleanup
+      ansible.builtin.include_tasks: cleanup.yml
