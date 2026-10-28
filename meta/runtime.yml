@@ -28,6 +28,10 @@ action_groups:
         - oci_network_public_ip
         - oci_network_dhcp_options
         - oci_network_dhcp_options_info
+        - oci_network_cpe
+        - oci_network_cpe_info
+        - oci_network_ipsec_connection
+        - oci_network_ipsec_connection_info
         - oci_network_drg
         - oci_network_drg_info
         - oci_network_drg_attachment

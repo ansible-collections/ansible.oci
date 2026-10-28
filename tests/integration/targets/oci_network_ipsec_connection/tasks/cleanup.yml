@@ -1,0 +1,139 @@
+---
+- name: Run IPSec cleanup with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Find leaked IPSec connection by name
+      ansible.oci.oci_network_ipsec_connection_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_connection_name }}"
+      register: oci_ipsec_connection_cleanup_lookup
+      when: oci_ipsec_connection_id | default('') | length == 0
+      ignore_errors: true
+
+    - name: Save leaked IPSec connection identifier
+      ansible.builtin.set_fact:
+        oci_ipsec_connection_id: "{{ oci_ipsec_connection_cleanup_lookup.ipsec_connections[0].id }}"
+      when:
+        - oci_ipsec_connection_id | default('') | length == 0
+        - oci_ipsec_connection_cleanup_lookup.ipsec_connections | default([]) | length > 0
+
+    - name: Clean up IPSec connection
+      ansible.oci.oci_network_ipsec_connection:
+        state: absent
+        ipsc_id: "{{ oci_ipsec_connection_id | default('') }}"
+      when: oci_ipsec_connection_id | default('') | length > 0
+      register: oci_ipsec_connection_cleanup
+      retries: 3
+      delay: 10
+      until: oci_ipsec_connection_cleanup is not failed
+      ignore_errors: true
+
+    - name: Find leaked CPE by name
+      ansible.oci.oci_network_cpe_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_cpe_name }}"
+      register: oci_ipsec_cpe_cleanup_lookup
+      when: oci_ipsec_cpe_id | default('') | length == 0
+      ignore_errors: true
+
+    - name: Save leaked CPE identifier
+      ansible.builtin.set_fact:
+        oci_ipsec_cpe_id: "{{ oci_ipsec_cpe_cleanup_lookup.cpes[0].id }}"
+      when:
+        - oci_ipsec_cpe_id | default('') | length == 0
+        - oci_ipsec_cpe_cleanup_lookup.cpes | default([]) | length > 0
+
+    - name: Clean up CPE
+      ansible.oci.oci_network_cpe:
+        state: absent
+        cpe_id: "{{ oci_ipsec_cpe_id | default('') }}"
+      when: oci_ipsec_cpe_id | default('') | length > 0
+      register: oci_ipsec_cpe_cleanup
+      retries: 3
+      delay: 10
+      until: oci_ipsec_cpe_cleanup is not failed
+      ignore_errors: true
+
+    - name: Clean up DRG
+      ansible.oci.oci_network_drg:
+        state: absent
+        drg_id: "{{ oci_ipsec_drg_id | default('') }}"
+      when: oci_ipsec_drg_id | default('') | length > 0
+      register: oci_ipsec_drg_cleanup
+      retries: 3
+      delay: 10
+      until: oci_ipsec_drg_cleanup is not failed
+      ignore_errors: true
+
+    - name: Find leaked DRG by name
+      ansible.oci.oci_network_drg_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_ipsec_drg_name }}"
+      register: oci_ipsec_drg_cleanup_lookup
+      when: oci_ipsec_drg_id | default('') | length == 0
+      ignore_errors: true
+
+    - name: Save leaked DRG identifier
+      ansible.builtin.set_fact:
+        oci_ipsec_drg_id: "{{ oci_ipsec_drg_cleanup_lookup.drgs[0].id }}"
+      when:
+        - oci_ipsec_drg_id | default('') | length == 0
+        - oci_ipsec_drg_cleanup_lookup.drgs | default([]) | length > 0
+
+    - name: Clean up leaked DRG
+      ansible.oci.oci_network_drg:
+        state: absent
+        drg_id: "{{ oci_ipsec_drg_id | default('') }}"
+      when:
+        - oci_ipsec_drg_id | default('') | length > 0
+        - oci_ipsec_drg_cleanup is not defined or oci_ipsec_drg_cleanup.skipped | default(false)
+      register: oci_ipsec_drg_cleanup_fallback
+      retries: 3
+      delay: 10
+      until: oci_ipsec_drg_cleanup_fallback is not failed
+      ignore_errors: true
+
+    - name: Assert DRG cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - (oci_ipsec_drg_cleanup is not defined or oci_ipsec_drg_cleanup is not failed)
+          - (oci_ipsec_drg_cleanup_fallback is not defined or oci_ipsec_drg_cleanup_fallback is not failed)
+      when: oci_ipsec_drg_cleanup is defined or oci_ipsec_drg_cleanup_fallback is defined
+
+    - name: Verify connection cleanup by ID
+      ansible.oci.oci_network_ipsec_connection_info:
+        ipsc_id: "{{ oci_ipsec_connection_id }}"
+      register: oci_ipsec_connection_cleanup_probe
+      when: oci_ipsec_connection_id | default('') | length > 0
+      until: oci_ipsec_connection_cleanup_probe.ipsec_connections | length == 0
+      retries: 20
+      delay: 15
+
+    - name: Verify CPE cleanup by ID
+      ansible.oci.oci_network_cpe_info:
+        cpe_id: "{{ oci_ipsec_cpe_id }}"
+      register: oci_ipsec_cpe_cleanup_probe
+      when: oci_ipsec_cpe_id | default('') | length > 0
+      until: oci_ipsec_cpe_cleanup_probe.cpes | length == 0
+      retries: 20
+      delay: 15
+
+    - name: Verify DRG cleanup by ID
+      ansible.oci.oci_network_drg_info:
+        drg_id: "{{ oci_ipsec_drg_id }}"
+      register: oci_ipsec_drg_cleanup_probe
+      when: oci_ipsec_drg_id | default('') | length > 0
+      until: oci_ipsec_drg_cleanup_probe.drgs | length == 0
+      retries: 20
+      delay: 15
+
+    - name: Assert IPSec cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - (oci_ipsec_connection_cleanup is not defined or oci_ipsec_connection_cleanup is not failed)
+          - (oci_ipsec_cpe_cleanup is not defined or oci_ipsec_cpe_cleanup is not failed)
+          - (oci_ipsec_drg_cleanup is not defined or oci_ipsec_drg_cleanup is not failed)
+          - (oci_ipsec_drg_cleanup_fallback is not defined or oci_ipsec_drg_cleanup_fallback is not failed)
