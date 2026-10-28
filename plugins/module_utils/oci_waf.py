@@ -11,20 +11,6 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
 )
 
 
-def _model(models, name, values):
-    """Build one OCI WAF model after removing unspecified values.
-
-    Args:
-        models: OCI WAF model namespace.
-        name: Model class name.
-        values: Model field values.
-
-    Returns:
-        An initialized OCI model.
-    """
-    return build_model(values, getattr(models, name))
-
-
 def build_response_body(models, value):
     """Build a static HTTP response body model from module input.
 
@@ -37,10 +23,9 @@ def build_response_body(models, value):
     """
     if value is None:
         return None
-    return _model(
-        models,
-        "StaticTextHttpResponseBody",
+    return build_model(
         normalize_enum_values(value, {"type"}),
+        models.StaticTextHttpResponseBody,
     )
 
 
@@ -61,15 +46,14 @@ def build_action(models, value):
         "RETURN_HTTP_RESPONSE": "ReturnHttpResponseAction",
     }[action_type]
     if action_type != "RETURN_HTTP_RESPONSE":
-        return _model(
-            models, model_name, {"type": action_type, "name": value.get("name")}
+        return build_model(
+            {"type": action_type, "name": value.get("name")},
+            getattr(models, model_name),
         )
     headers = value.get("headers")
     if headers is not None:
-        headers = [_model(models, "ResponseHeader", item) for item in headers]
-    return _model(
-        models,
-        model_name,
+        headers = [build_model(item, models.ResponseHeader) for item in headers]
+    return build_model(
         {
             "type": action_type,
             "name": value.get("name"),
@@ -77,6 +61,7 @@ def build_action(models, value):
             "headers": headers,
             "body": build_response_body(models, value.get("body")),
         },
+        getattr(models, model_name),
     )
 
 
@@ -92,17 +77,16 @@ def build_protection_capability(models, value):
     """
     exclusions = value.get("exclusions")
     if exclusions is not None:
-        exclusions = _model(models, "ProtectionCapabilityExclusions", exclusions)
+        exclusions = build_model(exclusions, models.ProtectionCapabilityExclusions)
     weights = value.get("collaborative_weights")
     if weights is not None:
         weights = [
-            _model(models, "CollaborativeCapabilityWeightOverride", item)
+            build_model(item, models.CollaborativeCapabilityWeightOverride)
             for item in weights
         ]
-    return _model(
-        models,
-        "ProtectionCapability",
+    return build_model(
         dict(value, exclusions=exclusions, collaborative_weights=weights),
+        models.ProtectionCapability,
     )
 
 
@@ -111,10 +95,10 @@ def _build_rate_limiting_rule(models, rule):
     rule["type"] = "REQUEST_RATE_LIMITING"
     if rule.get("configurations") is not None:
         rule["configurations"] = [
-            _model(models, "RequestRateLimitingConfiguration", item)
+            build_model(item, models.RequestRateLimitingConfiguration)
             for item in rule["configurations"]
         ]
-    return _model(models, "RequestRateLimitingRule", rule)
+    return build_model(rule, models.RequestRateLimitingRule)
 
 
 def _build_protection_rule(models, rule):
@@ -127,10 +111,10 @@ def _build_protection_rule(models, rule):
         ]
     settings = rule.get("protection_capability_settings")
     if settings is not None:
-        rule["protection_capability_settings"] = _model(
-            models, "ProtectionCapabilitySettings", settings
+        rule["protection_capability_settings"] = build_model(
+            settings, models.ProtectionCapabilitySettings
         )
-    return _model(models, "ProtectionRule", rule)
+    return build_model(rule, models.ProtectionRule)
 
 
 def build_rule(models, value, rule_kind):
@@ -150,7 +134,7 @@ def build_rule(models, value, rule_kind):
     if rule_kind.endswith("protection"):
         return _build_protection_rule(models, rule)
     rule["type"] = "ACCESS_CONTROL"
-    return _model(models, "AccessControlRule", rule)
+    return build_model(rule, models.AccessControlRule)
 
 
 def build_section(models, value, section_kind):
@@ -183,7 +167,7 @@ def build_section(models, value, section_kind):
     }.get(section_kind)
     if model_name is None:
         raise ValueError("Unsupported WAF section kind: %s" % section_kind)
-    return _model(models, model_name, section)
+    return build_model(section, getattr(models, model_name))
 
 
 def build_policy_fields(models, params):
