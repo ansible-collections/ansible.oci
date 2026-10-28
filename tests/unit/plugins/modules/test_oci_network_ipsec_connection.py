@@ -363,14 +363,15 @@ def test_combined_update_waits_before_secret(monkeypatch, fail_secret, wait):
         client,
     )
     instance._wait_for_tunnel = lambda *args: events.append("wait")
+    resource = FakeModel(id="ipsc")
     if fail_secret:
         with pytest.raises(FailJsonCalled) as failure:
-            instance.apply_extra_change(FakeModel(id="ipsc"))
+            instance.apply_extra_change(resource)
         assert failure.value.payload["changed"] is True
         assert "secret update denied" in failure.value.payload["msg"]
     else:
-        instance.apply_extra_change(FakeModel(id="ipsc"))
-        assert not instance.extra_change_needed(FakeModel(id="ipsc"))
+        instance.apply_extra_change(resource)
+        assert not instance.extra_change_needed(resource)
     expected = ["settings", "wait", "secret"]
     if wait and not fail_secret:
         expected.append("wait")
@@ -397,8 +398,9 @@ def test_failed_first_tunnel_mutation_reports_unchanged(monkeypatch):
         },
         client,
     )
+    resource = FakeModel(id="ipsc")
     with pytest.raises(FailJsonCalled) as failure:
-        instance.apply_extra_change(FakeModel(id="ipsc"))
+        instance.apply_extra_change(resource)
     assert failure.value.payload["changed"] is False
 
 
