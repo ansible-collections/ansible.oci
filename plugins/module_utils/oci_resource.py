@@ -231,7 +231,7 @@ class OciResourceBase(OciModuleBase, ABC):
                 self.update_details_name: update_details,
             },
         )
-        return self.get_update_result(response, resource.id)
+        return self.get_update_result(response, resource_ocid)
 
     def get_update_result(self, response, resource_id):
         """Return the resource after an update.
