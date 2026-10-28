@@ -1,0 +1,29 @@
+# Target selection uses Python 3.12 on Linux x86-64 (Ubuntu 24.04 or later).
+# This file includes all dependencies and wheel hashes.
+# Update this file from a clean Python 3.12 environment on the same platform.
+# Download the required Ansible release and its dependencies into an empty directory:
+# python3 -m pip download --only-binary=:all: --dest /tmp/selection-wheels ansible-core==VERSION
+# Calculate the hashes:
+# python3 -m pip hash /tmp/selection-wheels/*.whl
+# Replace every version and hash below with values from the downloaded wheels.
+# Check installation with --only-binary=:all: and --require-hashes in a clean environment.
+# Run pip check and the target-selection checks before committing the update.
+
+ansible-core==2.18.19 \
+    --hash=sha256:00f53c10d97ce001f6e49857820901b3e8d2f234cb9f5fd9fdf8092c14109fa0
+cffi==2.1.1 \
+    --hash=sha256:c1453022f490d2459a11819d83ad1d586e9ff65a12ac3e705ffebd46d3685dcf
+cryptography==50.0.2 \
+    --hash=sha256:9dab55f57c74c3cad24c323bacbbd04be4705ba6eb0d92e920b1fc4837ed5079
+jinja2==3.1.6 \
+    --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
+markupsafe==3.0.4 \
+    --hash=sha256:8e124f974786f831d6043728e38296969d3579db8896fe004682f5758e613581
+packaging==26.3 \
+    --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+pycparser==3.12 \
+    --hash=sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e
+pyyaml==6.0.3 \
+    --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc
+resolvelib==1.0.1 \
+    --hash=sha256:d2da45d1a8dfee81bdd591647783e340ef3bcb104b54c383f70d422ef5cc7dbf
