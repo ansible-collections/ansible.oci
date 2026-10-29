@@ -1,0 +1,50 @@
+---
+- name: Check integration settings
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Set disposable zone names
+  ansible.builtin.set_fact:
+    oci_dns_records_global_zone_name: "oci-dns-{{ oci_integration_rpfx }}.test"
+    oci_dns_records_private_zone_name: "oci-dnsp-{{ oci_integration_rpfx }}.test"
+    oci_dns_records_view_name: "oci-dns-view-{{ oci_integration_rpfx }}"
+
+- name: Exercise DNS record modules
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create disposable global primary zone
+      oci_dns_test_zone:
+        state: present
+        scope: global
+        zone_name: "{{ oci_dns_records_global_zone_name }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        config_file_location: "{{ oci_integration_config_file_location }}"
+        config_profile_name: "{{ oci_integration_config_profile_name }}"
+      register: oci_dns_records_global_zone
+
+    - name: Create disposable private zone and view
+      oci_dns_test_zone:
+        state: present
+        scope: private
+        zone_name: "{{ oci_dns_records_private_zone_name }}"
+        view_name: "{{ oci_dns_records_view_name }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        config_file_location: "{{ oci_integration_config_file_location }}"
+        config_profile_name: "{{ oci_integration_config_profile_name }}"
+      register: oci_dns_records_private_zone
+
+    - name: Exercise each scope
+      ansible.builtin.include_tasks: scope.yml
+      loop:
+        - { name: global, zone: "{{ oci_dns_records_global_zone_name }}", scope: global, view_id: null }
+        - { name: private, zone: "{{ oci_dns_records_private_zone_name }}", scope: private, view_id: "{{ oci_dns_records_private_zone.view_id }}" }
+      loop_control:
+        loop_var: oci_dns_records_case
+
+  always:
+    - name: Run DNS fixture cleanup
+      ansible.builtin.include_tasks: cleanup.yml
