@@ -5,6 +5,30 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: Remove resolver rules that can reference the endpoint
+      ansible.oci.oci_dns_resolver:
+        resolver_id: "{{ oci_network_vcn_integration_resolver_id }}"
+        forward_rules: []
+      when:
+        - oci_network_vcn_integration_resolver_id | default('') | length > 0
+        - oci_network_vcn_integration_endpoint_cleanup_needed | default(false) | bool
+      register: oci_cleanup_resolver_rules
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete leaked resolver endpoint
+      ansible.oci.oci_dns_resolver_endpoint:
+        state: absent
+        resolver_id: "{{ oci_network_vcn_integration_resolver_id }}"
+        name: "{{ oci_network_vcn_integration_endpoint_name }}"
+      when:
+        - oci_network_vcn_integration_resolver_id | default('') | length > 0
+        - oci_network_vcn_integration_endpoint_name | default('') | length > 0
+        - oci_network_vcn_integration_endpoint_cleanup_needed | default(false) | bool
+      register: oci_cleanup_resolver_endpoint
+      retries: 3
+      ignore_errors: true
+
     - name: Delete leaked duplicate VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
@@ -35,6 +59,8 @@
     - name: Verify resource cleanup succeeded
       ansible.builtin.assert:
         that:
+          - oci_cleanup_resolver_rules is not failed
+          - oci_cleanup_resolver_endpoint is not failed
           - oci_cleanup_duplicate_vcn is not failed
           - oci_cleanup_subnet is not failed
           - oci_cleanup_vcn is not failed
