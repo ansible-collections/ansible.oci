@@ -44,8 +44,9 @@ def test_existing_zone_name_fails_before_create():
     oci = _oci()
     oci.pagination.list_call_get_all_results.return_value.data = [types.SimpleNamespace(id="existing")]
 
+    params = _params()
     with pytest.raises(RuntimeError, match="already exists"):
-        fixture._create_fixture(client, oci, _params())
+        fixture._create_fixture(client, oci, params)
 
     client.create_zone.assert_not_called()
 
@@ -62,8 +63,9 @@ def test_partial_create_error_returns_all_owned_ids():
         RuntimeError("zone activation failed"),
     ]
 
+    params = _params("private")
     with pytest.raises(fixture.FixtureCreationError) as error:
-        fixture._create_fixture(client, oci, _params("private"))
+        fixture._create_fixture(client, oci, params)
 
     assert error.value.zone_id == "zone-owned"
     assert error.value.view_id == "view-owned"

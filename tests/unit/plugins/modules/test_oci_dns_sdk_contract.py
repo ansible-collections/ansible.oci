@@ -11,7 +11,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_dns import (
     OciDnsRecordsInfo,
     OciDnsRecordsResource,
 )
-from .conftest import DummyModule, ExitJsonCalled, FailJsonCalled
+from .conftest import DummyModule, ExitJsonCalled
 
 
 def make_record(domain="www.example.com", rtype="A", rdata="192.0.2.10", ttl=300, **extra):
@@ -35,7 +35,6 @@ def make_resource(kind, params):
     helper.scope = params.get("scope", "GLOBAL").upper()
     helper.view_id = params.get("view_id")
     helper.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
-    helper.records_etag = '"etag-1"'
     return helper
 
 
@@ -77,9 +76,8 @@ def test_update_uses_sdk_details_and_record_models(kind, method, details_name, d
     }
 
     def update_side_effect(**kwargs):
-        assert set(kwargs) == set(expected_kwargs) | {details_param, "if_match"}
+        assert set(kwargs) == set(expected_kwargs) | {details_param}
         assert {key: kwargs[key] for key in expected_kwargs} == expected_kwargs
-        assert kwargs["if_match"] == '"etag-1"'
         details = kwargs[details_param]
         assert isinstance(details, details_type)
         assert all(isinstance(item, record_details_type) for item in details.items)
@@ -131,7 +129,6 @@ def test_delete_uses_sdk_operation_and_scope_params(kind, method, extra_params):
         "scope": "GLOBAL",
         "view_id": None,
         **extra_params,
-        "if_match": '"etag-1"',
     }
     getattr(helper.client, method).side_effect = lambda **kwargs: (
         pytest.fail("Unexpected delete arguments") if kwargs != expected else None
@@ -298,7 +295,7 @@ def test_check_mode_reports_unchanged_for_matching_record_fields():
         },
     )
     helper.check_mode = True
-    helper.fetch_records_for_write = lambda: [current]
+    helper.fetch_records = lambda: [current]
 
     with pytest.raises(ExitJsonCalled) as result:
         helper.execute_resource_module()
@@ -320,7 +317,7 @@ def test_update_diff_preserves_old_data_and_excludes_generated_fields(check_mode
     })
     helper.check_mode = check_mode
     helper.module._diff = True
-    helper.fetch_records_for_write = lambda: [make_record(record_hash="generated")]
+    helper.fetch_records = lambda: [make_record(record_hash="generated")]
     helper.client.update_domain_records.return_value = SimpleNamespace(
         data=oci.dns.models.RecordCollection(items=[make_record(rdata="192.0.2.20")]),
     )
@@ -345,86 +342,11 @@ def test_unchanged_diff_ignores_record_presentation_and_generated_fields():
     })
     helper.check_mode = True
     helper.module._diff = True
-    helper.fetch_records_for_write = lambda: [make_record(domain="WWW.Example.COM.", record_hash="generated")]
+    helper.fetch_records = lambda: [make_record(domain="WWW.Example.COM.", record_hash="generated")]
     with pytest.raises(ExitJsonCalled) as result:
         helper.execute_resource_module()
     assert result.value.payload["changed"] is False
     assert result.value.payload["diff"]["before"] == result.value.payload["diff"]["after"]
-
-
-def test_write_read_requires_the_same_etag_on_every_page():
-    """Capture one stable ETag from all response pages before a write."""
-    helper = make_resource("domain", {
-        "zone_name_or_id": "example.com", "domain": "www.example.com",
-        "update_items": [],
-    })
-    item = make_record()
-    responses = [
-        SimpleNamespace(
-            headers={"etag": '"etag-1"'},
-            next_page="p2",
-            has_next_page=True,
-            data=SimpleNamespace(items=[item]),
-        ),
-        SimpleNamespace(
-            headers={"etag": '"etag-1"'},
-            next_page=None,
-            has_next_page=False,
-            data=SimpleNamespace(items=[]),
-        ),
-    ]
-    calls = []
-    helper.client.get_domain_records.side_effect = lambda **kwargs: calls.append(kwargs) or responses.pop(0)
-
-    assert helper.fetch_records_for_write() == [item]
-    assert helper.records_etag == '"etag-1"'
-    assert calls[1]["page"] == "p2"
-
-
-def test_write_read_rejects_etag_change_between_pages():
-    """Do not use a mixed-page read as a replacement snapshot."""
-    helper = make_resource("domain", {
-        "zone_name_or_id": "example.com", "domain": "www.example.com",
-        "update_items": [],
-    })
-    helper.client.get_domain_records.side_effect = [
-        SimpleNamespace(
-            headers={"etag": '"etag-1"'},
-            next_page="p2",
-            has_next_page=True,
-            data=SimpleNamespace(items=[]),
-        ),
-        SimpleNamespace(
-            headers={"etag": '"etag-2"'},
-            next_page=None,
-            has_next_page=False,
-            data=SimpleNamespace(items=[]),
-        ),
-    ]
-
-    helper.fetch_records_for_write()
-
-    assert helper.records_etag is None
-    with pytest.raises(FailJsonCalled) as result:
-        helper.update_resource([])
-    assert "consistent ETag" in result.value.payload["msg"]
-
-
-def test_update_reports_precondition_conflict():
-    """Turn OCI precondition failures into a clear retry message."""
-    helper = make_resource("domain", {
-        "zone_name_or_id": "example.com", "domain": "www.example.com",
-        "update_items": [{"domain": "www.example.com", "rtype": "A",
-                          "rdata": "192.0.2.11", "ttl": 300}],
-    })
-
-    class Conflict(Exception):
-        status = 412
-
-    helper.client.update_domain_records.side_effect = Conflict()
-    with pytest.raises(FailJsonCalled) as result:
-        helper.update_resource([])
-    assert "changed after the read" in result.value.payload["msg"]
 
 
 def test_write_read_treats_only_initial_scoped_404_as_absent(monkeypatch):
@@ -443,15 +365,43 @@ def test_write_read_treats_only_initial_scoped_404_as_absent(monkeypatch):
         raise NotFound()
 
     monkeypatch.setattr(oci.pagination, "list_call_get_all_results_generator", initial_404)
-    assert helper.fetch_records_for_write() == []
-    assert helper.records_etag is None
+    assert helper.fetch_records() == []
     assert zone_calls == [True]
 
     def later_404(*args, **kwargs):
-        yield SimpleNamespace(headers={"etag": '"etag-1"'}, has_next_page=True,
+        yield SimpleNamespace(headers={}, has_next_page=True,
                               next_page="p2", data=SimpleNamespace(items=[]))
         raise NotFound()
 
     monkeypatch.setattr(oci.pagination, "list_call_get_all_results_generator", later_404)
     with pytest.raises(NotFound):
-        helper.fetch_records_for_write()
+        helper.fetch_records()
+
+
+@pytest.mark.parametrize("kind,method,extra", [
+    ("domain", "update_domain_records", {"domain": "www.example.com"}),
+    ("rrset", "update_rr_set", {"domain": "www.example.com", "rtype": "A"}),
+])
+def test_missing_collection_can_be_created(monkeypatch, kind, method, extra):
+    """Create records when the first read returns 404."""
+    params = {"zone_name_or_id": "example.com", "state": "present", "update_items": [
+        {"domain": "www.example.com", "rtype": "A", "rdata": "192.0.2.10", "ttl": 300},
+    ], **extra}
+    helper = make_resource(kind, params)
+    helper.check_mode = False
+    helper.zone = lambda: None
+
+    class NotFound(Exception):
+        status = 404
+
+    def missing_page(*args, **kwargs):
+        raise NotFound()
+
+    monkeypatch.setattr(oci.pagination, "list_call_get_all_results_generator", missing_page)
+    getattr(helper.client, method).return_value = SimpleNamespace(data=SimpleNamespace(items=[make_record()]))
+
+    with pytest.raises(ExitJsonCalled) as result:
+        helper.execute_resource_module()
+
+    assert result.value.payload["changed"] is True
+    getattr(helper.client, method).assert_called_once()
