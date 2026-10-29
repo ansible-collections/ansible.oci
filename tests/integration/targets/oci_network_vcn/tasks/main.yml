@@ -11,6 +11,7 @@
     oci_network_vcn_integration_vcn_name: "{{ oci_network_vcn_integration_vcn_name }}-{{ oci_integration_rpfx }}"
     oci_network_vcn_integration_updated_vcn_name: "{{ oci_network_vcn_integration_updated_vcn_name }}-{{ oci_integration_rpfx }}"
     oci_network_vcn_integration_subnet_name: "{{ oci_network_vcn_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_network_vcn_integration_endpoint_name: "{{ oci_network_vcn_integration_endpoint_name }}_{{ oci_integration_rpfx }}"
     oci_network_vcn_integration_vcn_dns_label: "vcn{{ oci_integration_rpfx }}"
 
 - name: Exercise VCN module lifecycle
@@ -340,6 +341,9 @@
     - name: Capture created subnet id
       ansible.builtin.set_fact:
         oci_network_vcn_integration_subnet_id: "{{ oci_network_vcn_subnet_create.resource.id }}"
+
+    - name: Exercise DNS resolver and endpoint lifecycle
+      ansible.builtin.include_tasks: dns_resolver.yml
 
     - name: Assert delete fails cleanly while dependent subnet exists
       ansible.oci.oci_network_vcn: &oci_network_vcn_delete_module_options

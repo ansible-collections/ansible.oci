@@ -1,3 +1,7 @@
 destructive
 time=90m
 oci_network_vcn_info
+oci_dns_resolver
+oci_dns_resolver_info
+oci_dns_resolver_endpoint
+oci_dns_resolver_endpoint_info
