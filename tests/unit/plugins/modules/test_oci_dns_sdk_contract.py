@@ -71,7 +71,6 @@ def test_update_uses_sdk_details_and_record_models(kind, method, details_name, d
     expected_kwargs = {
         "zone_name_or_id": "example.com",
         "scope": "GLOBAL",
-        "view_id": None,
         **extra_params,
     }
 
@@ -127,7 +126,6 @@ def test_delete_uses_sdk_operation_and_scope_params(kind, method, extra_params):
     expected = {
         "zone_name_or_id": "example.com",
         "scope": "GLOBAL",
-        "view_id": None,
         **extra_params,
     }
     getattr(helper.client, method).side_effect = lambda **kwargs: (
@@ -232,7 +230,7 @@ def test_scoped_info_passes_selectors_and_filters_to_sdk(kind, method, model, pa
 
     assert helper.fetch_resources() == [item]
     operation.assert_called_once_with(
-        zone_name_or_id="example.com", scope=None, view_id=None, **expected
+        zone_name_or_id="example.com", **expected
     )
     helper.client.get_zone.assert_not_called()
 

@@ -145,10 +145,9 @@ class _DnsRecordsBase:
         Returns:
             The OCI response for the parent zone.
         """
-        return self.call_with_retry(
-            self.client.get_zone, zone_name_or_id=resource_id,
-            scope=self.scope, view_id=self.view_id,
-        )
+        params = self._request_selectors()
+        params["zone_name_or_id"] = resource_id
+        return self.call_with_retry(self.client.get_zone, **params)
 
     def zone(self):
         """Check that the parent zone exists after a record lookup returns 404.
@@ -189,7 +188,12 @@ class _DnsRecordsBase:
 
     def _request_selectors(self):
         """Return selectors shared by DNS record operations."""
-        return {"zone_name_or_id": self.zone_name, "scope": self.scope, "view_id": self.view_id}
+        params = {"zone_name_or_id": self.zone_name}
+        if self.scope is not None:
+            params["scope"] = self.scope
+        if self.view_id is not None:
+            params["view_id"] = self.view_id
+        return params
 
     def _select_operation(self, action, params):
         """Select an SDK operation and add its required record selectors.

@@ -385,3 +385,24 @@ def test_check_mode_reports_changed_records():
         helper.execute_resource_module()
 
     assert result.value.payload["changed"] is True
+
+
+@pytest.mark.parametrize("scope,view_id,expected", [
+    ("GLOBAL", None, {"zone_name_or_id": "example.com", "scope": "GLOBAL"}),
+    ("PRIVATE", "ocid1.dnsview.oc1..example", {
+        "zone_name_or_id": "example.com", "scope": "PRIVATE", "view_id": "ocid1.dnsview.oc1..example",
+    }),
+])
+def test_zone_lookup_passes_only_set_selectors(scope, view_id, expected):
+    """Omit an unset view ID and keep the private view ID."""
+    helper = object.__new__(dns_helper.OciDnsRecordsInfo)
+    helper.zone_name = "example.com"
+    helper.scope = scope
+    helper.view_id = view_id
+    calls = []
+    helper.client = types.SimpleNamespace(get_zone=lambda **kwargs: calls.append(kwargs))
+    helper.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
+
+    helper.get_resource_response("example.com")
+
+    assert calls == [expected]
