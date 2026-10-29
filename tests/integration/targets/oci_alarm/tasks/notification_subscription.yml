@@ -1,0 +1,270 @@
+---
+- name: Check subscription creation
+  ansible.oci.oci_notification_subscription: &subscription_create
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    topic_id: "{{ topic_create.resource.topic_id }}"
+    protocol: custom_https
+    endpoint: "{{ oci_notification_subscription_integration_endpoint }}"
+    max_retry_duration: "{{ oci_notification_subscription_integration_create_max_retry_duration }}"
+    freeform_tags: "{{ oci_notification_subscription_integration_create_tags }}"
+  check_mode: true
+  register: subscription_create_check
+
+# The topic was created by this test, so any subscription on it would come
+# from the check mode run. The full endpoint is not returned, so match on the topic.
+- name: Verify subscription creation check left no subscription
+  ansible.oci.oci_notification_subscription_info:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    topic_id: "{{ topic_create.resource.topic_id }}"
+  register: subscription_create_check_info
+  failed_when: >-
+    not subscription_create_check.changed or
+    subscription_create_check_info.subscriptions | length != 0
+
+- name: Create subscription
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_create
+  register: subscription_create
+
+- name: Capture subscription id for cleanup
+  ansible.builtin.set_fact:
+    oci_notification_subscription_cleanup_id: "{{ subscription_create.resource.id }}"
+
+- name: Verify created subscription values
+  ansible.builtin.assert:
+    that:
+      - subscription_create.changed
+      - subscription_create.resource.id | length > 0
+      - subscription_create.resource.protocol == 'CUSTOM_HTTPS'
+      - subscription_create.resource.endpoint == oci_notification_subscription_integration_endpoint_host
+      - subscription_create.resource.topic_id == topic_create.resource.topic_id
+      - subscription_create.resource.compartment_id == oci_integration_compartment_id
+      - subscription_create.resource.lifecycle_state in ['PENDING', 'ACTIVE']
+      - subscription_create.resource.freeform_tags.phase == 'create'
+      - subscription_create.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
+        oci_notification_subscription_integration_create_max_retry_duration | int
+
+- name: Wait for subscription visibility in the topic subscription list
+  ansible.oci.oci_notification_subscription_info:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    topic_id: "{{ topic_create.resource.topic_id }}"
+  register: subscription_in_list
+  until: >-
+    subscription_in_list.subscriptions
+      | selectattr('id', 'equalto', subscription_create.resource.id)
+      | list | length == 1
+  retries: 12
+  delay: 5
+
+- name: Verify subscription creation is idempotent without subscription_id
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_create
+  register: subscription_create_rerun
+  failed_when: >-
+    subscription_create_rerun.changed or
+    subscription_create_rerun.resource.id != subscription_create.resource.id
+
+- name: Verify subscription creation is idempotent in check mode
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_create
+  check_mode: true
+  register: subscription_create_check_rerun
+  failed_when: >-
+    subscription_create_check_rerun.changed or
+    subscription_create_check_rerun.resource.id != subscription_create.resource.id
+
+- name: Retrieve subscription by id
+  ansible.oci.oci_notification_subscription_info:
+    subscription_id: "{{ subscription_create.resource.id }}"
+  register: subscription_by_id
+
+- name: Retrieve subscriptions by compartment and topic
+  ansible.oci.oci_notification_subscription_info:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    topic_id: "{{ topic_create.resource.topic_id }}"
+  register: subscriptions_by_topic
+
+- name: Verify info queries return the subscription
+  ansible.builtin.assert:
+    that:
+      - subscription_by_id.subscriptions | length == 1
+      - subscription_by_id.subscriptions[0].id == subscription_create.resource.id
+      - subscription_by_id.subscriptions[0].topic_id == topic_create.resource.topic_id
+      - subscription_by_id.subscriptions[0].protocol == 'CUSTOM_HTTPS'
+      - subscription_by_id.subscriptions[0].endpoint == oci_notification_subscription_integration_endpoint_host
+      - subscription_by_id.subscriptions[0].compartment_id == oci_integration_compartment_id
+      - subscription_by_id.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
+        oci_notification_subscription_integration_create_max_retry_duration | int
+      - subscriptions_by_topic.subscriptions
+        | selectattr('id', 'equalto', subscription_create.resource.id)
+        | list | length == 1
+      - (subscriptions_by_topic.subscriptions
+        | selectattr('id', 'equalto', subscription_create.resource.id)
+        | first).delivery_policy.backoff_retry_policy.max_retry_duration ==
+        oci_notification_subscription_integration_create_max_retry_duration | int
+
+- name: Check subscription update
+  ansible.oci.oci_notification_subscription: &subscription_update
+    subscription_id: "{{ subscription_create.resource.id }}"
+    max_retry_duration: "{{ oci_notification_subscription_integration_update_max_retry_duration }}"
+    freeform_tags: "{{ oci_notification_subscription_integration_update_tags }}"
+  check_mode: true
+  register: subscription_update_check
+  failed_when: not subscription_update_check.changed
+
+- name: Verify subscription update check left subscription unchanged
+  ansible.oci.oci_notification_subscription_info:
+    subscription_id: "{{ subscription_create.resource.id }}"
+  register: subscription_update_check_info
+  failed_when: >-
+    subscription_update_check_info.subscriptions | length != 1 or
+    subscription_update_check_info.subscriptions[0].freeform_tags.phase != 'create' or
+    subscription_update_check_info.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration !=
+      oci_notification_subscription_integration_create_max_retry_duration | int
+
+- name: Update subscription
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_update
+  register: subscription_update
+
+- name: Verify updated subscription values
+  ansible.builtin.assert:
+    that:
+      - subscription_update.changed
+      - subscription_update.resource.id == subscription_create.resource.id
+      - subscription_update.resource.endpoint == oci_notification_subscription_integration_endpoint_host
+      - subscription_update.resource.freeform_tags.phase == 'update'
+      - subscription_update.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
+        oci_notification_subscription_integration_update_max_retry_duration | int
+
+- name: Wait for subscription update visibility
+  ansible.oci.oci_notification_subscription_info:
+    subscription_id: "{{ subscription_create.resource.id }}"
+  register: subscription_after_update
+  until: >-
+    subscription_after_update.subscriptions | length == 1 and
+    subscription_after_update.subscriptions[0].freeform_tags.phase == 'update' and
+    subscription_after_update.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
+      oci_notification_subscription_integration_update_max_retry_duration | int
+  retries: 12
+  delay: 5
+
+- name: Verify update is idempotent in normal mode
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_update
+  register: subscription_update_rerun
+  failed_when: subscription_update_rerun.changed
+
+- name: Verify update is idempotent in check mode
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_update
+  check_mode: true
+  register: subscription_update_check_rerun
+  failed_when: subscription_update_check_rerun.changed
+
+# An update without a delivery policy must not reset the retry duration.
+- name: Update subscription tags only
+  ansible.oci.oci_notification_subscription:
+    subscription_id: "{{ subscription_create.resource.id }}"
+    freeform_tags: "{{ oci_notification_subscription_integration_tags_only_tags }}"
+  register: subscription_tags_only_update
+
+- name: Verify tags only update kept the delivery policy
+  ansible.builtin.assert:
+    that:
+      - subscription_tags_only_update.changed
+      - subscription_tags_only_update.resource.freeform_tags.phase == 'tags_only'
+      - subscription_tags_only_update.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
+        oci_notification_subscription_integration_update_max_retry_duration | int
+
+- name: Wait for tags only update visibility
+  ansible.oci.oci_notification_subscription_info:
+    subscription_id: "{{ subscription_create.resource.id }}"
+  register: subscription_after_tags_only_update
+  until: >-
+    subscription_after_tags_only_update.subscriptions | length == 1 and
+    subscription_after_tags_only_update.subscriptions[0].freeform_tags.phase == 'tags_only' and
+    subscription_after_tags_only_update.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
+      oci_notification_subscription_integration_update_max_retry_duration | int
+  retries: 12
+  delay: 5
+
+# An update without tags must not reset the tags.
+- name: Update subscription retry duration only
+  ansible.oci.oci_notification_subscription:
+    subscription_id: "{{ subscription_create.resource.id }}"
+    max_retry_duration: "{{ oci_notification_subscription_integration_create_max_retry_duration }}"
+  register: subscription_retry_only_update
+
+- name: Verify retry duration only update kept the tags
+  ansible.builtin.assert:
+    that:
+      - subscription_retry_only_update.changed
+      - subscription_retry_only_update.resource.freeform_tags.phase == 'tags_only'
+      - subscription_retry_only_update.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
+        oci_notification_subscription_integration_create_max_retry_duration | int
+
+- name: Wait for retry duration only update visibility
+  ansible.oci.oci_notification_subscription_info:
+    subscription_id: "{{ subscription_create.resource.id }}"
+  register: subscription_after_retry_only_update
+  until: >-
+    subscription_after_retry_only_update.subscriptions | length == 1 and
+    subscription_after_retry_only_update.subscriptions[0].freeform_tags.phase == 'tags_only' and
+    subscription_after_retry_only_update.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
+      oci_notification_subscription_integration_create_max_retry_duration | int
+  retries: 12
+  delay: 5
+
+- name: Check subscription deletion by lookup
+  ansible.oci.oci_notification_subscription: &subscription_delete
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    topic_id: "{{ topic_create.resource.topic_id }}"
+    protocol: custom_https
+    endpoint: "{{ oci_notification_subscription_integration_endpoint }}"
+    state: absent
+  check_mode: true
+  register: subscription_delete_check
+  failed_when: not subscription_delete_check.changed
+
+- name: Verify deletion check left subscription present
+  ansible.oci.oci_notification_subscription_info:
+    subscription_id: "{{ subscription_create.resource.id }}"
+  register: subscription_delete_check_info
+  failed_when: subscription_delete_check_info.subscriptions | length != 1
+
+- name: Delete subscription by lookup
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_delete
+  register: subscription_delete
+  failed_when: not subscription_delete.changed
+
+- name: Wait until subscription is absent from the topic subscription list
+  ansible.oci.oci_notification_subscription_info:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    topic_id: "{{ topic_create.resource.topic_id }}"
+  register: subscription_after_delete
+  until: >-
+    subscription_after_delete.subscriptions
+      | selectattr('id', 'equalto', subscription_create.resource.id)
+      | selectattr('lifecycle_state', 'ne', 'DELETED')
+      | list | length == 0
+  retries: 12
+  delay: 5
+
+- name: Verify subscription deletion is idempotent
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_delete
+  register: subscription_delete_rerun
+  failed_when: subscription_delete_rerun.changed
+
+- name: Verify subscription deletion is idempotent in check mode
+  ansible.oci.oci_notification_subscription:
+    <<: *subscription_delete
+  check_mode: true
+  register: subscription_delete_check_rerun
+  failed_when: subscription_delete_check_rerun.changed
+
+- name: Clear subscription cleanup marker after verified delete
+  ansible.builtin.set_fact:
+    oci_notification_subscription_cleanup_id: ""

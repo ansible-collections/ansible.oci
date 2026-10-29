@@ -4,19 +4,21 @@
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
     fail_msg: >-
-      OCI alarm and notification topic integration tests require oci_integration_compartment_id to be defined in
-      tests/integration/integration_config.yml.
+      OCI alarm, notification topic, and notification subscription integration tests require
+      oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
 
 - name: Compute unique resource names and initialize cleanup markers
   ansible.builtin.set_fact:
     oci_alarm_id: ""
     oci_alarm_cleanup_name: "{{ oci_alarm_integration_alarm_name }}-{{ oci_integration_rpfx }}"
     oci_alarm_integration_alarm_name: "{{ oci_alarm_integration_alarm_name }}-{{ oci_integration_rpfx }}"
+    oci_notification_subscription_cleanup_id: ""
+    oci_notification_subscription_integration_endpoint: "{{ oci_notification_subscription_integration_endpoint }}-{{ oci_integration_rpfx }}"
     oci_notification_topic_cleanup_id: ""
     oci_notification_topic_cleanup_name: "{{ oci_notification_topic_integration_name }}-{{ oci_integration_rpfx }}"
     oci_notification_topic_integration_name: "{{ oci_notification_topic_integration_name }}-{{ oci_integration_rpfx }}"
 
-- name: Exercise notification topic and alarm module lifecycles
+- name: Exercise notification topic, subscription, and alarm module lifecycles
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
@@ -24,6 +26,10 @@
   block:
     - name: Create and update the notification topic
       ansible.builtin.import_tasks: notification_topic.yml
+
+    # Subscriptions belong to a topic, so they are tested while the topic exists.
+    - name: Create, update, and delete the notification subscription
+      ansible.builtin.import_tasks: notification_subscription.yml
 
     # OCI requires every alarm to have a destination, so the alarm tests use
     # the topic created above.
@@ -38,5 +44,5 @@
       ansible.builtin.import_tasks: notification_topic_delete.yml
 
   always:
-    - name: Run alarm and notification topic cleanup
+    - name: Run alarm, notification subscription, and notification topic cleanup
       ansible.builtin.include_tasks: cleanup.yml

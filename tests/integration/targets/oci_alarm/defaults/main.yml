@@ -18,3 +18,17 @@ oci_alarm_integration_create_tags:
 oci_alarm_integration_update_tags:
   phase: update
   role: integration
+oci_notification_subscription_integration_endpoint: "https://example.com/oci-integration"
+# The scheme, hostname, and port that module results report for the endpoint.
+oci_notification_subscription_integration_endpoint_host: "https://example.com"
+oci_notification_subscription_integration_create_max_retry_duration: 3600000
+oci_notification_subscription_integration_update_max_retry_duration: 7200000
+oci_notification_subscription_integration_create_tags:
+  phase: create
+  role: integration
+oci_notification_subscription_integration_update_tags:
+  phase: update
+  role: integration
+oci_notification_subscription_integration_tags_only_tags:
+  phase: tags_only
+  role: integration
