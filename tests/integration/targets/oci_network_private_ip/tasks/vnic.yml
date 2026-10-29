@@ -1,0 +1,194 @@
+---
+- name: Create security groups for VNIC updates
+  ansible.oci.oci_network_security_group:
+    state: present
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    vcn_id: "{{ oci_network_private_ip_vcn_create.resource.id }}"
+    name: "{{ oci_network_private_ip_integration_vcn_name }}-vnic-nsg-{{ item }}"
+  loop:
+    - 1
+    - 2
+  register: oci_network_vnic_nsgs
+
+- name: Read VNIC by ID
+  ansible.oci.oci_network_vnic_info:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+  register: oci_network_vnic_info_before
+
+- name: Assert info returned VNIC
+  ansible.builtin.assert:
+    that:
+      - oci_network_vnic_info_before.vnics | length == 1
+      - oci_network_vnic_info_before.vnics[0].id == oci_network_private_ip_primary_vnic_id
+      - not oci_network_vnic_info_before.changed | bool
+      - oci_network_vnic_info_before.vnics[0].is_primary | bool
+
+- name: Define VNIC update
+  ansible.builtin.set_fact:
+    oci_network_vnic_update:
+      vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+      name: "{{ oci_network_private_ip_integration_vcn_name }}-updated"
+      hostname_label: vnicupdated
+      nsg_ids:
+        - "{{ oci_network_vnic_nsgs.results[0].resource.id }}"
+        - "{{ oci_network_vnic_nsgs.results[1].resource.id }}"
+      skip_source_dest_check: true
+      route_table_id: "{{ oci_network_private_ip_vcn_create.resource.default_route_table_id }}"
+      freeform_tags: "{{ oci_network_private_ip_integration_update_tags }}"
+
+- name: Update VNIC in check mode
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_vnic_update.vnic_id }}"
+    name: "{{ oci_network_vnic_update.name }}"
+    hostname_label: "{{ oci_network_vnic_update.hostname_label }}"
+    nsg_ids: "{{ oci_network_vnic_update.nsg_ids }}"
+    skip_source_dest_check: "{{ oci_network_vnic_update.skip_source_dest_check }}"
+    route_table_id: "{{ oci_network_vnic_update.route_table_id }}"
+    freeform_tags: "{{ oci_network_vnic_update.freeform_tags }}"
+  check_mode: true
+  register: oci_network_vnic_update_check
+
+- name: Assert check mode predicts update
+  ansible.builtin.assert:
+    that: oci_network_vnic_update_check.changed | bool
+
+- name: Verify check mode did not update VNIC
+  ansible.oci.oci_network_vnic_info:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+  register: oci_network_vnic_check_probe
+
+- name: Assert original VNIC state remains
+  ansible.builtin.assert:
+    that:
+      - oci_network_vnic_check_probe.vnics[0].name == oci_network_vnic_info_before.vnics[0].name
+      - oci_network_vnic_check_probe.vnics[0].hostname_label == oci_network_vnic_info_before.vnics[0].hostname_label
+      - oci_network_vnic_check_probe.vnics[0].nsg_ids == oci_network_vnic_info_before.vnics[0].nsg_ids
+      - oci_network_vnic_check_probe.vnics[0].skip_source_dest_check == oci_network_vnic_info_before.vnics[0].skip_source_dest_check
+      - oci_network_vnic_check_probe.vnics[0].route_table_id == oci_network_vnic_info_before.vnics[0].route_table_id
+      - oci_network_vnic_check_probe.vnics[0].freeform_tags == oci_network_vnic_info_before.vnics[0].freeform_tags
+
+- name: Update VNIC
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_vnic_update.vnic_id }}"
+    name: "{{ oci_network_vnic_update.name }}"
+    hostname_label: "{{ oci_network_vnic_update.hostname_label }}"
+    nsg_ids: "{{ oci_network_vnic_update.nsg_ids }}"
+    skip_source_dest_check: "{{ oci_network_vnic_update.skip_source_dest_check }}"
+    route_table_id: "{{ oci_network_vnic_update.route_table_id }}"
+    freeform_tags: "{{ oci_network_vnic_update.freeform_tags }}"
+  register: oci_network_vnic_update_result
+
+- name: Assert VNIC update
+  ansible.builtin.assert:
+    that:
+      - oci_network_vnic_update_result.changed | bool
+      - oci_network_vnic_update_result.resource.lifecycle_state == "AVAILABLE"
+      - oci_network_vnic_update_result.resource.name == oci_network_vnic_update.name
+      - oci_network_vnic_update_result.resource.hostname_label == oci_network_vnic_update.hostname_label
+      - oci_network_vnic_update_result.resource.nsg_ids | sort == oci_network_vnic_update.nsg_ids | sort
+      - oci_network_vnic_update_result.resource.skip_source_dest_check | bool
+      - oci_network_vnic_update_result.resource.route_table_id == oci_network_vnic_update.route_table_id
+      - oci_network_vnic_update_result.resource.freeform_tags == oci_network_vnic_update.freeform_tags
+
+- name: Reapply VNIC update
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_vnic_update.vnic_id }}"
+    name: "{{ oci_network_vnic_update.name }}"
+    hostname_label: "{{ oci_network_vnic_update.hostname_label }}"
+    nsg_ids: "{{ oci_network_vnic_update.nsg_ids }}"
+    skip_source_dest_check: "{{ oci_network_vnic_update.skip_source_dest_check }}"
+    route_table_id: "{{ oci_network_vnic_update.route_table_id }}"
+    freeform_tags: "{{ oci_network_vnic_update.freeform_tags }}"
+  register: oci_network_vnic_update_rerun
+
+- name: Assert VNIC update is idempotent
+  ansible.builtin.assert:
+    that: not oci_network_vnic_update_rerun.changed | bool
+
+- name: Reapply VNIC update in check mode
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_vnic_update.vnic_id }}"
+    name: "{{ oci_network_vnic_update.name }}"
+    hostname_label: "{{ oci_network_vnic_update.hostname_label }}"
+    nsg_ids: "{{ oci_network_vnic_update.nsg_ids }}"
+    skip_source_dest_check: "{{ oci_network_vnic_update.skip_source_dest_check }}"
+    route_table_id: "{{ oci_network_vnic_update.route_table_id }}"
+    freeform_tags: "{{ oci_network_vnic_update.freeform_tags }}"
+  check_mode: true
+  register: oci_network_vnic_update_check_rerun
+
+- name: Assert repeated update check mode is unchanged
+  ansible.builtin.assert:
+    that: not oci_network_vnic_update_check_rerun.changed | bool
+
+- name: Reapply update with reordered NSGs
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+    nsg_ids:
+      - "{{ oci_network_vnic_nsgs.results[1].resource.id }}"
+      - "{{ oci_network_vnic_nsgs.results[0].resource.id }}"
+  register: oci_network_vnic_reordered
+
+- name: Assert reordered NSGs are unchanged
+  ansible.builtin.assert:
+    that: not oci_network_vnic_reordered.changed | bool
+
+- name: Clear NSGs and source destination check in check mode
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+    nsg_ids: []
+    skip_source_dest_check: false
+  check_mode: true
+  register: oci_network_vnic_clear_check
+
+- name: Assert clear check mode predicts update
+  ansible.builtin.assert:
+    that: oci_network_vnic_clear_check.changed | bool
+
+- name: Verify clear check mode did not mutate VNIC
+  ansible.oci.oci_network_vnic_info:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+  register: oci_network_vnic_clear_check_probe
+
+- name: Assert clear check mode preserved state
+  ansible.builtin.assert:
+    that:
+      - oci_network_vnic_clear_check_probe.vnics[0].nsg_ids | sort == oci_network_vnic_update.nsg_ids | sort
+      - oci_network_vnic_clear_check_probe.vnics[0].skip_source_dest_check | bool
+
+- name: Clear NSGs and source destination check
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+    nsg_ids: []
+    skip_source_dest_check: false
+  register: oci_network_vnic_clear
+
+- name: Assert clear update result
+  ansible.builtin.assert:
+    that:
+      - oci_network_vnic_clear.changed | bool
+      - oci_network_vnic_clear.resource.nsg_ids == []
+      - not oci_network_vnic_clear.resource.skip_source_dest_check | bool
+
+- name: Reapply clear update
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+    nsg_ids: []
+    skip_source_dest_check: false
+  register: oci_network_vnic_clear_rerun
+
+- name: Assert clear update is idempotent
+  ansible.builtin.assert:
+    that: not oci_network_vnic_clear_rerun.changed | bool
+
+- name: Reapply clear update in check mode
+  ansible.oci.oci_network_vnic_update:
+    vnic_id: "{{ oci_network_private_ip_primary_vnic_id }}"
+    nsg_ids: []
+    skip_source_dest_check: false
+  check_mode: true
+  register: oci_network_vnic_clear_check_rerun
+
+- name: Assert repeated clear check mode is unchanged
+  ansible.builtin.assert:
+    that: not oci_network_vnic_clear_check_rerun.changed | bool

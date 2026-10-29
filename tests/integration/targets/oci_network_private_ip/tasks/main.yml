@@ -275,6 +275,9 @@
       ansible.builtin.set_fact:
         oci_network_private_ip_id: ""
 
+    - name: Exercise VNIC updates with the shared network resources
+      ansible.builtin.include_tasks: vnic.yml
+
   always:
     - name: Run private IP cleanup
       ansible.builtin.include_tasks: cleanup.yml

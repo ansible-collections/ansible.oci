@@ -32,6 +32,16 @@
       retries: 3
       ignore_errors: true
 
+    - name: Delete security groups used for VNIC updates
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: "{{ item.resource.id }}"
+      loop: "{{ oci_network_vnic_nsgs.results | default([]) }}"
+      when: item.resource.id | default('') | length > 0
+      register: oci_cleanup_vnic_nsgs
+      retries: 3
+      ignore_errors: true
+
     - name: Delete leaked subnet
       ansible.oci.oci_network_subnet:
         state: absent
@@ -56,6 +66,7 @@
           - oci_cleanup_secondary_private_ip is not failed
           - oci_cleanup_secondary_vnic is not failed
           - oci_cleanup_compute_instance is not failed
+          - oci_cleanup_vnic_nsgs is not failed
           - oci_cleanup_subnet is not failed
           - oci_cleanup_vcn is not failed
         fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
