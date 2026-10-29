@@ -37,8 +37,6 @@ options:
   state:
     description:
       - The desired state of the domain record set.
-      - Changes require the same OCI ETag on every page of the record collection.
-      - The module fails if the ETag is missing or the records change after the read.
     type: str
     choices:
       - present

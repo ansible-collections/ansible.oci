@@ -217,49 +217,23 @@ class _DnsRecordsBase:
 
         return fn, params
 
-    def fetch_records_for_write(self):
-        """Read all pages and save one consistent ETag for the write."""
-        fn, params = self._record_request()
-        records, etag = self._read_record_pages(fn, params)
-        self.records_etag = etag
-        return records
-
     def _list_records(self, fn, params):
-        """Read all pages and return their record models."""
-        records, unused_etag = self._read_record_pages(fn, params)
-        return records
-
-    def _read_record_pages(self, fn, params):
-        """Read pages, capture ETags, and handle only an initial scoped 404.
-
-        Args:
-            fn: The selected OCI DNS list operation.
-            params: The operation selectors and filters.
-
-        Returns:
-            The record models and one ETag shared by every page, or None.
-        """
+        """Read all pages and handle an initial scoped 404."""
         records = []
-        etags = []
         page_count = 0
 
         try:
             for response in oci.pagination.list_call_get_all_results_generator(fn, "response", **params):
                 page_count += 1
-                headers = getattr(response, "headers", None) or {}
-                etags.append(headers.get("etag") or headers.get("ETag"))
                 records.extend(getattr(response.data, "items", None) or [])
         except Exception as exc:
             if getattr(exc, "status", None) == 404 and self.scope_kind != "zone" and page_count == 0:
                 self.zone()
-                return [], None
+                return []
 
             raise
 
-        if not etags or any(not etag for etag in etags) or len(set(etags)) != 1:
-            return records, None
-
-        return records, etags[0]
+        return records
 
     @staticmethod
     def record_fields(record):
@@ -342,7 +316,7 @@ class OciDnsRecordsResource(_DnsRecordsBase, OciModuleBase):
         return desired
 
     def update_resource(self, resource):
-        """Replace the selected DNS collection with an ETag precondition.
+        """Replace the selected DNS collection.
 
         Args:
             resource: Current record models.
@@ -359,18 +333,7 @@ class OciDnsRecordsResource(_DnsRecordsBase, OciModuleBase):
             "domain": "update_domain_records_details",
             "rrset": "update_rr_set_details",
         }[self.scope_kind]
-        etag = getattr(self, "records_etag", None)
-
-        if not etag:
-            self.module.fail_json(msg="Cannot replace DNS records because the read did not return one consistent ETag")
-
-        try:
-            response = self.call_with_retry(fn, **dict(params, **{argument_name: model, "if_match": etag}))
-        except Exception as exc:
-            if getattr(exc, "status", None) == 412:
-                self.module.fail_json(msg="DNS records changed after the read; retry the operation")
-
-            raise
+        response = self.call_with_retry(fn, **dict(params, **{argument_name: model}))
 
         return getattr(response.data, "items", model.items)
 
@@ -407,18 +370,7 @@ class OciDnsRecordsResource(_DnsRecordsBase, OciModuleBase):
 
         params = self._request_selectors()
         fn, params = self._select_operation("delete", params)
-        etag = getattr(self, "records_etag", None)
-
-        if not etag:
-            self.module.fail_json(msg="Cannot delete DNS records because the read did not return one consistent ETag")
-
-        try:
-            self.call_with_retry(fn, **dict(params, if_match=etag))
-        except Exception as exc:
-            if getattr(exc, "status", None) == 412:
-                self.module.fail_json(msg="DNS records changed after the read; retry the operation")
-
-            raise
+        self.call_with_retry(fn, **params)
 
     def build_diff(self, before, after):
         """Exclude generated metadata from the before and after record lists.
@@ -448,9 +400,6 @@ class OciDnsRecordsResource(_DnsRecordsBase, OciModuleBase):
         """
         changed = bool(records)
 
-        if changed and not getattr(self, "records_etag", None):
-            self.module.fail_json(msg="Cannot delete DNS records because the read did not return one consistent ETag")
-
         result = {"changed": changed}
         if getattr(self.module, "_diff", False):
             result["diff"] = self.build_diff(records, [])
@@ -471,9 +420,6 @@ class OciDnsRecordsResource(_DnsRecordsBase, OciModuleBase):
         desired = self.effective_desired(records)
         changed = not self.records_equal(records, desired)
 
-        if changed and not getattr(self, "records_etag", None):
-            self.module.fail_json(msg="Cannot replace DNS records because the read did not return one consistent ETag")
-
         result = {"changed": changed}
         if getattr(self.module, "_diff", False):
             result["diff"] = self.build_diff(before, desired if changed else before)
@@ -485,8 +431,8 @@ class OciDnsRecordsResource(_DnsRecordsBase, OciModuleBase):
         self.module.exit_json(**result)
 
     def execute_resource_module(self):
-        """Reconcile DNS records with a page-aware read and ETag precondition."""
-        records = self.fetch_records_for_write()
+        """Reconcile DNS records with a page-aware read."""
+        records = self.fetch_records()
 
         if self.module.params.get("state", "present") == "absent":
             self.execute_absent(records)

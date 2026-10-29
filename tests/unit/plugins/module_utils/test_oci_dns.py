@@ -79,11 +79,9 @@ def test_private_scope_requires_view_for_zone_name(monkeypatch):
         lambda self, module: setattr(self, "module", module),
     )
 
+    module = DummyModule({"scope": "private", "zone_name_or_id": "example.com"})
     with pytest.raises(ModuleExit) as result:
-        dns_helper.OciDnsRecordsResource(
-            DummyModule({"scope": "private", "zone_name_or_id": "example.com"}),
-            "zone",
-        )
+        dns_helper.OciDnsRecordsResource(module, "zone")
 
     assert "view_id is required" in result.value.payload["msg"]
 
@@ -132,7 +130,6 @@ def test_record_comparison_preserves_case_sensitive_txt_data():
 def test_create_request_rejects_invalid_record_items(item, scope, expected):
     """Reject records outside the selected scope."""
     helper = object.__new__(dns_helper.OciDnsRecordsResource)
-    helper.records_etag = '"etag-1"'
     helper.scope_kind = scope
     helper.module = DummyModule({
         "update_items": [item], "domain": "example.com", "rtype": "a",
@@ -161,7 +158,6 @@ def test_record_fields_preserve_arbitrary_oci_rdata():
 def test_resource_check_mode_reports_diff_without_writing():
     """Report the desired record change in check mode without an API write."""
     helper = object.__new__(dns_helper.OciDnsRecordsResource)
-    helper.records_etag = '"etag-1"'
     helper.module = DummyModule(
         {"state": "present", "update_items": [
             {"domain": "www.example.com.", "rtype": "a", "rdata": "192.0.2.2", "ttl": 300},
@@ -169,7 +165,7 @@ def test_resource_check_mode_reports_diff_without_writing():
     )
     helper.check_mode = True
     helper.scope_kind = "domain"
-    helper.fetch_records_for_write = lambda: [record("www.example.com", "A", "192.0.2.1")]
+    helper.fetch_records = lambda: [record("www.example.com", "A", "192.0.2.1")]
     helper.validate_create_request = lambda: None
     helper.update_resource = lambda unused: pytest.fail("check mode must not write")
 
@@ -184,7 +180,6 @@ def test_resource_check_mode_reports_diff_without_writing():
 def test_resource_check_mode_is_idempotent_for_unordered_records():
     """Return unchanged when current and desired record order differs."""
     helper = object.__new__(dns_helper.OciDnsRecordsResource)
-    helper.records_etag = '"etag-1"'
     helper.module = DummyModule(
         {"state": "present", "update_items": [
             {"domain": "b.example.com", "rtype": "a", "rdata": "192.0.2.2", "ttl": 300},
@@ -193,7 +188,7 @@ def test_resource_check_mode_is_idempotent_for_unordered_records():
     )
     helper.check_mode = True
     helper.scope_kind = "zone"
-    helper.fetch_records_for_write = lambda: [
+    helper.fetch_records = lambda: [
         record("a.example.com", "A", "192.0.2.1"),
         record("b.example.com", "A", "192.0.2.2"),
     ]
@@ -291,7 +286,6 @@ def test_record_fetch_returns_empty_when_scoped_record_is_missing(monkeypatch):
 def test_update_resource_builds_sdk_record_models():
     """Build record and request models for a domain replacement call."""
     helper = object.__new__(dns_helper.OciDnsRecordsResource)
-    helper.records_etag = '"etag-1"'
     helper.scope_kind = "domain"
     helper.zone_name = "example.com"
     helper.scope = None
@@ -315,11 +309,10 @@ def test_update_resource_builds_sdk_record_models():
 def test_absent_state_check_mode_does_not_delete_records():
     """Predict an absent operation in check mode without calling delete."""
     helper = object.__new__(dns_helper.OciDnsRecordsResource)
-    helper.records_etag = '"etag-1"'
     helper.module = DummyModule({"state": "absent", "domain": "www.example.com"}, check_mode=True, diff=True)
     helper.check_mode = True
     helper.scope_kind = "domain"
-    helper.fetch_records_for_write = lambda: [record("www.example.com", "A", "192.0.2.1")]
+    helper.fetch_records = lambda: [record("www.example.com", "A", "192.0.2.1")]
     helper.delete_resource = lambda unused: pytest.fail("check mode must not delete")
 
     with pytest.raises(ModuleExit) as result:
@@ -377,19 +370,18 @@ def test_missing_record_lookup_checks_zone_and_propagates_errors(zone_status, mo
         assert result.value.status == 403
 
 
-def test_check_mode_fails_when_changed_records_have_no_etag():
-    """Report a missing ETag before check mode predicts a write."""
+def test_check_mode_reports_changed_records():
+    """Report a planned change in check mode."""
     helper = object.__new__(dns_helper.OciDnsRecordsResource)
-    helper.records_etag = None
     helper.module = DummyModule({"state": "present", "update_items": [
         {"domain": "www.example.com", "rtype": "A", "rdata": "192.0.2.2", "ttl": 300},
     ]}, check_mode=True)
     helper.check_mode = True
     helper.scope_kind = "domain"
-    helper.fetch_records_for_write = lambda: [record("www.example.com", "A", "192.0.2.1")]
+    helper.fetch_records = lambda: [record("www.example.com", "A", "192.0.2.1")]
     helper.validate_create_request = lambda: None
 
     with pytest.raises(ModuleExit) as result:
         helper.execute_resource_module()
 
-    assert "consistent ETag" in result.value.payload["msg"]
+    assert result.value.payload["changed"] is True
