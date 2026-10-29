@@ -52,7 +52,12 @@ options:
         type: str
         required: true
       rtype:
-        description: The record type.
+        description:
+          - The record type. For example, C(A), C(AAAA), or C(CNAME).
+          - The module accepts upper or lower case.
+          - Supported types depend on the zone scope.
+          - See L(public DNS record types,https://docs.oracle.com/en-us/iaas/Content/DNS/Reference/supporteddnsresource.htm).
+          - See L(private DNS record types,https://docs.oracle.com/en-us/iaas/Content/DNS/Tasks/privatedns.htm).
         type: str
         required: true
       rdata:
