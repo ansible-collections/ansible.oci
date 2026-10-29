@@ -123,6 +123,35 @@ class OciScheduledDeletionMixin:
             dead_states |= {STATE_PENDING_DELETION, STATE_SCHEDULING_DELETION}
         return frozenset(dead_states)
 
+    def delete_resource_and_wait(
+        self, resource, delete_fn, action_verb="delete", **delete_kwargs
+    ):
+        """Schedule deletion of ``resource`` and wait until it is pending.
+
+        ``SCHEDULING_DELETION`` is a dead state so a rerun during the
+        transition stays idempotent, but it is only transient. Waiting on the
+        inherited dead states would return as soon as OCI accepts the request,
+        before the resource reaches ``PENDING_DELETION``.
+
+        Args:
+            resource: The resource to schedule for deletion.
+            delete_fn: The OCI schedule-deletion operation.
+            action_verb: The verb describing the operation in errors.
+            **delete_kwargs: Arguments passed to ``delete_fn``.
+
+        Returns:
+            The resource in ``PENDING_DELETION``, or the raw response data when
+            not waiting.
+        """
+        response = self.call_delete_fn(
+            resource, delete_fn, action_verb, **delete_kwargs
+        )
+        return self.get_mutation_result(
+            response.data,
+            self.get_resource_ocid(resource),
+            tuple(self.dead_states - {STATE_SCHEDULING_DELETION}),
+        )
+
     @staticmethod
     def is_pending_deletion(resource):
         """Return ``True`` when ``resource`` is scheduled for deletion.

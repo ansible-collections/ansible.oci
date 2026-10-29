@@ -418,6 +418,7 @@ def test_absent_waits_for_pending_deletion(monkeypatch):
 
     assert waited["resource_id"] == VAULT_ID
     assert "PENDING_DELETION" in waited["target_states"]
+    assert "SCHEDULING_DELETION" not in waited["target_states"]
 
 
 @pytest.mark.parametrize("deletion_days", [0, 6, 31])
