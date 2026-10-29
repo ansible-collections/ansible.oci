@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+import importlib
 import types
 
 from .conftest import ExitJsonCalled, FakeModel, FakeResponse, install_fake_oci, load_collection_module, make_module_instance
@@ -14,6 +15,8 @@ def install_resolver_oci(monkeypatch):
             make_retrying_call=lambda fn, *args, **call_kwargs: fn(*args, **call_kwargs)
         )
     )
+    base = importlib.import_module("ansible_collections.ansible.oci.plugins.module_utils.oci_base")
+    monkeypatch.setattr(base, "oci", oci)
     return oci, error
 
 
