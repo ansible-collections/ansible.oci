@@ -520,6 +520,33 @@ def test_absent_schedules_deletion_with_deletion_days(monkeypatch):
     assert time_of_deletion.tzinfo is not None
 
 
+def test_absent_waits_for_pending_deletion(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsClient(make_key())
+    instance = make_module_instance(
+        module_obj,
+        "OciVaultKeyModule",
+        {"state": "absent", "key_id": KEY_ID, "wait": True, "rotate": False},
+        client=client,
+    )
+    instance.call_with_retry = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+    waited = {}
+
+    def fake_wait(resource_id, target_states):
+        waited.update(resource_id=resource_id, target_states=set(target_states))
+        return client.key
+
+    instance.wait_for_resource_id = fake_wait
+
+    with pytest.raises(ExitJsonCalled):
+        instance.execute_resource_module()
+
+    assert waited["resource_id"] == KEY_ID
+    assert "PENDING_DELETION" in waited["target_states"]
+    assert "SCHEDULING_DELETION" not in waited["target_states"]
+
+
 @pytest.mark.parametrize("deletion_days", [0, 6, 31])
 def test_absent_deletion_days_out_of_range_fails(monkeypatch, deletion_days):
     install_fake_oci(monkeypatch)
