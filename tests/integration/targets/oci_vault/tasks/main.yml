@@ -18,9 +18,9 @@
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
     ansible.oci.oci_vault_key:
-      vault_id: "{{ oci_vault_id }}"
+      vault_id: "{{ oci_vault_id | default(omit) }}"
     ansible.oci.oci_vault_key_info:
-      vault_id: "{{ oci_vault_id }}"
+      vault_id: "{{ oci_vault_id | default(omit) }}"
   block:
     # ---------------------------------------------------------- vault create
     # Vault deletion is only scheduled at least 7 days out, so the vault is long-lived: the first run creates it and
