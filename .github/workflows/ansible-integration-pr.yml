@@ -54,8 +54,13 @@ jobs:
         with:
           python-version: ${{ env.INTEGRATION_PYTHON_VERSION }}
 
-      - name: Install Ansible ${{ env.INTEGRATION_ANSIBLE_REF }}
-        run: python3 -m pip install "https://github.com/ansible/ansible/archive/${INTEGRATION_ANSIBLE_REF}.tar.gz" --disable-pip-version-check
+      - name: Install locked target-selection dependencies
+        run: >-
+          python3 -m pip install
+          --only-binary=:all:
+          --require-hashes
+          --disable-pip-version-check
+          -r .github/requirements/integration-target-selection.txt
 
       - name: Determine integration targets
         id: determine
