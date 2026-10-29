@@ -1,0 +1,601 @@
+---
+- name: Define record set inputs
+  ansible.builtin.set_fact:
+    oci_dns_records_domain: "www.{{ oci_dns_records_case.zone }}"
+    oci_dns_records_initial:
+      - { domain: "www.{{ oci_dns_records_case.zone }}", rtype: a, rdata: 192.0.2.10, ttl: 300 }
+      - { domain: "www.{{ oci_dns_records_case.zone }}", rtype: aaaa, rdata: 2001:db8::10, ttl: 300 }
+      - { domain: "www.{{ oci_dns_records_case.zone }}", rtype: txt, rdata: '"oci integration"', ttl: 300 }
+      - { domain: "sentinel.{{ oci_dns_records_case.zone }}", rtype: txt, rdata: '"keep this record"', ttl: 300 }
+    oci_dns_records_updated:
+      - { domain: "www.{{ oci_dns_records_case.zone }}", rtype: a, rdata: 192.0.2.11, ttl: 600 }
+      - { domain: "www.{{ oci_dns_records_case.zone }}", rtype: aaaa, rdata: 2001:db8::11, ttl: 600 }
+
+- name: Predict zone record creation
+  ansible.oci.oci_dns_zone_records: &zone_present
+    state: present
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    update_items: "{{ oci_dns_records_initial }}"
+  check_mode: true
+  register: oci_dns_zone_create_check
+
+- name: Probe zone after create check mode
+  ansible.oci.oci_dns_zone_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+  register: oci_dns_zone_create_probe
+
+- name: Verify zone create check did not add records
+  ansible.builtin.assert:
+    that:
+      - oci_dns_zone_create_probe.records | selectattr('is_protected', 'equalto', false) | list | length == 0
+
+- name: Verify zone create check predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_zone_create_check.changed | bool
+
+- name: Create zone records
+  ansible.oci.oci_dns_zone_records:
+    <<: *zone_present
+  register: oci_dns_zone_create
+
+- name: Verify zone record create result
+  ansible.builtin.assert:
+    that:
+      - oci_dns_zone_create.changed | bool
+      - oci_dns_zone_create.resource['items'] | rejectattr('is_protected', 'equalto', true) | list | length == 4
+
+- name: Verify zone record create idempotence
+  ansible.oci.oci_dns_zone_records:
+    <<: *zone_present
+  register: oci_dns_zone_create_repeat
+
+- name: Verify zone record create check idempotence
+  ansible.oci.oci_dns_zone_records:
+    <<: *zone_present
+  check_mode: true
+  register: oci_dns_zone_create_check_repeat
+
+- name: Assert zone create reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_zone_create_repeat.changed | bool
+      - not oci_dns_zone_create_check_repeat.changed | bool
+
+- name: Predict domain record deletion for create coverage
+  ansible.oci.oci_dns_domain_records: &domain_create_absent
+    state: absent
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  check_mode: true
+  register: oci_dns_domain_create_delete_check
+
+- name: Verify domain delete check retained records
+  ansible.oci.oci_dns_domain_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  register: oci_dns_domain_create_delete_probe
+
+- name: Assert domain delete check predicts change and retained records
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_create_delete_check.changed | bool
+      - oci_dns_domain_create_delete_probe.records | length == 3
+
+- name: Delete domain records before create test
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_create_absent
+  register: oci_dns_domain_create_delete
+
+- name: Predict domain record creation
+  ansible.oci.oci_dns_domain_records: &domain_create_present
+    state: present
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    update_items: "{{ oci_dns_records_initial[:3] }}"
+  check_mode: true
+  register: oci_dns_domain_create_check
+
+- name: Probe domain after create check mode
+  ansible.oci.oci_dns_domain_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  register: oci_dns_domain_create_probe
+
+- name: Assert domain create check predicts change and made no change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_create_check.changed | bool
+      - oci_dns_domain_create_probe.records | length == 0
+
+- name: Create domain records
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_create_present
+  register: oci_dns_domain_create
+
+- name: Reapply domain create
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_create_present
+  register: oci_dns_domain_create_repeat
+
+- name: Recheck domain create
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_create_present
+  check_mode: true
+  register: oci_dns_domain_create_check_repeat
+
+- name: Assert domain create reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_create.changed | bool
+      - not oci_dns_domain_create_repeat.changed | bool
+      - not oci_dns_domain_create_check_repeat.changed | bool
+
+- name: Predict domain record replacement
+  ansible.oci.oci_dns_domain_records: &domain_present
+    state: present
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    update_items: "{{ oci_dns_records_updated }}"
+  check_mode: true
+  register: oci_dns_domain_update_check
+
+- name: Probe domain after update check mode
+  ansible.oci.oci_dns_domain_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  register: oci_dns_domain_update_probe
+
+- name: Verify domain update check retained original records
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_update_probe.records | length == 3
+      - oci_dns_domain_update_probe.records | selectattr('rdata', 'equalto', '192.0.2.10') | list | length == 1
+
+- name: Verify domain update check predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_update_check.changed | bool
+
+- name: Replace domain records
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_present
+  register: oci_dns_domain_update
+
+- name: Verify domain update result
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_update.changed | bool
+      - oci_dns_domain_update.resource['items'] | length == 2
+
+- name: Verify domain update reruns are unchanged
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_present
+  register: oci_dns_domain_update_repeat
+
+- name: Verify domain update check reruns are unchanged
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_present
+  check_mode: true
+  register: oci_dns_domain_update_check_repeat
+
+- name: Assert domain update reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_domain_update_repeat.changed | bool
+      - not oci_dns_domain_update_check_repeat.changed | bool
+
+- name: Predict A RRset deletion for create coverage
+  ansible.oci.oci_dns_record_set: &rrset_create_absent
+    state: absent
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  check_mode: true
+  register: oci_dns_rrset_create_delete_check
+
+- name: Probe A RRset after delete check
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  register: oci_dns_rrset_create_delete_probe
+
+- name: Assert RRset delete check predicts change and retains record
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_create_delete_check.changed | bool
+      - oci_dns_rrset_create_delete_probe.records | length == 1
+
+- name: Delete A RRset before create test
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_create_absent
+  register: oci_dns_rrset_create_delete
+
+- name: Predict A RRset creation
+  ansible.oci.oci_dns_record_set: &rrset_create_present
+    state: present
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+    update_items:
+      - { domain: "{{ oci_dns_records_domain }}", rtype: a, rdata: 192.0.2.11, ttl: 600 }
+  check_mode: true
+  register: oci_dns_rrset_create_check
+
+- name: Probe RRset after create check mode
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  register: oci_dns_rrset_create_probe
+
+- name: Assert RRset create check predicts change and made no change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_create_check.changed | bool
+      - oci_dns_rrset_create_probe.records | length == 0
+
+- name: Create A RRset
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_create_present
+  register: oci_dns_rrset_create
+
+- name: Reapply RRset create
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_create_present
+  register: oci_dns_rrset_create_repeat
+
+- name: Recheck RRset create
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_create_present
+  check_mode: true
+  register: oci_dns_rrset_create_check_repeat
+
+- name: Assert RRset create reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_create.changed | bool
+      - not oci_dns_rrset_create_repeat.changed | bool
+      - not oci_dns_rrset_create_check_repeat.changed | bool
+
+- name: Predict RRset replacement
+  ansible.oci.oci_dns_record_set: &rrset_present
+    state: present
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+    update_items:
+      - { domain: "{{ oci_dns_records_domain }}", rtype: a, rdata: 192.0.2.12, ttl: 900 }
+  check_mode: true
+  register: oci_dns_rrset_update_check
+
+- name: Probe RRset after update check mode
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  register: oci_dns_rrset_update_probe
+
+- name: Verify RRset update check retained the old record
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_update_probe.records | length == 1
+      - oci_dns_rrset_update_probe.records[0].rdata == '192.0.2.11'
+
+- name: Verify RRset update check predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_update_check.changed | bool
+
+- name: Replace A record set
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_present
+  register: oci_dns_rrset_update
+
+- name: Verify RRset update result
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_update.changed | bool
+      - oci_dns_rrset_update.resource['items'] | length == 1
+
+- name: Verify RRset update reruns are unchanged
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_present
+  register: oci_dns_rrset_update_repeat
+
+- name: Verify RRset update check reruns are unchanged
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_present
+  check_mode: true
+  register: oci_dns_rrset_update_check_repeat
+
+- name: Assert RRset update reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_rrset_update_repeat.changed | bool
+      - not oci_dns_rrset_update_check_repeat.changed | bool
+
+- name: Read zone records
+  ansible.oci.oci_dns_zone_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+  register: oci_dns_zone_records_info
+
+- name: Read domain records
+  ansible.oci.oci_dns_domain_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  register: oci_dns_domain_records_info
+
+- name: Read RRset
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  register: oci_dns_rrset_info
+
+- name: Verify updates retained the sentinel record
+  ansible.builtin.assert:
+    that:
+      - >-
+        oci_dns_zone_records_info.records
+        | map(attribute='domain') | map('regex_replace', '\\.$', '')
+        | select('equalto', 'sentinel.' ~ oci_dns_records_case.zone)
+        | list | length == 1
+      - >-
+        oci_dns_zone_records_info.records
+        | selectattr('rdata', 'equalto', '"keep this record"')
+        | list | length == 1
+
+- name: Verify info records and requested filters
+  ansible.builtin.assert:
+    that:
+      - oci_dns_zone_records_info.records | length >= 2
+      - oci_dns_domain_records_info.records | length == 2
+      - oci_dns_rrset_info.records | length == 1
+      - oci_dns_rrset_info.records[0].rtype | upper == 'A'
+      - oci_dns_rrset_info.records[0].rdata == '192.0.2.12'
+
+- name: Filter zone records in check mode
+  ansible.oci.oci_dns_zone_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: aaaa
+    sort_by: ttl
+    sort_order: desc
+  check_mode: true
+  register: oci_dns_filtered_info
+
+- name: Verify zone record filters and check mode
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_filtered_info.changed | bool
+      - oci_dns_filtered_info.records | length == 1
+      - oci_dns_filtered_info.records[0].rtype | upper == 'AAAA'
+      - oci_dns_filtered_info.records[0].rdata == '2001:db8::11'
+
+- name: Predict RRset deletion
+  ansible.oci.oci_dns_record_set: &rrset_absent
+    state: absent
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  check_mode: true
+  register: oci_dns_rrset_delete_check
+
+- name: Probe RRset after delete check mode
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  register: oci_dns_rrset_delete_probe
+
+- name: Verify RRset delete check retained its record
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_delete_probe.records | length == 1
+
+- name: Verify RRset delete check predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_delete_check.changed | bool
+
+- name: Delete A RRset
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_absent
+  register: oci_dns_rrset_delete
+
+- name: Verify RRset is absent
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+    rtype: a
+  register: oci_dns_rrset_deleted_info
+
+- name: Assert RRset delete and info result
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_delete.changed | bool
+      - oci_dns_rrset_deleted_info.records | length == 0
+
+- name: Repeat RRset deletion
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_absent
+  register: oci_dns_rrset_delete_repeat
+
+- name: Recheck RRset deletion
+  ansible.oci.oci_dns_record_set:
+    <<: *rrset_absent
+  check_mode: true
+  register: oci_dns_rrset_delete_check_repeat
+
+- name: Assert RRset deletion reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_rrset_delete_repeat.changed | bool
+      - not oci_dns_rrset_delete_check_repeat.changed | bool
+
+- name: Predict domain deletion
+  ansible.oci.oci_dns_domain_records: &domain_absent
+    state: absent
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  check_mode: true
+  register: oci_dns_domain_delete_check
+
+- name: Probe domain after delete check mode
+  ansible.oci.oci_dns_domain_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  register: oci_dns_domain_delete_probe
+
+- name: Verify domain delete check retained records
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_delete_probe.records | length == 1
+
+- name: Verify domain delete check predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_delete_check.changed | bool
+
+- name: Delete domain records
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_absent
+  register: oci_dns_domain_delete
+
+- name: Verify domain records are absent
+  ansible.oci.oci_dns_domain_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    domain: "{{ oci_dns_records_domain }}"
+  register: oci_dns_domain_deleted_info
+
+- name: Assert domain delete and info result
+  ansible.builtin.assert:
+    that:
+      - oci_dns_domain_delete.changed | bool
+      - oci_dns_domain_deleted_info.records | length == 0
+
+- name: Repeat domain deletion
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_absent
+  register: oci_dns_domain_delete_repeat
+
+- name: Recheck domain deletion
+  ansible.oci.oci_dns_domain_records:
+    <<: *domain_absent
+  check_mode: true
+  register: oci_dns_domain_delete_check_repeat
+
+- name: Assert domain deletion reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_domain_delete_repeat.changed | bool
+      - not oci_dns_domain_delete_check_repeat.changed | bool
+
+- name: Predict clearing mutable zone records
+  ansible.oci.oci_dns_zone_records: &zone_absent
+    state: present
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+    update_items: []
+  check_mode: true
+  register: oci_dns_zone_delete_check
+
+- name: Probe zone after clear check mode
+  ansible.oci.oci_dns_zone_records_info:
+    zone_name_or_id: "{{ oci_dns_records_case.zone }}"
+    scope: "{{ oci_dns_records_case.scope }}"
+    view_id: "{{ oci_dns_records_case.view_id | default(omit, true) }}"
+  register: oci_dns_zone_clear_probe
+
+- name: Verify zone clear check retained the sentinel
+  ansible.builtin.assert:
+    that:
+      - >-
+        oci_dns_zone_clear_probe.records
+        | map(attribute='domain') | map('regex_replace', '\\.$', '')
+        | select('equalto', 'sentinel.' ~ oci_dns_records_case.zone)
+        | list | length == 1
+
+- name: Verify zone removal check predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_zone_delete_check.changed | bool
+
+- name: Remove mutable zone records
+  ansible.oci.oci_dns_zone_records:
+    <<: *zone_absent
+  register: oci_dns_zone_delete
+
+- name: Verify zone record removal
+  ansible.builtin.assert:
+    that:
+      - oci_dns_zone_delete.changed | bool
+      - oci_dns_zone_delete.resource['items'] | rejectattr('is_protected', 'equalto', true) | list | length == 0
+
+- name: Repeat zone record removal
+  ansible.oci.oci_dns_zone_records:
+    <<: *zone_absent
+  register: oci_dns_zone_delete_repeat
+
+- name: Recheck zone record removal
+  ansible.oci.oci_dns_zone_records:
+    <<: *zone_absent
+  check_mode: true
+  register: oci_dns_zone_delete_check_repeat
+
+- name: Assert zone record removal reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_zone_delete_repeat.changed | bool
+      - not oci_dns_zone_delete_check_repeat.changed | bool
