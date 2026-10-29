@@ -26,7 +26,12 @@ options:
     type: str
     required: true
   rtype:
-    description: The record type.
+    description:
+      - The record type. For example, C(A), C(AAAA), or C(CNAME).
+      - The module accepts upper or lower case.
+      - Supported types depend on the zone scope.
+      - See L(public DNS record types,https://docs.oracle.com/en-us/iaas/Content/DNS/Reference/supporteddnsresource.htm).
+      - See L(private DNS record types,https://docs.oracle.com/en-us/iaas/Content/DNS/Tasks/privatedns.htm).
     type: str
     required: true
   scope:
@@ -49,7 +54,6 @@ options:
   update_items:
     description:
       - The complete list of records to keep when C(state=present).
-      - If OCI returns 404 for the missing collection, the module cannot create it safely.
       - To update a record, include its new values and all other records to keep.
       - To delete a mutable record, omit it and include all other records to keep.
       - Protected records that are omitted remain unchanged.
@@ -62,7 +66,12 @@ options:
         type: str
         required: true
       rtype:
-        description: The record type.
+        description:
+          - The record type. For example, C(A), C(AAAA), or C(CNAME).
+          - The module accepts upper or lower case.
+          - Supported types depend on the zone scope.
+          - See L(public DNS record types,https://docs.oracle.com/en-us/iaas/Content/DNS/Reference/supporteddnsresource.htm).
+          - See L(private DNS record types,https://docs.oracle.com/en-us/iaas/Content/DNS/Tasks/privatedns.htm).
         type: str
         required: true
       rdata:
