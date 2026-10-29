@@ -1,0 +1,39 @@
+---
+- name: Clean up the global DNS fixture
+  oci_dns_test_zone:
+    state: absent
+    scope: global
+    zone_name: "{{ oci_dns_records_global_zone_name }}"
+    zone_id: "{{ oci_dns_records_global_zone.zone_id | default(omit) }}"
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    config_file_location: "{{ oci_integration_config_file_location }}"
+    config_profile_name: "{{ oci_integration_config_profile_name }}"
+  register: oci_dns_records_global_cleanup
+  retries: 3
+  ignore_errors: true
+  when: oci_dns_records_global_zone is defined
+
+- name: Clean up the private DNS fixture and view
+  oci_dns_test_zone:
+    state: absent
+    scope: private
+    zone_name: "{{ oci_dns_records_private_zone_name }}"
+    view_name: "{{ oci_dns_records_view_name }}"
+    zone_id: "{{ oci_dns_records_private_zone.zone_id | default(omit) }}"
+    view_id: "{{ oci_dns_records_private_zone.view_id | default(omit) }}"
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    config_file_location: "{{ oci_integration_config_file_location }}"
+    config_profile_name: "{{ oci_integration_config_profile_name }}"
+  register: oci_dns_records_private_cleanup
+  retries: 3
+  ignore_errors: true
+  when: oci_dns_records_private_zone is defined
+
+- name: Verify DNS fixture cleanup
+  ansible.builtin.assert:
+    that:
+      - oci_dns_records_global_cleanup is not failed
+      - oci_dns_records_private_cleanup is not failed
+    fail_msg: >-
+      A DNS fixture cleanup action failed after 3 retries.
+      See the failed cleanup tasks above.

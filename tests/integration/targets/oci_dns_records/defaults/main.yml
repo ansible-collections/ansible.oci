@@ -1,0 +1,3 @@
+oci_dns_records_global_zone_name: "oci-dns-records-{{ oci_integration_rpfx }}.test"
+oci_dns_records_private_zone_name: "oci-dns-private-{{ oci_integration_rpfx }}.test"
+oci_dns_records_view_name: "oci-dns-view-{{ oci_integration_rpfx }}"
