@@ -111,6 +111,7 @@ class OciResourceBase(OciModuleBase, ABC):
 
     client_class = None
     resource_id_param = None
+    resource_id_field = "id"
     list_resource_method = None
     common_list_filter_params = ("compartment_id",)
     list_filter_params = ()
@@ -222,14 +223,15 @@ class OciResourceBase(OciModuleBase, ABC):
             return resource
 
         update_details = self.build_update_details(update_plan["update_model_fields"])
+        resource_ocid = self.get_resource_ocid(resource)
         response = self.call_with_retry(
             getattr(self.client, self.update_method_name),
             **{
-                self.resource_id_param: resource.id,
+                self.resource_id_param: resource_ocid,
                 self.update_details_name: update_details,
             },
         )
-        return self.get_update_result(response, resource.id)
+        return self.get_update_result(response, resource_ocid)
 
     def get_update_result(self, response, resource_id):
         """Return the resource after an update.
@@ -473,6 +475,18 @@ class OciResourceBase(OciModuleBase, ABC):
         subclasses may extend or override it with resource-specific checks.
         """
         self._require_create_fields()
+
+    def get_resource_ocid(self, resource):
+        """Return the OCID of an OCI resource model.
+
+        Args:
+            resource: The OCI SDK resource model.
+
+        Returns:
+            The value of the ``resource_id_field`` attribute, which is ``id``
+            for most OCI resources.
+        """
+        return getattr(resource, self.resource_id_field)
 
     @property
     def resource_id(self):
@@ -765,7 +779,8 @@ class OciResourceBase(OciModuleBase, ABC):
             if getattr(exc, "status", None) == 409:
                 self.module.fail_json(
                     msg=(
-                        f"Cannot {action_verb} {self.create_resource_name} {resource.id} while "
+                        f"Cannot {action_verb} {self.create_resource_name} "
+                        f"{self.get_resource_ocid(resource)} while "
                         f"dependent resources exist: {exc}"
                     )
                 )
@@ -786,7 +801,7 @@ class OciResourceBase(OciModuleBase, ABC):
 
         return self.get_mutation_result(
             response.data,
-            resource.id,
+            self.get_resource_ocid(resource),
             tuple(self.dead_states),
         )
 

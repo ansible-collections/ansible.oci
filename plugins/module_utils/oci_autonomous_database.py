@@ -67,5 +67,5 @@ class OciADBBase(OciResourceBase):
         return self.delete_resource_and_wait(
             resource,
             self.client.delete_autonomous_database,
-            autonomous_database_id=resource.id,
+            autonomous_database_id=self.get_resource_ocid(resource),
         )

@@ -379,10 +379,11 @@ class OciIdentityDomainResourceBase(OciIdentityDomainsMixin, OciResourceBase):
         operations = self.get_update_plan(resource)["operations"]
         if not operations:
             return resource
+        resource_id_kwarg = self.resource_id_kwarg or self.resource_id_param
         return self.call_with_retry(
             getattr(self.client, self.patch_method_name),
             **{
-                self.resource_id_kwarg or self.resource_id_param: resource.id,
+                resource_id_kwarg: self.get_resource_ocid(resource),
                 "patch_op": build_patch_op(operations),
                 **self.get_scim_response_kwargs(),
             },
