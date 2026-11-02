@@ -22,6 +22,9 @@ notes:
   - A new subscription stays in the C(PENDING) state until its endpoint confirms it.
     With C(wait=true), the module returns once the subscription is C(PENDING) or C(ACTIVE),
     so it does not wait for the endpoint to confirm.
+  - OCI only allows updates to a subscription after its endpoint confirms it. The module fails when
+    a C(PENDING) subscription needs an update. When a new subscription is C(PENDING), C(max_retry_duration)
+    is not applied and the module returns a warning.
   - When C(subscription_id) is omitted, the subscription is found by C(compartment_id),
     C(topic_id), C(protocol), and C(endpoint).
   - Module results only include the scheme, hostname, and port of the subscription endpoint because
@@ -78,6 +81,8 @@ options:
     description:
       - The maximum time, in milliseconds, that OCI retries a failed delivery using exponential backoff.
       - Omit this option to keep the current delivery policy.
+      - OCI cannot set this value when creating a subscription, so the module applies it with a follow-up
+        update. That update only succeeds after the endpoint confirms the subscription.
     type: int
 """
 
@@ -393,11 +398,36 @@ class OciNotificationSubscriptionModule(OciResourceBase):
             WAIT_FOR_SUBSCRIPTION_STATES,
         )
 
+    def needs_update(self, resource):
+        """Detect drift and fail when the subscription cannot be updated yet.
+
+        OCI rejects updates to a subscription until its endpoint confirms it,
+        so drift on an unconfirmed subscription fails here, before any check
+        mode result or update call.
+
+        Args:
+            resource: The current subscription model.
+
+        Returns:
+            True when the subscription needs an update.
+        """
+        update_needed = super(OciNotificationSubscriptionModule, self).needs_update(resource)
+        if update_needed and resource.lifecycle_state != "ACTIVE":
+            self.module.fail_json(
+                msg=(
+                    f"Subscription {resource.id} is {resource.lifecycle_state}. OCI only allows "
+                    "updates to a subscription after its endpoint confirms it."
+                )
+            )
+        return update_needed
+
     def finalize_created_resource(self, resource):
         """Apply the retry duration to a newly created subscription.
 
         The create call has no delivery policy, so max_retry_duration can only
-        be applied with a follow-up update.
+        be applied with a follow-up update. OCI rejects that update until the
+        endpoint confirms the subscription, so it is skipped with a warning
+        while the subscription is not active.
 
         Args:
             resource: The newly created subscription model.
@@ -405,6 +435,13 @@ class OciNotificationSubscriptionModule(OciResourceBase):
         Returns:
             The subscription model after any follow-up update.
         """
+        if resource.lifecycle_state != "ACTIVE":
+            if self.module.params.get("max_retry_duration") is not None:
+                self.module.warn(
+                    f"Subscription {resource.id} is {resource.lifecycle_state}, so max_retry_duration "
+                    "was not applied. Run the module again after the endpoint confirms the subscription."
+                )
+            return resource
         if self.needs_update(resource):
             return self.update_resource(resource)
         return resource

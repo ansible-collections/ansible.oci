@@ -5,7 +5,6 @@
     topic_id: "{{ topic_create.resource.topic_id }}"
     protocol: custom_https
     endpoint: "{{ oci_notification_subscription_integration_endpoint }}"
-    max_retry_duration: "{{ oci_notification_subscription_integration_create_max_retry_duration }}"
     freeform_tags: "{{ oci_notification_subscription_integration_create_tags }}"
   check_mode: true
   register: subscription_create_check
@@ -39,10 +38,8 @@
       - subscription_create.resource.endpoint == oci_notification_subscription_integration_endpoint_host
       - subscription_create.resource.topic_id == topic_create.resource.topic_id
       - subscription_create.resource.compartment_id == oci_integration_compartment_id
-      - subscription_create.resource.lifecycle_state in ['PENDING', 'ACTIVE']
+      - subscription_create.resource.lifecycle_state == 'PENDING'
       - subscription_create.resource.freeform_tags.phase == 'create'
-      - subscription_create.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
-        oci_notification_subscription_integration_create_max_retry_duration | int
 
 - name: Wait for subscription visibility in the topic subscription list
   ansible.oci.oci_notification_subscription_info:
@@ -93,128 +90,38 @@
       - subscription_by_id.subscriptions[0].protocol == 'CUSTOM_HTTPS'
       - subscription_by_id.subscriptions[0].endpoint == oci_notification_subscription_integration_endpoint_host
       - subscription_by_id.subscriptions[0].compartment_id == oci_integration_compartment_id
-      - subscription_by_id.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
-        oci_notification_subscription_integration_create_max_retry_duration | int
       - subscriptions_by_topic.subscriptions
         | selectattr('id', 'equalto', subscription_create.resource.id)
         | list | length == 1
-      - (subscriptions_by_topic.subscriptions
-        | selectattr('id', 'equalto', subscription_create.resource.id)
-        | first).delivery_policy.backoff_retry_policy.max_retry_duration ==
-        oci_notification_subscription_integration_create_max_retry_duration | int
 
-- name: Check subscription update
+# The integration endpoint never confirms the subscription, so it stays
+# PENDING and OCI rejects updates to it. The module must fail cleanly.
+- name: Check subscription update while pending
   ansible.oci.oci_notification_subscription: &subscription_update
     subscription_id: "{{ subscription_create.resource.id }}"
-    max_retry_duration: "{{ oci_notification_subscription_integration_update_max_retry_duration }}"
+    max_retry_duration: "{{ oci_notification_subscription_integration_max_retry_duration }}"
     freeform_tags: "{{ oci_notification_subscription_integration_update_tags }}"
   check_mode: true
   register: subscription_update_check
-  failed_when: not subscription_update_check.changed
-
-- name: Verify subscription update check left subscription unchanged
-  ansible.oci.oci_notification_subscription_info:
-    subscription_id: "{{ subscription_create.resource.id }}"
-  register: subscription_update_check_info
   failed_when: >-
-    subscription_update_check_info.subscriptions | length != 1 or
-    subscription_update_check_info.subscriptions[0].freeform_tags.phase != 'create' or
-    subscription_update_check_info.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration !=
-      oci_notification_subscription_integration_create_max_retry_duration | int
+    subscription_update_check is not failed or
+    'PENDING' not in subscription_update_check.msg
 
-- name: Update subscription
+- name: Update subscription while pending
   ansible.oci.oci_notification_subscription:
     <<: *subscription_update
   register: subscription_update
+  failed_when: >-
+    subscription_update is not failed or
+    'PENDING' not in subscription_update.msg
 
-- name: Verify updated subscription values
-  ansible.builtin.assert:
-    that:
-      - subscription_update.changed
-      - subscription_update.resource.id == subscription_create.resource.id
-      - subscription_update.resource.endpoint == oci_notification_subscription_integration_endpoint_host
-      - subscription_update.resource.freeform_tags.phase == 'update'
-      - subscription_update.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
-        oci_notification_subscription_integration_update_max_retry_duration | int
-
-- name: Wait for subscription update visibility
+- name: Verify failed update left subscription unchanged
   ansible.oci.oci_notification_subscription_info:
     subscription_id: "{{ subscription_create.resource.id }}"
-  register: subscription_after_update
-  until: >-
-    subscription_after_update.subscriptions | length == 1 and
-    subscription_after_update.subscriptions[0].freeform_tags.phase == 'update' and
-    subscription_after_update.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
-      oci_notification_subscription_integration_update_max_retry_duration | int
-  retries: 12
-  delay: 5
-
-- name: Verify update is idempotent in normal mode
-  ansible.oci.oci_notification_subscription:
-    <<: *subscription_update
-  register: subscription_update_rerun
-  failed_when: subscription_update_rerun.changed
-
-- name: Verify update is idempotent in check mode
-  ansible.oci.oci_notification_subscription:
-    <<: *subscription_update
-  check_mode: true
-  register: subscription_update_check_rerun
-  failed_when: subscription_update_check_rerun.changed
-
-# An update without a delivery policy must not reset the retry duration.
-- name: Update subscription tags only
-  ansible.oci.oci_notification_subscription:
-    subscription_id: "{{ subscription_create.resource.id }}"
-    freeform_tags: "{{ oci_notification_subscription_integration_tags_only_tags }}"
-  register: subscription_tags_only_update
-
-- name: Verify tags only update kept the delivery policy
-  ansible.builtin.assert:
-    that:
-      - subscription_tags_only_update.changed
-      - subscription_tags_only_update.resource.freeform_tags.phase == 'tags_only'
-      - subscription_tags_only_update.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
-        oci_notification_subscription_integration_update_max_retry_duration | int
-
-- name: Wait for tags only update visibility
-  ansible.oci.oci_notification_subscription_info:
-    subscription_id: "{{ subscription_create.resource.id }}"
-  register: subscription_after_tags_only_update
-  until: >-
-    subscription_after_tags_only_update.subscriptions | length == 1 and
-    subscription_after_tags_only_update.subscriptions[0].freeform_tags.phase == 'tags_only' and
-    subscription_after_tags_only_update.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
-      oci_notification_subscription_integration_update_max_retry_duration | int
-  retries: 12
-  delay: 5
-
-# An update without tags must not reset the tags.
-- name: Update subscription retry duration only
-  ansible.oci.oci_notification_subscription:
-    subscription_id: "{{ subscription_create.resource.id }}"
-    max_retry_duration: "{{ oci_notification_subscription_integration_create_max_retry_duration }}"
-  register: subscription_retry_only_update
-
-- name: Verify retry duration only update kept the tags
-  ansible.builtin.assert:
-    that:
-      - subscription_retry_only_update.changed
-      - subscription_retry_only_update.resource.freeform_tags.phase == 'tags_only'
-      - subscription_retry_only_update.resource.delivery_policy.backoff_retry_policy.max_retry_duration ==
-        oci_notification_subscription_integration_create_max_retry_duration | int
-
-- name: Wait for retry duration only update visibility
-  ansible.oci.oci_notification_subscription_info:
-    subscription_id: "{{ subscription_create.resource.id }}"
-  register: subscription_after_retry_only_update
-  until: >-
-    subscription_after_retry_only_update.subscriptions | length == 1 and
-    subscription_after_retry_only_update.subscriptions[0].freeform_tags.phase == 'tags_only' and
-    subscription_after_retry_only_update.subscriptions[0].delivery_policy.backoff_retry_policy.max_retry_duration ==
-      oci_notification_subscription_integration_create_max_retry_duration | int
-  retries: 12
-  delay: 5
+  register: subscription_update_info
+  failed_when: >-
+    subscription_update_info.subscriptions | length != 1 or
+    subscription_update_info.subscriptions[0].freeform_tags.phase != 'create'
 
 - name: Check subscription deletion by lookup
   ansible.oci.oci_notification_subscription: &subscription_delete
