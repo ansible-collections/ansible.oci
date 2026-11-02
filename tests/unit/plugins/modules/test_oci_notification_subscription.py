@@ -292,6 +292,68 @@ def test_finalize_created_resource_without_max_retry_duration_does_not_update(mo
     assert instance.finalize_created_resource(created) is created
 
 
+def test_finalize_created_pending_resource_warns_instead_of_updating(monkeypatch):
+    """Skip the follow-up update with a warning while the subscription is pending."""
+    module_obj = load_subscription_module(monkeypatch)
+    instance = make_subscription(
+        module_obj,
+        {
+            "compartment_id": "c1",
+            "topic_id": "t1",
+            "protocol": "EMAIL",
+            "endpoint": "ops@example.com",
+            "max_retry_duration": 3600000,
+        },
+        types.SimpleNamespace(update_subscription=raising(AssertionError("unexpected update"))),
+    )
+    created = make_current(lifecycle_state="PENDING", deliver_policy=None)
+    assert instance.finalize_created_resource(created) is created
+    assert len(instance.module.warnings) == 1
+    assert "max_retry_duration" in instance.module.warnings[0]
+
+
+def test_finalize_created_pending_resource_without_max_retry_duration_does_not_warn(monkeypatch):
+    """Return a pending subscription without a warning when no retry duration is requested."""
+    module_obj = load_subscription_module(monkeypatch)
+    instance = make_subscription(
+        module_obj,
+        {"compartment_id": "c1", "topic_id": "t1", "protocol": "EMAIL", "endpoint": "ops@example.com"},
+    )
+    created = make_current(lifecycle_state="PENDING")
+    assert instance.finalize_created_resource(created) is created
+    assert instance.module.warnings == []
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_pending_subscription_update_fails(monkeypatch, check_mode):
+    """Fail with a clear message when a pending subscription needs an update."""
+    module_obj = load_subscription_module(monkeypatch)
+    instance = make_subscription(
+        module_obj,
+        {"subscription_id": "s1", "max_retry_duration": 3600000},
+        types.SimpleNamespace(update_subscription=raising(AssertionError("unexpected update"))),
+        check_mode=check_mode,
+    )
+    monkeypatch.setattr(instance, "resolve_target_resource", lambda: make_current(lifecycle_state="PENDING"))
+    with pytest.raises(FailJsonCalled) as failure:
+        instance.execute_resource_module()
+    assert "PENDING" in failure.value.payload["msg"]
+
+
+def test_pending_subscription_without_drift_is_unchanged(monkeypatch):
+    """Leave a matching pending subscription unchanged."""
+    module_obj = load_subscription_module(monkeypatch)
+    instance = make_subscription(
+        module_obj,
+        {"subscription_id": "s1", "max_retry_duration": 7200000},
+        types.SimpleNamespace(update_subscription=raising(AssertionError("unexpected update"))),
+    )
+    monkeypatch.setattr(instance, "resolve_target_resource", lambda: make_current(lifecycle_state="PENDING"))
+    with pytest.raises(ExitJsonCalled) as result:
+        instance.execute_resource_module()
+    assert result.value.payload["changed"] is False
+
+
 def test_create_in_check_mode_does_not_call_api(monkeypatch):
     """Report a change for a new subscription without calling create."""
     module_obj = load_subscription_module(monkeypatch)

@@ -26,6 +26,10 @@ class DummyModule:
     def __init__(self, params=None, check_mode=False):
         self.params = params or {}
         self.check_mode = check_mode
+        self.warnings = []
+
+    def warn(self, warning):
+        self.warnings.append(warning)
 
     def fail_json(self, **kwargs):
         raise FailJsonCalled(kwargs)
