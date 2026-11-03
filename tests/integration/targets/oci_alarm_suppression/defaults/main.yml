@@ -1,0 +1,7 @@
+---
+oci_alarm_suppression_integration_topic_name: "oci-alarm-suppression-integration-topic"
+oci_alarm_suppression_integration_alarm_name: "oci-alarm-suppression-integration-alarm"
+oci_alarm_suppression_integration_name: "oci-alarm-suppression-integration"
+oci_alarm_suppression_integration_description: "OCI alarm suppression integration test"
+oci_alarm_suppression_integration_recurrence: "FREQ=DAILY;BYHOUR=2"
+oci_alarm_suppression_integration_duration: "PT1H"

@@ -1,0 +1,5 @@
+destructive
+time=30m
+oci_alarm_suppression_info
+oci_alarm
+oci_notification_topic
