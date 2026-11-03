@@ -91,6 +91,8 @@ action_groups:
         - oci_bastion_info
         - oci_alarm
         - oci_alarm_info
+        - oci_alarm_suppression
+        - oci_alarm_suppression_info
         - oci_identity_domain
         - oci_identity_domain_info
         - oci_loadbalancer
