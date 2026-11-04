@@ -331,6 +331,29 @@ def test_present_existing_resource_is_unchanged(monkeypatch):
     assert exc_info.value.payload["resource"]["name"] == "maintenance"
 
 
+def test_hydrate_named_resource_refetches_with_get_alarm_suppression(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    full = FakeModel(
+        id=SUPPRESSION_ID,
+        suppression_conditions=[{"condition_type": "RECURRENCE"}],
+    )
+    get_calls = []
+
+    def get_alarm_suppression(alarm_suppression_id):
+        get_calls.append(alarm_suppression_id)
+        return FakeResponse(data=full)
+
+    instance = make_suppression_module(
+        module_obj,
+        {},
+        client=types.SimpleNamespace(get_alarm_suppression=get_alarm_suppression),
+    )
+
+    summary = FakeModel(id=SUPPRESSION_ID)
+    assert instance.hydrate_named_resource(summary) is full
+    assert get_calls == [SUPPRESSION_ID]
+
+
 def test_create_resource_calls_create_alarm_suppression(monkeypatch):
     module_obj = load_suppression_module(monkeypatch)
     create_calls = []
