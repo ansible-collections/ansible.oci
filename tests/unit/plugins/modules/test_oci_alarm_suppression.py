@@ -220,10 +220,6 @@ def test_build_create_details_for_compartment_target(monkeypatch):
     "params, expected_filters",
     [
         ({"alarm_id": ALARM_ID, "name": "n"}, {"alarm_id": ALARM_ID}),
-        (
-            {"compartment_id": COMPARTMENT_ID, "name": "n"},
-            {"compartment_id": COMPARTMENT_ID},
-        ),
     ],
 )
 def test_name_lookup_is_scoped_to_target(monkeypatch, params, expected_filters):
@@ -234,7 +230,7 @@ def test_name_lookup_is_scoped_to_target(monkeypatch, params, expected_filters):
         id=SUPPRESSION_ID,
         display_name="n",
         lifecycle_state="ACTIVE",
-        alarm_suppression_target={"target_type": instance.target_type},
+        alarm_suppression_target={"target_type": "ALARM", "alarm_id": ALARM_ID},
     )
     other = FakeModel(id="other", display_name="x", lifecycle_state="ACTIVE")
 
@@ -249,25 +245,57 @@ def test_name_lookup_is_scoped_to_target(monkeypatch, params, expected_filters):
     assert list_calls == [expected_filters]
 
 
-def test_compartment_name_lookup_skips_alarm_targeted_match(monkeypatch):
+def test_alarm_name_lookup_skips_compartment_targeted_match(monkeypatch):
     module_obj = load_suppression_module(monkeypatch)
-    instance = make_suppression_module(
-        module_obj, {"compartment_id": COMPARTMENT_ID, "name": "n"}
-    )
-    alarm_targeted = FakeModel(
-        id="alarm-targeted",
+    instance = make_suppression_module(module_obj, {"alarm_id": ALARM_ID, "name": "n"})
+    compartment_targeted = FakeModel(
+        id="compartment-targeted",
         display_name="n",
         lifecycle_state="ACTIVE",
-        alarm_suppression_target={"target_type": "ALARM", "alarm_id": ALARM_ID},
+        alarm_suppression_target={"target_type": "COMPARTMENT"},
     )
 
     def fake_list_all(list_fn, **kwargs):
-        return [alarm_targeted]
+        return [compartment_targeted]
 
     instance.client = types.SimpleNamespace(list_alarm_suppressions=None)
     monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
 
     assert instance.resolve_resource_by_name() is None
+
+
+def test_compartment_name_lookup_is_skipped_for_present(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(
+        module_obj,
+        {"compartment_id": COMPARTMENT_ID, "name": "n", "state": "present"},
+    )
+    list_calls = []
+
+    def fake_list_all(list_fn, **kwargs):
+        list_calls.append(kwargs)
+        return []
+
+    instance.client = types.SimpleNamespace(list_alarm_suppressions=None)
+    monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
+
+    assert instance.resolve_resource_by_name() is None
+    assert list_calls == []
+
+
+def test_compartment_name_lookup_fails_for_absent(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(
+        module_obj,
+        {"compartment_id": COMPARTMENT_ID, "name": "n", "state": "absent"},
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.resolve_resource_by_name()
+
+    msg = exc_info.value.payload["msg"]
+    assert "alarm_suppression_id" in msg
+    assert "compartment-targeted" in msg
 
 
 def test_name_lookup_requires_target_scope(monkeypatch):
