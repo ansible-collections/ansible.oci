@@ -306,6 +306,8 @@ def test_changed_option_fails_as_immutable(monkeypatch, param_name, value):
         "RRULE:FREQ=DAILY;BYHOUR=2",
         "BYHOUR=2;FREQ=DAILY",
         "FREQ=DAILY;BYHOUR=2;BYMINUTE=0;BYSECOND=0",
+        # The exact form OCI returned in integration testing.
+        "FREQ=DAILY;BYHOUR=02;BYMINUTE=00;BYSECOND=00",
         "freq=daily;byhour=2",
     ],
 )

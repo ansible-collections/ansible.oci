@@ -26,10 +26,11 @@ notes:
     suppression differs from any supplied option, including tags, the task
     fails. Delete the suppression and create it again to change it.
   - Recurrence rules are compared semantically, so a rule that OCI returns
-    with its parts reordered, prefixed with C(RRULE:), or expanded with the
-    parts that default to zero (C(BYMINUTE=0), C(BYSECOND=0)) is treated as
-    unchanged. When OCI does not report suppression conditions for an
-    existing suppression, changes to them cannot be detected.
+    with its parts reordered, prefixed with C(RRULE:), zero-padded
+    (C(BYHOUR=02)), or expanded with the parts that default to zero
+    (C(BYMINUTE=0), C(BYSECOND=0)) is treated as unchanged. When OCI does
+    not report suppression conditions for an existing suppression, changes
+    to them cannot be detected.
   - Time values accept fractional seconds of up to six digits (microseconds),
     and the C(T) and C(Z) characters must be uppercase.
 options:
@@ -381,8 +382,11 @@ def normalize_recurrence_rule(value):
         if not separator:
             continue
         key = key.strip().upper()
-        # RRULE values are case-insensitive tokens such as DAILY and MO.
+        # RRULE values are case-insensitive tokens such as DAILY and MO, and
+        # OCI zero-pads numeric values such as BYHOUR=02.
         part_value = part_value.strip().upper()
+        if part_value.isdigit():
+            part_value = str(int(part_value))
         if DEFAULT_RRULE_PARTS.get(key) == part_value:
             continue
         parts[key] = part_value
