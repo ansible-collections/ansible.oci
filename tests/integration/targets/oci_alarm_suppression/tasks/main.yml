@@ -48,6 +48,9 @@
         namespace: oci_computeagent
         query: CpuUtilization[1m].mean() > 90
         severity: warning
+        # Dimension-level suppressions require the alarm to split notifications
+        # by metric stream.
+        is_notifications_per_metric_dimension_enabled: true
         destinations:
           - "{{ oci_alarm_suppression_topic_id }}"
       register: oci_alarm_suppression_alarm
