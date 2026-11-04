@@ -412,6 +412,25 @@ def normalize_suppression_condition(condition):
     return normalized
 
 
+def get_suppression_target_type(resource):
+    """Return the target type reported by an alarm suppression.
+
+    Args:
+        resource: An alarm suppression model or serialized dictionary.
+
+    Returns:
+        The target_type value, or None when the resource reports no target.
+    """
+    target = (
+        resource.get("alarm_suppression_target")
+        if isinstance(resource, dict)
+        else getattr(resource, "alarm_suppression_target", None)
+    )
+    if isinstance(target, dict):
+        return target.get("target_type")
+    return getattr(target, "target_type", None)
+
+
 def build_suppression_target(params):
     """Build the alarm or compartment suppression target from module parameters.
 
@@ -536,22 +555,25 @@ class OciAlarmSuppressionModule(OciResourceBase):
         """
         return ("alarm_id",) if self.target_type == "ALARM" else ("compartment_id",)
 
-    def collect_list_filters(self, *param_groups):
-        """Collect list filters and restrict them to the suppression target type.
+    def find_resources_by_name(self):
+        """List name matches restricted to the requested suppression target.
 
-        Overridden because listing by compartment_id alone also returns
-        suppressions that target individual alarms in that compartment, which
-        must not match a compartment-wide suppression of the same name.
-
-        Args:
-            *param_groups: Groups of module parameter names to collect.
+        Overridden because the service rejects list_alarm_suppressions calls
+        that combine compartment_id with target_type, so the target type is
+        not sent as a list filter. Listing by compartment_id alone also
+        returns suppressions that target individual alarms in that
+        compartment, which must not match a compartment-wide suppression of
+        the same name, so those are filtered out locally instead.
 
         Returns:
-            The list filters, including target_type.
+            The live name matches that target the requested alarm or
+            compartment.
         """
-        list_filters = super().collect_list_filters(*param_groups)
-        list_filters["target_type"] = self.target_type
-        return list_filters
+        return [
+            resource
+            for resource in super().find_resources_by_name()
+            if get_suppression_target_type(resource) == self.target_type
+        ]
 
     def validate_create_request(self) -> None:
         """Fail when a create request omits the suppression target.

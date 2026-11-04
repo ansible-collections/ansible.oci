@@ -219,10 +219,10 @@ def test_build_create_details_for_compartment_target(monkeypatch):
 @pytest.mark.parametrize(
     "params, expected_filters",
     [
-        ({"alarm_id": ALARM_ID, "name": "n"}, {"alarm_id": ALARM_ID, "target_type": "ALARM"}),
+        ({"alarm_id": ALARM_ID, "name": "n"}, {"alarm_id": ALARM_ID}),
         (
             {"compartment_id": COMPARTMENT_ID, "name": "n"},
-            {"compartment_id": COMPARTMENT_ID, "target_type": "COMPARTMENT"},
+            {"compartment_id": COMPARTMENT_ID},
         ),
     ],
 )
@@ -230,7 +230,12 @@ def test_name_lookup_is_scoped_to_target(monkeypatch, params, expected_filters):
     module_obj = load_suppression_module(monkeypatch)
     list_calls = []
     instance = make_suppression_module(module_obj, params)
-    match = FakeModel(id=SUPPRESSION_ID, display_name="n", lifecycle_state="ACTIVE")
+    match = FakeModel(
+        id=SUPPRESSION_ID,
+        display_name="n",
+        lifecycle_state="ACTIVE",
+        alarm_suppression_target={"target_type": instance.target_type},
+    )
     other = FakeModel(id="other", display_name="x", lifecycle_state="ACTIVE")
 
     def fake_list_all(list_fn, **kwargs):
@@ -242,6 +247,27 @@ def test_name_lookup_is_scoped_to_target(monkeypatch, params, expected_filters):
 
     assert instance.resolve_resource_by_name() is match
     assert list_calls == [expected_filters]
+
+
+def test_compartment_name_lookup_skips_alarm_targeted_match(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(
+        module_obj, {"compartment_id": COMPARTMENT_ID, "name": "n"}
+    )
+    alarm_targeted = FakeModel(
+        id="alarm-targeted",
+        display_name="n",
+        lifecycle_state="ACTIVE",
+        alarm_suppression_target={"target_type": "ALARM", "alarm_id": ALARM_ID},
+    )
+
+    def fake_list_all(list_fn, **kwargs):
+        return [alarm_targeted]
+
+    instance.client = types.SimpleNamespace(list_alarm_suppressions=None)
+    monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
+
+    assert instance.resolve_resource_by_name() is None
 
 
 def test_name_lookup_requires_target_scope(monkeypatch):
