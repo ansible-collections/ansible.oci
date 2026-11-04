@@ -547,6 +547,23 @@ class OciAlarmSuppressionModule(OciResourceBase):
             alarm_suppression_id=resource_id,
         )
 
+    def hydrate_named_resource(self, resource):
+        """Re-fetch a name-lookup match with get_alarm_suppression.
+
+        Overridden because list_alarm_suppressions returns an
+        AlarmSuppressionSummary that does not match the full model returned by
+        get_alarm_suppression (such as suppression_conditions), which would
+        make an unchanged suppression look like it needs an update and fail on
+        the immutable-field check.
+
+        Args:
+            resource: The AlarmSuppressionSummary matched by name.
+
+        Returns:
+            The full AlarmSuppression model for the matched OCID.
+        """
+        return self.get_resource_by_id(resource.id)
+
     def create_resource(self):
         details = build_create_alarm_suppression_details(self.module.params)
         response = self.call_with_retry(
