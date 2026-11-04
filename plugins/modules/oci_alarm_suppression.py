@@ -25,6 +25,11 @@ notes:
   - OCI does not support updating an alarm suppression. When an existing
     suppression differs from any supplied option, including tags, the task
     fails. Delete the suppression and create it again to change it.
+  - Recurrence rules are compared semantically, so a rule that OCI returns
+    with its parts reordered, prefixed with C(RRULE:), or expanded with the
+    parts that default to zero (C(BYMINUTE=0), C(BYSECOND=0)) is treated as
+    unchanged. When OCI does not report suppression conditions for an
+    existing suppression, changes to them cannot be detected.
   - Time values accept fractional seconds of up to six digits (microseconds),
     and the C(T) and C(Z) characters must be uppercase.
 options:
@@ -347,6 +352,62 @@ def normalize_time_parameters(module):
             module.fail_json(msg=f"Invalid {param_name}: {exc}")
 
 
+# RRULE parts that OCI documents as defaulting to zero when omitted, so the
+# service may return an abbreviated rule expanded with them.
+DEFAULT_RRULE_PARTS = {"BYMINUTE": "0", "BYSECOND": "0"}
+
+
+def normalize_recurrence_rule(value):
+    """Canonicalize an RFC 5545 recurrence rule for comparison.
+
+    OCI may return a rule with its parts reordered, prefixed with RRULE:, or
+    expanded with the parts that default to zero, so comparing raw strings
+    would report phantom drift on an unchanged suppression.
+
+    Args:
+        value: The recurrence rule string, or any non-string value.
+
+    Returns:
+        A semantically equivalent rule string with sorted parts, or the input
+        unchanged when it is not a string.
+    """
+    if not isinstance(value, str):
+        return value
+    if value.startswith("RRULE:"):
+        value = value[len("RRULE:"):]
+    parts = {}
+    for part in value.split(";"):
+        key, separator, part_value = part.partition("=")
+        if not separator:
+            continue
+        key = key.strip().upper()
+        # RRULE values are case-insensitive tokens such as DAILY and MO.
+        part_value = part_value.strip().upper()
+        if DEFAULT_RRULE_PARTS.get(key) == part_value:
+            continue
+        parts[key] = part_value
+    return ";".join(f"{key}={parts[key]}" for key in sorted(parts))
+
+
+def normalize_suppression_condition(condition):
+    """Canonicalize one suppression condition for comparison.
+
+    Args:
+        condition: The condition as a dictionary.
+
+    Returns:
+        A copy with condition_type defaulted to RECURRENCE and the recurrence
+        rule canonicalized.
+    """
+    normalized = dict(condition)
+    if not normalized.get("condition_type"):
+        normalized["condition_type"] = "RECURRENCE"
+    normalized["suppression_recurrence"] = normalize_recurrence_rule(
+        normalized.get("suppression_recurrence")
+    )
+    return normalized
+
+
 def build_suppression_target(params):
     """Build the alarm or compartment suppression target from module parameters.
 
@@ -435,7 +496,13 @@ class OciAlarmSuppressionModule(OciResourceBase):
                 is_mutable=False,
                 immutable_reason=IMMUTABLE_REASON,
             )
-            for field in SUPPRESSION_FIELDS + ("suppression_conditions",)
+            for field in SUPPRESSION_FIELDS
+        ),
+        UpdateFieldSpec(
+            param_name="suppression_conditions",
+            is_mutable=False,
+            immutable_reason=IMMUTABLE_REASON,
+            strategy="check_suppression_conditions",
         ),
         *(
             UpdateFieldSpec(
@@ -520,6 +587,45 @@ class OciAlarmSuppressionModule(OciResourceBase):
                 )
             )
         super().validate_name_lookup_scope()
+
+    def check_suppression_conditions(self, resource, resource_dict, spec, desired_value):
+        """Fail when requested suppression conditions differ from the resource.
+
+        Overridden as a custom strategy because OCI can return an otherwise
+        unchanged recurrence rule in an equivalent form (parts reordered,
+        RRULE:-prefixed, or expanded with the parts that default to zero), so
+        the conditions are compared after canonicalization instead of raw.
+        When OCI does not report conditions for an existing suppression, drift
+        on them cannot be detected and the comparison is skipped.
+
+        Args:
+            resource: The current alarm suppression model.
+            resource_dict: The serialized alarm suppression.
+            spec: The field spec for suppression_conditions.
+            desired_value: The conditions requested by the caller.
+
+        Returns:
+            An empty list, because no update operation is ever planned.
+        """
+        current_value = resource_dict.get("suppression_conditions")
+        if current_value is None:
+            return []
+        current_conditions = [
+            normalize_suppression_condition(condition) for condition in current_value
+        ]
+        desired_conditions = [
+            normalize_suppression_condition(condition) for condition in desired_value
+        ]
+        if current_conditions == desired_conditions:
+            return []
+        self.fail_immutable_field_change(
+            "suppression_conditions",
+            reason=(
+                f"OCI does not support updating alarm suppressions "
+                f"(existing conditions: {current_value!r}, "
+                f"requested conditions: {desired_value!r})"
+            ),
+        )
 
     def check_target_field(self, resource, resource_dict, spec, desired_value):
         """Fail when a target option differs from the existing suppression.

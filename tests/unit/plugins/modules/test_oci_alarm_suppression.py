@@ -299,6 +299,61 @@ def test_changed_option_fails_as_immutable(monkeypatch, param_name, value):
     assert "OCI does not support updating alarm suppressions" in msg
 
 
+@pytest.mark.parametrize(
+    "returned_rule",
+    [
+        "FREQ=DAILY;BYHOUR=2",
+        "RRULE:FREQ=DAILY;BYHOUR=2",
+        "BYHOUR=2;FREQ=DAILY",
+        "FREQ=DAILY;BYHOUR=2;BYMINUTE=0;BYSECOND=0",
+        "freq=daily;byhour=2",
+    ],
+)
+def test_equivalent_recurrence_rule_is_unchanged(monkeypatch, returned_rule):
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(module_obj, dict(MATCHING_PARAMS))
+    resource = matching_resource(
+        suppression_conditions=[
+            {
+                "condition_type": "RECURRENCE",
+                "suppression_recurrence": returned_rule,
+                "suppression_duration": "PT2H",
+            }
+        ]
+    )
+
+    assert instance.needs_update(resource) is False
+
+
+def test_unreported_suppression_conditions_are_not_drift(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(module_obj, dict(MATCHING_PARAMS))
+    resource = matching_resource(suppression_conditions=None)
+
+    assert instance.needs_update(resource) is False
+
+
+def test_changed_recurrence_rule_fails_with_values(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(module_obj, dict(MATCHING_PARAMS))
+    resource = matching_resource(
+        suppression_conditions=[
+            {
+                "condition_type": "RECURRENCE",
+                "suppression_recurrence": "FREQ=WEEKLY;BYDAY=MO",
+                "suppression_duration": "PT2H",
+            }
+        ]
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.needs_update(resource)
+
+    msg = exc_info.value.payload["msg"]
+    assert "FREQ=WEEKLY;BYDAY=MO" in msg
+    assert "FREQ=DAILY;BYHOUR=2" in msg
+
+
 def test_compartment_target_mismatch_fails(monkeypatch):
     module_obj = load_suppression_module(monkeypatch)
     instance = make_suppression_module(
