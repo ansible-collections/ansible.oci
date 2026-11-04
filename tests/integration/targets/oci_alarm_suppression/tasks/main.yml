@@ -1,0 +1,67 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI alarm suppression integration tests require oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Compute unique resource names, suppression window, and cleanup markers
+  ansible.builtin.set_fact:
+    oci_alarm_suppression_topic_id: ""
+    oci_alarm_suppression_alarm_id: ""
+    oci_alarm_suppression_id: ""
+    oci_alarm_suppression_compartment_suppression_id: ""
+    oci_alarm_suppression_dimension_suppression_id: ""
+    oci_alarm_suppression_integration_topic_name: "{{ oci_alarm_suppression_integration_topic_name }}-{{ oci_integration_rpfx }}"
+    oci_alarm_suppression_integration_alarm_name: "{{ oci_alarm_suppression_integration_alarm_name }}-{{ oci_integration_rpfx }}"
+    oci_alarm_suppression_integration_name: "{{ oci_alarm_suppression_integration_name }}-{{ oci_integration_rpfx }}"
+    # Computed once so every task in the run requests the same window.
+    oci_alarm_suppression_time_from: >-
+      {{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + 3600, utc=true) }}
+    oci_alarm_suppression_time_until: >-
+      {{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + 86400, utc=true) }}
+
+- name: Exercise alarm suppression module lifecycles
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    # OCI requires an alarm, and every alarm requires a destination.
+    - name: Create the notification topic for the alarm
+      ansible.oci.oci_notification_topic:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_alarm_suppression_integration_topic_name }}"
+      register: oci_alarm_suppression_topic
+
+    - name: Capture topic id for cleanup
+      ansible.builtin.set_fact:
+        oci_alarm_suppression_topic_id: "{{ oci_alarm_suppression_topic.resource.topic_id }}"
+
+    - name: Create the alarm to suppress
+      ansible.oci.oci_alarm:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_alarm_suppression_integration_alarm_name }}"
+        metric_compartment_id: "{{ oci_integration_compartment_id }}"
+        namespace: oci_computeagent
+        query: CpuUtilization[1m].mean() > 90
+        severity: warning
+        # Dimension-level suppressions require the alarm to split notifications
+        # by metric stream.
+        is_notifications_per_metric_dimension_enabled: true
+        destinations:
+          - "{{ oci_alarm_suppression_topic_id }}"
+      register: oci_alarm_suppression_alarm
+
+    - name: Capture alarm id for cleanup
+      ansible.builtin.set_fact:
+        oci_alarm_suppression_alarm_id: "{{ oci_alarm_suppression_alarm.resource.id }}"
+
+    - name: Create and delete the alarm suppressions
+      ansible.builtin.import_tasks: suppression.yml
+
+  always:
+    - name: Run alarm suppression cleanup
+      ansible.builtin.include_tasks: cleanup.yml
