@@ -1,0 +1,520 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI vault integration tests require oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_vault_key_integration_key_name: "{{ oci_vault_key_integration_key_name }}-{{ oci_integration_rpfx }}"
+    oci_vault_key_integration_renamed_key_name: "{{ oci_vault_key_integration_renamed_key_name }}-{{ oci_integration_rpfx }}"
+
+- name: Exercise vault and vault key module lifecycles
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+    ansible.oci.oci_vault_key:
+      vault_id: "{{ oci_vault_id | default(omit) }}"
+    ansible.oci.oci_vault_key_info:
+      vault_id: "{{ oci_vault_id | default(omit) }}"
+  block:
+    # ---------------------------------------------------------- vault create
+    # Vault deletion is only scheduled at least 7 days out, so the vault is long-lived: the first run creates it and
+    # later runs find it by name. Tags are not set here so the per-run tag update below does not make this task drift.
+    - name: Ensure shared vault exists in check mode
+      ansible.oci.oci_vault: &oci_vault_create_module_options
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_vault_integration_vault_name }}"
+      check_mode: true
+      register: oci_vault_create_check
+
+    - name: Read shared vault by name after create check mode
+      ansible.oci.oci_vault_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_vault_integration_vault_name }}"
+      register: oci_vault_create_check_probe
+
+    - name: Assert create check mode did not create a vault
+      ansible.builtin.assert:
+        that:
+          - >-
+            (oci_vault_create_check_probe.vaults | rejectattr('lifecycle_state', 'in', ['DELETED', 'DELETING'])
+            | list | length) == (0 if oci_vault_create_check.changed else 1)
+
+    - name: Ensure shared vault exists
+      ansible.oci.oci_vault:
+        <<: *oci_vault_create_module_options
+      register: oci_vault_create
+
+    - name: Capture vault id
+      ansible.builtin.set_fact:
+        oci_vault_id: "{{ oci_vault_create.resource.id }}"
+
+    - name: Assert check mode predicted the create result and the vault is active
+      ansible.builtin.assert:
+        that:
+          - oci_vault_create.changed == oci_vault_create_check.changed
+          - oci_vault_create.resource.lifecycle_state == "ACTIVE"
+          - oci_vault_create.resource.name == oci_vault_integration_vault_name
+
+    - name: Read vault by id
+      ansible.oci.oci_vault_info:
+        vault_id: "{{ oci_vault_id }}"
+      register: oci_vault_info_by_id
+
+    - name: Assert vault info by id returned the shared vault
+      ansible.builtin.assert:
+        that:
+          - oci_vault_info_by_id.vaults | length == 1
+          - oci_vault_info_by_id.vaults[0].id == oci_vault_id
+          - oci_vault_info_by_id.vaults[0].name == oci_vault_integration_vault_name
+          - oci_vault_info_by_id.vaults[0].lifecycle_state == "ACTIVE"
+          - oci_vault_info_by_id.vaults[0].vault_type == "DEFAULT"
+          - oci_vault_info_by_id.vaults[0].management_endpoint | length > 0
+
+    - name: Rerun vault create by name
+      ansible.oci.oci_vault:
+        <<: *oci_vault_create_module_options
+      register: oci_vault_create_again
+
+    - name: Rerun vault create by name in check mode
+      ansible.oci.oci_vault:
+        <<: *oci_vault_create_module_options
+      check_mode: true
+      register: oci_vault_create_again_check
+
+    - name: Assert vault create reruns are idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_vault_create_again.changed | bool
+          - not oci_vault_create_again_check.changed | bool
+          - oci_vault_create_again.resource.id == oci_vault_id
+
+    # ---------------------------------------------------------- vault update
+    # Only tags are updated, with a per-run value so the update is a real change on every run. Renaming would break
+    # the name lookup that later runs rely on.
+    - name: Update vault tags in check mode
+      ansible.oci.oci_vault: &oci_vault_update_module_options
+        state: present
+        vault_id: "{{ oci_vault_id }}"
+        freeform_tags:
+          role: integration
+          run: "{{ oci_integration_rpfx | string }}"
+      check_mode: true
+      register: oci_vault_update_check
+
+    - name: Read vault after update check mode
+      ansible.oci.oci_vault_info:
+        vault_id: "{{ oci_vault_id }}"
+      register: oci_vault_update_check_probe
+
+    - name: Assert vault update check mode reported a change without modifying the vault
+      ansible.builtin.assert:
+        that:
+          - oci_vault_update_check.changed | bool
+          - oci_vault_update_check_probe.vaults[0].freeform_tags == oci_vault_info_by_id.vaults[0].freeform_tags
+
+    - name: Update vault tags
+      ansible.oci.oci_vault:
+        <<: *oci_vault_update_module_options
+      register: oci_vault_update
+
+    - name: Read vault after update
+      ansible.oci.oci_vault_info:
+        vault_id: "{{ oci_vault_id }}"
+      register: oci_vault_update_probe
+
+    - name: Assert vault update changed the vault
+      ansible.builtin.assert:
+        that:
+          - oci_vault_update.changed | bool
+          - oci_vault_update.resource.id == oci_vault_id
+          - oci_vault_update_probe.vaults[0].freeform_tags | length == 2
+          - oci_vault_update_probe.vaults[0].freeform_tags.role == "integration"
+          - oci_vault_update_probe.vaults[0].freeform_tags.run == oci_integration_rpfx | string
+          - oci_vault_update_probe.vaults[0].lifecycle_state == "ACTIVE"
+
+    - name: Rerun vault update
+      ansible.oci.oci_vault:
+        <<: *oci_vault_update_module_options
+      register: oci_vault_update_again
+
+    - name: Rerun vault update in check mode
+      ansible.oci.oci_vault:
+        <<: *oci_vault_update_module_options
+      check_mode: true
+      register: oci_vault_update_again_check
+
+    - name: Assert vault update reruns are idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_vault_update_again.changed | bool
+          - not oci_vault_update_again_check.changed | bool
+
+    # ---------------------------------------------------------- vault delete
+    # Deleting the shared vault would force the next run to create another one, so delete is only covered in check mode.
+    - name: Schedule vault deletion in check mode
+      ansible.oci.oci_vault:
+        state: absent
+        vault_id: "{{ oci_vault_id }}"
+        deletion_days: 7
+      check_mode: true
+      register: oci_vault_delete_check
+
+    - name: Read vault after delete check mode
+      ansible.oci.oci_vault_info:
+        vault_id: "{{ oci_vault_id }}"
+      register: oci_vault_delete_check_probe
+
+    - name: Assert vault delete check mode reported a change without scheduling deletion
+      ansible.builtin.assert:
+        that:
+          - oci_vault_delete_check.changed | bool
+          - oci_vault_delete_check_probe.vaults[0].lifecycle_state == "ACTIVE"
+
+    # ------------------------------------------------------------ key create
+    - name: Create key in check mode
+      ansible.oci.oci_vault_key: &oci_vault_key_create_module_options
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_vault_key_integration_key_name }}"
+        key_shape: "{{ oci_vault_key_integration_key_shape }}"
+        protection_mode: software
+        freeform_tags: "{{ oci_vault_key_integration_create_tags }}"
+      check_mode: true
+      register: oci_vault_key_create_check
+
+    - name: Assert create check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_create_check.changed | bool
+
+    - name: Read keys by name after create check mode
+      ansible.oci.oci_vault_key_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_vault_key_integration_key_name }}"
+      register: oci_vault_key_create_check_probe
+
+    - name: Assert key is still absent after create check mode
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_create_check_probe.vault_keys | length == 0
+
+    - name: Create key
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_create_module_options
+      register: oci_vault_key_create
+
+    - name: Capture key id
+      ansible.builtin.set_fact:
+        oci_vault_key_id: "{{ oci_vault_key_create.resource.id }}"
+
+    - name: Assert create reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_create.changed | bool
+          - oci_vault_key_create.resource.lifecycle_state == "ENABLED"
+          - oci_vault_key_create.resource.name == oci_vault_key_integration_key_name
+
+    - name: Read key by id
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_info_by_id
+
+    - name: Assert key info by id returned the created key
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_info_by_id.vault_keys | length == 1
+          - oci_vault_key_info_by_id.vault_keys[0].id == oci_vault_key_id
+          - oci_vault_key_info_by_id.vault_keys[0].name == oci_vault_key_integration_key_name
+          - oci_vault_key_info_by_id.vault_keys[0].lifecycle_state == "ENABLED"
+          - oci_vault_key_info_by_id.vault_keys[0].protection_mode == "SOFTWARE"
+          - oci_vault_key_info_by_id.vault_keys[0].key_shape.algorithm == "AES"
+          - oci_vault_key_info_by_id.vault_keys[0].key_shape.length == oci_vault_key_integration_key_shape.length
+          - oci_vault_key_info_by_id.vault_keys[0].freeform_tags == oci_vault_key_integration_create_tags
+
+    - name: List keys by name
+      ansible.oci.oci_vault_key_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_vault_key_integration_key_name }}"
+        protection_mode: software
+        algorithm: aes
+      register: oci_vault_key_info_list
+
+    - name: Assert key info list returned the created key
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_info_list.vault_keys | selectattr('id', 'equalto', oci_vault_key_id) | list | length == 1
+
+    - name: Rerun create by name
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_create_module_options
+      register: oci_vault_key_create_again
+
+    - name: Rerun create by name in check mode
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_create_module_options
+      check_mode: true
+      register: oci_vault_key_create_again_check
+
+    - name: Rerun create by id
+      ansible.oci.oci_vault_key:
+        state: present
+        key_id: "{{ oci_vault_key_id }}"
+        freeform_tags: "{{ oci_vault_key_integration_create_tags }}"
+      register: oci_vault_key_create_by_id_again
+
+    - name: Rerun create by id in check mode
+      ansible.oci.oci_vault_key:
+        state: present
+        key_id: "{{ oci_vault_key_id }}"
+        freeform_tags: "{{ oci_vault_key_integration_create_tags }}"
+      check_mode: true
+      register: oci_vault_key_create_by_id_again_check
+
+    - name: Assert create reruns are idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_vault_key_create_again.changed | bool
+          - not oci_vault_key_create_again_check.changed | bool
+          - not oci_vault_key_create_by_id_again.changed | bool
+          - not oci_vault_key_create_by_id_again_check.changed | bool
+          - oci_vault_key_create_again.resource.id == oci_vault_key_id
+          - oci_vault_key_create_by_id_again.resource.id == oci_vault_key_id
+
+    # ------------------------------------------------------------ key update
+    - name: Update key name and tags in check mode
+      ansible.oci.oci_vault_key: &oci_vault_key_update_module_options
+        state: present
+        key_id: "{{ oci_vault_key_id }}"
+        name: "{{ oci_vault_key_integration_renamed_key_name }}"
+        freeform_tags: "{{ oci_vault_key_integration_update_tags }}"
+      check_mode: true
+      register: oci_vault_key_update_check
+
+    - name: Read key after update check mode
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_update_check_probe
+
+    - name: Assert update check mode reported a change without modifying the key
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_update_check.changed | bool
+          - oci_vault_key_update_check_probe.vault_keys[0].name == oci_vault_key_integration_key_name
+          - oci_vault_key_update_check_probe.vault_keys[0].freeform_tags == oci_vault_key_integration_create_tags
+
+    - name: Update key name and tags
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_update_module_options
+      register: oci_vault_key_update
+
+    - name: Read key after update
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_update_probe
+
+    - name: Assert update changed the key
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_update.changed | bool
+          - oci_vault_key_update.resource.id == oci_vault_key_id
+          - oci_vault_key_update_probe.vault_keys[0].name == oci_vault_key_integration_renamed_key_name
+          - oci_vault_key_update_probe.vault_keys[0].freeform_tags == oci_vault_key_integration_update_tags
+          - oci_vault_key_update_probe.vault_keys[0].lifecycle_state == "ENABLED"
+
+    - name: Rerun update
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_update_module_options
+      register: oci_vault_key_update_again
+
+    - name: Rerun update in check mode
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_update_module_options
+      check_mode: true
+      register: oci_vault_key_update_again_check
+
+    - name: Assert update reruns are idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_vault_key_update_again.changed | bool
+          - not oci_vault_key_update_again_check.changed | bool
+
+    # ------------------------------------------------------------ key rotate
+    # Auto-rotation is intentionally not covered: it requires a virtual private vault and fails on DEFAULT vaults.
+    # Rotation creates a new key version on every run, so it has no idempotent rerun by design.
+    - name: Rotate key in check mode
+      ansible.oci.oci_vault_key: &oci_vault_key_rotate_module_options
+        state: present
+        key_id: "{{ oci_vault_key_id }}"
+        rotate: true
+      check_mode: true
+      register: oci_vault_key_rotate_check
+
+    - name: Read key after rotate check mode
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_rotate_check_probe
+
+    - name: Assert rotate check mode reported a change without rotating the key
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_rotate_check.changed | bool
+          - oci_vault_key_rotate_check_probe.vault_keys[0].current_key_version == oci_vault_key_update_probe.vault_keys[0].current_key_version
+
+    - name: Rotate key
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_rotate_module_options
+      register: oci_vault_key_rotate
+
+    - name: Read key after rotate
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_rotate_probe
+
+    - name: Assert rotate created a new key version
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_rotate.changed | bool
+          - oci_vault_key_rotate_probe.vault_keys[0].lifecycle_state == "ENABLED"
+          - oci_vault_key_rotate_probe.vault_keys[0].current_key_version != oci_vault_key_update_probe.vault_keys[0].current_key_version
+
+    - name: Run without rotate
+      ansible.oci.oci_vault_key:
+        state: present
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_no_rotate
+
+    - name: Run without rotate in check mode
+      ansible.oci.oci_vault_key:
+        state: present
+        key_id: "{{ oci_vault_key_id }}"
+      check_mode: true
+      register: oci_vault_key_no_rotate_check
+
+    - name: Read key after run without rotate
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_no_rotate_probe
+
+    - name: Assert a run without rotate changes nothing
+      ansible.builtin.assert:
+        that:
+          - not oci_vault_key_no_rotate.changed | bool
+          - not oci_vault_key_no_rotate_check.changed | bool
+          - oci_vault_key_no_rotate_probe.vault_keys[0].current_key_version == oci_vault_key_rotate_probe.vault_keys[0].current_key_version
+
+    # ------------------------------------------------------------ key delete
+    - name: Schedule key deletion in check mode
+      ansible.oci.oci_vault_key: &oci_vault_key_delete_module_options
+        state: absent
+        key_id: "{{ oci_vault_key_id }}"
+        deletion_days: "{{ oci_vault_key_integration_deletion_days }}"
+      check_mode: true
+      register: oci_vault_key_delete_check
+
+    - name: Read key after delete check mode
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_delete_check_probe
+
+    - name: Assert delete check mode reported a change without scheduling deletion
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_delete_check.changed | bool
+          - oci_vault_key_delete_check_probe.vault_keys[0].lifecycle_state == "ENABLED"
+
+    - name: Schedule key deletion
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_delete_module_options
+      register: oci_vault_key_delete
+
+    - name: Read key after delete
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_delete_probe
+
+    - name: Assert key is pending deletion
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_delete.changed | bool
+          - oci_vault_key_delete_probe.vault_keys | length == 1
+          - oci_vault_key_delete_probe.vault_keys[0].lifecycle_state == "PENDING_DELETION"
+
+    - name: Rerun delete
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_delete_module_options
+      register: oci_vault_key_delete_again
+
+    - name: Rerun delete in check mode
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_delete_module_options
+      check_mode: true
+      register: oci_vault_key_delete_again_check
+
+    - name: Assert delete reruns are idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_vault_key_delete_again.changed | bool
+          - not oci_vault_key_delete_again_check.changed | bool
+
+    # ----------------------------------------------------------- key restore
+    - name: Cancel key deletion in check mode
+      ansible.oci.oci_vault_key: &oci_vault_key_restore_module_options
+        state: present
+        key_id: "{{ oci_vault_key_id }}"
+      check_mode: true
+      register: oci_vault_key_restore_check
+
+    - name: Read key after restore check mode
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_restore_check_probe
+
+    - name: Assert restore check mode reported a change and the key is still pending deletion
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_restore_check.changed | bool
+          - oci_vault_key_restore_check_probe.vault_keys[0].lifecycle_state == "PENDING_DELETION"
+
+    - name: Cancel key deletion
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_restore_module_options
+      register: oci_vault_key_restore
+
+    - name: Read key after restore
+      ansible.oci.oci_vault_key_info:
+        key_id: "{{ oci_vault_key_id }}"
+      register: oci_vault_key_restore_probe
+
+    - name: Assert key is enabled again
+      ansible.builtin.assert:
+        that:
+          - oci_vault_key_restore.changed | bool
+          - oci_vault_key_restore_probe.vault_keys[0].lifecycle_state == "ENABLED"
+
+    - name: Rerun restore
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_restore_module_options
+      register: oci_vault_key_restore_again
+
+    - name: Rerun restore in check mode
+      ansible.oci.oci_vault_key:
+        <<: *oci_vault_key_restore_module_options
+      check_mode: true
+      register: oci_vault_key_restore_again_check
+
+    - name: Assert restore reruns are idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_vault_key_restore_again.changed | bool
+          - not oci_vault_key_restore_again_check.changed | bool
+
+  always:
+    - name: Run vault and vault key cleanup
+      ansible.builtin.include_tasks: cleanup.yml
