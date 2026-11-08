@@ -241,3 +241,228 @@ releases:
         name: oci_volume_group_backup_info
         namespace: ''
     release_date: '2026-10-04'
+  1.2.0:
+    changes:
+      deprecated_features:
+        - Uppercase and mixed-case choice values in these fields are deprecated and
+          will be removed in ansible.oci 2.0.0. Use lowercase choices instead.
+      minor_changes:
+        - Modules now accept lowercase choice values for bastion DNS status, volume
+          sources, network rules, bucket settings, and OKE image filters.
+      release_summary: Release summary for v1.2.0
+    fragments:
+      - lowercase_choices.yml
+      - release-summary.yml
+    modules:
+      - description: Manage an alarm in Oracle Cloud Infrastructure Monitoring.
+        name: oci_alarm
+        namespace: ''
+      - description: Retrieve alarm information from Oracle Cloud Infrastructure.
+        name: oci_alarm_info
+        namespace: ''
+      - description: Manage an Autonomous Database in Oracle Cloud Infrastructure.
+        name: oci_autonomous_database
+        namespace: ''
+      - description: Manage a clone of an Autonomous Database in Oracle Cloud Infrastructure.
+        name: oci_autonomous_database_clone
+        namespace: ''
+      - description: List the clones of an Autonomous Database in Oracle Cloud Infrastructure.
+        name: oci_autonomous_database_clone_info
+        namespace: ''
+      - description: Retrieve Autonomous Database information from Oracle Cloud Infrastructure.
+        name: oci_autonomous_database_info
+        namespace: ''
+      - description: Download the wallet for an Autonomous Database in Oracle Cloud
+          Infrastructure.
+        name: oci_autonomous_database_wallet
+        namespace: ''
+      - description: Manage DNS records in an OCI domain.
+        name: oci_dns_domain_records
+        namespace: ''
+      - description: Retrieve records from an OCI DNS domain.
+        name: oci_dns_domain_records_info
+        namespace: ''
+      - description: Manage one OCI DNS record set.
+        name: oci_dns_record_set
+        namespace: ''
+      - description: Retrieve one OCI DNS record set.
+        name: oci_dns_record_set_info
+        namespace: ''
+      - description: Update a DNS resolver in Oracle Cloud Infrastructure.
+        name: oci_dns_resolver
+        namespace: ''
+      - description: Manage a DNS resolver endpoint in Oracle Cloud Infrastructure.
+        name: oci_dns_resolver_endpoint
+        namespace: ''
+      - description: Get information about DNS resolver endpoints.
+        name: oci_dns_resolver_endpoint_info
+        namespace: ''
+      - description: Get DNS resolver information from Oracle Cloud Infrastructure.
+        name: oci_dns_resolver_info
+        namespace: ''
+      - description: Manage DNS records in an OCI zone.
+        name: oci_dns_zone_records
+        namespace: ''
+      - description: Retrieve records from an OCI DNS zone.
+        name: oci_dns_zone_records_info
+        namespace: ''
+      - description: Manage an OCI IAM identity domain API key.
+        name: oci_identity_api_key
+        namespace: ''
+      - description: Retrieve OCI IAM identity domain API keys.
+        name: oci_identity_api_key_info
+        namespace: ''
+      - description: Manage a dynamic group in an OCI IAM identity domain.
+        name: oci_identity_dynamic_group
+        namespace: ''
+      - description: Retrieve dynamic groups from an OCI IAM identity domain.
+        name: oci_identity_dynamic_group_info
+        namespace: ''
+      - description: Manage an OCI identity policy.
+        name: oci_identity_policy
+        namespace: ''
+      - description: Retrieve OCI identity policy information.
+        name: oci_identity_policy_info
+        namespace: ''
+      - description: Manage a tag definition in an OCI tag namespace.
+        name: oci_identity_tag
+        namespace: ''
+      - description: Get tag definitions from an OCI tag namespace.
+        name: oci_identity_tag_info
+        namespace: ''
+      - description: Manage OCI tag namespaces.
+        name: oci_identity_tag_namespace
+        namespace: ''
+      - description: Retrieve OCI tag namespace information.
+        name: oci_identity_tag_namespace_info
+        namespace: ''
+      - description: Manage an OCI load balancer.
+        name: oci_loadbalancer
+        namespace: ''
+      - description: Manage a backend server in an OCI load balancer backend set.
+        name: oci_loadbalancer_backend
+        namespace: ''
+      - description: Retrieve backend server information from an OCI load balancer.
+        name: oci_loadbalancer_backend_info
+        namespace: ''
+      - description: Manage a backend set on an OCI load balancer.
+        name: oci_loadbalancer_backend_set
+        namespace: ''
+      - description: Retrieve backend set information from an OCI load balancer.
+        name: oci_loadbalancer_backend_set_info
+        namespace: ''
+      - description: Update a Load Balancer backend set health checker.
+        name: oci_loadbalancer_health_checker
+        namespace: ''
+      - description: Get the health checker for an OCI Load Balancer backend set.
+        name: oci_loadbalancer_health_checker_info
+        namespace: ''
+      - description: Retrieve load balancer information from OCI.
+        name: oci_loadbalancer_info
+        namespace: ''
+      - description: Manage a Load Balancer listener in Oracle Cloud Infrastructure.
+        name: oci_loadbalancer_listener
+        namespace: ''
+      - description: Get listeners from an OCI Load Balancer.
+        name: oci_loadbalancer_listener_info
+        namespace: ''
+      - description: Manage a Load Balancer routing policy.
+        name: oci_loadbalancer_routing_policy
+        namespace: ''
+      - description: Get routing policies from an OCI Load Balancer.
+        name: oci_loadbalancer_routing_policy_info
+        namespace: ''
+      - description: Manage an OCI customer\-premises equipment object.
+        name: oci_network_cpe
+        namespace: ''
+      - description: Retrieve OCI customer\-premises equipment information.
+        name: oci_network_cpe_info
+        namespace: ''
+      - description: Manage an OCI Network Firewall.
+        name: oci_network_firewall
+        namespace: ''
+      - description: Retrieve OCI Network Firewall information.
+        name: oci_network_firewall_info
+        namespace: ''
+      - description: Manage an OCI Network Firewall policy.
+        name: oci_network_firewall_policy
+        namespace: ''
+      - description: Retrieve OCI Network Firewall policy information.
+        name: oci_network_firewall_policy_info
+        namespace: ''
+      - description: Manage an OCI IPSec connection and its tunnels.
+        name: oci_network_ipsec_connection
+        namespace: ''
+      - description: Retrieve OCI IPSec connections and optional tunnel data.
+        name: oci_network_ipsec_connection_info
+        namespace: ''
+      - description: Manage an OCI network load balancer.
+        name: oci_network_loadbalancer
+        namespace: ''
+      - description: Manage an OCI Network Load Balancer backend.
+        name: oci_network_loadbalancer_backend
+        namespace: ''
+      - description: Get OCI Network Load Balancer backend details.
+        name: oci_network_loadbalancer_backend_info
+        namespace: ''
+      - description: Manage an OCI Network Load Balancer backend set.
+        name: oci_network_loadbalancer_backend_set
+        namespace: ''
+      - description: Get OCI Network Load Balancer backend set details.
+        name: oci_network_loadbalancer_backend_set_info
+        namespace: ''
+      - description: Manage an OCI Network Load Balancer backend set health checker.
+        name: oci_network_loadbalancer_health_checker
+        namespace: ''
+      - description: Get OCI Network Load Balancer health checker details.
+        name: oci_network_loadbalancer_health_checker_info
+        namespace: ''
+      - description: Retrieve OCI network load balancer information.
+        name: oci_network_loadbalancer_info
+        namespace: ''
+      - description: Manage an OCI Network Load Balancer listener.
+        name: oci_network_loadbalancer_listener
+        namespace: ''
+      - description: Get OCI Network Load Balancer listener details.
+        name: oci_network_loadbalancer_listener_info
+        namespace: ''
+      - description: Gather information about a VNIC.
+        name: oci_network_vnic_info
+        namespace: ''
+      - description: Update a VNIC in Oracle Cloud Infrastructure.
+        name: oci_network_vnic_update
+        namespace: ''
+      - description: Manage an OCI Notifications topic.
+        name: oci_notification_topic
+        namespace: ''
+      - description: Retrieve OCI Notifications topic information.
+        name: oci_notification_topic_info
+        namespace: ''
+      - description: Manage an OCI Container Engine for Kubernetes (OKE) cluster.
+        name: oci_oke_cluster
+        namespace: ''
+      - description: Retrieve OKE cluster information from OCI.
+        name: oci_oke_cluster_info
+        namespace: ''
+      - description: Manage an OCI Container Engine for Kubernetes (OKE) node pool.
+        name: oci_oke_node_pool
+        namespace: ''
+      - description: Retrieve OKE node pool information from OCI.
+        name: oci_oke_node_pool_info
+        namespace: ''
+      - description: Retrieve available OKE node pool options from OCI.
+        name: oci_oke_node_pool_options_info
+        namespace: ''
+      - description: Manage an OCI Web Application Firewall.
+        name: oci_waf_web_app_firewall
+        namespace: ''
+      - description: Retrieve OCI Web Application Firewall information.
+        name: oci_waf_web_app_firewall_info
+        namespace: ''
+      - description: Manage an OCI Web Application Firewall policy.
+        name: oci_waf_web_app_firewall_policy
+        namespace: ''
+      - description: Retrieve OCI Web Application Firewall policies.
+        name: oci_waf_web_app_firewall_policy_info
+        namespace: ''
+    release_date: '2026-11-08'
