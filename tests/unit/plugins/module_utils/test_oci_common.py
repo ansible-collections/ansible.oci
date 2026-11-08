@@ -318,3 +318,42 @@ def test_merge_preserves_input_data_and_explicit_values(current, desired, expect
     assert result == expected
     assert current == original_current
     assert desired == original_desired
+
+
+@pytest.mark.parametrize(
+    "current,desired,differs",
+    [
+        ([{"shape": "a"}, {"shape": "b"}], [{"shape": "b"}, {"shape": "a"}], False),
+        ([{"shape": "a", "used_count": 1}], [{"shape": "a"}], False),
+        ([{"config": {"ocpus": 1, "mode": "STATIC"}}], [{"config": {"ocpus": 1, "mode": None}}], False),
+        ([{"count": 1}], [{"count": 2}], True),
+        ([{"shape": "a"}], [{"shape": "a"}, {"shape": "b"}], True),
+        ([{"shape": "a"}, {"shape": "b"}], [{"shape": "a"}], True),
+        ([{"shape": "a"}, {"shape": "b"}], [{"shape": "a"}, {"shape": "a"}], True),
+        ([{"shape": "a"}, {"shape": "a"}], [{"shape": "a"}, {"shape": "a"}], False),
+        ([{"count": 1}], [{"count": 0}], True),
+        ([{"enabled": True}], [{"enabled": False}], True),
+        ([{"count": 0, "enabled": False}], [{"count": 0, "enabled": False}], False),
+        ([], [], False),
+        (None, [], False),
+        ([{"shape": "a"}], [], True),
+        ([{"shape": "a"}], None, True),
+        ([{"blocks": ["a", "b"]}], [{"blocks": ["b", "a"]}], True),
+    ],
+    ids=[
+        "reordered", "response-fields", "nested-defaults", "changed-value",
+        "added-item", "removed-item", "duplicate-cannot-reuse-match",
+        "matching-duplicates", "explicit-zero", "explicit-false",
+        "matching-zero-and-false", "empty", "missing-current", "clear",
+        "missing-desired", "nested-list-order-preserved",
+    ],
+)
+def test_values_differ_as_unordered_subset_list(current, desired, differs):
+    """Compare unordered items without changing input data or nested list semantics."""
+    oci_common = load_collection_module("oci_common")
+    original_current = copy.deepcopy(current)
+    original_desired = copy.deepcopy(desired)
+
+    assert oci_common.values_differ_as_unordered_subset_list(current, desired) is differs
+    assert current == original_current
+    assert desired == original_desired

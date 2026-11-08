@@ -1,0 +1,140 @@
+---
+- name: Read capacity use
+  ansible.oci.oci_instance_capacity_reservation_info: &reservation_lookup
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+  register: reservation_in_use
+
+- name: Verify instance uses reserved capacity
+  ansible.builtin.assert:
+    that:
+      - oci_instance_create.resource.capacity_reservation_id == oci_instance_capacity_reservation_id
+      - reservation_in_use.capacity_reservations[0].instance_reservation_configs[0].used_count == 1
+
+- name: Remove instance from reservation
+  ansible.oci.oci_instance:
+    instance_id: "{{ oci_instance_id }}"
+    capacity_reservation_id: ''
+
+- name: Read instance after reservation removal
+  ansible.oci.oci_instance_info:
+    instance_id: "{{ oci_instance_id }}"
+  register: instance_without_reservation
+
+- name: Verify instance left reservation
+  ansible.builtin.assert:
+    that:
+      - not instance_without_reservation.instances[0].capacity_reservation_id
+
+- name: Reduce reserved capacity in check mode
+  ansible.oci.oci_instance_capacity_reservation: &reservation_reduce
+    state: present
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+    instance_reservation_configs:
+      - instance_shape: "{{ oci_instance_discovered_shape }}"
+        instance_shape_config: "{{ oci_instance_integration_shape_config }}"
+        reserved_count: 1
+  check_mode: true
+  register: reservation_change_check
+
+- name: Verify check mode predicts a change
+  ansible.builtin.assert:
+    that:
+      - reservation_change_check.changed
+
+- name: Read reservation after check mode
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify check mode preserves reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 2
+
+- name: Reduce reserved capacity
+  ansible.oci.oci_instance_capacity_reservation: *reservation_reduce
+  register: reservation_change
+
+- name: Verify reservation change
+  ansible.builtin.assert:
+    that:
+      - reservation_change.changed
+
+- name: Read reservation after change
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 1
+
+- name: Repeat desired reservation state
+  ansible.oci.oci_instance_capacity_reservation: *reservation_reduce
+  register: reservation_repeat
+
+- name: Repeat desired reservation state in check mode
+  ansible.oci.oci_instance_capacity_reservation: *reservation_reduce
+  check_mode: true
+  register: reservation_repeat_check
+
+- name: Verify reservation state is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_repeat.changed
+      - not reservation_repeat_check.changed
+
+- name: Delete capacity reservation in check mode
+  ansible.oci.oci_instance_capacity_reservation: &reservation_delete
+    state: absent
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+  check_mode: true
+  register: reservation_change_check
+
+- name: Verify check mode predicts a change
+  ansible.builtin.assert:
+    that:
+      - reservation_change_check.changed
+
+- name: Read reservation after check mode
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify check mode preserves reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations | length == 1
+      - reservation_probe.capacity_reservations[0].lifecycle_state == "ACTIVE"
+
+- name: Delete capacity reservation
+  ansible.oci.oci_instance_capacity_reservation: *reservation_delete
+  register: reservation_change
+
+- name: Verify reservation change
+  ansible.builtin.assert:
+    that:
+      - reservation_change.changed
+
+- name: Read reservation after change
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations | length == 0 or reservation_probe.capacity_reservations[0].lifecycle_state
+        == "DELETED"
+
+- name: Repeat desired reservation state
+  ansible.oci.oci_instance_capacity_reservation: *reservation_delete
+  register: reservation_repeat
+
+- name: Repeat desired reservation state in check mode
+  ansible.oci.oci_instance_capacity_reservation: *reservation_delete
+  check_mode: true
+  register: reservation_repeat_check
+
+- name: Verify reservation state is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_repeat.changed
+      - not reservation_repeat_check.changed

@@ -410,3 +410,29 @@ def values_differ_as_subset(current_value, desired_value):
     if isinstance(desired_value, list):
         return strip_none_values(current_value or []) != strip_none_values(desired_value)
     return current_value != desired_value
+
+
+def values_differ_as_unordered_subset_list(current_value, desired_value):
+    """Compare unordered lists with subset matching for each desired item.
+
+    Each current item can match once. Extra fields in current mappings are
+    ignored. Added or removed items count as changes. Inputs remain unchanged.
+
+    Args:
+        current_value: Current serialized items, or None for an empty list.
+        desired_value: Desired serialized items, or None for an empty list.
+
+    Returns:
+        True when the requested items differ from the current items.
+    """
+    unmatched = list(current_value or [])
+    for desired in desired_value or []:
+        match_index = next(
+            (index for index, item in enumerate(unmatched)
+             if not values_differ_as_subset(item, desired)),
+            None,
+        )
+        if match_index is None:
+            return True
+        unmatched.pop(match_index)
+    return bool(unmatched)
