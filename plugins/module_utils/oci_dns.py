@@ -5,10 +5,7 @@ __metaclass__ = type
 
 from collections import Counter
 
-from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
-    OCI_AUTH_ARGS,
-    serialize_oci_model,
-)
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import serialize_oci_model
 from ansible_collections.ansible.oci.plugins.module_utils.oci_info import OciInfoBase
 from ansible_collections.ansible.oci.plugins.module_utils.oci_base import OciModuleBase, oci
 
@@ -19,13 +16,11 @@ def _dns_common_argument_spec():
     Returns:
         Common DNS argument declarations.
     """
-    spec = dict(OCI_AUTH_ARGS)
-    spec.update(
+    return dict(
         scope=dict(type="str", choices=["global", "private"]),
         zone_name_or_id=dict(type="str", required=True),
         view_id=dict(type="str"),
     )
-    return spec
 
 
 def _dns_kind_argument_spec(kind):

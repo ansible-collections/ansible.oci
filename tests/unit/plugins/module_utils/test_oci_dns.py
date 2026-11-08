@@ -46,6 +46,7 @@ def test_argument_spec_accepts_record_types_as_text():
     """Accept record types without a fixed list of choices."""
     spec = dns_helper.build_dns_argument_spec("rrset")
 
+    assert "auth_type" not in spec
     assert spec["scope"]["choices"] == ["global", "private"]
     assert spec["zone_name_or_id"]["required"] is True
     assert spec["update_items"]["options"]["ttl"]["type"] == "int"

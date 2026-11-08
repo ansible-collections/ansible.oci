@@ -110,6 +110,7 @@ resource:
 
 from ansible.module_utils.basic import AnsibleModule
 
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import OCI_AUTH_ARGS
 from ansible_collections.ansible.oci.plugins.module_utils.oci_dns import (
     OciDnsRecordsResource,
     build_dns_argument_spec,
@@ -124,7 +125,7 @@ class OciDnsRecordSetModule(OciDnsRecordsResource):
 
 def main():
     """Run the DNS record-set module."""
-    argument_spec = build_dns_argument_spec("rrset")
+    argument_spec = dict(OCI_AUTH_ARGS, **build_dns_argument_spec("rrset"))
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,

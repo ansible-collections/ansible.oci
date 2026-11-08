@@ -84,6 +84,7 @@ records:
 
 from ansible.module_utils.basic import AnsibleModule
 
+from ansible_collections.ansible.oci.plugins.module_utils.oci_common import OCI_AUTH_ARGS
 from ansible_collections.ansible.oci.plugins.module_utils.oci_dns import (
     OciDnsRecordsInfo,
     build_dns_argument_spec,
@@ -99,7 +100,7 @@ class OciDnsZoneRecordsInfoModule(OciDnsRecordsInfo):
 def main():
     """Run the DNS zone record info module."""
     module = AnsibleModule(
-        argument_spec=build_dns_argument_spec("zone", info=True),
+        argument_spec=dict(OCI_AUTH_ARGS, **build_dns_argument_spec("zone", info=True)),
         supports_check_mode=True,
     )
     OciDnsZoneRecordsInfoModule(module).execute_info_module()

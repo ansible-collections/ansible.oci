@@ -30,6 +30,7 @@ def test_resource_main_uses_scope_builder_and_executor(monkeypatch, module_name,
         return {"zone_name_or_id": {"type": "str", "required": True}}
 
     def fake_ansible_module(**kwargs):
+        captured["argument_spec"] = kwargs["argument_spec"]
         captured["required_if"] = kwargs["required_if"]
         return DummyModule({})
 
@@ -48,6 +49,9 @@ def test_resource_main_uses_scope_builder_and_executor(monkeypatch, module_name,
 
     module_obj.main()
 
+    assert captured["argument_spec"] == dict(
+        module_obj.OCI_AUTH_ARGS, zone_name_or_id={"type": "str", "required": True}
+    )
     assert captured["builder"] == (kind, False)
     assert captured["required_if"] == [("state", "present", ["update_items"])]
     assert captured["scope"] == kind
@@ -73,12 +77,19 @@ def test_info_main_uses_scope_builder_and_executor(monkeypatch, module_name, cla
         def execute_info_module(self):
             captured["executed"] = True
 
+    def fake_ansible_module(**kwargs):
+        captured["argument_spec"] = kwargs["argument_spec"]
+        return DummyModule({})
+
     monkeypatch.setattr(module_obj, "build_dns_argument_spec", fake_builder)
-    monkeypatch.setattr(module_obj, "AnsibleModule", lambda **kwargs: DummyModule({}))
+    monkeypatch.setattr(module_obj, "AnsibleModule", fake_ansible_module)
     monkeypatch.setattr(module_obj, class_name, FakeInfoClass)
 
     module_obj.main()
 
+    assert captured["argument_spec"] == dict(
+        module_obj.OCI_AUTH_ARGS, zone_name_or_id={"type": "str", "required": True}
+    )
     assert captured["builder"] == (kind, True)
     assert captured["scope"] == kind
     assert captured["executed"] is True
