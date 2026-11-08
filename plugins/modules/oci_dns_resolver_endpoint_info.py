@@ -41,10 +41,95 @@ EXAMPLES = r"""
 
 RETURN = r"""
 endpoints:
-  description: Resolver endpoints that match the query.
+  description:
+    - The resolver endpoints that match the request.
+    - List requests return summary records.
+    - Requests with C(name) also return fields specific to the endpoint type.
   returned: always
   type: list
   elements: dict
+  contains:
+    name:
+      description: The endpoint name within the resolver.
+      type: str
+      returned: when available
+    endpoint_type:
+      description: The endpoint type. VNIC identifies an endpoint with a virtual network interface.
+      type: str
+      returned: when available
+    forwarding_address:
+      description: The IPv4 address used to forward DNS queries.
+      type: str
+      returned: when available
+    is_forwarding:
+      description: Whether the endpoint forwards DNS queries.
+      type: bool
+      returned: when available
+    is_listening:
+      description: Whether the endpoint listens for DNS queries.
+      type: bool
+      returned: when available
+    listening_address:
+      description: The IPv4 address used to receive DNS queries.
+      type: str
+      returned: when available
+    id:
+      description: The OCID of the endpoint.
+      type: str
+      returned: when available
+    resolver_id:
+      description: The OCID of the resolver that contains the endpoint.
+      type: str
+      returned: when available
+    compartment_id:
+      description: The OCID of the compartment that contains the endpoint.
+      type: str
+      returned: when available
+    time_created:
+      description: The creation time in RFC 3339 format.
+      type: str
+      returned: when available
+    time_updated:
+      description: The last update time in RFC 3339 format.
+      type: str
+      returned: when available
+    lifecycle_state:
+      description: The current lifecycle state of the endpoint.
+      type: str
+      returned: when available
+    _self:
+      description: The URL of the endpoint resource.
+      type: str
+      returned: when available
+    freeform_tags:
+      description: The free-form tags applied to the endpoint.
+      type: dict
+      returned: when available
+    defined_tags:
+      description: The defined tags applied to the endpoint.
+      type: dict
+      returned: when available
+    subnet_id:
+      description: The OCID of the subnet that contains the endpoint interface.
+      type: str
+      returned: when name is specified and the endpoint type is VNIC
+    nsg_ids:
+      description: The network security group OCIDs for the endpoint interface.
+      type: list
+      returned: when name is specified and the endpoint type is VNIC
+      elements: str
+    security_attributes:
+      description: The security attributes applied to the endpoint.
+      type: dict
+      returned: when name is specified and the endpoint type is VNIC
+    pe_id:
+      description: The OCID of the private endpoint.
+      type: str
+      returned: when name is specified and the endpoint type is VNIC
+    vnic_id:
+      description: The OCID of the virtual network interface for the endpoint.
+      type: str
+      returned: when name is specified and the endpoint type is VNIC
 """
 
 from ansible.module_utils.basic import AnsibleModule
