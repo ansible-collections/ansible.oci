@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import types
+from itertools import permutations
 
 import pytest
 
@@ -415,3 +416,133 @@ def test_delete_preserves_wait_order_and_skips_reads_without_wait(
 
     assert instance.delete_resource(FakeModel(id="reservation")) is None
     assert events == expected_events
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize("old_domain,new_domain", [("FD-1", None), (None, "FD-1"), ("FD-1", "FD-2")])
+@pytest.mark.parametrize("count", [1, 2])
+def test_fault_domain_replacement_fails_before_mutation(monkeypatch, check_mode, old_domain, new_domain, count):
+    """Reject domain replacements even when the count changes or check mode is enabled."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    config = {"instance_shape": "shape", "reserved_count": count}
+    if new_domain is not None:
+        config["fault_domain"] = new_domain
+    instance = make_reservation_module(
+        module_obj, {"instance_reservation_configs": [config]}, check_mode=check_mode
+    )
+    resource = FakeModel(id="reservation", instance_reservation_configs=[
+        FakeModel(instance_shape="shape", reserved_count=1, fault_domain=old_domain, used_count=0)
+    ])
+    instance.resolve_target_resource = lambda: resource
+    instance.update_resource = raising(AssertionError("Unexpected mutation"))
+
+    with pytest.raises(FailJsonCalled) as exc:
+        instance.execute_resource_module()
+
+    assert "deleting the reservation" in exc.value.payload["msg"]
+    assert "creating a new reservation" in exc.value.payload["msg"]
+
+
+@pytest.mark.parametrize("current_order", list(permutations(range(2))))
+@pytest.mark.parametrize("desired_order", list(permutations(range(2))))
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_mixed_fault_domains_are_idempotent(monkeypatch, current_order, desired_order, check_mode):
+    """Keep matching specified and unspecified domains unchanged in every order."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    configs = [{"instance_shape": "shape", "reserved_count": 1},
+               {"instance_shape": "shape", "reserved_count": 1, "fault_domain": "FD-1"}]
+    desired = [dict(configs[index]) for index in desired_order]
+    desired[0].setdefault("fault_domain", None)
+    resource = FakeModel(id="reservation", instance_reservation_configs=[
+        FakeModel(**configs[index], used_count=0) for index in current_order
+    ])
+    instance = make_reservation_module(module_obj, {"instance_reservation_configs": desired}, check_mode=check_mode)
+    instance.resolve_target_resource = lambda: resource
+    instance.update_resource = raising(AssertionError("Unexpected mutation"))
+
+    with pytest.raises(ExitJsonCalled) as exc:
+        instance.execute_resource_module()
+
+    assert exc.value.payload["changed"] is False
+
+
+@pytest.mark.parametrize("operation", ["add", "remove", "count"])
+def test_configuration_changes_preserve_fault_domain_rules(monkeypatch, operation):
+    """Permit adding, removing, and resizing configurations with retained placement."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    configs = [{"instance_shape": "shape", "reserved_count": 1, "fault_domain": "FD-1"},
+               {"instance_shape": "shape", "reserved_count": 1}]
+    current, desired = [dict(item) for item in configs], [dict(item) for item in configs]
+    if operation == "add":
+        current.pop()
+    elif operation == "remove":
+        desired.pop()
+    else:
+        desired[0]["reserved_count"] = 2
+    instance = make_reservation_module(module_obj, {"instance_reservation_configs": desired})
+
+    plan = instance.build_update_plan(FakeModel(instance_reservation_configs=current))
+
+    assert plan["update_needed"] is True
+    assert plan["update_model_fields"]["instance_reservation_configs"] == desired
+
+
+def test_constructed_module_creates_reservation_and_waits(monkeypatch):
+    """Construct both clients and execute creation with the expected payload and waits."""
+    shared_install_fake_oci(monkeypatch, model_names=MODEL_NAMES, include_work_requests=True)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    from ansible_collections.ansible.oci.plugins.module_utils import oci_base
+    events = []
+    created = FakeModel(id="reservation")
+    final = FakeModel(id="reservation", lifecycle_state="ACTIVE")
+
+    def create(**kwargs):
+        details = kwargs["create_compute_capacity_reservation_details"]
+        assert details.compartment_id == "compartment"
+        assert details.availability_domain == "AD-1"
+        assert details.display_name == "reserved"
+        assert details.is_default_reservation is False
+        assert details.freeform_tags == {"phase": "create"}
+        assert details.defined_tags == {"ns": {"key": "value"}}
+        config = details.instance_reservation_configs[0]
+        assert config.instance_shape == "shape"
+        assert config.reserved_count == 1
+        assert config.instance_shape_config.ocpus == 1.0
+        events.append("create")
+        return FakeResponse(created, {"opc-work-request-id": "work"})
+
+    client = types.SimpleNamespace(create_compute_capacity_reservation=create)
+    work_client = types.SimpleNamespace()
+    monkeypatch.setattr(oci_base, "HAS_OCI_SDK", True)
+    monkeypatch.setattr(oci_base, "create_service_client", lambda module, cls: client)
+    monkeypatch.setattr(module_obj, "create_service_client", lambda module, cls: work_client)
+    instance = module_obj.OciComputeCapacityReservationModule(DummyModule({
+        "compartment_id": "compartment", "availability_domain": "AD-1", "name": "reserved",
+        "is_default_reservation": False, "freeform_tags": {"phase": "create"},
+        "defined_tags": {"ns": {"key": "value"}}, "wait": True,
+        "instance_reservation_configs": [{"instance_shape": "shape", "reserved_count": 1,
+                                          "instance_shape_config": {"ocpus": 1.0}}],
+    }))
+    assert instance.client is client
+    assert instance.work_request_client is work_client
+    instance.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
+
+    def wait_work(actual_client, request_id):
+        assert actual_client is work_client
+        assert request_id == "work"
+        events.append("work")
+
+    def wait_resource(resource_id, states):
+        assert resource_id == "reservation"
+        assert states == ("ACTIVE",)
+        events.append("resource")
+        return final
+
+    instance.wait_for_work_request = wait_work
+    instance.wait_for_resource_id = wait_resource
+
+    assert instance.create_resource() is final
+    assert events == ["create", "work", "resource"]

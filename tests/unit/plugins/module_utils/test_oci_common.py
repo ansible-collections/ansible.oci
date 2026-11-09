@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import copy
+from itertools import permutations
 from threading import Barrier, Event, Lock, get_ident
 
 import pytest
@@ -357,3 +358,27 @@ def test_values_differ_as_unordered_subset_list(current, desired, differs):
     assert oci_common.values_differ_as_unordered_subset_list(current, desired) is differs
     assert current == original_current
     assert desired == original_desired
+
+
+@pytest.mark.parametrize("current_order", list(permutations(range(2))))
+@pytest.mark.parametrize("desired_order", list(permutations(range(2))))
+def test_unordered_subset_list_reassigns_overlapping_matches(current_order, desired_order):
+    """Find a complete assignment for every ordering of overlapping matches."""
+    helper = load_collection_module("oci_common")
+    current = [{"shape": "a", "fault_domain": "FD-1"}, {"shape": "a"}]
+    desired = [{"shape": "a"}, {"shape": "a", "fault_domain": "FD-1"}]
+    current = [current[index] for index in current_order]
+    desired = [desired[index] for index in desired_order]
+    original = copy.deepcopy((current, desired))
+
+    assert helper.values_differ_as_unordered_subset_list(current, desired) is False
+    assert (current, desired) == original
+
+
+def test_unordered_subset_list_rejects_incomplete_assignment():
+    """Reject overlapping candidates that cannot match all desired items."""
+    helper = load_collection_module("oci_common")
+    current = [{"shape": "a", "domain": "one"}, {"shape": "a"}, {"shape": "b"}]
+    desired = [{"shape": "a"}, {"shape": "a", "domain": "one"}, {"shape": "a", "domain": "one"}]
+
+    assert helper.values_differ_as_unordered_subset_list(current, desired) is True

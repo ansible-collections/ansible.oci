@@ -136,6 +136,35 @@
       - not reservation_repeat.changed
       - not reservation_repeat_check.changed
 
+- name: Reject a fault domain replacement in check mode
+  ansible.oci.oci_instance_capacity_reservation:
+    state: present
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+    instance_reservation_configs:
+      - instance_shape: "{{ oci_instance_discovered_shape }}"
+        instance_shape_config: "{{ oci_instance_integration_shape_config }}"
+        reserved_count: 2
+        fault_domain: FAULT-DOMAIN-1
+  check_mode: true
+  register: reservation_placement_check
+  failed_when: false
+
+- name: Verify the replacement requires deletion and creation
+  ansible.builtin.assert:
+    that:
+      - "'deleting the reservation' in reservation_placement_check.msg"
+      - "'creating a new reservation' in reservation_placement_check.msg"
+
+- name: Read reservation after the rejected replacement
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify the rejected replacement preserves placement and capacity
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].fault_domain is none
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 2
+
 - name: Find updated reservation by name
   ansible.oci.oci_instance_capacity_reservation_info:
     compartment_id: "{{ oci_integration_compartment_id }}"

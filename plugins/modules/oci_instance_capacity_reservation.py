@@ -87,6 +87,8 @@ options:
       fault_domain:
         description:
           - The fault domain for the reserved instances.
+          - Omit this value to reserve capacity without a specified fault domain.
+          - To change the fault domain, delete the reservation and create a new reservation.
         type: str
       cluster_placement_group_id:
         description:
@@ -229,6 +231,10 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_COMMON_ARGS,
     build_model,
     import_oci_sdk,
+    match_unordered_subset_list,
+    serialize_oci_model,
+    values_differ_as_subset,
+    values_differ_as_unordered_subset_list,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -238,6 +244,14 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
 oci = import_oci_sdk()[0]
 
 WAIT_FOR_CAPACITY_RESERVATION_STATES = (LIFECYCLE_ACTIVE,)
+
+
+def reservation_config_differs(current, desired):
+    """Compare fault domains exactly and other requested fields as subsets."""
+    return (
+        current.get("fault_domain") != desired.get("fault_domain")
+        or values_differ_as_subset(current, desired)
+    )
 
 
 def build_instance_reservation_config(config):
@@ -301,7 +315,7 @@ class OciComputeCapacityReservationModule(OciResourceBase):
     update_field_specs = (
         UpdateFieldSpec(param_name="name", resource_field="display_name", is_mutable=True),
         UpdateFieldSpec(param_name="is_default_reservation", is_mutable=True),
-        UpdateFieldSpec(param_name="instance_reservation_configs", is_mutable=True, compare="unordered_subset_list"),
+        UpdateFieldSpec(param_name="instance_reservation_configs", is_mutable=True, compare="reservation_configs"),
         UpdateFieldSpec(param_name="compartment_id", is_mutable=False, immutable_reason="this module does not support compartment moves"),
         UpdateFieldSpec(param_name="availability_domain", is_mutable=False, immutable_reason="OCI does not support changing the availability domain"),
     )
@@ -316,6 +330,39 @@ class OciComputeCapacityReservationModule(OciResourceBase):
         self.work_request_client = create_service_client(
             module, oci.work_requests.WorkRequestClient
         )
+
+    def compare_update_field_values(self, current_value, desired_value, compare=None):
+        """Apply reservation placement rules through the shared list matcher."""
+        if compare == "reservation_configs":
+            return values_differ_as_unordered_subset_list(
+                current_value, desired_value, reservation_config_differs
+            )
+        return super().compare_update_field_values(current_value, desired_value, compare)
+
+    def build_update_plan(self, resource):
+        """Reject fault-domain replacements before any update operation."""
+        plan = super().build_update_plan(resource)
+        if "instance_reservation_configs" not in plan["update_model_fields"]:
+            return plan
+        current = serialize_oci_model(resource).get("instance_reservation_configs") or []
+        desired = self.module.params["instance_reservation_configs"]
+        current_identity = [{key: value for key, value in item.items() if key != "reserved_count"} for item in current]
+        desired_identity = [{key: value for key, value in item.items() if key != "reserved_count"} for item in desired]
+        retained = match_unordered_subset_list(current_identity, desired_identity, reservation_config_differs)
+        unmatched_current = [item for index, item in enumerate(current_identity) if index not in retained.values()]
+        unmatched_desired = [item for index, item in enumerate(desired_identity) if index not in retained]
+        for wanted in unmatched_desired:
+            without_domain = {key: value for key, value in wanted.items() if key != "fault_domain"}
+            if any(
+                item.get("fault_domain") != wanted.get("fault_domain")
+                and not values_differ_as_subset(item, without_domain)
+                for item in unmatched_current
+            ):
+                self.module.fail_json(
+                    msg="Changing instance_reservation_configs.fault_domain requires deleting the reservation "
+                    "and creating a new reservation. This includes removing a specified fault domain."
+                )
+        return plan
 
     def get_resource_response(self, resource_id):
         """Fetch one capacity reservation by OCID.
