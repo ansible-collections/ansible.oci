@@ -3,6 +3,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 DOCUMENTATION = r"""
@@ -840,6 +841,8 @@ resource:
     time_created: "2026-01-01T00:00:00.000Z"
 """
 
+from copy import deepcopy
+
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
@@ -850,11 +853,18 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
-    rename_aliased_fields,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
+)
+from ansible_collections.ansible.oci.plugins.module_utils.oci_instance import (
+    AGENT_CONFIG_PARAM_TO_OCI,
+    COMPUTE_LAUNCH_ARGS,
+    ENUM_KEYS,
+    build_agent_config,
+    build_create_instance_details,
+    build_platform_config,
 )
 
 oci = import_oci_sdk()[0]
@@ -879,197 +889,6 @@ POWER_STATE_ACTIONS = {
     LIFECYCLE_RUNNING: "START",
     LIFECYCLE_STOPPED: "STOP",
 }
-
-# Module inputs use lowercase snake_case choices (Ansible convention), while
-# OCI's wire format and returned resources use upper-case constants (for
-# example RECOVERY_ACTION_STOP_INSTANCE -> "STOP_INSTANCE"). Every enum-like
-# suboption this module exposes converts cleanly with a plain str.upper(), so
-# a single normalization helper keyed on field name covers all of them,
-# instead of one-off conversions scattered across each builder function. This
-# set is also assigned to OciInstanceModule.enum_keys so the shared
-# "subset_dict" comparator (see oci_resource.py) normalizes the same way.
-ENUM_KEYS = {
-    "power_state",
-    "recovery_action",
-    "desired_state",
-    "type",
-    "boot_volume_type",
-    "firmware",
-    "network_type",
-    "remote_data_volume_type",
-    "numa_nodes_per_socket",
-}
-
-# For mapping input to SDK model fields.
-AGENT_CONFIG_PARAM_TO_OCI = {
-    "all_plugins_disabled": "are_all_plugins_disabled",
-    "management_disabled": "is_management_disabled",
-    "monitoring_disabled": "is_monitoring_disabled",
-}
-
-
-def build_create_vnic_details(params):
-    details = filter_none_values(
-        {
-            "subnet_id": params.get("subnet_id"),
-            "assign_public_ip": params.get("assign_public_ip"),
-            "display_name": params.get("vnic_name"),
-            "private_ip": params.get("private_ip"),
-            "private_ip_id": params.get("private_ip_id"),
-            "hostname_label": params.get("hostname_label"),
-            "nsg_ids": params.get("nsg_ids"),
-        }
-    )
-    if not details:
-        return None
-    return oci.core.models.CreateVnicDetails(**details)
-
-
-def build_source_details(params):
-    image_id = params.get("image_id")
-    boot_volume_id = params.get("boot_volume_id")
-    if image_id:
-        details = filter_none_values(
-            {
-                "image_id": image_id,
-                "boot_volume_size_in_gbs": params.get("boot_volume_size_in_gbs"),
-                "boot_volume_vpus_per_gb": params.get("boot_volume_vpus_per_gb"),
-                "kms_key_id": params.get("kms_key_id"),
-            }
-        )
-        return oci.core.models.InstanceSourceViaImageDetails(**details)
-    if boot_volume_id:
-        return oci.core.models.InstanceSourceViaBootVolumeDetails(
-            boot_volume_id=boot_volume_id
-        )
-    return None
-
-
-def build_preemptible_instance_config(params):
-    preemptible_instance_config = params.get("preemptible_instance_config")
-    if not preemptible_instance_config:
-        return None
-    preemption_action = oci.core.models.TerminatePreemptionAction(
-        **filter_none_values(
-            {"preserve_boot_volume": preemptible_instance_config.get("preserve_boot_volume")}
-        )
-    )
-    return oci.core.models.PreemptibleInstanceConfigDetails(
-        preemption_action=preemption_action
-    )
-
-
-def build_agent_config(params, model_class):
-    agent_config = params.get("agent_config")
-    if not agent_config:
-        return None
-    agent_config = rename_aliased_fields(agent_config, AGENT_CONFIG_PARAM_TO_OCI)
-    plugins_config = agent_config.get("plugins_config")
-    plugins = None
-    if plugins_config:
-        plugins = [
-            build_model(
-                plugin_config,
-                oci.core.models.InstanceAgentPluginConfigDetails,
-                enum_keys=ENUM_KEYS,
-            )
-            for plugin_config in plugins_config
-        ]
-    details = filter_none_values(
-        {
-            "are_all_plugins_disabled": agent_config.get("are_all_plugins_disabled"),
-            "is_management_disabled": agent_config.get("is_management_disabled"),
-            "is_monitoring_disabled": agent_config.get("is_monitoring_disabled"),
-            "plugins_config": plugins,
-        }
-    )
-    return model_class(**details)
-
-
-# OCI uses distinct model classes per operation for several nested configs
-# (for example LaunchInstanceAvailabilityConfigDetails vs
-# UpdateInstanceAvailabilityConfigDetails vs the response-only
-# InstanceAvailabilityConfig), even though the field sets are identical.
-# platform_config is additionally polymorphic on "type", and bare-metal
-# platform_config types have no update-context class at all (OCI does not
-# support updating their platform_config after launch).
-def build_platform_config(params, class_suffix):
-    platform_config = params.get("platform_config")
-    if not platform_config:
-        return None
-    normalized = normalize_enum_values(dict(platform_config), ENUM_KEYS)
-    platform_type = normalized.pop("type", None)
-    # OCI's SDK codegen names each polymorphic subtype's class after its
-    # "type" discriminator converted to PascalCase, e.g. "AMD_MILAN_BM" ->
-    # "AmdMilanBm". Deriving it avoids hand-maintaining a type->class map
-    # that would otherwise need a manual update every time OCI adds a new
-    # shape family.
-    class_prefix = "".join(word.capitalize() for word in (platform_type or "").split("_"))
-    model_class = getattr(oci.core.models, f"{class_prefix}{class_suffix}", None)
-    if model_class is None:
-        is_known_type = any(
-            name.startswith(class_prefix) for name in dir(oci.core.models)
-        )
-        if not is_known_type:
-            raise ValueError(f"Unsupported platform_config type: {platform_config.get('type')}")
-        raise ValueError(
-            f"platform_config type {platform_config.get('type')} does not support this operation"
-        )
-    details = filter_none_values(normalized)
-    details["type"] = platform_type
-    return model_class(**details)
-
-
-def build_create_instance_details(params):
-    details = filter_none_values(
-        {
-            "availability_domain": params.get("availability_domain"),
-            "compartment_id": params.get("compartment_id"),
-            "display_name": params.get("name"),
-            "shape": params.get("shape"),
-            "shape_config": build_model(
-                params.get("shape_config"),
-                oci.core.models.LaunchInstanceShapeConfigDetails,
-            ),
-            "source_details": build_source_details(params),
-            "create_vnic_details": build_create_vnic_details(params),
-            "metadata": params.get("metadata"),
-            "extended_metadata": params.get("extended_metadata"),
-            "security_attributes": params.get("security_attributes"),
-            "launch_options": build_model(
-                params.get("launch_options") or None,
-                oci.core.models.LaunchOptions,
-                enum_keys=ENUM_KEYS,
-            ),
-            "instance_options": build_model(
-                params.get("instance_options"), oci.core.models.InstanceOptions
-            ),
-            "availability_config": build_model(
-                params.get("availability_config") or None,
-                oci.core.models.LaunchInstanceAvailabilityConfigDetails,
-                enum_keys=ENUM_KEYS,
-            ),
-            "preemptible_instance_config": build_preemptible_instance_config(params),
-            "agent_config": build_agent_config(
-                params, oci.core.models.LaunchInstanceAgentConfigDetails
-            ),
-            "platform_config": build_platform_config(params, "LaunchInstancePlatformConfig"),
-            "fault_domain": params.get("fault_domain"),
-            "capacity_reservation_id": params.get("capacity_reservation_id"),
-            "dedicated_vm_host_id": params.get("dedicated_vm_host_id"),
-            "cluster_placement_group_id": params.get("cluster_placement_group_id"),
-            "compute_cluster_id": params.get("compute_cluster_id"),
-            "instance_configuration_id": params.get("instance_configuration_id"),
-            "ipxe_script": params.get("ipxe_script"),
-            "is_pv_encryption_in_transit_enabled": params.get(
-                "is_pv_encryption_in_transit_enabled"
-            ),
-            "is_ai_enterprise_enabled": params.get("is_ai_enterprise_enabled"),
-            "freeform_tags": params.get("freeform_tags"),
-            "defined_tags": params.get("defined_tags"),
-        }
-    )
-    return oci.core.models.LaunchInstanceDetails(**details)
 
 
 # Builders reused for the update path. Each takes a single-key params-shaped
@@ -1250,9 +1069,7 @@ class OciInstanceModule(OciResourceBase):
 
     def validate_create_request(self):
         super().validate_create_request()
-        if not self.module.params.get("image_id") and not self.module.params.get(
-            "boot_volume_id"
-        ):
+        if not self.module.params.get("image_id") and not self.module.params.get("boot_volume_id"):
             self.module.fail_json(
                 msg="Creating an instance requires either image_id or boot_volume_id"
             )
@@ -1320,9 +1137,7 @@ class OciInstanceModule(OciResourceBase):
         delete_kwargs = filter_none_values(
             {
                 "instance_id": resource.id,
-                "preserve_boot_volume": self.module.params.get(
-                    "preserve_boot_volume_on_delete"
-                ),
+                "preserve_boot_volume": self.module.params.get("preserve_boot_volume_on_delete"),
             }
         )
         return self.delete_resource_and_wait(
@@ -1333,116 +1148,16 @@ class OciInstanceModule(OciResourceBase):
 
 
 def main():
+    """Run the Compute instance module."""
     argument_spec = dict(
         OCI_COMMON_ARGS,
+        **deepcopy(COMPUTE_LAUNCH_ARGS),
         state=dict(type="str", choices=["present", "absent"], default="present"),
         instance_id=dict(type="str"),
         availability_domain=dict(type="str"),
         fault_domain=dict(type="str"),
         shape=dict(type="str"),
-        shape_config=dict(
-            type="dict",
-            options=dict(
-                ocpus=dict(type="float"),
-                memory_in_gbs=dict(type="float"),
-            ),
-        ),
-        image_id=dict(type="str"),
-        boot_volume_id=dict(type="str"),
-        boot_volume_size_in_gbs=dict(type="int"),
-        boot_volume_vpus_per_gb=dict(type="int"),
-        kms_key_id=dict(type="str"),
         preserve_boot_volume_on_delete=dict(type="bool"),
-        subnet_id=dict(type="str"),
-        assign_public_ip=dict(type="bool"),
-        vnic_name=dict(type="str"),
-        private_ip=dict(type="str"),
-        private_ip_id=dict(type="str"),
-        hostname_label=dict(type="str"),
-        nsg_ids=dict(type="list", elements="str"),
-        metadata=dict(type="dict"),
-        extended_metadata=dict(type="dict"),
-        security_attributes=dict(type="dict"),
-        launch_options=dict(
-            type="dict",
-            options=dict(
-                boot_volume_type=dict(
-                    type="str", choices=["ide", "iscsi", "paravirtualized", "scsi", "vfio"]
-                ),
-                firmware=dict(type="str", choices=["bios", "uefi_64"]),
-                network_type=dict(
-                    type="str", choices=["acceleratedpv", "e1000", "paravirtualized", "vfio"]
-                ),
-                remote_data_volume_type=dict(
-                    type="str", choices=["ide", "iscsi", "paravirtualized", "scsi", "vfio"]
-                ),
-                is_pv_encryption_in_transit_enabled=dict(type="bool"),
-                is_consistent_volume_naming_enabled=dict(type="bool"),
-            ),
-        ),
-        instance_options=dict(
-            type="dict",
-            options=dict(
-                are_legacy_imds_endpoints_disabled=dict(type="bool"),
-            ),
-        ),
-        availability_config=dict(
-            type="dict",
-            options=dict(
-                is_live_migration_preferred=dict(type="bool"),
-                recovery_action=dict(
-                    type="str", choices=["restore_instance", "stop_instance"]
-                ),
-            ),
-        ),
-        preemptible_instance_config=dict(
-            type="dict",
-            options=dict(
-                preserve_boot_volume=dict(type="bool"),
-            ),
-        ),
-        agent_config=dict(
-            type="dict",
-            options=dict(
-                all_plugins_disabled=dict(type="bool"),
-                management_disabled=dict(type="bool"),
-                monitoring_disabled=dict(type="bool"),
-                plugins_config=dict(
-                    type="list",
-                    elements="dict",
-                    options=dict(
-                        name=dict(type="str"),
-                        desired_state=dict(type="str", choices=["enabled", "disabled"]),
-                    ),
-                ),
-            ),
-        ),
-        platform_config=dict(
-            type="dict",
-            options=dict(
-                type=dict(type="str"),
-                is_secure_boot_enabled=dict(type="bool"),
-                is_trusted_platform_module_enabled=dict(type="bool"),
-                is_measured_boot_enabled=dict(type="bool"),
-                is_memory_encryption_enabled=dict(type="bool"),
-                is_symmetric_multi_threading_enabled=dict(type="bool"),
-                numa_nodes_per_socket=dict(
-                    type="str", choices=["nps0", "nps1", "nps2", "nps4", "nps6"]
-                ),
-                is_access_control_service_enabled=dict(type="bool"),
-                are_virtual_instructions_enabled=dict(type="bool"),
-                is_input_output_memory_management_unit_enabled=dict(type="bool"),
-                percentage_of_cores_enabled=dict(type="int"),
-            ),
-        ),
-        capacity_reservation_id=dict(type="str"),
-        dedicated_vm_host_id=dict(type="str"),
-        cluster_placement_group_id=dict(type="str"),
-        compute_cluster_id=dict(type="str"),
-        instance_configuration_id=dict(type="str"),
-        ipxe_script=dict(type="str"),
-        is_pv_encryption_in_transit_enabled=dict(type="bool"),
-        is_ai_enterprise_enabled=dict(type="bool"),
         power_state=dict(type="str", choices=["running", "stopped"]),
     )
 

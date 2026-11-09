@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 import types
@@ -14,7 +15,6 @@ from .conftest import (
     load_collection_module,
     make_module_instance,
 )
-
 
 INSTANCE_MODEL_NAMES = (
     "LaunchInstanceDetails",
@@ -39,10 +39,16 @@ INSTANCE_MODEL_NAMES = (
 
 
 def install_fake_oci(monkeypatch):
-    return shared_install_fake_oci(
+    result = shared_install_fake_oci(
         monkeypatch,
         model_names=INSTANCE_MODEL_NAMES,
     )
+    import sys
+
+    compute = sys.modules.get("ansible_collections.ansible.oci.plugins.module_utils.oci_instance")
+    if compute is not None:
+        monkeypatch.setattr(compute, "oci", result[0])
+    return result
 
 
 def make_instance_module(module_obj, params, client=None):
@@ -84,12 +90,9 @@ def test_main_exposes_power_state_argument(monkeypatch):
     assert captured["argument_spec"]["shape_config"]["type"] == "dict"
     assert "display_name" not in captured["argument_spec"]
     assert captured["argument_spec"]["boot_volume_id"] == {"type": "str"}
-    assert (
-        captured["argument_spec"]["availability_config"]["options"]["recovery_action"][
-            "choices"
-        ]
-        == ["restore_instance", "stop_instance"]
-    )
+    assert captured["argument_spec"]["availability_config"]["options"]["recovery_action"][
+        "choices"
+    ] == ["restore_instance", "stop_instance"]
 
 
 def test_build_create_instance_details_includes_supported_fields(monkeypatch):
@@ -374,9 +377,7 @@ def test_update_resource_retries_transient_conflict_on_update_instance(monkeypat
             retry_kwargs["max_retries"] = kwargs.get("max_retries")
             retry_kwargs["retry_on"] = kwargs.get("retry_on")
         call_kwargs = {
-            key: value
-            for key, value in kwargs.items()
-            if key not in ("max_retries", "retry_on")
+            key: value for key, value in kwargs.items() if key not in ("max_retries", "retry_on")
         }
         return fn(*args, **call_kwargs)
 
@@ -522,7 +523,7 @@ def test_build_source_details_uses_boot_volume_when_image_id_absent(monkeypatch)
     install_fake_oci(monkeypatch)
 
     instance_module = load_collection_module("oci_instance")
-    details = instance_module.build_source_details(
+    details = load_collection_module("oci_instance", plugin_dir="module_utils").build_source_details(
         {"boot_volume_id": "ocid1.bootvolume.oc1..example"}
     )
 

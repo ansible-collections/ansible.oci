@@ -871,6 +871,23 @@ def test_oci_resource_base_default_update_resource_uses_class_metadata(monkeypat
     assert hook_calls == [(response, "ocid1.example.oc1..123")]
 
 
+def test_oci_resource_base_sync_update_returns_response_data(monkeypatch):
+    oci_resource = load_collection_module("oci_resource")
+    response_data = types.SimpleNamespace(id="ocid1.example.oc1..updated")
+    response = types.SimpleNamespace(data=response_data)
+    base = types.SimpleNamespace(update_wait_states=None)
+
+    def fail_if_waiting(*args, **kwargs):
+        raise AssertionError("synchronous updates must not wait")
+
+    monkeypatch.setattr(base, "get_mutation_result", fail_if_waiting, raising=False)
+    result = oci_resource.OciResourceBase.get_update_result(
+        base, response, "ocid1.example.oc1..123"
+    )
+
+    assert result is response_data
+
+
 def test_incomplete_oci_resource_subclass_cannot_be_instantiated(monkeypatch):
     oci_resource = load_collection_module("oci_resource")
     patch_create_service_client(
