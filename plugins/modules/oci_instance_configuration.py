@@ -337,7 +337,7 @@ options:
                 description:
                 - Select the number of NUMA nodes per socket.
                 type: str
-                choices: [nps0, nps1, nps2, nps4]
+                choices: [nps0, nps1, nps2, nps4, nps6]
               is_symmetric_multi_threading_enabled:
                 description:
                 - Enable symmetric multi-threading for the instance.
@@ -924,7 +924,7 @@ options:
                     description:
                     - Select the number of NUMA nodes per socket.
                     type: str
-                    choices: [nps0, nps1, nps2, nps4]
+                    choices: [nps0, nps1, nps2, nps4, nps6]
                   is_symmetric_multi_threading_enabled:
                     description:
                     - Enable symmetric multi-threading for the instance.
@@ -1382,7 +1382,6 @@ class OciInstanceConfigurationModule(OciResourceBase):
     resource_id_param = "instance_configuration_id"
     list_resource_method = "list_instance_configurations"
     list_filter_params = ()
-    resource_get_method = "get_instance_configuration"
     name_response_field = "display_name"
     create_required_fields = ("compartment_id", "name")
     create_resource_name = "instance configuration"
@@ -1455,28 +1454,24 @@ class OciInstanceConfigurationModule(OciResourceBase):
         if source == "instance" and not self.module.params.get("instance_id"):
             self.module.fail_json(msg="Creating with source=instance requires instance_id")
         if instance_details:
-            details_type = instance_details.get("instance_type", "compute")
-            direct_compute_fields = (
-                "block_volumes",
-                "launch_details",
-                "secondary_vnics",
-            )
-            if details_type == "compute" and instance_details.get("options"):
-                self.module.fail_json(
-                    msg=(
-                        "instance_details.options is only valid when "
-                        "instance_type=instance_options"
-                    )
-                )
-            if details_type == "instance_options" and any(
-                instance_details.get(field) is not None for field in direct_compute_fields
-            ):
-                self.module.fail_json(
-                    msg=(
-                        "block_volumes, launch_details, and secondary_vnics must "
-                        "be set inside options when instance_type=instance_options"
-                    )
-                )
+            self.build_template_details(instance_details)
+
+    def build_template_details(self, fields):
+        """Build template details and report invalid inputs through Ansible.
+
+        Args:
+            fields: The requested instance details.
+
+        Returns:
+            The SDK model for the template.
+
+        Raises:
+            AnsibleFailJson: If the template contains unsupported fields or values.
+        """
+        try:
+            return build_instance_configuration_details(fields)
+        except ValueError as exc:
+            self.module.fail_json(msg=f"Invalid instance_details: {exc}")
 
     def create_resource(self):
         """Create a configuration and return its SDK model.
@@ -1499,10 +1494,8 @@ class OciInstanceConfigurationModule(OciResourceBase):
             )
         else:
             details = oci.core.models.CreateInstanceConfigurationDetails(
-                instance_details=build_instance_configuration_details(
-                    params.get("instance_details")
-                ),
-                **common
+                instance_details=self.build_template_details(params.get("instance_details")),
+                **common,
             )
         return self.call_with_retry(
             self.client.create_instance_configuration,
@@ -1551,7 +1544,7 @@ class OciInstanceConfigurationModule(OciResourceBase):
         """
         if compare == "subset_dict":
             current_value = serialize_oci_model(current_value)
-            desired_value = serialize_oci_model(build_instance_configuration_details(desired_value))
+            desired_value = serialize_oci_model(self.build_template_details(desired_value))
             return values_differ_as_subset(current_value, desired_value, compare_list_items=True)
         return super().compare_update_field_values(current_value, desired_value, compare)
 

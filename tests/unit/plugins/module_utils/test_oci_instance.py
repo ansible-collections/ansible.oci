@@ -2,6 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+from copy import deepcopy
+
+import pytest
 import oci
 import oci.core
 
@@ -177,3 +180,112 @@ def test_preemptible_config_uses_terminate_without_input_discriminator(monkeypat
         assert isinstance(action, oci.core.models.TerminatePreemptionAction)
         assert action.type == "TERMINATE"
         assert action.preserve_boot_volume is preserve_boot_volume
+
+
+def test_configuration_generic_bm_accepts_nps6():
+    """Accept NPS6 through argument validation and SDK conversion."""
+    from ansible.module_utils.common.arg_spec import ArgumentSpecValidator
+
+    compute = load_collection_module("oci_instance", plugin_dir="module_utils")
+    fields = {"platform_config": {"type": "generic_bm", "numa_nodes_per_socket": "nps6"}}
+    result = ArgumentSpecValidator(compute.INSTANCE_CONFIGURATION_LAUNCH_ARGS).validate(fields)
+    assert not result.error_messages
+    details = compute.build_instance_configuration_details({"launch_details": fields})
+    assert details.launch_details.platform_config.numa_nodes_per_socket == "NPS6"
+
+
+def test_configuration_conversion_preserves_original_template():
+    """Preserve inputs through repeated recursive conversions."""
+    compute = load_collection_module("oci_instance", plugin_dir="module_utils")
+    fields = {
+        "launch_details": {
+            "name": "TemplateName",
+            "source_details": {"source_type": "boot_volume", "boot_volume_id": "BootID"},
+            "agent_config": {
+                "monitoring_disabled": False,
+                "plugins_config": [{"name": "PluginName", "desired_state": "enabled"}],
+            },
+            "metadata": {"type": "KeepCase", "name": "KeepName"},
+            "defined_tags": {"Namespace": {"Key": "MixedCase"}},
+        },
+        "block_volumes": [
+            {"create_details": {"source_details": {"type": "volume_backup", "id": "BackupID"}}}
+        ],
+    }
+    original = deepcopy(fields)
+    first = compute.build_instance_configuration_details(fields)
+    second = compute.build_instance_configuration_details(fields)
+    assert fields == original
+    assert oci.util.to_dict(first) == oci.util.to_dict(second)
+    assert first.launch_details.source_details.source_type == "bootVolume"
+    assert first.launch_details.agent_config.plugins_config[0].desired_state == "ENABLED"
+
+
+@pytest.mark.parametrize(
+    "fields, unsupported",
+    [
+        ({"instance_type": "compute", "options": []}, "options"),
+        ({"instance_type": "instance_options", "launch_details": {}}, "launch_details"),
+        (
+            {
+                "launch_details": {
+                    "source_details": {"source_type": "image", "boot_volume_id": "BootID"}
+                }
+            },
+            "boot_volume_id",
+        ),
+        (
+            {
+                "launch_details": {
+                    "platform_config": {"type": "intel_vm", "percentage_of_cores_enabled": 0}
+                }
+            },
+            "percentage_of_cores_enabled",
+        ),
+        (
+            {
+                "launch_details": {
+                    "platform_config": {
+                        "type": "intel_vm",
+                        "are_virtual_instructions_enabled": False,
+                    }
+                }
+            },
+            "are_virtual_instructions_enabled",
+        ),
+        (
+            {
+                "instance_type": "instance_options",
+                "options": [{"instance_type": "compute", "options": []}],
+            },
+            "options",
+        ),
+    ],
+)
+def test_configuration_rejects_fields_outside_selected_model(fields, unsupported):
+    """Reject supplied fields that the selected SDK model cannot retain."""
+    compute = load_collection_module("oci_instance", plugin_dir="module_utils")
+    original = deepcopy(fields)
+    with pytest.raises(ValueError, match=unsupported):
+        compute.build_instance_configuration_details(fields)
+    assert fields == original
+
+
+def test_configuration_ignores_omitted_fields_and_preserves_false_and_zero():
+    """Ignore None placeholders and retain supported false and zero values."""
+    compute = load_collection_module("oci_instance", plugin_dir="module_utils")
+    details = compute.build_instance_configuration_details(
+        {
+            "instance_type": "compute",
+            "options": None,
+            "launch_details": {
+                "platform_config": {
+                    "type": "generic_bm",
+                    "percentage_of_cores_enabled": 0,
+                    "are_virtual_instructions_enabled": False,
+                }
+            },
+        }
+    )
+    assert details.launch_details.platform_config.percentage_of_cores_enabled == 0
+    assert details.launch_details.platform_config.are_virtual_instructions_enabled is False

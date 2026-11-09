@@ -73,12 +73,14 @@ MODEL_ENUM_FIELDS = {
     },
 }
 
+AGENT_CONFIG_PARAM_TO_OCI = {
+    "all_plugins_disabled": "are_all_plugins_disabled",
+    "management_disabled": "is_management_disabled",
+    "monitoring_disabled": "is_monitoring_disabled",
+}
+
 MODEL_FIELD_ALIASES = {
-    "InstanceConfigurationLaunchInstanceAgentConfigDetails": {
-        "all_plugins_disabled": "are_all_plugins_disabled",
-        "management_disabled": "is_management_disabled",
-        "monitoring_disabled": "is_monitoring_disabled",
-    },
+    "InstanceConfigurationLaunchInstanceAgentConfigDetails": AGENT_CONFIG_PARAM_TO_OCI,
     "InstanceConfigurationLaunchInstanceDetails": {"name": "display_name"},
     "InstanceConfigurationCreateVnicDetails": {"name": "display_name"},
     "InstanceConfigurationAttachVnicDetails": {"name": "display_name"},
@@ -131,7 +133,7 @@ def _configuration_model_fields(model_name, fields):
     Returns:
         A copy with SDK field names and enum values.
     """
-    fields = rename_aliased_fields(fields, MODEL_FIELD_ALIASES.get(model_name, {}))
+    fields = rename_aliased_fields(dict(fields), MODEL_FIELD_ALIASES.get(model_name, {}))
     if model_name == "PreemptionAction":
         fields.pop("type", None)
     enum_fields = MODEL_ENUM_FIELDS.get(model_name, set())
@@ -151,15 +153,24 @@ def _build_configuration_model(model_name, fields):
 
     Returns:
         The SDK model, or None when fields are omitted.
+
+    Raises:
+        ValueError: If a populated field is not supported by the selected model.
     """
     if fields is None:
         return None
     fields = _configuration_model_fields(model_name, fields)
     model_name = _configuration_model_type(model_name, fields)
     model_class = getattr(oci.core.models, model_name)
+    supported = model_class().swagger_types
+    unsupported = sorted(
+        field for field, value in fields.items() if value is not None and field not in supported
+    )
+    if unsupported:
+        raise ValueError(f"Unsupported fields for {model_name}: {', '.join(unsupported)}")
     nested_models = {}
     list_models = {}
-    for field, type_name in model_class().swagger_types.items():
+    for field, type_name in supported.items():
         if type_name.startswith("list[") and hasattr(oci.core.models, type_name[5:-1]):
             list_models[field] = type_name[5:-1]
         elif hasattr(oci.core.models, type_name):
@@ -179,12 +190,6 @@ ENUM_KEYS = {
     "network_type",
     "remote_data_volume_type",
     "numa_nodes_per_socket",
-}
-
-AGENT_CONFIG_PARAM_TO_OCI = {
-    "all_plugins_disabled": "are_all_plugins_disabled",
-    "management_disabled": "is_management_disabled",
-    "monitoring_disabled": "is_monitoring_disabled",
 }
 
 # Nested launch inputs shared by instance and instance-configuration modules.
@@ -331,7 +336,6 @@ INSTANCE_CONFIGURATION_LAUNCH_ARGS = dict(
         type="dict",
         options={
             **deepcopy(COMPUTE_LAUNCH_ARGS["platform_config"]["options"]),
-            "numa_nodes_per_socket": dict(type="str", choices=["nps0", "nps1", "nps2", "nps4"]),
             "type": dict(type="str", required=True),
         },
     ),

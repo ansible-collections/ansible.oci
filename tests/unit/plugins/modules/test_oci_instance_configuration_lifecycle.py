@@ -278,3 +278,60 @@ def test_info_list_uses_pagination_filters_and_local_name_filter(monkeypatch):
             {"compartment_id": "ocid1.compartment.oc1..example"},
         ),
     ]
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize(
+    "invalid_details, unsupported",
+    [
+        (
+            {
+                "instance_type": "compute",
+                "options": [{"instance_type": "compute", "launch_details": {"shape": "different"}}],
+            },
+            "options",
+        ),
+        (
+            {"instance_type": "instance_options", "launch_details": {"shape": "different"}},
+            "launch_details",
+        ),
+        (
+            {
+                "launch_details": {
+                    "source_details": {"source_type": "image", "boot_volume_id": "BootID"}
+                }
+            },
+            "boot_volume_id",
+        ),
+    ],
+)
+def test_invalid_templates_fail_before_mutations(
+    monkeypatch, check_mode, existing, invalid_details, unsupported
+):
+    """Reject invalid templates before creation or existing-resource comparison."""
+    module_obj = load_real_configuration_module(monkeypatch)[0]
+    current = make_instance_configuration(module_obj) if existing else None
+    mutation_calls = []
+    client = types.SimpleNamespace(
+        create_instance_configuration=lambda **kwargs: mutation_calls.append(kwargs),
+        update_instance_configuration=lambda **kwargs: mutation_calls.append(kwargs),
+    )
+    instance = make_resource(
+        module_obj,
+        {
+            "state": "present",
+            "name": "template",
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "source": "none",
+            "instance_details": invalid_details,
+        },
+        current,
+        check_mode=check_mode,
+        client=client,
+    )
+    with pytest.raises(FailJsonCalled) as result:
+        instance.execute_resource_module()
+    assert "Invalid instance_details" in result.value.payload["msg"]
+    assert unsupported in result.value.payload["msg"]
+    assert mutation_calls == []
