@@ -1,0 +1,38 @@
+---
+- name: Clean up health check resource with shared OCI auth defaults
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked health check by ID
+      ansible.oci.oci_health_check:
+        monitor_type: "{{ oci_health_check_cleanup_monitor_type }}"
+        monitor_id: "{{ oci_health_check_cleanup_monitor_id }}"
+        state: absent
+      when: oci_health_check_cleanup_monitor_id | default('') | length > 0
+      register: oci_cleanup_health_check_by_id
+      retries: 3
+      ignore_errors: true
+
+    - name: Delete leaked health check by exact scoped name
+      ansible.oci.oci_health_check:
+        monitor_type: "{{ oci_health_check_cleanup_monitor_type }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_health_check_cleanup_monitor_name }}"
+        state: absent
+      when:
+        - oci_health_check_cleanup_monitor_id | default('') | length == 0
+        - oci_health_check_cleanup_monitor_name | default('') | length > 0
+      register: oci_cleanup_health_check_by_name
+      retries: 3
+      ignore_errors: true
+
+    - name: Verify health check cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_health_check_by_id is not failed
+          - oci_cleanup_health_check_by_name is not failed
+        fail_msg: >-
+          Health check cleanup failed after 3 retries;
+          see the failed cleanup tasks above.

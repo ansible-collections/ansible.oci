@@ -1,0 +1,19 @@
+---
+oci_health_check_integration_name: oci-health-check-integration
+oci_health_check_integration_targets:
+  - example.com
+oci_health_check_create_interval_in_seconds: 10
+oci_health_check_update_interval_in_seconds: 30
+oci_health_check_create_timeout_in_seconds: 10
+oci_health_check_update_timeout_in_seconds: 20
+oci_health_check_create_method: get
+oci_health_check_update_method: head
+oci_health_check_create_path: /
+oci_health_check_update_path: /health
+oci_health_check_create_headers: {}
+oci_health_check_update_headers:
+  X-OCI-Test: health-check
+oci_health_check_create_tags:
+  phase: create
+oci_health_check_update_tags:
+  phase: update
