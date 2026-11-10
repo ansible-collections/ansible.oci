@@ -3,8 +3,9 @@
   ansible.builtin.assert:
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_integration_config_file_location | default('', true) | length > 0
     fail_msg: >-
-      OCI DRG integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+      OCI DRG integration tests require compartment and OCI config values in tests/integration/integration_config.yml.
 
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
@@ -203,6 +204,12 @@
       ansible.builtin.assert:
         that:
           - not oci_drg_update_rerun.changed | bool
+
+    - name: Exercise DRG attachment lifecycle on the shared DRG
+      ansible.builtin.include_tasks: drg_attachment.yml
+
+    - name: Exercise remote peering connection lifecycle on the shared DRG
+      ansible.builtin.include_tasks: remote_peering_connection.yml
 
     - name: Delete DRG in check mode
       ansible.oci.oci_network_drg: &oci_drg_delete_module_options

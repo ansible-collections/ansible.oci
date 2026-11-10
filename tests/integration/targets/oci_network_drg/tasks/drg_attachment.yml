@@ -1,15 +1,7 @@
 ---
-- name: Validate required OCI integration variables
-  ansible.builtin.assert:
-    that:
-      - oci_integration_compartment_id | default('', true) | length > 0
-    fail_msg: >-
-      OCI DRG attachment integration tests require oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
-
 - name: Compute unique resource names for this run
   ansible.builtin.set_fact:
     oci_drg_attachment_integration_vcn_name: "{{ oci_drg_attachment_integration_vcn_name }}-{{ oci_integration_rpfx }}"
-    oci_drg_attachment_integration_drg_name: "{{ oci_drg_attachment_integration_drg_name }}-{{ oci_integration_rpfx }}"
     oci_drg_attachment_integration_attachment_name: "{{ oci_drg_attachment_integration_attachment_name }}-{{ oci_integration_rpfx }}"
     oci_drg_attachment_integration_updated_attachment_name: "{{ oci_drg_attachment_integration_updated_attachment_name }}-{{ oci_integration_rpfx }}"
 
@@ -33,23 +25,12 @@
       ansible.builtin.set_fact:
         oci_drg_attachment_integration_vcn_id: "{{ oci_drg_attachment_vcn_create.resource.id }}"
 
-    - name: Create test DRG for DRG attachment integration
-      ansible.oci.oci_network_drg:
-        state: present
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        name: "{{ oci_drg_attachment_integration_drg_name }}"
-      register: oci_drg_attachment_drg_create
-
-    - name: Capture created DRG id
-      ansible.builtin.set_fact:
-        oci_drg_attachment_integration_drg_id: "{{ oci_drg_attachment_drg_create.resource.id }}"
-
     - name: Define DRG attachment create and delete parameters
       ansible.builtin.set_fact:
         oci_drg_attachment_create_params:
           state: present
           compartment_id: "{{ oci_integration_compartment_id }}"
-          drg_id: "{{ oci_drg_attachment_integration_drg_id }}"
+          drg_id: "{{ oci_drg_id }}"
           vcn_id: "{{ oci_drg_attachment_integration_vcn_id }}"
           name: "{{ oci_drg_attachment_integration_attachment_name }}"
           freeform_tags: "{{ oci_drg_attachment_integration_create_tags }}"
@@ -106,7 +87,7 @@
           - oci_drg_attachment_probe_after_create.drg_attachments | length == 1
           - oci_drg_attachment_probe_after_create.drg_attachments[0].id == oci_drg_attachment_id
           - oci_drg_attachment_probe_after_create.drg_attachments[0].name == oci_drg_attachment_integration_attachment_name
-          - oci_drg_attachment_probe_after_create.drg_attachments[0].drg_id == oci_drg_attachment_integration_drg_id
+          - oci_drg_attachment_probe_after_create.drg_attachments[0].drg_id == oci_drg_id
           - oci_drg_attachment_probe_after_create.drg_attachments[0].vcn_id == oci_drg_attachment_integration_vcn_id
           - oci_drg_attachment_probe_after_create.drg_attachments[0].lifecycle_state == "ATTACHED"
           - oci_drg_attachment_probe_after_create.drg_attachments[0].freeform_tags.phase == "create"
@@ -114,7 +95,7 @@
     - name: List created DRG attachment by scoped name
       ansible.oci.oci_network_drg_attachment_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
-        drg_id: "{{ oci_drg_attachment_integration_drg_id }}"
+        drg_id: "{{ oci_drg_id }}"
         vcn_id: "{{ oci_drg_attachment_integration_vcn_id }}"
         name: "{{ oci_drg_attachment_integration_attachment_name }}"
       register: oci_drg_attachment_info_list
@@ -249,4 +230,4 @@
 
   always:
     - name: Run DRG attachment cleanup
-      ansible.builtin.include_tasks: cleanup.yml
+      ansible.builtin.include_tasks: drg_attachment_cleanup.yml

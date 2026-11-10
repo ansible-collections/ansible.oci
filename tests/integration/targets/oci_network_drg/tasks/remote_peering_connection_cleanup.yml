@@ -1,0 +1,51 @@
+---
+- name: Clean up remote peering test resources
+  module_defaults:
+    ansible.oci.oci_network_drg:
+      wait_interval: 5
+    ansible.oci.oci_network_remote_peering_connection:
+      wait_interval: 5
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Delete leaked first RPC
+      ansible.oci.oci_network_remote_peering_connection:
+        state: absent
+        remote_peering_connection_id: "{{ oci_rpc_id }}"
+      when: oci_rpc_id | default('') | length > 0
+      register: oci_rpc_cleanup
+      retries: 3
+      delay: 5
+      until: oci_rpc_cleanup is succeeded
+      ignore_errors: true
+
+    - name: Delete leaked second RPC
+      ansible.oci.oci_network_remote_peering_connection:
+        state: absent
+        remote_peering_connection_id: "{{ oci_rpc_peer_id }}"
+      when: oci_rpc_peer_id | default('') | length > 0
+      register: oci_rpc_peer_cleanup
+      retries: 3
+      delay: 5
+      until: oci_rpc_peer_cleanup is succeeded
+      ignore_errors: true
+
+    - name: Delete leaked second DRG
+      ansible.oci.oci_network_drg:
+        state: absent
+        drg_id: "{{ oci_rpc_peer_drg_create.resource.id }}"
+      when: oci_rpc_peer_drg_create.resource.id | default('') | length > 0
+      register: oci_rpc_peer_drg_cleanup
+      retries: 3
+      delay: 5
+      until: oci_rpc_peer_drg_cleanup is succeeded
+      ignore_errors: true
+
+    - name: Verify remote peering cleanup succeeded
+      ansible.builtin.assert:
+        that:
+          - oci_rpc_cleanup is not failed
+          - oci_rpc_peer_cleanup is not failed
+          - oci_rpc_peer_drg_cleanup is not failed
+        fail_msg: Remote peering resource cleanup failed after retries.
