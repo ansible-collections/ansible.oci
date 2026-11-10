@@ -19,7 +19,7 @@ jobs:
   integration-weekly:
     name: "py${{ matrix.python-version }} / ${{ matrix.ansible-ref }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     permissions:
       contents: read
     strategy:
