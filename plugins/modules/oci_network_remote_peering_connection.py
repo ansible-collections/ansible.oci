@@ -120,6 +120,11 @@ resource:
       type: str
       returned: always
       sample: ocid1.compartment.oc1..example
+    drg_id:
+      description: The OCID of the dynamic routing gateway (DRG) for the connection.
+      type: str
+      returned: always
+      sample: ocid1.drg.oc1..example
     lifecycle_state:
       description: The current lifecycle state of the remote peering connection.
       type: str
@@ -159,6 +164,7 @@ resource:
     id: ocid1.remotepeeringconnection.oc1..example
     name: example-rpc
     compartment_id: ocid1.compartment.oc1..example
+    drg_id: ocid1.drg.oc1..example
     lifecycle_state: AVAILABLE
     defined_tags: {"Operations": {"CostCenter": "42"}}
     time_created: "2026-01-01T00:00:00.000Z"
