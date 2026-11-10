@@ -1,0 +1,289 @@
+---
+# ---------------------------------------------------------------- create
+- name: Create alarm suppression in check mode
+  ansible.oci.oci_alarm_suppression: &oci_alarm_suppression_create
+    alarm_id: "{{ oci_alarm_suppression_alarm_id }}"
+    name: "{{ oci_alarm_suppression_integration_name }}"
+    description: "{{ oci_alarm_suppression_integration_description }}"
+    level: alarm
+    time_suppress_from: "{{ oci_alarm_suppression_time_from }}"
+    time_suppress_until: "{{ oci_alarm_suppression_time_until }}"
+    suppression_conditions:
+      - suppression_recurrence: "{{ oci_alarm_suppression_integration_recurrence }}"
+        suppression_duration: "{{ oci_alarm_suppression_integration_duration }}"
+    freeform_tags:
+      role: integration
+  check_mode: true
+  register: oci_alarm_suppression_create_check
+
+- name: Read alarm suppressions after create check mode
+  ansible.oci.oci_alarm_suppression_info:
+    alarm_id: "{{ oci_alarm_suppression_alarm_id }}"
+    name: "{{ oci_alarm_suppression_integration_name }}"
+  register: oci_alarm_suppression_create_check_probe
+
+- name: Assert create check mode reported a change and created nothing
+  ansible.builtin.assert:
+    that:
+      - oci_alarm_suppression_create_check.changed
+      - oci_alarm_suppression_create_check_probe.alarm_suppressions | length == 0
+
+- name: Create alarm suppression
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_create
+  register: oci_alarm_suppression_create
+
+- name: Capture alarm suppression id for cleanup
+  ansible.builtin.set_fact:
+    oci_alarm_suppression_id: "{{ oci_alarm_suppression_create.resource.id }}"
+
+- name: Assert create reported a change and expected state
+  ansible.builtin.assert:
+    that:
+      - oci_alarm_suppression_create.changed
+      - oci_alarm_suppression_create.resource.lifecycle_state == "ACTIVE"
+      - oci_alarm_suppression_create.resource.name == oci_alarm_suppression_integration_name
+      - oci_alarm_suppression_create.resource.level == "ALARM"
+      - oci_alarm_suppression_create.resource.alarm_suppression_target.target_type == "ALARM"
+      - oci_alarm_suppression_create.resource.alarm_suppression_target.alarm_id == oci_alarm_suppression_alarm_id
+      - oci_alarm_suppression_create.resource.suppression_conditions[0].suppression_duration ==
+          oci_alarm_suppression_integration_duration
+      - oci_alarm_suppression_create.resource.freeform_tags.role == "integration"
+
+- name: Verify create is idempotent by name lookup
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_create
+  register: oci_alarm_suppression_create_rerun
+  failed_when: >-
+    oci_alarm_suppression_create_rerun.changed or
+    oci_alarm_suppression_create_rerun.resource.id != oci_alarm_suppression_id
+
+- name: Verify create is idempotent in check mode
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_create
+  check_mode: true
+  register: oci_alarm_suppression_create_check_rerun
+  failed_when: oci_alarm_suppression_create_check_rerun.changed
+
+- name: Verify create is idempotent by id
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_create
+    alarm_suppression_id: "{{ oci_alarm_suppression_id }}"
+  register: oci_alarm_suppression_create_by_id
+  failed_when: oci_alarm_suppression_create_by_id.changed
+
+# ---------------------------------------------------------------- update
+# OCI has no update operation, so a changed option must fail in both modes.
+- name: Attempt to change the description in check mode
+  ansible.oci.oci_alarm_suppression: &oci_alarm_suppression_change
+    <<: *oci_alarm_suppression_create
+    description: "{{ oci_alarm_suppression_integration_description }} updated"
+  check_mode: true
+  register: oci_alarm_suppression_change_check
+  ignore_errors: true
+
+- name: Attempt to change the description
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_change
+  register: oci_alarm_suppression_change
+  ignore_errors: true
+
+- name: Read alarm suppression after the rejected change
+  ansible.oci.oci_alarm_suppression_info:
+    alarm_suppression_id: "{{ oci_alarm_suppression_id }}"
+  register: oci_alarm_suppression_after_change
+
+- name: Assert the change was rejected and the suppression is unchanged
+  ansible.builtin.assert:
+    that:
+      - oci_alarm_suppression_change_check is failed
+      - oci_alarm_suppression_change is failed
+      - "'not supported' in oci_alarm_suppression_change.msg"
+      - oci_alarm_suppression_after_change.alarm_suppressions | length == 1
+      - oci_alarm_suppression_after_change.alarm_suppressions[0].description ==
+          oci_alarm_suppression_integration_description
+
+# ---------------------------------------------------------------- info
+- name: List every suppression that affects the alarm
+  ansible.oci.oci_alarm_suppression_info:
+    alarm_id: "{{ oci_alarm_suppression_alarm_id }}"
+    is_all_suppressions: true
+    level: alarm
+  register: oci_alarm_suppression_info_all
+
+- name: Assert info listing returned the suppression
+  ansible.builtin.assert:
+    that:
+      - oci_alarm_suppression_info_all.alarm_suppressions |
+          selectattr('id', 'equalto', oci_alarm_suppression_id) | list | length == 1
+
+# ---------------------------------------------------------------- dimension level
+- name: Create dimension-level suppression
+  ansible.oci.oci_alarm_suppression: &oci_alarm_suppression_dimension
+    alarm_id: "{{ oci_alarm_suppression_alarm_id }}"
+    name: "{{ oci_alarm_suppression_integration_name }}-dimension"
+    level: dimension
+    dimensions:
+      resourceId: ocid1.instance.oc1..integration
+    time_suppress_from: "{{ oci_alarm_suppression_time_from }}"
+    time_suppress_until: "{{ oci_alarm_suppression_time_until }}"
+  register: oci_alarm_suppression_dimension
+
+- name: Capture dimension suppression id for cleanup
+  ansible.builtin.set_fact:
+    oci_alarm_suppression_dimension_suppression_id: "{{ oci_alarm_suppression_dimension.resource.id }}"
+
+- name: Read the dimension-level suppression
+  ansible.oci.oci_alarm_suppression_info:
+    alarm_suppression_id: "{{ oci_alarm_suppression_dimension_suppression_id }}"
+  register: oci_alarm_suppression_dimension_info
+
+- name: Assert dimension-level suppression was created with its dimensions
+  ansible.builtin.assert:
+    that:
+      - oci_alarm_suppression_dimension.changed
+      - oci_alarm_suppression_dimension.resource.level == "DIMENSION"
+      - oci_alarm_suppression_dimension_info.alarm_suppressions | length == 1
+      - oci_alarm_suppression_dimension_info.alarm_suppressions[0].level == "DIMENSION"
+      - oci_alarm_suppression_dimension_info.alarm_suppressions[0].dimensions.resourceId ==
+          "ocid1.instance.oc1..integration"
+
+- name: Verify dimension-level suppression is idempotent
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_dimension
+  register: oci_alarm_suppression_dimension_rerun
+  failed_when: >-
+    oci_alarm_suppression_dimension_rerun.changed or
+    oci_alarm_suppression_dimension_rerun.resource.id != oci_alarm_suppression_dimension_suppression_id
+
+- name: Delete dimension-level suppression
+  ansible.oci.oci_alarm_suppression:
+    state: absent
+    alarm_suppression_id: "{{ oci_alarm_suppression_dimension_suppression_id }}"
+  register: oci_alarm_suppression_dimension_delete
+  failed_when: not oci_alarm_suppression_dimension_delete.changed
+
+- name: Clear dimension suppression cleanup marker
+  ansible.builtin.set_fact:
+    oci_alarm_suppression_dimension_suppression_id: ""
+
+# ---------------------------------------------------------------- compartment target
+# The OCI list API requires an alarm, so compartment-targeted suppressions
+# cannot be found by name: creating does not detect duplicates and deleting
+# requires the id.
+- name: Create compartment suppression in check mode
+  ansible.oci.oci_alarm_suppression: &oci_alarm_suppression_compartment
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_alarm_suppression_integration_name }}-compartment"
+    level: alarm
+    time_suppress_from: "{{ oci_alarm_suppression_time_from }}"
+    time_suppress_until: "{{ oci_alarm_suppression_time_until }}"
+  check_mode: true
+  register: oci_alarm_suppression_compartment_check
+  failed_when: not oci_alarm_suppression_compartment_check.changed
+
+- name: Create compartment suppression
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_compartment
+  register: oci_alarm_suppression_compartment
+
+- name: Capture compartment suppression id for cleanup
+  ansible.builtin.set_fact:
+    oci_alarm_suppression_compartment_suppression_id: "{{ oci_alarm_suppression_compartment.resource.id }}"
+
+- name: Assert compartment suppression targets the compartment
+  ansible.builtin.assert:
+    that:
+      - oci_alarm_suppression_compartment.changed
+      - oci_alarm_suppression_compartment.resource.alarm_suppression_target.target_type == "COMPARTMENT"
+      - oci_alarm_suppression_compartment.resource.alarm_suppression_target.compartment_id ==
+          oci_integration_compartment_id
+
+- name: Verify compartment suppression is idempotent by id
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_compartment
+    alarm_suppression_id: "{{ oci_alarm_suppression_compartment_suppression_id }}"
+  register: oci_alarm_suppression_compartment_rerun
+  failed_when: >-
+    oci_alarm_suppression_compartment_rerun.changed or
+    oci_alarm_suppression_compartment_rerun.resource.id != oci_alarm_suppression_compartment_suppression_id
+
+- name: Verify compartment suppression is idempotent by id in check mode
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_compartment
+    alarm_suppression_id: "{{ oci_alarm_suppression_compartment_suppression_id }}"
+  check_mode: true
+  register: oci_alarm_suppression_compartment_check_rerun
+  failed_when: oci_alarm_suppression_compartment_check_rerun.changed
+
+- name: Attempt to delete compartment suppression by name
+  ansible.oci.oci_alarm_suppression:
+    state: absent
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_alarm_suppression_integration_name }}-compartment"
+  register: oci_alarm_suppression_compartment_delete_by_name
+  failed_when: oci_alarm_suppression_compartment_delete_by_name is not failed
+  ignore_errors: true
+
+- name: Assert deleting by name failed with guidance
+  ansible.builtin.assert:
+    that:
+      - "'alarm_suppression_id' in oci_alarm_suppression_compartment_delete_by_name.msg"
+
+- name: Delete compartment suppression by id
+  ansible.oci.oci_alarm_suppression:
+    state: absent
+    alarm_suppression_id: "{{ oci_alarm_suppression_compartment_suppression_id }}"
+  register: oci_alarm_suppression_compartment_delete
+  failed_when: not oci_alarm_suppression_compartment_delete.changed
+
+- name: Clear compartment suppression cleanup marker
+  ansible.builtin.set_fact:
+    oci_alarm_suppression_compartment_suppression_id: ""
+
+# ---------------------------------------------------------------- delete
+- name: Delete alarm suppression in check mode
+  ansible.oci.oci_alarm_suppression: &oci_alarm_suppression_delete
+    state: absent
+    alarm_suppression_id: "{{ oci_alarm_suppression_id }}"
+  check_mode: true
+  register: oci_alarm_suppression_delete_check
+  failed_when: not oci_alarm_suppression_delete_check.changed
+
+- name: Read alarm suppression after delete check mode
+  ansible.oci.oci_alarm_suppression_info:
+    alarm_suppression_id: "{{ oci_alarm_suppression_id }}"
+  register: oci_alarm_suppression_delete_check_probe
+  failed_when: >-
+    oci_alarm_suppression_delete_check_probe.alarm_suppressions | length != 1 or
+    oci_alarm_suppression_delete_check_probe.alarm_suppressions[0].lifecycle_state != "ACTIVE"
+
+- name: Delete alarm suppression
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_delete
+  register: oci_alarm_suppression_delete
+  failed_when: not oci_alarm_suppression_delete.changed
+
+- name: Verify delete is idempotent
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_delete
+  register: oci_alarm_suppression_delete_rerun
+  failed_when: oci_alarm_suppression_delete_rerun.changed
+
+- name: Verify delete is idempotent in check mode
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_delete
+  check_mode: true
+  register: oci_alarm_suppression_delete_check_rerun
+  failed_when: oci_alarm_suppression_delete_check_rerun.changed
+
+- name: Verify the suppression is gone from the active list
+  ansible.oci.oci_alarm_suppression_info:
+    alarm_id: "{{ oci_alarm_suppression_alarm_id }}"
+    name: "{{ oci_alarm_suppression_integration_name }}"
+  register: oci_alarm_suppression_after_delete
+  failed_when: oci_alarm_suppression_after_delete.alarm_suppressions | length != 0
+
+- name: Clear alarm suppression cleanup marker
+  ansible.builtin.set_fact:
+    oci_alarm_suppression_id: ""
