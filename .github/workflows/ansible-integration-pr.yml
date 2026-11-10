@@ -21,6 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  ANSIBLE_CORE_VERSION: "2.18"
   INTEGRATION_ANSIBLE_REF: stable-2.18
   INTEGRATION_PYTHON_VERSION: '3.12'
 
@@ -54,8 +55,12 @@ jobs:
         with:
           python-version: ${{ env.INTEGRATION_PYTHON_VERSION }}
 
-      - name: Install Ansible ${{ env.INTEGRATION_ANSIBLE_REF }}
-        run: python3 -m pip install "https://github.com/ansible/ansible/archive/${INTEGRATION_ANSIBLE_REF}.tar.gz" --disable-pip-version-check
+      - name: Install Ansible for target selection
+        run: >-
+          python3 -m pip install
+          --only-binary=:all:
+          --disable-pip-version-check
+          "ansible-core==${ANSIBLE_CORE_VERSION}.*"
 
       - name: Determine integration targets
         id: determine
