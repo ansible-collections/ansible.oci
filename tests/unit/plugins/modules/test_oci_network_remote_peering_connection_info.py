@@ -97,7 +97,7 @@ def test_execute_info_serializes_rpc_list(monkeypatch):
 
 def test_fetch_by_id_returns_empty_list_on_404(monkeypatch):
     """Verify a missing RPC does not fail an info lookup."""
-    _, service_error = install_fake_oci(monkeypatch)
+    unused_oci, service_error = install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_network_remote_peering_connection_info")
 
     def get_remote_peering_connection(**kwargs):

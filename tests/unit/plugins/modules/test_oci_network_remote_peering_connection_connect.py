@@ -190,12 +190,12 @@ def test_connect_needed_rejects_non_available_lifecycle(monkeypatch):
 
 def test_connect_get_404_fails_with_clear_message(monkeypatch):
     """Verify a missing source connection fails clearly."""
-    _, service_error = install_fake_oci(monkeypatch)
+    unused_oci, service_error = install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_network_remote_peering_connection_connect")
     instance = make_connect_module(
         module_obj,
         {"remote_peering_connection_id": "missing", "peer_id": "peer", "peer_region_name": "region"},
-        client=types.SimpleNamespace(get_remote_peering_connection=lambda **kwargs: (_ for _ in ()).throw(service_error(404))),
+        client=types.SimpleNamespace(get_remote_peering_connection=lambda **kwargs: (item for item in ()).throw(service_error(404))),
     )
     instance.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
     with pytest.raises(FailJsonCalled):
@@ -204,13 +204,13 @@ def test_connect_get_404_fails_with_clear_message(monkeypatch):
 
 def test_connect_get_non404_error_propagates(monkeypatch):
     """Verify non-404 source lookup errors remain visible to callers."""
-    _, service_error = install_fake_oci(monkeypatch)
+    unused_oci, service_error = install_fake_oci(monkeypatch)
     module_obj = load_collection_module("oci_network_remote_peering_connection_connect")
     error = service_error(500)
     instance = make_connect_module(
         module_obj,
         {"remote_peering_connection_id": "rpc-id", "peer_id": "peer", "peer_region_name": "region"},
-        client=types.SimpleNamespace(get_remote_peering_connection=lambda **kwargs: (_ for _ in ()).throw(error)),
+        client=types.SimpleNamespace(get_remote_peering_connection=lambda **kwargs: (item for item in ()).throw(error)),
     )
     instance.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
     with pytest.raises(service_error) as raised:
