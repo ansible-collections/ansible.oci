@@ -1,0 +1,35 @@
+---
+- name: Read instance state before action check mode
+  ansible.oci.oci_instance_info:
+    instance_id: "{{ oci_instance_id }}"
+  register: oci_instance_action_before
+
+- name: Run action in check mode
+  ansible.oci.oci_instance_actions:
+    instance_id: "{{ oci_instance_id }}"
+    action: "{{ oci_instance_action_case.action }}"
+  check_mode: true
+  register: oci_instance_action_check
+
+- name: Read instance state after action check mode
+  ansible.oci.oci_instance_info:
+    instance_id: "{{ oci_instance_id }}"
+  register: oci_instance_action_after_check
+
+- name: Assert check mode reports the action without changing state
+  ansible.builtin.assert:
+    that:
+      - oci_instance_action_check.changed | bool
+      - oci_instance_action_after_check.instances[0].lifecycle_state == oci_instance_action_before.instances[0].lifecycle_state
+
+- name: Run instance action
+  ansible.oci.oci_instance_actions:
+    instance_id: "{{ oci_instance_id }}"
+    action: "{{ oci_instance_action_case.action }}"
+  register: oci_instance_action_result
+
+- name: Assert action changed the instance to the target state
+  ansible.builtin.assert:
+    that:
+      - oci_instance_action_result.changed | bool
+      - oci_instance_action_result.resource.lifecycle_state == oci_instance_action_case.target_state

@@ -2,4 +2,5 @@ destructive
 time=90m
 oci_identity_availability_domain_info
 oci_instance_info
+oci_instance_actions
 oci_shape_info
