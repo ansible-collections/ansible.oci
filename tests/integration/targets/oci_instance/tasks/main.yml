@@ -284,6 +284,9 @@
           - oci_instance_create.resource.availability_config.recovery_action == "RESTORE_INSTANCE"
           - not oci_instance_create.resource.agent_config.are_all_plugins_disabled | bool
 
+    - name: Exercise instance actions
+      ansible.builtin.include_tasks: test_instance_actions.yml
+
     - name: Read the instance by id
       ansible.oci.oci_instance_info:
         instance_id: "{{ oci_instance_id }}"
