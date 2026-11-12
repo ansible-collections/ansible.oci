@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import json
 import types
+
+from ansible.module_utils import basic
 
 import pytest
 
@@ -237,3 +240,87 @@ def test_missing_id_fails_and_check_mode_predicts_create():
     with pytest.raises(ExitJsonCalled) as result:
         instance.execute_resource_module()
     assert result.value.payload["changed"] is True
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_headers_are_hidden_in_ansible_output(monkeypatch, capsys, check_mode):
+    """Hide supplied header values in the actual Ansible JSON response."""
+    module = load_collection_module("oci_health_check")
+    params = {
+        "monitor_type": "http", "monitor_id": "monitor1",
+        "headers": {"X-Api-Key": "synthetic-api-key", "Cookie": "synthetic-cookie"},
+        "_ansible_check_mode": check_mode,
+    }
+    monkeypatch.setattr(basic, "_ANSIBLE_ARGS", json.dumps({"ANSIBLE_MODULE_ARGS": params}).encode())
+    monkeypatch.setattr(basic, "_ANSIBLE_PROFILE", "legacy", raising=False)
+    monkeypatch.setattr(basic, "_PARSED_MODULE_ARGS", params.copy(), raising=False)
+
+    class FakeResourceModule:
+        def __init__(self, instance):
+            self.module = instance
+
+        def execute_resource_module(self):
+            assert self.module.params["headers"] == params["headers"]
+            self.module.exit_json(changed=False)
+
+    monkeypatch.setattr(module, "OciHealthCheckModule", FakeResourceModule)
+    with pytest.raises(SystemExit) as result:
+        module.main()
+    assert result.value.code == 0
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["changed"] is False
+    assert "synthetic-api-key" not in output
+    assert "synthetic-cookie" not in output
+
+
+@pytest.mark.parametrize("operation", ["create", "update", "unchanged", "check_unchanged"])
+def test_resource_results_omit_stored_headers(operation):
+    """Remove stored headers from results without changing the resource."""
+    module = load_collection_module("oci_health_check")
+    params = {"monitor_type": "http", "monitor_id": "monitor1"}
+    resource = types.SimpleNamespace(id="monitor1", display_name="Monitor", headers={"Cookie": "stored-cookie"})
+    instance = make_module_instance(
+        module, "OciHealthCheckModule", params, check_mode=operation == "check_unchanged",
+    )
+    if operation == "create":
+        params.pop("monitor_id")
+        instance.resolve_target_resource = lambda: None
+        instance.validate_create_request = lambda: None
+        instance.create_resource = lambda: resource
+    else:
+        instance.resolve_target_resource = lambda: resource
+        instance.needs_update = lambda current: operation == "update"
+        instance.update_resource = lambda current: resource
+    with pytest.raises(ExitJsonCalled) as result:
+        instance.execute_resource_module()
+    assert result.value.payload["changed"] is (operation in ("create", "update"))
+    assert result.value.payload["resource"] == {"id": "monitor1", "name": "Monitor"}
+    assert resource.headers == {"Cookie": "stored-cookie"}
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_matching_headers_remain_unchanged(check_mode):
+    """Keep stored headers available for comparison while omitting them from results."""
+    module = load_collection_module("oci_health_check")
+    headers = {"X-Api-Key": "synthetic-api-key"}
+    instance = make_module_instance(
+        module, "OciHealthCheckModule",
+        {"monitor_type": "http", "monitor_id": "monitor1", "headers": headers.copy()},
+        check_mode=check_mode,
+    )
+    resource = types.SimpleNamespace(id="monitor1", headers=headers.copy())
+    instance.resolve_target_resource = lambda: resource
+    with pytest.raises(ExitJsonCalled) as result:
+        instance.execute_resource_module()
+    assert result.value.payload == {"changed": False, "resource": {"id": "monitor1"}}
+    assert resource.headers == headers
+
+
+def test_header_values_reach_sdk_models():
+    """Preserve supplied headers in create and update requests."""
+    module = load_collection_module("oci_health_check")
+    headers = {"X-Api-Key": "synthetic-api-key", "Cookie": "synthetic-cookie"}
+    for creating in (False, True):
+        details = module.build_monitor_details({"headers": headers.copy()}, "http", creating=creating)
+        assert details.headers == headers

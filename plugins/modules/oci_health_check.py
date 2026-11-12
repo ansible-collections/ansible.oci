@@ -78,6 +78,8 @@ options:
     description:
       - HTTP request headers for HTTP monitors.
       - OCI does not support the C(Authorization) header.
+      - Supplied header values are hidden from Ansible logs.
+      - Module results omit all headers.
     type: dict
   interval_in_seconds:
     description: The time between probes in seconds. This option is required to create a monitor.
@@ -161,9 +163,6 @@ resource:
       description: The HTTP request path.
       type: str
       sample: /
-    headers:
-      description: HTTP request headers.
-      type: dict
     vantage_point_names:
       description: The vantage points that run probes.
       type: list
@@ -296,6 +295,7 @@ class OciHealthCheckModule(OciResourceBase):
         """Return the monitor list operation name."""
         return self.dispatch["list"]
 
+    redacted_result_keys = ("headers",)
     resource_id_param = "monitor_id"
     name_lookup_param = "name"
     name_response_field = "display_name"
@@ -434,7 +434,7 @@ def main():
         protocol=dict(type="str", choices=list(PROTOCOL_VALUES)),
         method=dict(type="str", choices=["get", "head"]),
         path=dict(type="str"),
-        headers=dict(type="dict"),
+        headers=dict(type="dict", no_log=True),
         interval_in_seconds=dict(type="int", choices=[10, 30, 60]),
         is_enabled=dict(type="bool"),
     )

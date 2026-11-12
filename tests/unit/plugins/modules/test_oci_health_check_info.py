@@ -2,7 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import types
 
-from .conftest import DummyModule, FakeResponse, load_collection_module, make_module_instance
+import pytest
+
+from .conftest import DummyModule, ExitJsonCalled, FakeResponse, load_collection_module, make_module_instance
 
 
 def test_info_dispatches_get_by_monitor_type():
@@ -19,7 +21,7 @@ def test_info_dispatches_get_by_monitor_type():
         instance = make_module_instance(
             module,
             "OciHealthCheckInfoModule",
-            {"monitor_type": monitor_type, "monitor_id": "monitor1"},
+            {"monitor_type": monitor_type, "monitor_id": "monitor1", "name": "ignored"},
             client=client,
         )
         instance.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
@@ -47,17 +49,18 @@ def test_info_get_404_returns_empty_list():
     assert instance.fetch_resources() == []
 
 
-def test_info_list_filters_include_home_region_and_name():
-    """Pass supported list filters and apply the name filter locally."""
+@pytest.mark.parametrize("monitor_type", ["http", "ping"])
+def test_info_list_filters_include_home_region_and_name(monitor_type):
+    """Send the name filter to OCI and retain exact local matching."""
     module = load_collection_module("oci_health_check_info")
     instance = make_module_instance(
         module,
         "OciHealthCheckInfoModule",
         {
-            "monitor_type": "ping", "compartment_id": "compartment1",
+            "monitor_type": monitor_type, "compartment_id": "compartment1",
             "name": "monitor", "home_region": "us-phoenix-1",
         },
-        client=types.SimpleNamespace(list_ping_monitors=lambda **kwargs: None),
+        client=types.SimpleNamespace(**{"list_%s_monitors" % monitor_type: lambda **kwargs: None}),
     )
     captured = {}
     resources = [types.SimpleNamespace(display_name="monitor"), types.SimpleNamespace(display_name="other")]
@@ -66,6 +69,7 @@ def test_info_list_filters_include_home_region_and_name():
     assert captured == {
         "compartment_id": "compartment1",
         "home_region": "us-phoenix-1",
+        "display_name": "monitor",
     }
 
 
@@ -94,3 +98,39 @@ def test_info_main_uses_canonical_names_and_result_key(monkeypatch):
     assert "aliases" not in spec["name"]
     assert spec["home_region"]["type"] == "str"
     assert info_class.results_key == "health_checks"
+
+
+@pytest.mark.parametrize("monitor_type", ["http", "ping"])
+@pytest.mark.parametrize("name", [None, ""])
+def test_info_optional_name_filter(monitor_type, name):
+    """Omit an absent name filter and preserve an empty name."""
+    module = load_collection_module("oci_health_check_info")
+    instance = make_module_instance(
+        module, "OciHealthCheckInfoModule",
+        {"monitor_type": monitor_type, "compartment_id": "compartment1", "name": name},
+        client=types.SimpleNamespace(**{"list_%s_monitors" % monitor_type: lambda **kwargs: None}),
+    )
+    captured = {}
+    instance.list_all_resources = lambda fn, **kwargs: captured.update(kwargs) or []
+    assert instance.fetch_resources() == []
+    expected = {"compartment_id": "compartment1"}
+    if name is not None:
+        expected["display_name"] = name
+    assert captured == expected
+
+
+def test_info_get_result_omits_stored_headers():
+    """Remove stored headers from an ID lookup without supplied header values."""
+    module = load_collection_module("oci_health_check_info")
+    resource = types.SimpleNamespace(id="monitor1", display_name="Monitor", headers={"Cookie": "stored-cookie"})
+    instance = make_module_instance(
+        module, "OciHealthCheckInfoModule", {"monitor_type": "http", "monitor_id": "monitor1"},
+        client=types.SimpleNamespace(get_http_monitor=lambda **kwargs: FakeResponse(resource)),
+    )
+    instance.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
+    with pytest.raises(ExitJsonCalled) as result:
+        instance.execute_info_module()
+    assert result.value.payload == {
+        "changed": False, "health_checks": [{"id": "monitor1", "name": "Monitor"}],
+    }
+    assert resource.headers == {"Cookie": "stored-cookie"}

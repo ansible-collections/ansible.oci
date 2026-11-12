@@ -11,6 +11,7 @@ module: oci_health_check_info
 short_description: Get OCI Health Checks monitor information
 description:
   - Get one monitor or list monitor summaries in a compartment.
+  - Results omit HTTP request headers to protect confidential values.
 version_added: "1.3.0"
 author:
   - Ron Gershburg (@ronger4)
@@ -97,10 +98,6 @@ health_checks:
       description: The HTTP request path.
       type: str
       sample: /
-    headers:
-      returned: When monitor_id is supplied and the field applies to the monitor type.
-      description: HTTP request headers.
-      type: dict
     vantage_point_names:
       returned: When monitor_id is supplied and the field applies to the monitor type.
       description: The vantage points that run probes.
@@ -168,10 +165,19 @@ class OciHealthCheckInfoModule(OciInfoBase):
         """Return the monitor list operation name."""
         return self.dispatch["list"]
 
+    redacted_result_keys = ("headers",)
     results_key = "health_checks"
     resource_id_param = "monitor_id"
     resource_id_kwarg = "monitor_id"
     list_filter_params = ("compartment_id", "home_region")
+
+    def collect_list_filters(self, *param_groups):
+        """Translate the module name filter to the OCI display-name filter."""
+        filters = super(OciHealthCheckInfoModule, self).collect_list_filters(*param_groups)
+        name = self.module.params.get(self.name_filter_param)
+        if name is not None:
+            filters["display_name"] = name
+        return filters
 
 
 def main():
