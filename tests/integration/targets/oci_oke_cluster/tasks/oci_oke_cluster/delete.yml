@@ -1,0 +1,16 @@
+---
+- name: Test the OKE cluster lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Test cluster deletion by ID
+      ansible.builtin.include_tasks: test_cluster_scenario.yml
+      vars:
+        oci_oke_lookup_name: '{{ oci_oke_cluster_integration_updated_name }}'
+        oci_oke_operation:
+          state: absent
+          cluster_id: '{{ oci_oke_cluster_id }}'
+        oci_oke_expected: {}

@@ -1,0 +1,94 @@
+---
+- name: Exercise Object Storage bucket lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Check bucket update without changing OCI
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        versioning: Enabled
+        metadata: &id001
+          phase: update
+        object_events_enabled: true
+        auto_tiering: InfrequentAccess
+        freeform_tags: &id002
+          phase: update
+      check_mode: true
+      register: bucket_update_check
+
+    - name: Read bucket after update check mode
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_update_probe
+
+    - name: Verify update check mode left bucket settings unchanged
+      ansible.builtin.assert:
+        that:
+          - bucket_update_check.changed | bool
+          - bucket_update_probe.buckets[0].versioning == 'Disabled'
+          - bucket_update_probe.buckets[0].metadata.phase == 'create'
+          - not bucket_update_probe.buckets[0].object_events_enabled | bool
+          - bucket_update_probe.buckets[0].auto_tiering == 'Disabled'
+          - bucket_update_probe.buckets[0].freeform_tags.phase == 'create'
+
+    - name: Update bucket
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        versioning: Enabled
+        metadata: *id001
+        object_events_enabled: true
+        auto_tiering: InfrequentAccess
+        freeform_tags: *id002
+      register: bucket_update
+
+    - name: Save shared versioned_bucket
+      ansible.builtin.set_fact:
+        oci_group_resources: '{{ oci_group_resources | combine({''versioned_bucket'': bucket_update}) }}'
+
+    - name: Verify updated bucket
+      ansible.builtin.assert:
+        that:
+          - bucket_update.changed | bool
+          - bucket_update.resource.versioning == 'Enabled'
+          - bucket_update.resource.metadata.phase == 'update'
+          - bucket_update.resource.object_events_enabled | bool
+          - bucket_update.resource.auto_tiering == 'InfrequentAccess'
+          - bucket_update.resource.freeform_tags.phase == 'update'
+
+    - name: Reconcile updated bucket in check mode
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        versioning: Enabled
+        metadata: *id001
+        object_events_enabled: true
+        auto_tiering: InfrequentAccess
+        freeform_tags: *id002
+      check_mode: true
+      register: bucket_update_check_rerun
+
+    - name: Reconcile updated bucket again
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        versioning: Enabled
+        metadata: *id001
+        object_events_enabled: true
+        auto_tiering: InfrequentAccess
+        freeform_tags: *id002
+      register: bucket_update_rerun
+
+    - name: Verify bucket update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not bucket_update_check_rerun.changed | bool
+          - not bucket_update_rerun.changed | bool

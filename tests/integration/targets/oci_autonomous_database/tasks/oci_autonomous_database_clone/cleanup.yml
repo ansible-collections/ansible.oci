@@ -1,0 +1,25 @@
+---
+- name: Find leaked databases by unique name
+  ansible.oci.oci_autonomous_database_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ item }}'
+  loop:
+    - '{{ oci_adb_clone_integration_metadata_name }}'
+    - '{{ oci_adb_clone_integration_metadata_renamed }}'
+    - '{{ oci_adb_clone_integration_refreshable_name }}'
+    - '{{ oci_adb_clone_integration_source_name }}'
+  register: oci_group_cleanup_0
+  ignore_errors: true
+  when:
+    - oci_group_started_oci_autonomous_database_clone | default(false)
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Find leaked databases by unique name''] }}'
+  when: oci_group_cleanup_0 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

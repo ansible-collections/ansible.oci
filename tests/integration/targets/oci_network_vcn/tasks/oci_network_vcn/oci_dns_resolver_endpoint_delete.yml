@@ -1,0 +1,52 @@
+---
+- name: Delete endpoint in check mode
+  ansible.oci.oci_dns_resolver_endpoint:
+    state: absent
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_endpoint_name }}'
+  check_mode: true
+  register: oci_dns_resolver_endpoint_delete_check
+
+- name: Assert endpoint delete check mode predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_endpoint_delete_check.changed | bool
+
+- name: Read endpoint after delete check mode
+  ansible.oci.oci_dns_resolver_endpoint_info:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_endpoint_name }}'
+  register: oci_dns_resolver_endpoint_delete_probe
+
+- name: Assert endpoint still exists after delete check mode
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_endpoint_delete_probe.endpoints | length == 1
+
+- name: Delete endpoint
+  ansible.oci.oci_dns_resolver_endpoint:
+    state: absent
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_endpoint_name }}'
+  register: oci_dns_resolver_endpoint_delete
+
+- name: Assert endpoint delete changed cloud state
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_endpoint_delete.changed | bool
+
+- name: Mark resolver endpoint as deleted
+  ansible.builtin.set_fact:
+    oci_network_vcn_integration_endpoint_cleanup_needed: false
+
+- name: Repeat endpoint delete
+  ansible.oci.oci_dns_resolver_endpoint:
+    state: absent
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_endpoint_name }}'
+  register: oci_dns_resolver_endpoint_delete_repeat
+
+- name: Assert repeated endpoint delete is unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_resolver_endpoint_delete_repeat.changed | bool

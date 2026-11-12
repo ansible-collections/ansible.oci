@@ -1,0 +1,58 @@
+---
+- name: Exercise Network Security Group module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete Network Security Group in check mode
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: '{{ oci_network_security_group_id }}'
+      check_mode: true
+      register: oci_network_security_group_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_delete_check.changed | bool
+
+    - name: Read Network Security Group after delete check mode
+      ansible.oci.oci_network_security_group_info:
+        network_security_group_id: '{{ oci_network_security_group_id }}'
+      register: oci_network_security_group_delete_check_probe
+
+    - name: Assert Network Security Group still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_delete_check_probe.network_security_groups | length == 1
+
+    - name: Delete Network Security Group
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: '{{ oci_network_security_group_id }}'
+      register: oci_network_security_group_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_security_group_delete.changed | bool
+
+    - name: Delete Network Security Group again
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: '{{ oci_network_security_group_id }}'
+      register: oci_network_security_group_delete_rerun
+
+    - name: Assert repeated delete is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_network_security_group_delete_rerun.changed | bool
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_security_group/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_network_security_group: false

@@ -1,0 +1,247 @@
+---
+- name: Check firewall creation
+  ansible.oci.oci_waf_web_app_firewall:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_firewall_test_name }}'
+    freeform_tags:
+      phase: create
+    load_balancer_id: '{{ oci_waf_firewall_load_balancer.resource.id }}'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  check_mode: true
+  register: oci_waf_firewall_create_check
+
+- name: Read firewalls after the creation check
+  ansible.oci.oci_waf_web_app_firewall_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_firewall_test_name }}'
+  register: oci_waf_firewall_before_create
+
+- name: Verify the creation check left the firewall absent
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_create_check.changed
+      - oci_waf_firewall_before_create.web_app_firewalls | length == 0
+
+- name: Create the firewall
+  ansible.oci.oci_waf_web_app_firewall:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_firewall_test_name }}'
+    freeform_tags:
+      phase: create
+    load_balancer_id: '{{ oci_waf_firewall_load_balancer.resource.id }}'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  register: oci_waf_firewall_create
+
+- name: Save the firewall ID for cleanup
+  ansible.builtin.set_fact:
+    oci_waf_firewall_cleanup_id: '{{ oci_waf_firewall_create.resource.id }}'
+
+- name: Verify the created firewall
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_create.changed
+      - oci_waf_firewall_create.resource.id | length > 0
+      - oci_waf_firewall_create.resource.name == oci_waf_firewall_test_name
+      - oci_waf_firewall_create.resource.compartment_id == oci_integration_compartment_id
+      - oci_waf_firewall_create.resource.lifecycle_state == 'ACTIVE'
+      - oci_waf_firewall_create.resource.freeform_tags.phase == 'create'
+
+- name: Wait for the firewall to appear in the active list
+  ansible.oci.oci_waf_web_app_firewall_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_firewall_test_name }}'
+    lifecycle_state: active
+  register: oci_waf_firewall_list
+  until: oci_waf_firewall_list.web_app_firewalls | length == 1
+  retries: 12
+  delay: 5
+
+- name: Verify the list result
+  ansible.builtin.assert:
+    that:
+      - not oci_waf_firewall_list.changed
+      - oci_waf_firewall_list.web_app_firewalls[0].id == oci_waf_firewall_cleanup_id
+
+- name: Retrieve the firewall by ID
+  ansible.oci.oci_waf_web_app_firewall_info:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+  register: oci_waf_firewall_by_id
+
+- name: Verify the ID result
+  ansible.builtin.assert:
+    that:
+      - not oci_waf_firewall_by_id.changed
+      - oci_waf_firewall_by_id.web_app_firewalls | length == 1
+      - oci_waf_firewall_by_id.web_app_firewalls[0].id == oci_waf_firewall_cleanup_id
+
+- name: Verify the WAF attachment
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_create.resource.load_balancer_id == oci_waf_firewall_load_balancer.resource.id
+      - oci_waf_firewall_create.resource.web_app_firewall_policy_id == oci_waf_policy_cleanup_id
+      - oci_waf_firewall_create.resource.backend_type == 'LOAD_BALANCER'
+
+- name: Verify creation is unchanged
+  ansible.oci.oci_waf_web_app_firewall:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_firewall_test_name }}'
+    freeform_tags:
+      phase: create
+    load_balancer_id: '{{ oci_waf_firewall_load_balancer.resource.id }}'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  check_mode: false
+  register: oci_waf_firewall_create_repeat
+  failed_when: |-
+    oci_waf_firewall_create_repeat.changed or oci_waf_firewall_create_repeat.resource.id !=
+    oci_waf_firewall_cleanup_id
+
+- name: Verify creation is unchanged in check mode
+  ansible.oci.oci_waf_web_app_firewall:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_firewall_test_name }}'
+    freeform_tags:
+      phase: create
+    load_balancer_id: '{{ oci_waf_firewall_load_balancer.resource.id }}'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  check_mode: true
+  register: oci_waf_firewall_create_repeat
+  failed_when: |-
+    oci_waf_firewall_create_repeat.changed or oci_waf_firewall_create_repeat.resource.id !=
+    oci_waf_firewall_cleanup_id
+
+- name: Read the firewall before update 1
+  ansible.oci.oci_waf_web_app_firewall_info:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+  register: oci_waf_firewall_before_update
+
+- name: Check firewall update 1
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    name: '{{ oci_waf_firewall_test_name }}-updated'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_replacement.resource.id }}'
+    freeform_tags:
+      phase: update
+  check_mode: true
+  register: oci_waf_firewall_update_check
+
+- name: Read the firewall after the update check
+  ansible.oci.oci_waf_web_app_firewall_info:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+  register: oci_waf_firewall_after_update_check
+
+- name: Verify the update check left the firewall unchanged
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_update_check.changed
+      - oci_waf_firewall_after_update_check.web_app_firewalls == oci_waf_firewall_before_update.web_app_firewalls
+
+- name: Update the firewall
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    name: '{{ oci_waf_firewall_test_name }}-updated'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_replacement.resource.id }}'
+    freeform_tags:
+      phase: update
+  register: oci_waf_firewall_update
+
+- name: Verify the updated firewall
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_update.changed
+      - oci_waf_firewall_update.resource.lifecycle_state == 'ACTIVE'
+      - oci_waf_firewall_update.resource.name == oci_waf_firewall_test_name + "-updated"
+      - oci_waf_firewall_update.resource.web_app_firewall_policy_id == oci_waf_policy_replacement.resource.id
+      - 'oci_waf_firewall_update.resource.freeform_tags == {''phase'': ''update''}'
+
+- name: Verify update is unchanged
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    name: '{{ oci_waf_firewall_test_name }}-updated'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_replacement.resource.id }}'
+    freeform_tags:
+      phase: update
+  check_mode: false
+  register: oci_waf_firewall_update_repeat
+  failed_when: |-
+    oci_waf_firewall_update_repeat.changed or oci_waf_firewall_update_repeat.resource.id !=
+    oci_waf_firewall_cleanup_id
+
+- name: Verify the unchanged firewall settings
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_update_repeat.resource.name == oci_waf_firewall_test_name + "-updated"
+      - oci_waf_firewall_update_repeat.resource.web_app_firewall_policy_id == oci_waf_policy_replacement.resource.id
+      - 'oci_waf_firewall_update_repeat.resource.freeform_tags == {''phase'': ''update''}'
+
+- name: Verify update is unchanged in check mode
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    name: '{{ oci_waf_firewall_test_name }}-updated'
+    web_app_firewall_policy_id: '{{ oci_waf_policy_replacement.resource.id }}'
+    freeform_tags:
+      phase: update
+  check_mode: true
+  register: oci_waf_firewall_update_repeat
+  failed_when: |-
+    oci_waf_firewall_update_repeat.changed or oci_waf_firewall_update_repeat.resource.id !=
+    oci_waf_firewall_cleanup_id
+
+- name: Verify the unchanged firewall settings
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_update_repeat.resource.name == oci_waf_firewall_test_name + "-updated"
+      - oci_waf_firewall_update_repeat.resource.web_app_firewall_policy_id == oci_waf_policy_replacement.resource.id
+      - 'oci_waf_firewall_update_repeat.resource.freeform_tags == {''phase'': ''update''}'
+
+- name: Check firewall deletion
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    state: absent
+  check_mode: true
+  register: oci_waf_firewall_delete_check
+
+- name: Read the firewall after the deletion check
+  ansible.oci.oci_waf_web_app_firewall_info:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+  register: oci_waf_firewall_after_delete_check
+
+- name: Verify the deletion check left the firewall present
+  ansible.builtin.assert:
+    that:
+      - oci_waf_firewall_delete_check.changed
+      - oci_waf_firewall_after_delete_check.web_app_firewalls | length == 1
+      - oci_waf_firewall_after_delete_check.web_app_firewalls[0].lifecycle_state == 'ACTIVE'
+
+- name: Delete the firewall
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    state: absent
+  register: oci_waf_firewall_delete
+  failed_when: not oci_waf_firewall_delete.changed
+
+- name: Wait until the firewall is absent from the active list
+  ansible.oci.oci_waf_web_app_firewall_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    lifecycle_state: active
+  register: oci_waf_firewall_after_delete
+  until: |-
+    oci_waf_firewall_after_delete.web_app_firewalls | selectattr('id', 'equalto',
+    oci_waf_firewall_cleanup_id) | list | length == 0
+  retries: 12
+  delay: 5
+
+- name: Verify deletion is unchanged
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    state: absent
+  check_mode: false
+  register: oci_waf_firewall_delete_repeat
+  failed_when: oci_waf_firewall_delete_repeat.changed
+
+- name: Verify deletion is unchanged in check mode
+  ansible.oci.oci_waf_web_app_firewall:
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+    state: absent
+  check_mode: true
+  register: oci_waf_firewall_delete_repeat
+  failed_when: oci_waf_firewall_delete_repeat.changed

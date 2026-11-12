@@ -1,0 +1,430 @@
+---
+- name: Check policy creation
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_policy_test_name }}'
+    freeform_tags:
+      phase: create
+    actions:
+
+      - name: allow
+        type: allow
+
+      - name: reject
+        type: return_http_response
+        code: 403
+        headers:
+
+          - name: Content-Type
+            value: text/plain
+        body:
+          type: static_text
+          text: Request blocked
+    request_access_control:
+      default_action_name: allow
+      rules: []
+  check_mode: true
+  register: oci_waf_policy_create_check
+
+- name: Read policies after the creation check
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_policy_test_name }}'
+  register: oci_waf_policy_before_create
+
+- name: Verify the creation check left the policy absent
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_create_check.changed
+      - oci_waf_policy_before_create.web_app_firewall_policies | length == 0
+
+- name: Create the policy
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_policy_test_name }}'
+    freeform_tags:
+      phase: create
+    actions:
+
+      - name: allow
+        type: allow
+
+      - name: reject
+        type: return_http_response
+        code: 403
+        headers:
+
+          - name: Content-Type
+            value: text/plain
+        body:
+          type: static_text
+          text: Request blocked
+    request_access_control:
+      default_action_name: allow
+      rules: []
+  register: oci_waf_policy_create
+
+- name: Save the policy ID for cleanup
+  ansible.builtin.set_fact:
+    oci_waf_policy_cleanup_id: '{{ oci_waf_policy_create.resource.id }}'
+
+- name: Verify the created policy
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_create.changed
+      - oci_waf_policy_create.resource.id | length > 0
+      - oci_waf_policy_create.resource.name == oci_waf_policy_test_name
+      - oci_waf_policy_create.resource.compartment_id == oci_integration_compartment_id
+      - oci_waf_policy_create.resource.lifecycle_state == 'ACTIVE'
+      - oci_waf_policy_create.resource.freeform_tags.phase == 'create'
+
+- name: Wait for the policy to appear in the active list
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_policy_test_name }}'
+    lifecycle_state: active
+  register: oci_waf_policy_list
+  until: oci_waf_policy_list.web_app_firewall_policies | length == 1
+  retries: 12
+  delay: 5
+
+- name: Verify the list result
+  ansible.builtin.assert:
+    that:
+      - not oci_waf_policy_list.changed
+      - oci_waf_policy_list.web_app_firewall_policies[0].id == oci_waf_policy_cleanup_id
+
+- name: Retrieve the policy by ID
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  register: oci_waf_policy_by_id
+
+- name: Verify the ID result
+  ansible.builtin.assert:
+    that:
+      - not oci_waf_policy_by_id.changed
+      - oci_waf_policy_by_id.web_app_firewall_policies | length == 1
+      - oci_waf_policy_by_id.web_app_firewall_policies[0].id == oci_waf_policy_cleanup_id
+
+- name: Verify the WAF policy actions
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_create.resource.actions | length == 2
+      - |-
+        oci_waf_policy_create.resource.actions | selectattr('name', 'equalto', 'reject') |
+        map(attribute='code') | first == 403
+      - oci_waf_policy_create.resource.request_access_control.default_action_name == 'allow'
+
+- name: Verify creation is unchanged
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_policy_test_name }}'
+    freeform_tags:
+      phase: create
+    actions:
+
+      - name: allow
+        type: allow
+
+      - name: reject
+        type: return_http_response
+        code: 403
+        headers:
+
+          - name: Content-Type
+            value: text/plain
+        body:
+          type: static_text
+          text: Request blocked
+    request_access_control:
+      default_action_name: allow
+      rules: []
+  check_mode: false
+  register: oci_waf_policy_create_repeat
+  failed_when: oci_waf_policy_create_repeat.changed or oci_waf_policy_create_repeat.resource.id != oci_waf_policy_cleanup_id
+
+- name: Verify creation is unchanged in check mode
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_waf_policy_test_name }}'
+    freeform_tags:
+      phase: create
+    actions:
+
+      - name: allow
+        type: allow
+
+      - name: reject
+        type: return_http_response
+        code: 403
+        headers:
+
+          - name: Content-Type
+            value: text/plain
+        body:
+          type: static_text
+          text: Request blocked
+    request_access_control:
+      default_action_name: allow
+      rules: []
+  check_mode: true
+  register: oci_waf_policy_create_repeat
+  failed_when: oci_waf_policy_create_repeat.changed or oci_waf_policy_create_repeat.resource.id != oci_waf_policy_cleanup_id
+
+- name: Read the policy before update 1
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  register: oci_waf_policy_before_update
+
+- name: Check policy update 1
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    name: '{{ oci_waf_policy_test_name }}-updated'
+    freeform_tags:
+      phase: update
+    request_access_control:
+      default_action_name: allow
+      rules:
+
+        - name: block-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-blocked'
+          action_name: reject
+    request_rate_limiting:
+      rules:
+
+        - name: limit-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-limited'
+          action_name: reject
+          configurations:
+            - period_in_seconds: 60
+              requests_limit: 100
+              action_duration_in_seconds: 60
+  check_mode: true
+  register: oci_waf_policy_update_check
+
+- name: Read the policy after the update check
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  register: oci_waf_policy_after_update_check
+
+- name: Verify the update check left the policy unchanged
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update_check.changed
+      - |-
+        oci_waf_policy_after_update_check.web_app_firewall_policies ==
+        oci_waf_policy_before_update.web_app_firewall_policies
+
+- name: Update the policy
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    name: '{{ oci_waf_policy_test_name }}-updated'
+    freeform_tags:
+      phase: update
+    request_access_control:
+      default_action_name: allow
+      rules:
+
+        - name: block-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-blocked'
+          action_name: reject
+    request_rate_limiting:
+      rules:
+
+        - name: limit-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-limited'
+          action_name: reject
+          configurations:
+            - period_in_seconds: 60
+              requests_limit: 100
+              action_duration_in_seconds: 60
+  register: oci_waf_policy_update
+
+- name: Verify the updated policy
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update.changed
+      - oci_waf_policy_update.resource.lifecycle_state == 'ACTIVE'
+      - oci_waf_policy_update.resource.name == oci_waf_policy_test_name + "-updated"
+      - 'oci_waf_policy_update.resource.freeform_tags == {''phase'': ''update''}'
+      - oci_waf_policy_update.resource.request_access_control.rules | default([], true) | length == 1
+      - oci_waf_policy_update.resource.request_access_control.rules[0].name == 'block-test-path'
+      - oci_waf_policy_update.resource.request_access_control.rules[0].action_name == 'reject'
+      - oci_waf_policy_update.resource.request_access_control.default_action_name == 'allow'
+      - oci_waf_policy_update.resource.request_rate_limiting.rules | default([], true) | length == 1
+      - oci_waf_policy_update.resource.request_rate_limiting.rules[0].name == 'limit-test-path'
+      - oci_waf_policy_update.resource.request_rate_limiting.rules[0].action_name == 'reject'
+
+- name: Verify update is unchanged
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    name: '{{ oci_waf_policy_test_name }}-updated'
+    freeform_tags:
+      phase: update
+    request_access_control:
+      default_action_name: allow
+      rules:
+
+        - name: block-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-blocked'
+          action_name: reject
+    request_rate_limiting:
+      rules:
+
+        - name: limit-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-limited'
+          action_name: reject
+          configurations:
+            - period_in_seconds: 60
+              requests_limit: 100
+              action_duration_in_seconds: 60
+  check_mode: false
+  register: oci_waf_policy_update_repeat
+  failed_when: oci_waf_policy_update_repeat.changed or oci_waf_policy_update_repeat.resource.id != oci_waf_policy_cleanup_id
+
+- name: Verify the unchanged policy settings
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update_repeat.resource.name == oci_waf_policy_test_name + "-updated"
+      - 'oci_waf_policy_update_repeat.resource.freeform_tags == {''phase'': ''update''}'
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules | default([], true) | length == 1
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules[0].name == 'block-test-path'
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules[0].action_name == 'reject'
+      - oci_waf_policy_update_repeat.resource.request_access_control.default_action_name == 'allow'
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules | default([], true) | length == 1
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules[0].name == 'limit-test-path'
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules[0].action_name == 'reject'
+
+- name: Verify update is unchanged in check mode
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    name: '{{ oci_waf_policy_test_name }}-updated'
+    freeform_tags:
+      phase: update
+    request_access_control:
+      default_action_name: allow
+      rules:
+
+        - name: block-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-blocked'
+          action_name: reject
+    request_rate_limiting:
+      rules:
+
+        - name: limit-test-path
+          condition_language: jmespath
+          condition: http.request.url.path == '/oci-integration-limited'
+          action_name: reject
+          configurations:
+            - period_in_seconds: 60
+              requests_limit: 100
+              action_duration_in_seconds: 60
+  check_mode: true
+  register: oci_waf_policy_update_repeat
+  failed_when: oci_waf_policy_update_repeat.changed or oci_waf_policy_update_repeat.resource.id != oci_waf_policy_cleanup_id
+
+- name: Verify the unchanged policy settings
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update_repeat.resource.name == oci_waf_policy_test_name + "-updated"
+      - 'oci_waf_policy_update_repeat.resource.freeform_tags == {''phase'': ''update''}'
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules | default([], true) | length == 1
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules[0].name == 'block-test-path'
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules[0].action_name == 'reject'
+      - oci_waf_policy_update_repeat.resource.request_access_control.default_action_name == 'allow'
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules | default([], true) | length == 1
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules[0].name == 'limit-test-path'
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules[0].action_name == 'reject'
+
+- name: Read the policy before update 2
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  register: oci_waf_policy_before_update
+
+- name: Check policy update 2
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    request_access_control:
+      default_action_name: allow
+      rules: []
+    request_rate_limiting:
+      rules: []
+  check_mode: true
+  register: oci_waf_policy_update_check
+
+- name: Read the policy after the update check
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  register: oci_waf_policy_after_update_check
+
+- name: Verify the update check left the policy unchanged
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update_check.changed
+      - |-
+        oci_waf_policy_after_update_check.web_app_firewall_policies ==
+        oci_waf_policy_before_update.web_app_firewall_policies
+
+- name: Update the policy
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    request_access_control:
+      default_action_name: allow
+      rules: []
+    request_rate_limiting:
+      rules: []
+  register: oci_waf_policy_update
+
+- name: Verify the updated policy
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update.changed
+      - oci_waf_policy_update.resource.lifecycle_state == 'ACTIVE'
+      - oci_waf_policy_update.resource.request_access_control.rules | default([], true) | length == 0
+      - oci_waf_policy_update.resource.request_access_control.default_action_name == 'allow'
+      - oci_waf_policy_update.resource.request_rate_limiting.rules | default([], true) | length == 0
+
+- name: Verify update is unchanged
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    request_access_control:
+      default_action_name: allow
+      rules: []
+    request_rate_limiting:
+      rules: []
+  check_mode: false
+  register: oci_waf_policy_update_repeat
+  failed_when: oci_waf_policy_update_repeat.changed or oci_waf_policy_update_repeat.resource.id != oci_waf_policy_cleanup_id
+
+- name: Verify the unchanged policy settings
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules | default([], true) | length == 0
+      - oci_waf_policy_update_repeat.resource.request_access_control.default_action_name == 'allow'
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules | default([], true) | length == 0
+
+- name: Verify update is unchanged in check mode
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    request_access_control:
+      default_action_name: allow
+      rules: []
+    request_rate_limiting:
+      rules: []
+  check_mode: true
+  register: oci_waf_policy_update_repeat
+  failed_when: oci_waf_policy_update_repeat.changed or oci_waf_policy_update_repeat.resource.id != oci_waf_policy_cleanup_id
+
+- name: Verify the unchanged policy settings
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_update_repeat.resource.request_access_control.rules | default([], true) | length == 0
+      - oci_waf_policy_update_repeat.resource.request_access_control.default_action_name == 'allow'
+      - oci_waf_policy_update_repeat.resource.request_rate_limiting.rules | default([], true) | length == 0

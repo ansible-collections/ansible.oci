@@ -1,0 +1,46 @@
+---
+- name: Delete leaked first API key
+  ansible.oci.oci_identity_api_key:
+    state: absent
+    domain_id: '{{ oci_identity_api_key_domain_id }}'
+    user_id: '{{ oci_identity_api_key_user_id }}'
+    fingerprint: '{{ oci_identity_api_key_first_fingerprint }}'
+  when:
+    - oci_group_started_oci_identity_api_key | default(false)
+    - oci_identity_api_key_domain_id | default('') | length > 0
+    - oci_identity_api_key_user_id | default('') | length > 0
+    - oci_identity_api_key_first_fingerprint | default('') | length > 0
+  register: oci_group_cleanup_10
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked first API key''] }}'
+  when: oci_group_cleanup_10 is failed
+
+- name: Delete leaked second API key
+  ansible.oci.oci_identity_api_key:
+    state: absent
+    domain_id: '{{ oci_identity_api_key_domain_id }}'
+    user_id: '{{ oci_identity_api_key_user_id }}'
+    fingerprint: '{{ oci_identity_api_key_second_fingerprint }}'
+  when:
+    - oci_group_started_oci_identity_api_key | default(false)
+    - oci_identity_api_key_domain_id | default('') | length > 0
+    - oci_identity_api_key_user_id | default('') | length > 0
+    - oci_identity_api_key_second_fingerprint | default('') | length > 0
+  register: oci_group_cleanup_12
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked second API key''] }}'
+  when: oci_group_cleanup_12 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

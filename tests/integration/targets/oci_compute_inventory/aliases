@@ -1,3 +1,0 @@
-destructive
-time=90m
-needs/file/plugins/inventory/oci_compute.py

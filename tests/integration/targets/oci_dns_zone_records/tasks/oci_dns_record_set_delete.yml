@@ -1,0 +1,82 @@
+---
+- name: Predict RRset deletion
+  ansible.oci.oci_dns_record_set:
+    state: absent
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: a
+  check_mode: true
+  register: oci_dns_rrset_delete_check
+
+- name: Probe RRset after delete check mode
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: a
+  register: oci_dns_rrset_delete_probe
+
+- name: Verify RRset delete check retained its record
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_delete_probe.records | length == 1
+
+- name: Verify RRset delete check predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_delete_check.changed | bool
+
+- name: Delete A RRset
+  ansible.oci.oci_dns_record_set:
+    state: absent
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: a
+  register: oci_dns_rrset_delete
+
+- name: Verify RRset is absent
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: a
+  register: oci_dns_rrset_deleted_info
+
+- name: Assert RRset delete and info result
+  ansible.builtin.assert:
+    that:
+      - oci_dns_rrset_delete.changed | bool
+      - oci_dns_rrset_deleted_info.records | length == 0
+
+- name: Repeat RRset deletion
+  ansible.oci.oci_dns_record_set:
+    state: absent
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: a
+  register: oci_dns_rrset_delete_repeat
+
+- name: Recheck RRset deletion
+  ansible.oci.oci_dns_record_set:
+    state: absent
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: a
+  check_mode: true
+  register: oci_dns_rrset_delete_check_repeat
+
+- name: Assert RRset deletion reruns are unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_rrset_delete_repeat.changed | bool
+      - not oci_dns_rrset_delete_check_repeat.changed | bool

@@ -1,0 +1,78 @@
+---
+- name: Exercise subnet module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Use the tested subnet for VCN dependency checks
+      ansible.builtin.set_fact:
+        oci_network_vcn_integration_subnet_id: '{{ oci_subnet_id }}'
+
+    - name: Exercise DNS resolver and endpoint lifecycle
+      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_vcn/dns_resolver.yml'
+
+    - name: Assert delete fails cleanly while dependent subnet exists
+      ansible.oci.oci_network_vcn:
+        state: '{{ oci_network_vcn_delete_params.state }}'
+        vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
+      register: oci_network_vcn_delete_blocked
+      ignore_errors: true
+
+    - name: Verify blocked delete message
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete_blocked is failed
+          - '''dependent resources'' in (oci_network_vcn_delete_blocked.msg | default(''''))'
+
+    - name: Delete subnet in check mode
+      ansible.oci.oci_network_subnet:
+        state: '{{ oci_subnet_delete_params.state }}'
+        subnet_id: '{{ oci_subnet_delete_params.subnet_id }}'
+      check_mode: true
+      register: oci_subnet_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_subnet_delete_check.changed | bool
+
+    - name: Read subnet after delete check mode
+      ansible.oci.oci_network_subnet_info:
+        subnet_id: '{{ oci_subnet_id }}'
+      register: oci_subnet_delete_check_probe
+
+    - name: Assert subnet still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_subnet_delete_check_probe.subnets | length == 1
+
+    - name: Delete subnet
+      ansible.oci.oci_network_subnet:
+        state: '{{ oci_subnet_delete_params.state }}'
+        subnet_id: '{{ oci_subnet_delete_params.subnet_id }}'
+      register: oci_subnet_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_subnet_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_network_subnet:
+        state: '{{ oci_subnet_delete_params.state }}'
+        subnet_id: '{{ oci_subnet_delete_params.subnet_id }}'
+      register: oci_subnet_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_subnet_delete_rerun.changed | bool
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_subnet/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_network_subnet: false

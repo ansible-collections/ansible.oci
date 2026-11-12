@@ -1,0 +1,24 @@
+---
+- name: Delete leaked user before deleting its domain
+  ansible.oci.oci_identity_user:
+    state: absent
+    domain_id: '{{ oci_integration_domain_id }}'
+    user_name: '{{ oci_identity_user_cleanup_name }}'
+  when:
+    - oci_group_started_oci_identity_user | default(false)
+    - oci_integration_domain_id | length > 0
+    - oci_identity_user_cleanup_name | default('') | length > 0
+  register: oci_group_cleanup_26
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked user before deleting its domain''] }}'
+  when: oci_group_cleanup_26 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

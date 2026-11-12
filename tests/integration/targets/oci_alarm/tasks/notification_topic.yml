@@ -1,31 +1,32 @@
 ---
 - name: Check topic creation
-  ansible.oci.oci_notification_topic: &topic_create
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_notification_topic_integration_name }}"
-    description: "{{ oci_notification_topic_integration_description }}"
-    freeform_tags:
+  ansible.oci.oci_notification_topic:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    description: '{{ oci_notification_topic_integration_description }}'
+    freeform_tags: &id001
       phase: create
   check_mode: true
   register: topic_create_check
 
 - name: Verify topic creation check left topic absent
   ansible.oci.oci_notification_topic_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_notification_topic_integration_name }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
   register: topic_create_check_info
-  failed_when: >-
-    not topic_create_check.changed or
-    topic_create_check_info.topics | length != 0
+  failed_when: not topic_create_check.changed or topic_create_check_info.topics | length != 0
 
 - name: Create topic
   ansible.oci.oci_notification_topic:
-    <<: *topic_create
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    description: '{{ oci_notification_topic_integration_description }}'
+    freeform_tags: *id001
   register: topic_create
 
 - name: Capture topic id for cleanup
   ansible.builtin.set_fact:
-    oci_notification_topic_cleanup_id: "{{ topic_create.resource.topic_id }}"
+    oci_notification_topic_cleanup_id: '{{ topic_create.resource.topic_id }}'
 
 - name: Verify created topic values
   ansible.builtin.assert:
@@ -40,8 +41,8 @@
 
 - name: Wait for topic visibility by exact name
   ansible.oci.oci_notification_topic_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_notification_topic_integration_name }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
   register: topic_by_name
   until: topic_by_name.topics | length == 1
   retries: 12
@@ -49,29 +50,33 @@
 
 - name: Verify topic creation is idempotent without topic_id
   ansible.oci.oci_notification_topic:
-    <<: *topic_create
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    description: '{{ oci_notification_topic_integration_description }}'
+    freeform_tags: *id001
   register: topic_create_rerun
-  failed_when: >-
-    topic_create_rerun.changed or
-    topic_create_rerun.resource.topic_id != topic_create.resource.topic_id
+  failed_when: topic_create_rerun.changed or topic_create_rerun.resource.topic_id != topic_create.resource.topic_id
 
 - name: Verify topic creation is idempotent in check mode
   ansible.oci.oci_notification_topic:
-    <<: *topic_create
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    description: '{{ oci_notification_topic_integration_description }}'
+    freeform_tags: *id001
   check_mode: true
   register: topic_create_check_rerun
-  failed_when: >-
-    topic_create_check_rerun.changed or
-    topic_create_check_rerun.resource.topic_id != topic_create.resource.topic_id
+  failed_when: |-
+    topic_create_check_rerun.changed or topic_create_check_rerun.resource.topic_id !=
+    topic_create.resource.topic_id
 
 - name: Retrieve topic by id
   ansible.oci.oci_notification_topic_info:
-    topic_id: "{{ topic_create.resource.topic_id }}"
+    topic_id: '{{ topic_create.resource.topic_id }}'
   register: topic_by_id
 
 - name: Retrieve topics by compartment and lifecycle state
   ansible.oci.oci_notification_topic_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
     lifecycle_state: active
   register: topics_active
 
@@ -85,10 +90,10 @@
       - topics_active.topics | selectattr('topic_id', 'equalto', topic_create.resource.topic_id) | list | length == 1
 
 - name: Check topic update
-  ansible.oci.oci_notification_topic: &topic_update
-    topic_id: "{{ topic_create.resource.topic_id }}"
-    description: "{{ oci_notification_topic_integration_description }} updated"
-    freeform_tags:
+  ansible.oci.oci_notification_topic:
+    topic_id: '{{ topic_create.resource.topic_id }}'
+    description: '{{ oci_notification_topic_integration_description }} updated'
+    freeform_tags: &id002
       phase: update
   check_mode: true
   register: topic_update_check
@@ -96,17 +101,18 @@
 
 - name: Verify topic update check left topic unchanged
   ansible.oci.oci_notification_topic_info:
-    topic_id: "{{ topic_create.resource.topic_id }}"
+    topic_id: '{{ topic_create.resource.topic_id }}'
   register: topic_update_check_info
-  failed_when: >-
-    topic_update_check_info.topics | length != 1 or
-    topic_update_check_info.topics[0].description !=
+  failed_when: |-
+    topic_update_check_info.topics | length != 1 or topic_update_check_info.topics[0].description !=
       oci_notification_topic_integration_description or
     topic_update_check_info.topics[0].freeform_tags.phase != 'create'
 
 - name: Update topic
   ansible.oci.oci_notification_topic:
-    <<: *topic_update
+    topic_id: '{{ topic_create.resource.topic_id }}'
+    description: '{{ oci_notification_topic_integration_description }} updated'
+    freeform_tags: *id002
   register: topic_update
 
 - name: Verify updated topic values
@@ -120,34 +126,37 @@
 
 - name: Wait for topic update visibility
   ansible.oci.oci_notification_topic_info:
-    topic_id: "{{ topic_create.resource.topic_id }}"
+    topic_id: '{{ topic_create.resource.topic_id }}'
   register: topic_after_update
-  until: >-
-    topic_after_update.topics | length == 1 and
-    topic_after_update.topics[0].freeform_tags.phase == 'update' and
-    topic_after_update.topics[0].description ==
-      oci_notification_topic_integration_description + ' updated'
+  until: |-
+    topic_after_update.topics | length == 1 and topic_after_update.topics[0].freeform_tags.phase ==
+    'update' and topic_after_update.topics[0].description ==
+    oci_notification_topic_integration_description + ' updated'
   retries: 12
   delay: 5
 
 - name: Verify update is idempotent in normal mode
   ansible.oci.oci_notification_topic:
-    <<: *topic_update
+    topic_id: '{{ topic_create.resource.topic_id }}'
+    description: '{{ oci_notification_topic_integration_description }} updated'
+    freeform_tags: *id002
   register: topic_update_rerun
   failed_when: topic_update_rerun.changed
 
 - name: Verify update is idempotent in check mode
   ansible.oci.oci_notification_topic:
-    <<: *topic_update
+    topic_id: '{{ topic_create.resource.topic_id }}'
+    description: '{{ oci_notification_topic_integration_description }} updated'
+    freeform_tags: *id002
   check_mode: true
   register: topic_update_check_rerun
   failed_when: topic_update_check_rerun.changed
 
 - name: Check tags-only update by name lookup
-  ansible.oci.oci_notification_topic: &topic_tags_update
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_notification_topic_integration_name }}"
-    freeform_tags:
+  ansible.oci.oci_notification_topic:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    freeform_tags: &id003
       phase: tags-only
   check_mode: true
   register: topic_tags_update_check
@@ -155,17 +164,19 @@
 
 - name: Verify tags-only check left topic unchanged
   ansible.oci.oci_notification_topic_info:
-    topic_id: "{{ topic_create.resource.topic_id }}"
+    topic_id: '{{ topic_create.resource.topic_id }}'
   register: topic_tags_update_check_info
-  failed_when: >-
+  failed_when: |-
     topic_tags_update_check_info.topics | length != 1 or
     topic_tags_update_check_info.topics[0].freeform_tags.phase != 'update' or
-    topic_tags_update_check_info.topics[0].description !=
-      oci_notification_topic_integration_description + ' updated'
+    topic_tags_update_check_info.topics[0].description != oci_notification_topic_integration_description
+    + ' updated'
 
 - name: Update topic tags only by name lookup
   ansible.oci.oci_notification_topic:
-    <<: *topic_tags_update
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    freeform_tags: *id003
   register: topic_tags_update
 
 - name: Verify tags-only update preserved the description
@@ -178,29 +189,31 @@
 
 - name: Wait for tags-only update visibility
   ansible.oci.oci_notification_topic_info:
-    topic_id: "{{ topic_create.resource.topic_id }}"
+    topic_id: '{{ topic_create.resource.topic_id }}'
   register: topic_after_tags_update
-  until: >-
+  until: |-
     topic_after_tags_update.topics | length == 1 and
     topic_after_tags_update.topics[0].freeform_tags.phase == 'tags-only' and
-    topic_after_tags_update.topics[0].description ==
-      oci_notification_topic_integration_description + ' updated'
+    topic_after_tags_update.topics[0].description == oci_notification_topic_integration_description +
+    ' updated'
   retries: 12
   delay: 5
 
 - name: Verify tags-only update is idempotent in normal mode
   ansible.oci.oci_notification_topic:
-    <<: *topic_tags_update
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    freeform_tags: *id003
   register: topic_tags_update_rerun
-  failed_when: >-
-    topic_tags_update_rerun.changed or
-    topic_tags_update_rerun.resource.topic_id != topic_create.resource.topic_id
+  failed_when: topic_tags_update_rerun.changed or topic_tags_update_rerun.resource.topic_id != topic_create.resource.topic_id
 
 - name: Verify tags-only update is idempotent in check mode
   ansible.oci.oci_notification_topic:
-    <<: *topic_tags_update
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_notification_topic_integration_name }}'
+    freeform_tags: *id003
   check_mode: true
   register: topic_tags_update_check_rerun
-  failed_when: >-
-    topic_tags_update_check_rerun.changed or
-    topic_tags_update_check_rerun.resource.topic_id != topic_create.resource.topic_id
+  failed_when: |-
+    topic_tags_update_check_rerun.changed or topic_tags_update_check_rerun.resource.topic_id !=
+    topic_create.resource.topic_id

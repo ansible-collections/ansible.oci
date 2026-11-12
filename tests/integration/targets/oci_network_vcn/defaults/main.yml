@@ -1,16 +1,144 @@
 ---
-oci_network_vcn_integration_vcn_name: "oci-vcn-integration-vcn"
-oci_network_vcn_integration_updated_vcn_name: "oci-vcn-integration-vcn-updated"
-oci_network_vcn_integration_subnet_name: "oci-vcn-integration-subnet"
-oci_network_vcn_integration_vcn_cidr_block: "10.241.0.0/16"
-oci_network_vcn_integration_modified_vcn_cidr_block: "10.241.0.0/17"
-oci_network_vcn_integration_additional_vcn_cidr_block: "10.242.0.0/16"
-oci_network_vcn_integration_subnet_cidr_block: "10.241.0.0/24"
-oci_network_vcn_integration_vcn_dns_label: "ocivcnit"
-oci_network_vcn_integration_endpoint_name: "oci_vcn_dns_endpoint"
+oci_network_vcn_integration_vcn_name: oci-vcn-integration-vcn
+oci_network_vcn_integration_updated_vcn_name: oci-vcn-integration-vcn-updated
+oci_network_vcn_integration_subnet_name: oci-vcn-integration-subnet
+oci_network_vcn_integration_vcn_cidr_block: 10.241.0.0/16
+oci_network_vcn_integration_modified_vcn_cidr_block: 10.241.0.0/17
+oci_network_vcn_integration_additional_vcn_cidr_block: 10.242.0.0/16
+oci_network_vcn_integration_subnet_cidr_block: 10.241.0.0/24
+oci_network_vcn_integration_vcn_dns_label: ocivcnit
+oci_network_vcn_integration_endpoint_name: oci_vcn_dns_endpoint
 oci_network_vcn_integration_create_tags:
   phase: create
   role: integration
 oci_network_vcn_integration_update_tags:
+  phase: update
+  role: integration
+oci_dhcp_options_integration_vcn_name: oci-dhcp-options-integration-vcn
+oci_dhcp_options_integration_dhcp_options_name: oci-dhcp-options-integration-dhcp
+oci_dhcp_options_integration_updated_dhcp_options_name: oci-dhcp-options-integration-dhcp-updated
+oci_dhcp_options_integration_vcn_cidr_block: 10.252.0.0/16
+oci_dhcp_options_integration_vcn_dns_label: ocidhcpoptv
+oci_dhcp_options_integration_create_tags:
+  phase: create
+  role: integration
+oci_dhcp_options_integration_update_tags:
+  phase: update
+  role: integration
+oci_internet_gateway_integration_vcn_name: oci-ig-integration-vcn
+oci_internet_gateway_integration_ig_name: oci-ig-integration-ig
+oci_internet_gateway_integration_updated_ig_name: oci-ig-integration-ig-updated
+oci_internet_gateway_integration_vcn_cidr_block: 10.252.0.0/16
+oci_internet_gateway_integration_vcn_dns_label: ociigv
+oci_internet_gateway_integration_create_tags:
+  phase: create
+  role: integration
+oci_internet_gateway_integration_update_tags:
+  phase: update
+  role: integration
+oci_nat_gateway_integration_vcn_name: oci-nat-gateway-integration-vcn
+oci_nat_gateway_integration_nat_gateway_name: oci-nat-gateway-integration-nat-gateway
+oci_nat_gateway_integration_updated_nat_gateway_name: oci-nat-gateway-integration-nat-gateway-updated
+oci_nat_gateway_integration_vcn_cidr_block: 10.252.0.0/16
+oci_nat_gateway_integration_vcn_dns_label: ocinatgwv
+oci_nat_gateway_integration_create_tags:
+  phase: create
+  role: integration
+oci_nat_gateway_integration_update_tags:
+  phase: update
+  role: integration
+oci_route_table_integration_vcn_name: oci-route-table-integration-vcn
+oci_route_table_integration_ig_name: oci-route-table-integration-ig
+oci_route_table_integration_route_table_name: oci-route-table-integration-rt
+oci_route_table_integration_updated_route_table_name: oci-route-table-integration-rt-updated
+oci_route_table_integration_vcn_cidr_block: 10.252.0.0/16
+oci_route_table_integration_vcn_dns_label: ocirtvcn
+oci_route_table_integration_create_tags:
+  phase: create
+  role: integration
+oci_route_table_integration_update_tags:
+  phase: update
+  role: integration
+oci_security_list_integration_vcn_name: oci-security-list-integration-vcn
+oci_security_list_integration_security_list_name: oci-security-list-integration-sl
+oci_security_list_integration_updated_security_list_name: oci-security-list-integration-sl-updated
+oci_security_list_integration_vcn_cidr_block: 10.253.0.0/16
+oci_security_list_integration_vcn_dns_label: ocislvcn
+oci_security_list_integration_create_tags:
+  phase: create
+  role: integration
+oci_security_list_integration_update_tags:
+  phase: update
+  role: integration
+oci_network_security_group_integration_vcn_name: oci-network-security-group-integration-vcn
+oci_network_security_group_integration_name: oci-network-security-group-integration
+oci_network_security_group_integration_updated_name: oci-network-security-group-integration-updated
+oci_network_security_group_integration_vcn_cidr_block: 10.254.0.0/16
+oci_network_security_group_integration_vcn_dns_label: ocinsgvcn
+oci_network_security_group_integration_create_tags:
+  phase: create
+  role: integration
+oci_network_security_group_integration_update_tags:
+  phase: update
+  role: integration
+oci_network_security_group_rule_vcn_name: oci-network-security-group-rule-vcn
+oci_network_security_group_rule_nsg_name: oci-network-security-group-rule-nsg
+oci_network_security_group_rule_peer_nsg_name: oci-network-security-group-rule-peer-nsg
+oci_network_security_group_rule_vcn_cidr: 10.252.0.0/16
+oci_service_gateway_integration_vcn_name: oci-sgw-integration-vcn
+oci_service_gateway_integration_gateway_name: oci-sgw-integration-gateway
+oci_service_gateway_integration_updated_gateway_name: oci-sgw-integration-gateway-updated
+oci_service_gateway_integration_vcn_cidr_block: 10.252.0.0/16
+oci_service_gateway_integration_vcn_dns_label: ocisgwv
+oci_service_gateway_integration_create_tags:
+  phase: create
+  role: integration
+oci_service_gateway_integration_update_tags:
+  phase: update
+  role: integration
+oci_lpg_integration_vcn_name: oci-lpg-integration-vcn
+oci_lpg_integration_peer_vcn_name: oci-lpg-integration-peer-vcn
+oci_lpg_integration_lpg_name: oci-lpg-integration-lpg
+oci_lpg_integration_updated_lpg_name: oci-lpg-integration-lpg-updated
+oci_lpg_integration_peer_lpg_name: oci-lpg-integration-peer-lpg
+oci_lpg_integration_vcn_cidr_block: 10.254.0.0/16
+oci_lpg_integration_peer_vcn_cidr_block: 10.255.0.0/16
+oci_lpg_integration_vcn_dns_label: ocilpgvcn
+oci_lpg_integration_peer_vcn_dns_label: ocilpgpeer
+oci_lpg_integration_create_tags:
+  phase: create
+  role: integration
+oci_lpg_integration_update_tags:
+  phase: update
+  role: integration
+oci_subnet_integration_vcn_name: oci-subnet-integration-vcn
+oci_subnet_integration_subnet_name: oci-subnet-integration-subnet
+oci_subnet_integration_updated_subnet_name: oci-subnet-integration-subnet-updated
+oci_subnet_integration_vcn_cidr_block: 10.241.0.0/16
+oci_subnet_integration_subnet_cidr_block: 10.241.1.0/25
+oci_subnet_integration_updated_subnet_cidr_block: 10.241.1.0/24
+oci_subnet_integration_vcn_dns_label: ocisubnetv
+oci_subnet_integration_subnet_dns_label: ocisubnets
+oci_subnet_integration_create_tags:
+  phase: create
+  role: integration
+oci_subnet_integration_update_tags:
+  phase: update
+  role: integration
+oci_bastion_integration_vcn_name: oci-bastion-integration-vcn
+oci_bastion_integration_subnet_name: oci-bastion-integration-subnet
+oci_bastion_integration_bastion_name: oci-bastion-integration-bastion
+oci_bastion_integration_vcn_cidr_block: 10.241.0.0/16
+oci_bastion_integration_subnet_cidr_block: 10.241.1.0/24
+oci_bastion_integration_vcn_dns_label: ocibastionv
+oci_bastion_integration_subnet_dns_label: ocibastions
+oci_bastion_integration_client_cidr_block_allow_list:
+- 0.0.0.0/0
+oci_bastion_integration_create_max_session_ttl_in_seconds: 1800
+oci_bastion_integration_update_max_session_ttl_in_seconds: 3600
+oci_bastion_integration_create_tags:
+  phase: create
+  role: integration
+oci_bastion_integration_update_tags:
   phase: update
   role: integration

@@ -1,4 +1,0 @@
-destructive
-time=120m
-oci_network_vnic_update
-oci_network_vnic_info

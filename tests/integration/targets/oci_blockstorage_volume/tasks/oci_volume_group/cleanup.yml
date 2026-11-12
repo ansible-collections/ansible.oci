@@ -1,0 +1,41 @@
+---
+- name: Delete leaked volume group during cleanup
+  ansible.oci.oci_volume_group:
+    state: absent
+    volume_group_id: '{{ oci_volume_group_id }}'
+  when:
+    - oci_group_started_oci_volume_group | default(false)
+    - oci_volume_group_id | default('') | length > 0
+  register: oci_group_cleanup_8
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked volume group during cleanup''] }}'
+  when: oci_group_cleanup_8 is failed
+
+- name: Delete leaked member volumes during cleanup
+  ansible.oci.oci_blockstorage_volume:
+    state: absent
+    volume_id: '{{ item }}'
+  loop: >-
+    {{ [oci_volume_group_second_volume_create.resource.id] if oci_volume_group_second_volume_create.resource.id | default('')
+    | length > 0 else [] }}
+  when:
+    - oci_group_started_oci_volume_group | default(false)
+    - item | default('') | length > 0
+  register: oci_group_cleanup_10
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked member volumes during cleanup''] }}'
+  when: oci_group_cleanup_10 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

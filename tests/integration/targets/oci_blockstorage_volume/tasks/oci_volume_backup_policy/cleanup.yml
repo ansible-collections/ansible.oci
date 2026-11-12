@@ -1,0 +1,25 @@
+---
+- name: Delete leaked volume backup policy during cleanup
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  ansible.oci.oci_volume_backup_policy:
+    state: absent
+    volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+  when:
+    - oci_group_started_oci_volume_backup_policy | default(false)
+    - oci_volume_backup_policy_id | default('') | length > 0
+  register: oci_group_cleanup_4
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked volume backup policy during cleanup''] }}'
+  when: oci_group_cleanup_4 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

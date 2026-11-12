@@ -1,0 +1,133 @@
+---
+- name: Find the resolver attached to the test VCN
+  ansible.oci.oci_dns_resolver_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+  register: oci_network_vcn_resolver_list
+
+- name: Find the resolver record for the test VCN
+  ansible.builtin.set_fact:
+    oci_network_vcn_integration_resolver: |-
+      {{ oci_network_vcn_resolver_list.resolvers
+         | selectattr('attached_vcn_id', 'equalto', oci_network_vcn_id)
+         | first | default({}) }}
+
+- name: Save resolver fields for the test VCN
+  ansible.builtin.set_fact:
+    oci_network_vcn_integration_resolver_id: '{{ oci_network_vcn_integration_resolver.id | default('''') }}'
+    oci_network_vcn_integration_resolver_display_name: '{{ oci_network_vcn_integration_resolver.name }}'
+
+- name: Assert a resolver exists for the test VCN
+  ansible.builtin.assert:
+    that:
+      - oci_network_vcn_integration_resolver_id | length > 0
+    fail_msg: No DNS resolver is attached to the test VCN.
+
+- name: Run oci_dns_resolver_endpoint tests
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_vcn/oci_dns_resolver_endpoint.yml'
+
+- name: Add a resolver rule that references the endpoint
+  ansible.oci.oci_dns_resolver:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    forward_rules:
+      - client_address_conditions: []
+        qname_cover_conditions:
+          - integration.invalid
+        source_endpoint_name: '{{ oci_network_vcn_integration_endpoint_name }}'
+        destination_addresses:
+          - 192.0.2.53
+  register: oci_dns_resolver_rule_add
+
+- name: Assert resolver rule update changed cloud state
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_rule_add.changed | bool
+
+- name: Remove resolver rule reference before endpoint delete
+  ansible.oci.oci_dns_resolver:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    forward_rules: []
+  register: oci_dns_resolver_rule_remove
+
+- name: Assert resolver rule reference was removed
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_rule_remove.changed | bool
+
+- name: Run oci_dns_resolver_endpoint_delete tests
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_vcn/oci_dns_resolver_endpoint_delete.yml'
+
+- name: Update VCN resolver display name and tags in check mode
+  ansible.oci.oci_dns_resolver:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
+    freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
+    forward_rules: &id001 []
+  check_mode: true
+  register: oci_dns_resolver_update_check
+
+- name: Assert resolver update check mode predicts a change
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_update_check.changed | bool
+
+- name: Read resolver after update check mode
+  ansible.oci.oci_dns_resolver_info:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+  register: oci_dns_resolver_update_probe
+
+- name: Assert resolver update check mode did not change display name
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_update_probe.resolvers | length == 1
+      - oci_dns_resolver_update_probe.resolvers[0].name == oci_network_vcn_integration_resolver_display_name
+
+- name: Update VCN resolver display name and tags
+  ansible.oci.oci_dns_resolver:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
+    freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
+    forward_rules: *id001
+  register: oci_dns_resolver_update
+
+- name: Assert resolver update changed cloud state
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_update.changed | bool
+
+- name: Read resolver after update
+  ansible.oci.oci_dns_resolver_info:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+  register: oci_dns_resolver_update_result
+
+- name: Assert resolver display name was updated
+  ansible.builtin.assert:
+    that:
+      - oci_dns_resolver_update_result.resolvers | length == 1
+      - oci_dns_resolver_update_result.resolvers[0].name == oci_network_vcn_integration_vcn_name + "-resolver-updated"
+
+- name: Repeat resolver update
+  ansible.oci.oci_dns_resolver:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
+    freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
+    forward_rules: *id001
+  register: oci_dns_resolver_update_repeat
+
+- name: Assert repeated resolver update is unchanged
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_resolver_update_repeat.changed | bool
+
+- name: Check repeated resolver update
+  ansible.oci.oci_dns_resolver:
+    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
+    name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
+    freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
+    forward_rules: *id001
+  check_mode: true
+  register: oci_dns_resolver_update_check_repeat
+
+- name: Assert repeated resolver update is unchanged in check mode
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_resolver_update_check_repeat.changed | bool

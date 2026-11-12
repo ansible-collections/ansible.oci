@@ -8,6 +8,7 @@
       tests require oci_integration_compartment_id to be defined in
       tests/integration/integration_config.yml.
 
+
 - name: Compute unique resource names and initialize cleanup markers
   ansible.builtin.set_fact:
     oci_alarm_id: ""
@@ -31,35 +32,43 @@
     oci_notification_topic_cleanup_name: "{{ oci_notification_topic_integration_name }}-{{ oci_integration_rpfx }}"
     oci_notification_topic_integration_name: "{{ oci_notification_topic_integration_name }}-{{ oci_integration_rpfx }}"
 
+
 - name: Exercise notification topic, subscription, alarm, and alarm suppression module lifecycles
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+
     - name: Create and update the notification topic
       ansible.builtin.import_tasks: notification_topic.yml
 
     # Subscriptions belong to a topic, so they are tested while the topic exists.
+
     - name: Create, update, and delete the notification subscription
       ansible.builtin.import_tasks: notification_subscription.yml
 
     # OCI requires every alarm to have a destination, so the alarm tests use
     # the topic created above.
+
     - name: Use the notification topic as the alarm destination
       ansible.builtin.set_fact:
         oci_alarm_integration_destination_id: "{{ topic_create.resource.topic_id }}"
+
 
     - name: Create, update, and delete the alarm
       ansible.builtin.import_tasks: alarm.yml
 
     # Suppressions need an alarm, so they bring up their own on the same topic.
+
     - name: Create and delete the alarm suppressions
       ansible.builtin.import_tasks: alarm_suppression.yml
+
 
     - name: Delete the notification topic
       ansible.builtin.import_tasks: notification_topic_delete.yml
 
   always:
+
     - name: Run alarm, alarm suppression, notification subscription, and notification topic cleanup
-      ansible.builtin.include_tasks: cleanup.yml
+      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'

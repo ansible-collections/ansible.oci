@@ -1,0 +1,52 @@
+---
+- name: Exercise identity-domain user lifecycle in a temporary domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete user in check mode
+      ansible.oci.oci_identity_user:
+        domain_id: '{{ oci_integration_domain_id }}'
+        state: absent
+        user_id: '{{ user_create_result.resource.id }}'
+      check_mode: true
+      register: user_delete_check
+      failed_when: not user_delete_check.changed
+
+    - name: Delete user
+      ansible.oci.oci_identity_user:
+        domain_id: '{{ oci_integration_domain_id }}'
+        state: absent
+        user_id: '{{ user_create_result.resource.id }}'
+      register: user_delete
+      failed_when: not user_delete.changed
+
+    - name: Wait until deleted user is absent
+      ansible.oci.oci_identity_user_info:
+        domain_id: '{{ oci_integration_domain_id }}'
+        user_id: '{{ user_create_result.resource.id }}'
+      register: user_after_delete
+      until: user_after_delete.users | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify user deletion is idempotent
+      ansible.oci.oci_identity_user:
+        domain_id: '{{ oci_integration_domain_id }}'
+        state: absent
+        user_id: '{{ user_create_result.resource.id }}'
+      register: user_delete_rerun
+      failed_when: user_delete_rerun.changed
+
+    - name: Clear user cleanup marker
+      ansible.builtin.set_fact:
+        oci_identity_user_cleanup_name: ''
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_user/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_identity_user: false

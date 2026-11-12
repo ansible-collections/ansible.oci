@@ -1,0 +1,210 @@
+---
+- name: Validate domain creation inputs
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_membership_home_region | length > 0
+
+- name: Compute unique fixture names
+  ansible.builtin.set_fact:
+    oci_membership_domain_name: '{{ oci_membership_domain_name }}-{{ oci_integration_rpfx }}'
+    oci_membership_user_name: '{{ oci_membership_user_name }}-{{ oci_integration_rpfx }}@example.com'
+    oci_membership_group_name: '{{ oci_membership_group_name }}-{{ oci_integration_rpfx }}'
+    oci_membership_added: false
+    oci_membership_group_cleanup_id: ''
+    oci_membership_user_cleanup_id: ''
+
+- name: Mark oci_identity_user_group_membership as started
+  ansible.builtin.set_fact:
+    oci_group_started_oci_identity_user_group_membership: true
+
+- name: Exercise identity-domain membership lifecycle in a temporary domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Use the shared domain
+      ansible.builtin.set_fact:
+        membership_domain_create: '{{ oci_prerequisites.domain }}'
+
+    - name: Capture temporary identity domain endpoint
+      ansible.builtin.set_fact:
+        oci_membership_domain_id: '{{ membership_domain_create.resource.id }}'
+        oci_membership_domain_url: '{{ membership_domain_create.resource.url }}'
+
+    - name: Verify temporary identity domain endpoint
+      ansible.builtin.assert:
+        that:
+          - oci_membership_domain_id | length > 0
+          - oci_membership_domain_url | length > 0
+
+    - name: Use the shared user
+      ansible.builtin.set_fact:
+        membership_user: '{{ oci_prerequisites.user }}'
+
+    - name: Track fixture user for cleanup
+      ansible.builtin.set_fact:
+        oci_membership_user_cleanup_id: '{{ membership_user.resource.id }}'
+
+    - name: Use the shared group
+      ansible.builtin.set_fact:
+        membership_group: '{{ oci_prerequisites.group }}'
+
+    - name: Track fixture group for cleanup
+      ansible.builtin.set_fact:
+        oci_membership_group_cleanup_id: '{{ membership_group.resource.id }}'
+
+    - name: Wait until the fixture user is available
+      ansible.oci.oci_identity_user_info:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+      register: membership_user_info
+      until: membership_user_info.users | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Wait until the fixture group is available
+      ansible.oci.oci_identity_group_info:
+        domain_id: '{{ oci_membership_domain_id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: membership_group_info
+      until: membership_group_info.groups | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Add membership in check mode
+      ansible.oci.oci_identity_user_group_membership:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      check_mode: true
+      register: membership_check
+
+    - name: Verify check mode left membership absent
+      ansible.oci.oci_identity_user_group_membership_info:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: membership_check_info
+      failed_when: not membership_check.changed or membership_check_info.user_group_memberships | length != 0
+
+    - name: Add membership by composite identity
+      ansible.oci.oci_identity_user_group_membership:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: membership_create
+
+    - name: Track membership for cleanup
+      ansible.builtin.set_fact:
+        oci_membership_added: true
+
+    - name: Verify create result identifies the membership
+      ansible.builtin.assert:
+        that:
+          - membership_create.changed
+          - membership_create.resource.group_id == membership_group.resource.id
+          - membership_create.resource.user_id == membership_user.resource.id
+
+    - name: Wait until the membership is visible
+      ansible.oci.oci_identity_user_group_membership_info:
+        domain_url: '{{ oci_membership_domain_url }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: membership_by_pair
+      until: membership_by_pair.user_group_memberships | length == 1
+      retries: 12
+      delay: 5
+
+    - name: Assert create and present reconciliation idempotency
+      ansible.oci.oci_identity_user_group_membership:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: membership_rerun
+      failed_when: |-
+        membership_rerun.changed or membership_rerun.resource.group_id != membership_group.resource.id or
+        membership_rerun.resource.user_id != membership_user.resource.id
+
+    - name: List memberships by user
+      ansible.oci.oci_identity_user_group_membership_info:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+      register: memberships_by_user
+      until: membership_group.resource.id in (memberships_by_user.user_group_memberships | map(attribute='group_id'))
+      retries: 12
+      delay: 5
+
+    - name: List memberships by group
+      ansible.oci.oci_identity_user_group_membership_info:
+        domain_id: '{{ oci_membership_domain_id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: memberships_by_group
+      until: membership_user.resource.id in (memberships_by_group.user_group_memberships | map(attribute='user_id'))
+      retries: 12
+      delay: 5
+
+    - name: Verify membership filters
+      ansible.builtin.assert:
+        that:
+          - membership_group.resource.id in (memberships_by_user.user_group_memberships | map(attribute='group_id'))
+          - membership_user.resource.id in (memberships_by_group.user_group_memberships | map(attribute='user_id'))
+
+    - name: Remove membership in check mode
+      ansible.oci.oci_identity_user_group_membership:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+        state: absent
+      check_mode: true
+      register: membership_delete_check
+      failed_when: not membership_delete_check.changed
+
+    - name: Verify delete check mode left the membership present
+      ansible.oci.oci_identity_user_group_membership_info:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: membership_delete_check_info
+      failed_when: membership_delete_check_info.user_group_memberships | length != 1
+
+    - name: Remove membership
+      ansible.oci.oci_identity_user_group_membership:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+        state: absent
+      register: membership_delete
+      failed_when: not membership_delete.changed
+
+    - name: Wait until the membership is absent
+      ansible.oci.oci_identity_user_group_membership_info:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+      register: membership_deleted_info
+      until: membership_deleted_info.user_group_memberships | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Assert delete idempotency
+      ansible.oci.oci_identity_user_group_membership:
+        domain_id: '{{ oci_membership_domain_id }}'
+        user_id: '{{ membership_user.resource.id }}'
+        group_id: '{{ membership_group.resource.id }}'
+        state: absent
+      register: membership_delete_rerun
+      failed_when: membership_delete_rerun.changed
+
+    - name: Clear membership cleanup marker
+      ansible.builtin.set_fact:
+        oci_membership_added: false
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_user_group_membership/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_identity_user_group_membership: false

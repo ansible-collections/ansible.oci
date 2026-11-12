@@ -1,0 +1,22 @@
+---
+- name: Remove prerequisite backend set
+  ansible.oci.oci_network_loadbalancer_backend_set:
+    network_load_balancer_id: '{{ oci_nlb_test_id }}'
+    name: '{{ oci_nlb_test_backend_set }}'
+    state: absent
+  when:
+    - oci_group_started_oci_network_loadbalancer_backend | default(false)
+    - oci_nlb_test_id | default('') | length > 0
+  register: oci_group_cleanup_6
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove prerequisite backend set''] }}'
+  when: oci_group_cleanup_6 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

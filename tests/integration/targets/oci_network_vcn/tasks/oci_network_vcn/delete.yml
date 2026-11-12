@@ -1,0 +1,51 @@
+---
+- name: Exercise VCN module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete VCN in check mode
+      ansible.oci.oci_network_vcn:
+        state: '{{ oci_network_vcn_delete_params.state }}'
+        vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
+      check_mode: true
+      register: oci_network_vcn_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete_check.changed | bool
+
+    - name: Read VCN after delete check mode
+      ansible.oci.oci_network_vcn_info:
+        vcn_id: '{{ oci_network_vcn_id }}'
+      register: oci_network_vcn_delete_check_probe
+
+    - name: Assert VCN still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete_check_probe.vcns | length == 1
+
+    - name: Delete VCN
+      ansible.oci.oci_network_vcn:
+        state: '{{ oci_network_vcn_delete_params.state }}'
+        vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
+      register: oci_network_vcn_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_network_vcn:
+        state: '{{ oci_network_vcn_delete_params.state }}'
+        vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
+      register: oci_network_vcn_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_network_vcn_delete_rerun.changed | bool

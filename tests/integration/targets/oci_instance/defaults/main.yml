@@ -1,19 +1,14 @@
 ---
-# oci_instance_integration_availability_domain is tenancy-specific (AD names
-# are not portable across OCI accounts)
-oci_instance_integration_availability_domain: "gzqB:US-SANJOSE-1-AD-1"
-# Image OCID is discovered at run time via oci_image_info (tasks/main.yml),
-# filtered by these values, rather than pinned here. Oracle periodically
-# deprecates/rotates platform images, so a hardcoded OCID would go stale.
-oci_instance_integration_operating_system: "Oracle Linux"
-oci_instance_integration_operating_system_version: "9"
-oci_instance_integration_vcn_name: "oci-instance-integration-vcn"
-oci_instance_integration_subnet_name: "oci-instance-integration-subnet"
-oci_instance_integration_instance_name: "oci-instance-integration-instance"
-oci_instance_integration_updated_instance_name: "oci-instance-integration-instance-updated"
-oci_instance_integration_vcn_cidr_block: "10.253.0.0/16"
-oci_instance_integration_subnet_cidr_block: "10.253.1.0/24"
-oci_instance_integration_shape: "VM.Standard.E4.Flex"
+oci_instance_integration_availability_domain: gzqB:US-SANJOSE-1-AD-1
+oci_instance_integration_operating_system: Oracle Linux
+oci_instance_integration_operating_system_version: '9'
+oci_instance_integration_vcn_name: oci-instance-integration-vcn
+oci_instance_integration_subnet_name: oci-instance-integration-subnet
+oci_instance_integration_instance_name: oci-instance-integration-instance
+oci_instance_integration_updated_instance_name: oci-instance-integration-instance-updated
+oci_instance_integration_vcn_cidr_block: 10.253.0.0/16
+oci_instance_integration_subnet_cidr_block: 10.253.1.0/24
+oci_instance_integration_shape: VM.Standard.E4.Flex
 oci_instance_integration_shape_config:
   ocpus: 1
   memory_in_gbs: 16
@@ -24,5 +19,156 @@ oci_instance_integration_create_tags:
   phase: create
   role: integration
 oci_instance_integration_update_tags:
+  phase: update
+  role: integration
+oci_integration_region: us-sanjose-1
+oci_compute_inventory_integration_vcn_name: oci-compute-inventory-vcn
+oci_compute_inventory_integration_subnet_name: oci-compute-inventory-subnet
+oci_compute_inventory_integration_instance_name: oci-compute-inventory-instance
+oci_compute_inventory_integration_vcn_cidr_block: 10.254.0.0/16
+oci_compute_inventory_integration_subnet_cidr_block: 10.254.1.0/24
+oci_compute_inventory_integration_operating_system: Oracle Linux
+oci_compute_inventory_integration_operating_system_version: '9'
+oci_compute_inventory_integration_shape: VM.Standard.E4.Flex
+oci_compute_inventory_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_compute_inventory_integration_tags:
+  role: oci-compute-inventory
+  purpose: inventory-test
+oci_instance_console_connection_integration_public_key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0e9sw7AgE2UThMW6Fy1qIqLu3cvdPVJ531TXnjB3ztFrQ7MpRzo7B0iA23bFD2/yN+Am5mifYrOsQbDvnP6UJy3UAQ6d/UZgeg729aFihaawdlmeG9syRsA/h3S2tnSsTCKpc+Sc9XmLylCZnj9EvMoWrQNcVrmuci/TYuZzY3S4KQrc9SjGvd5ozeY3JbKKbBG0RIZzkww1cijkl95DZoEad3hI9bifjPE8wrjb5iPLX3oEQVVe/gnZTCgEbf1aR27jTSAcumlLGAXcnyheEdQnm5NMxuNHbOVOJ6oWt2xSWWPV2d8zrfCUBVVAc0OMa7vypCqArZ2lIC3YXsbO7
+  integration-test
+oci_instance_console_connection_integration_availability_domain: '{{ oci_instance_integration_availability_domain }}'
+oci_instance_console_connection_integration_operating_system: Oracle Linux
+oci_instance_console_connection_integration_operating_system_version: '9'
+oci_instance_console_connection_integration_shape: VM.Standard.E4.Flex
+oci_instance_console_connection_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_instance_console_connection_integration_vcn_name: oci-instance-console-connection-integration-vcn
+oci_instance_console_connection_integration_subnet_name: oci-instance-console-connection-integration-subnet
+oci_instance_console_connection_integration_instance_name: oci-instance-console-connection-integration-instance
+oci_instance_console_connection_integration_vcn_cidr_block: 10.252.0.0/16
+oci_instance_console_connection_integration_subnet_cidr_block: 10.252.1.0/24
+oci_instance_console_connection_integration_create_tags:
+  phase: create
+  role: integration
+oci_instance_console_connection_integration_update_tags:
+  phase: update
+  role: integration
+oci_vnic_attachment_integration_operating_system: Oracle Linux
+oci_vnic_attachment_integration_operating_system_version: '9'
+oci_vnic_attachment_integration_shape: VM.Standard.E4.Flex
+oci_vnic_attachment_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_vnic_attachment_integration_vcn_name: oci-vnic-attachment-integration-vcn
+oci_vnic_attachment_integration_subnet_name: oci-vnic-attachment-integration-subnet
+oci_vnic_attachment_integration_instance_name: oci-vnic-attachment-integration-instance
+oci_vnic_attachment_integration_attachment_name: oci-vnic-attachment-integration-attachment
+oci_vnic_attachment_integration_vnic_name: oci-vnic-attachment-integration-vnic
+oci_vnic_attachment_integration_vcn_cidr_block: 10.249.0.0/16
+oci_vnic_attachment_integration_subnet_cidr_block: 10.249.1.0/24
+oci_network_private_ip_integration_operating_system: Oracle Linux
+oci_network_private_ip_integration_operating_system_version: '9'
+oci_network_private_ip_integration_shape: VM.Standard.E4.Flex
+oci_network_private_ip_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_network_private_ip_integration_vcn_name: oci-private-ip-integration-vcn
+oci_network_private_ip_integration_subnet_name: oci-private-ip-integration-subnet
+oci_network_private_ip_integration_instance_name: oci-private-ip-integration-instance
+oci_network_private_ip_integration_attachment_name: oci-private-ip-integration-attachment
+oci_network_private_ip_integration_vnic_name: oci-private-ip-integration-vnic
+oci_network_private_ip_integration_name: oci-private-ip-integration
+oci_network_private_ip_integration_updated_name: oci-private-ip-integration-updated
+oci_network_private_ip_integration_vcn_cidr_block: 10.248.0.0/16
+oci_network_private_ip_integration_subnet_cidr_block: 10.248.1.0/24
+oci_network_private_ip_integration_primary_vnic_ip_address: '{{ oci_instance_integration_subnet_cidr_block.split(''/'')[0].rsplit(''.'',
+  1)[0] }}.10'
+oci_network_private_ip_integration_secondary_vnic_ip_address: '{{ oci_instance_integration_subnet_cidr_block.split(''/'')[0].rsplit(''.'',
+  1)[0] }}.11'
+oci_network_private_ip_integration_ip_address: '{{ oci_instance_integration_subnet_cidr_block.split(''/'')[0].rsplit(''.'',
+  1)[0] }}.20'
+oci_network_private_ip_integration_create_tags:
+  phase: create
+  role: integration
+oci_network_private_ip_integration_update_tags:
+  phase: update
+  role: integration
+oci_volume_attachment_integration_operating_system: Oracle Linux
+oci_volume_attachment_integration_operating_system_version: '9'
+oci_volume_attachment_integration_shape: VM.Standard.E4.Flex
+oci_volume_attachment_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_volume_attachment_integration_vcn_name: oci-volume-attachment-integration-vcn
+oci_volume_attachment_integration_subnet_name: oci-volume-attachment-integration-subnet
+oci_volume_attachment_integration_instance_name: oci-volume-attachment-integration-instance
+oci_volume_attachment_integration_volume_name: oci-volume-attachment-integration-volume
+oci_volume_attachment_integration_attachment_name: oci-volume-attachment-integration-attachment
+oci_volume_attachment_integration_vcn_cidr_block: 10.254.0.0/16
+oci_volume_attachment_integration_subnet_cidr_block: 10.254.1.0/24
+oci_volume_attachment_integration_size_in_gbs: 50
+oci_volume_attachment_integration_type: paravirtualized
+oci_boot_volume_backup_integration_operating_system: Oracle Linux
+oci_boot_volume_backup_integration_operating_system_version: '9'
+oci_boot_volume_backup_integration_shape: VM.Standard.E4.Flex
+oci_boot_volume_backup_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_boot_volume_backup_integration_vcn_name: oci-boot-volume-backup-integration-vcn
+oci_boot_volume_backup_integration_subnet_name: oci-boot-volume-backup-integration-subnet
+oci_boot_volume_backup_integration_instance_name: oci-boot-volume-backup-integration-instance
+oci_boot_volume_backup_integration_vcn_cidr_block: 10.251.0.0/16
+oci_boot_volume_backup_integration_subnet_cidr_block: 10.251.1.0/24
+oci_boot_volume_backup_integration_backup_name: oci-boot-volume-backup-integration-backup
+oci_boot_volume_backup_integration_updated_backup_name: oci-boot-volume-backup-integration-backup-updated
+oci_boot_volume_backup_integration_backup_type: incremental
+oci_boot_volume_backup_integration_create_tags:
+  phase: create
+  role: integration
+oci_boot_volume_backup_integration_update_tags:
+  phase: update
+  role: integration
+oci_boot_volume_integration_operating_system: Oracle Linux
+oci_boot_volume_integration_operating_system_version: '9'
+oci_boot_volume_integration_shape: VM.Standard.E4.Flex
+oci_boot_volume_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_boot_volume_integration_vcn_name: oci-boot-volume-integration-vcn
+oci_boot_volume_integration_subnet_name: oci-boot-volume-integration-subnet
+oci_boot_volume_integration_instance_name: oci-boot-volume-integration-instance
+oci_boot_volume_integration_vcn_cidr_block: 10.252.0.0/16
+oci_boot_volume_integration_subnet_cidr_block: 10.252.1.0/24
+oci_boot_volume_integration_backup_name: oci-boot-volume-integration-backup
+oci_boot_volume_integration_restore_name: oci-boot-volume-integration-restored
+oci_boot_volume_integration_updated_restore_name: oci-boot-volume-integration-restored-updated
+oci_boot_volume_integration_backup_type: full
+oci_boot_volume_integration_create_tags:
+  phase: create
+  role: integration
+oci_boot_volume_integration_update_tags:
+  phase: update
+  role: integration
+oci_image_integration_availability_domain: '{{ oci_instance_integration_availability_domain }}'
+oci_image_integration_operating_system: Oracle Linux
+oci_image_integration_operating_system_version: '9'
+oci_image_integration_shape: VM.Standard.E4.Flex
+oci_image_integration_shape_config:
+  ocpus: 1
+  memory_in_gbs: 16
+oci_image_integration_vcn_name: oci-image-integration-vcn
+oci_image_integration_subnet_name: oci-image-integration-subnet
+oci_image_integration_instance_name: oci-image-integration-source-instance
+oci_image_integration_vcn_cidr_block: 10.252.0.0/16
+oci_image_integration_subnet_cidr_block: 10.252.1.0/24
+oci_image_integration_image_name: oci-image-integration-image
+oci_image_integration_updated_image_name: oci-image-integration-image-updated
+oci_image_integration_create_tags:
+  phase: create
+  role: integration
+oci_image_integration_update_tags:
   phase: update
   role: integration

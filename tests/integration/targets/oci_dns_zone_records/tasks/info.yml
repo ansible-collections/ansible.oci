@@ -1,0 +1,61 @@
+---
+- name: Read zone records
+  ansible.oci.oci_dns_zone_records_info:
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+  register: oci_dns_zone_records_info
+
+- name: Read domain records
+  ansible.oci.oci_dns_domain_records_info:
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+  register: oci_dns_domain_records_info
+
+- name: Read RRset
+  ansible.oci.oci_dns_record_set_info:
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: a
+  register: oci_dns_rrset_info
+
+- name: Verify updates retained the sentinel record
+  ansible.builtin.assert:
+    that:
+      - |-
+        oci_dns_zone_records_info.records | map(attribute='domain') | map('regex_replace', '\\.$', '') |
+        select('equalto', 'sentinel.' ~ oci_dns_records_case.zone) | list | length == 1
+      - oci_dns_zone_records_info.records | selectattr('rdata', 'equalto', '"keep this record"') | list | length == 1
+
+- name: Verify info records and requested filters
+  ansible.builtin.assert:
+    that:
+      - oci_dns_zone_records_info.records | length >= 2
+      - oci_dns_domain_records_info.records | length == 2
+      - oci_dns_rrset_info.records | length == 1
+      - oci_dns_rrset_info.records[0].rtype | upper == 'A'
+      - oci_dns_rrset_info.records[0].rdata == '192.0.2.12'
+
+- name: Filter zone records in check mode
+  ansible.oci.oci_dns_zone_records_info:
+    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
+    scope: '{{ oci_dns_records_case.scope }}'
+    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
+    domain: '{{ oci_dns_records_domain }}'
+    rtype: aaaa
+    sort_by: ttl
+    sort_order: desc
+  check_mode: true
+  register: oci_dns_filtered_info
+
+- name: Verify zone record filters and check mode
+  ansible.builtin.assert:
+    that:
+      - not oci_dns_filtered_info.changed | bool
+      - oci_dns_filtered_info.records | length == 1
+      - oci_dns_filtered_info.records[0].rtype | upper == 'AAAA'
+      - oci_dns_filtered_info.records[0].rdata == '2001:db8::11'

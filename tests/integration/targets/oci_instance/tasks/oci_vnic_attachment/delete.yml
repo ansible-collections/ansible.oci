@@ -1,0 +1,51 @@
+---
+- name: Exercise VNIC attachment module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Detach VNIC in check mode
+      ansible.oci.oci_vnic_attachment:
+        state: absent
+        vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+      check_mode: true
+      register: oci_vnic_attachment_delete_check
+
+    - name: Assert detach check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_vnic_attachment_delete_check.changed | bool
+
+    - name: Verify check mode did not detach the VNIC
+      ansible.oci.oci_vnic_attachment_info:
+        vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+      register: oci_vnic_attachment_delete_check_probe
+
+    - name: Assert the attachment still exists
+      ansible.builtin.assert:
+        that:
+          - oci_vnic_attachment_delete_check_probe.vnic_attachments | length == 1
+
+    - name: Detach VNIC
+      ansible.oci.oci_vnic_attachment:
+        state: absent
+        vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+      register: oci_vnic_attachment_delete
+
+    - name: Assert detach reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_vnic_attachment_delete.changed | bool
+
+    - name: Detach VNIC again
+      ansible.oci.oci_vnic_attachment:
+        state: absent
+        vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+      register: oci_vnic_attachment_delete_rerun
+
+    - name: Assert detach rerun is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_vnic_attachment_delete_rerun.changed | bool

@@ -1,0 +1,74 @@
+---
+- name: Exercise volume group module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete volume group in check mode
+      ansible.oci.oci_volume_group:
+        state: absent
+        volume_group_id: '{{ oci_volume_group_id }}'
+      check_mode: true
+      register: oci_volume_group_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_delete_check.changed | bool
+
+    - name: Read volume group after delete check mode
+      ansible.oci.oci_volume_group_info:
+        volume_group_id: '{{ oci_volume_group_id }}'
+      register: oci_volume_group_delete_check_probe
+
+    - name: Assert volume group still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_delete_check_probe.volume_groups | length == 1
+
+    - name: Delete volume group
+      ansible.oci.oci_volume_group:
+        state: absent
+        volume_group_id: '{{ oci_volume_group_id }}'
+      register: oci_volume_group_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_group_delete.changed | bool
+
+    - name: Assert delete is a no-op in check mode
+      ansible.oci.oci_volume_group:
+        state: absent
+        volume_group_id: '{{ oci_volume_group_id }}'
+      check_mode: true
+      register: oci_volume_group_delete_check_rerun
+
+    - name: Verify delete check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_delete_check_rerun.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_volume_group:
+        state: absent
+        volume_group_id: '{{ oci_volume_group_id }}'
+      register: oci_volume_group_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_group_delete_rerun.changed | bool
+
+    - name: Clear volume group id after successful delete
+      ansible.builtin.set_fact:
+        oci_volume_group_id: ''
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_group/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_volume_group: false

@@ -1,0 +1,63 @@
+---
+- name: Check the test compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Initialize test names and cleanup IDs
+  ansible.builtin.set_fact:
+    oci_waf_policy_test_name: oci-waf-web-app-firewall-policy-{{ oci_integration_rpfx }}
+    oci_waf_policy_cleanup_id: ''
+    oci_waf_firewall_test_name: oci-waf-web-app-firewall-{{ oci_integration_rpfx }}
+    oci_waf_firewall_cleanup_id: ''
+
+- name: Mark oci_waf_web_app_firewall as started
+  ansible.builtin.set_fact:
+    oci_group_started_oci_waf_web_app_firewall: true
+
+- name: Test the WAF policy and firewall lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Run oci_waf_web_app_firewall_policy tests
+      ansible.builtin.include_tasks: oci_waf_web_app_firewall_policy.yml
+
+    - name: Use the shared vcn
+      ansible.builtin.set_fact:
+        oci_waf_firewall_vcn: '{{ oci_prerequisites.vcn }}'
+
+    - name: Use the shared subnet
+      ansible.builtin.set_fact:
+        oci_waf_firewall_subnet: '{{ oci_prerequisites.subnet }}'
+
+    - name: Use the shared load_balancer
+      ansible.builtin.set_fact:
+        oci_waf_firewall_load_balancer: '{{ oci_prerequisites.load_balancer }}'
+
+    - name: Create the replacement WAF policy
+      ansible.oci.oci_waf_web_app_firewall_policy:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_waf_firewall_test_name }}-replacement'
+        actions:
+
+          - name: allow
+            type: allow
+        request_access_control:
+          default_action_name: allow
+      register: oci_waf_policy_replacement
+
+    - name: Run oci_waf_web_app_firewall tests
+      ansible.builtin.include_tasks: oci_waf_web_app_firewall.yml
+
+    - name: Run oci_waf_web_app_firewall_policy_delete tests
+      ansible.builtin.include_tasks: oci_waf_web_app_firewall_policy_delete.yml
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_waf_web_app_firewall/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_waf_web_app_firewall: false
