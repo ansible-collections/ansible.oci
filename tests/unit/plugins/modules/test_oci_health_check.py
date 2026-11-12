@@ -251,6 +251,8 @@ def test_headers_are_hidden_in_ansible_output(monkeypatch, capsys, check_mode):
         "headers": {"X-Api-Key": "synthetic-api-key", "Cookie": "synthetic-cookie"},
         "_ansible_check_mode": check_mode,
     }
+    if "inject_invocation" in basic.PASS_VARS:
+        params["_ansible_inject_invocation"] = True
     monkeypatch.setattr(basic, "_ANSIBLE_ARGS", json.dumps({"ANSIBLE_MODULE_ARGS": params}).encode())
     monkeypatch.setattr(basic, "_ANSIBLE_PROFILE", "legacy", raising=False)
     monkeypatch.setattr(basic, "_PARSED_MODULE_ARGS", params.copy(), raising=False)
@@ -261,6 +263,7 @@ def test_headers_are_hidden_in_ansible_output(monkeypatch, capsys, check_mode):
 
         def execute_resource_module(self):
             assert self.module.params["headers"] == params["headers"]
+            assert set(params["headers"].values()) <= self.module.no_log_values
             self.module.exit_json(changed=False)
 
     monkeypatch.setattr(module, "OciHealthCheckModule", FakeResourceModule)
@@ -270,6 +273,16 @@ def test_headers_are_hidden_in_ansible_output(monkeypatch, capsys, check_mode):
     output = capsys.readouterr().out
     payload = json.loads(output)
     assert payload["changed"] is False
+    assert set(payload["invocation"]["module_args"]["headers"]) == {"X-Api-Key", "Cookie"}
+    # Ansible 2.22 sends secrets to the controller for masking.
+    payload.pop("_ansible_new_secrets", None)
+    output = json.dumps(payload)
+    try:
+        from ansible.module_utils.secrets import mask_secrets
+    except ImportError:
+        pass  # Older Ansible versions mask values before serialization.
+    else:
+        output = mask_secrets(output)
     assert "synthetic-api-key" not in output
     assert "synthetic-cookie" not in output
 
