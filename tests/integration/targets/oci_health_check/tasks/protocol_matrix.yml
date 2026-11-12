@@ -1,0 +1,205 @@
+---
+- name: Set unique protocol test resource name and cleanup ID
+  ansible.builtin.set_fact:
+    oci_health_check_case_name: "{{ oci_health_check_integration_name }}-{{ oci_integration_rpfx }}-{{ oci_health_check_case.protocol }}"
+    oci_health_check_case_id: ''
+
+- name: Test the {{ oci_health_check_case.protocol }} monitor lifecycle
+  block:
+    - name: Check {{ oci_health_check_case.protocol }} monitor creation
+      ansible.oci.oci_health_check: &oci_health_check_case_create_options
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_health_check_case_name }}"
+        targets: "{{ oci_health_check_integration_targets }}"
+        protocol: "{{ oci_health_check_case.protocol }}"
+        port: "{{ 443 if oci_health_check_case.protocol == 'tcp' else omit }}"
+        interval_in_seconds: "{{ oci_health_check_create_interval_in_seconds }}"
+        timeout_in_seconds: "{{ oci_health_check_create_timeout_in_seconds }}"
+        is_enabled: false
+        method: "{{ oci_health_check_create_method if oci_health_check_case.monitor_type == 'http' else omit }}"
+        path: "{{ oci_health_check_create_path if oci_health_check_case.monitor_type == 'http' else omit }}"
+        headers: "{{ oci_health_check_create_headers if oci_health_check_case.monitor_type == 'http' else omit }}"
+        freeform_tags: "{{ oci_health_check_create_tags }}"
+      check_mode: true
+      register: oci_health_check_case_create_check
+
+    - name: Read after {{ oci_health_check_case.protocol }} create check
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_health_check_case_name }}"
+      register: oci_health_check_case_after_create_check
+
+    - name: Verify the {{ oci_health_check_case.protocol }} create check
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_case_create_check.changed
+          - oci_health_check_case_after_create_check.health_checks | length == 0
+
+    - name: Create {{ oci_health_check_case.protocol }} monitor
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_create_options
+      register: oci_health_check_case_create
+
+    - name: Save {{ oci_health_check_case.protocol }} monitor ID
+      ansible.builtin.set_fact:
+        oci_health_check_case_id: "{{ oci_health_check_case_create.resource.id }}"
+
+    - name: Verify created {{ oci_health_check_case.protocol }} monitor
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_case_create.changed
+          - oci_health_check_case_id | length > 0
+          - oci_health_check_case_create.resource.id == oci_health_check_case_id
+          - oci_health_check_case_create.resource.name == oci_health_check_case_name
+
+    - name: Repeat {{ oci_health_check_case.protocol }} monitor in normal mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_create_options
+      register: oci_health_check_case_create_repeat
+
+    - name: Repeat {{ oci_health_check_case.protocol }} monitor in check mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_create_options
+      check_mode: true
+      register: oci_health_check_case_create_repeat_check
+
+    - name: Verify create idempotency for {{ oci_health_check_case.protocol }}
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_case_create.changed
+          - not oci_health_check_case_create_repeat.changed
+          - not oci_health_check_case_create_repeat_check.changed
+          - oci_health_check_case_create.resource.protocol == oci_health_check_case.protocol | upper
+          - oci_health_check_case_create.resource.interval_in_seconds == oci_health_check_create_interval_in_seconds
+
+    - name: Read {{ oci_health_check_case.protocol }} monitor before update check
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_case_before_update
+
+    - name: Check {{ oci_health_check_case.protocol }} monitor update
+      ansible.oci.oci_health_check: &oci_health_check_case_update_options
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+        protocol: "{{ oci_health_check_case.protocol }}"
+        port: "{{ 443 if oci_health_check_case.protocol == 'tcp' else omit }}"
+        interval_in_seconds: "{{ oci_health_check_update_interval_in_seconds }}"
+        timeout_in_seconds: "{{ oci_health_check_update_timeout_in_seconds }}"
+        is_enabled: false
+        method: "{{ oci_health_check_update_method if oci_health_check_case.monitor_type == 'http' else omit }}"
+        path: "{{ oci_health_check_update_path if oci_health_check_case.monitor_type == 'http' else omit }}"
+        headers: "{{ oci_health_check_update_headers if oci_health_check_case.monitor_type == 'http' else omit }}"
+        freeform_tags: "{{ oci_health_check_update_tags }}"
+      check_mode: true
+      register: oci_health_check_case_update_check
+
+    - name: Read {{ oci_health_check_case.protocol }} monitor after update check
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_case_after_update_check
+
+    - name: Verify {{ oci_health_check_case.protocol }} update check preserved remote state
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_case_update_check.changed
+          - oci_health_check_case_after_update_check.health_checks == oci_health_check_case_before_update.health_checks
+
+    - name: Update {{ oci_health_check_case.protocol }} monitor
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_update_options
+      register: oci_health_check_case_update
+
+    - name: Read {{ oci_health_check_case.protocol }} monitor after update
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_case_after_update
+
+    - name: Verify {{ oci_health_check_case.protocol }} updated state
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_case_update.changed
+          - oci_health_check_case_after_update.health_checks[0].interval_in_seconds == oci_health_check_update_interval_in_seconds
+
+    - name: Verify {{ oci_health_check_case.protocol }} update idempotency in normal mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_update_options
+      register: oci_health_check_case_update_repeat
+
+    - name: Verify {{ oci_health_check_case.protocol }} update idempotency in check mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_update_options
+      check_mode: true
+      register: oci_health_check_case_update_repeat_check
+
+    - name: Assert {{ oci_health_check_case.protocol }} update results
+      ansible.builtin.assert:
+        that:
+          - not oci_health_check_case_update_repeat.changed
+          - not oci_health_check_case_update_repeat_check.changed
+
+    - name: Test HTTP-specific operations
+      ansible.builtin.include_tasks: http_checks.yml
+      when: oci_health_check_case.protocol == 'http'
+
+    - name: Read {{ oci_health_check_case.protocol }} monitor before delete check
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_case_before_delete
+
+    - name: Check {{ oci_health_check_case.protocol }} monitor deletion
+      ansible.oci.oci_health_check: &oci_health_check_case_delete_options
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+        state: absent
+      check_mode: true
+      register: oci_health_check_case_delete_check
+
+    - name: Read {{ oci_health_check_case.protocol }} monitor after delete check
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_case_after_delete_check
+
+    - name: Verify the {{ oci_health_check_case.protocol }} delete check preserved the monitor
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_case_delete_check.changed
+          - oci_health_check_case_after_delete_check.health_checks | length == 1
+          - oci_health_check_case_after_delete_check.health_checks[0].id == oci_health_check_case_id
+          - oci_health_check_case_after_delete_check.health_checks == oci_health_check_case_before_delete.health_checks
+
+    - name: Delete {{ oci_health_check_case.protocol }} monitor
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_delete_options
+      register: oci_health_check_case_delete
+
+    - name: Repeat {{ oci_health_check_case.protocol }} monitor deletion in normal mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_delete_options
+      register: oci_health_check_case_delete_repeat
+
+    - name: Repeat {{ oci_health_check_case.protocol }} monitor deletion in check mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_case_delete_options
+      check_mode: true
+      register: oci_health_check_case_delete_repeat_check
+
+    - name: Verify {{ oci_health_check_case.protocol }} monitor deletion
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_case_delete.changed
+          - not oci_health_check_case_delete_repeat.changed
+          - not oci_health_check_case_delete_repeat_check.changed
+  always:
+    - name: Clean up {{ oci_health_check_case.protocol }} monitor
+      ansible.builtin.include_tasks: cleanup.yml
+      vars:
+        oci_health_check_cleanup_monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        oci_health_check_cleanup_monitor_id: "{{ oci_health_check_case_id }}"
+        oci_health_check_cleanup_monitor_name: "{{ oci_health_check_case_name }}"

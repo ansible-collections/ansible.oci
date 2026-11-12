@@ -1,0 +1,86 @@
+---
+- name: Test HTTP monitor info operations
+  block:
+    - name: Get HTTP monitor by ID
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_http_get
+
+    - name: List HTTP monitor by name and home region
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_health_check_case_name }}"
+        home_region: "{{ oci_health_check_http_get.health_checks[0].home_region }}"
+      register: oci_health_check_http_list
+
+    - name: Verify HTTP monitor info results
+      ansible.builtin.assert:
+        that:
+          - not oci_health_check_http_get.changed
+          - oci_health_check_http_get.health_checks | length == 1
+          - oci_health_check_http_get.health_checks[0].id == oci_health_check_case_id
+          - oci_health_check_http_get.health_checks[0].name == oci_health_check_case_name
+          - not oci_health_check_http_list.changed
+          - oci_health_check_http_list.health_checks | length == 1
+          - oci_health_check_http_list.health_checks[0].id == oci_health_check_case_id
+          - oci_health_check_http_list.health_checks[0].name == oci_health_check_case_name
+          - oci_health_check_http_list.health_checks[0].home_region == oci_health_check_http_get.health_checks[0].home_region
+
+- name: Test HTTP to HTTPS update
+  block:
+    - name: Check HTTP to HTTPS update
+      ansible.oci.oci_health_check: &oci_health_check_https_update_options
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+        protocol: https
+      check_mode: true
+      register: oci_health_check_https_update_check
+
+    - name: Read HTTP monitor after HTTPS update check
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_http_after_update_check
+
+    - name: Verify HTTPS update check preserved remote state
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_https_update_check.changed
+          - oci_health_check_http_after_update_check.health_checks == oci_health_check_case_after_update.health_checks
+
+    - name: Update HTTP monitor to HTTPS
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_https_update_options
+      register: oci_health_check_https_update
+
+    - name: Read monitor after HTTPS update
+      ansible.oci.oci_health_check_info:
+        monitor_type: "{{ oci_health_check_case.monitor_type }}"
+        monitor_id: "{{ oci_health_check_case_id }}"
+      register: oci_health_check_http_after_update
+
+    - name: Verify HTTPS update result
+      ansible.builtin.assert:
+        that:
+          - oci_health_check_https_update.changed
+          - oci_health_check_http_after_update.health_checks | length == 1
+          - oci_health_check_http_after_update.health_checks[0].protocol == 'HTTPS'
+
+    - name: Verify HTTPS update idempotency in normal mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_https_update_options
+      register: oci_health_check_https_update_repeat
+
+    - name: Verify HTTPS update idempotency in check mode
+      ansible.oci.oci_health_check:
+        <<: *oci_health_check_https_update_options
+      check_mode: true
+      register: oci_health_check_https_update_repeat_check
+
+    - name: Assert HTTPS update idempotency
+      ansible.builtin.assert:
+        that:
+          - not oci_health_check_https_update_repeat.changed
+          - not oci_health_check_https_update_repeat_check.changed
