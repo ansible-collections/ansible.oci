@@ -111,13 +111,22 @@
         instance_id: "{{ oci_network_private_ip_instance_id }}"
       register: oci_network_private_ip_vnic_attachment_info
 
+    - name: Assert one primary VNIC attachment remains
+      ansible.builtin.assert:
+        that:
+          - >-
+            oci_network_private_ip_vnic_attachment_info.vnic_attachments
+            | rejectattr('vnic_id', 'equalto', oci_network_private_ip_secondary_vnic_id)
+            | list | length == 1
+        fail_msg: Expected exactly one VNIC attachment after excluding the secondary VNIC.
+
     - name: Capture primary VNIC ID
       ansible.builtin.set_fact:
         oci_network_private_ip_primary_vnic_id: >-
           {{
             (
               oci_network_private_ip_vnic_attachment_info.vnic_attachments
-              | selectattr('nic_index', 'equalto', 0)
+              | rejectattr('vnic_id', 'equalto', oci_network_private_ip_secondary_vnic_id)
               | list
               | first
             ).vnic_id
