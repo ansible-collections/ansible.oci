@@ -129,7 +129,7 @@ capacity_reservations:
               type: list
               elements: str
         reserved_count:
-          description: The requested instance count.
+          description: The actual number of instances reserved for this configuration.
           type: int
         used_count:
           description: The number of instances in use.

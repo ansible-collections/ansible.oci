@@ -83,6 +83,56 @@
       - not reservation_repeat.changed
       - not reservation_repeat_check.changed
 
+- name: Clear reservation configurations in check mode
+  ansible.oci.oci_instance_capacity_reservation: &reservation_clear
+    state: present
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+    instance_reservation_configs: []
+  check_mode: true
+  register: reservation_clear_check
+
+- name: Read reservation after clear in check mode
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify check mode preserves configurations
+  ansible.builtin.assert:
+    that:
+      - reservation_clear_check.changed
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 1
+
+- name: Clear reservation configurations
+  ansible.oci.oci_instance_capacity_reservation: *reservation_clear
+  register: reservation_clear_result
+
+- name: Read reservation after clearing configurations
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify configurations are empty and the reservation exists
+  ansible.builtin.assert:
+    that:
+      - reservation_clear_result.changed
+      - reservation_probe.capacity_reservations | length == 1
+      - reservation_probe.capacity_reservations[0].id == oci_instance_capacity_reservation_id
+      - reservation_probe.capacity_reservations[0].lifecycle_state == "ACTIVE"
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs | default([], true) | length == 0
+
+- name: Repeat configuration clear
+  ansible.oci.oci_instance_capacity_reservation: *reservation_clear
+  register: reservation_clear_repeat
+
+- name: Repeat configuration clear in check mode
+  ansible.oci.oci_instance_capacity_reservation: *reservation_clear
+  check_mode: true
+  register: reservation_clear_repeat_check
+
+- name: Verify repeated configuration clear is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_clear_repeat.changed
+      - not reservation_clear_repeat_check.changed
+
 - name: Delete capacity reservation in check mode
   ansible.oci.oci_instance_capacity_reservation: &reservation_delete
     state: absent

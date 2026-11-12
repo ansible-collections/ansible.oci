@@ -192,3 +192,18 @@
   ansible.builtin.assert:
     that:
       - not reservation_by_name.changed
+
+- name: Repeat reservation state by name and availability domain
+  ansible.oci.oci_instance_capacity_reservation:
+    state: present
+    name: "{{ oci_instance_integration_instance_name }}-reservation-updated"
+    availability_domain: "{{ oci_instance_integration_availability_domain }}"
+    instance_reservation_configs: *reservation_configs
+    freeform_tags: *reservation_tags
+    compartment_id: "{{ oci_integration_compartment_id }}"
+  register: reservation_by_domain
+
+- name: Verify reservation name lookup with a domain is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_by_domain.changed

@@ -369,10 +369,11 @@ def test_unordered_subset_list_reassigns_overlapping_matches(current_order, desi
     desired = [{"shape": "a"}, {"shape": "a", "fault_domain": "FD-1"}]
     current = [current[index] for index in current_order]
     desired = [desired[index] for index in desired_order]
-    original = copy.deepcopy((current, desired))
+    original_current, original_desired = copy.deepcopy((current, desired))
 
     assert helper.values_differ_as_unordered_subset_list(current, desired) is False
-    assert (current, desired) == original
+    assert current == original_current
+    assert desired == original_desired
 
 
 def test_unordered_subset_list_rejects_incomplete_assignment():

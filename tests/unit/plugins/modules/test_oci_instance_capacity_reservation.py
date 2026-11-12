@@ -222,9 +222,10 @@ def test_work_request_failure_stops_resource_wait(monkeypatch):
     instance.wait_for_work_request = raising(RuntimeError("work request failed"))
     instance.wait_for_resource_id = raising(AssertionError("resource wait was not expected"))
 
+    response = FakeResponse(data=None, headers={"opc-work-request-id": "request-1"})
     with pytest.raises(RuntimeError, match="work request failed"):
         instance.wait_for_reservation_work_request(
-            FakeResponse(data=None, headers={"opc-work-request-id": "request-1"}),
+            response,
             "reservation",
             ("ACTIVE",),
         )
@@ -497,7 +498,9 @@ def test_constructed_module_creates_reservation_and_waits(monkeypatch):
     from ansible_collections.ansible.oci.plugins.module_utils import oci_base
     events = []
     created = FakeModel(id="reservation")
-    final = FakeModel(id="reservation", lifecycle_state="ACTIVE")
+    final = FakeModel(id="reservation", lifecycle_state="ACTIVE", instance_reservation_configs=[
+        FakeModel(instance_shape="shape", reserved_count=1, instance_shape_config={"ocpus": 1.0})
+    ])
 
     def create(**kwargs):
         details = kwargs["create_compute_capacity_reservation_details"]
@@ -546,3 +549,136 @@ def test_constructed_module_creates_reservation_and_waits(monkeypatch):
 
     assert instance.create_resource() is final
     assert events == ["create", "work", "resource"]
+
+
+@pytest.mark.parametrize("operation", ["create", "update"])
+@pytest.mark.parametrize(
+    "actual_counts,desired_counts,expected_warning",
+    [
+        ([2], [2], False),
+        ([1], [2], True),
+        ([0], [2], True),
+        ([0], [0], False),
+        ([3], [2], False),
+        ([2, 1], [1, 2], False),
+        ([8, 5], [9, 4], True),
+        ([], [1], True),
+    ],
+)
+def test_completed_operations_warn_about_insufficient_capacity(
+    monkeypatch, operation, actual_counts, desired_counts, expected_warning
+):
+    """Check each requested configuration after creation or update completes."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    desired = [{"instance_shape": "shape", "reserved_count": count} for count in desired_counts]
+    resource = FakeModel(id="reservation", instance_reservation_configs=[
+        FakeModel(instance_shape="shape", reserved_count=count, used_count=0) for count in actual_counts
+    ])
+    client = types.SimpleNamespace(create_compute_capacity_reservation=lambda **kwargs: FakeResponse(resource))
+    instance = make_reservation_module(module_obj, {"instance_reservation_configs": desired}, client=client)
+    instance.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
+    instance.wait_for_resource_id = lambda resource_id, states: resource
+    warnings = []
+    instance.module.warn = warnings.append
+
+    result = instance.create_resource() if operation == "create" else instance.get_update_result(FakeResponse(None), "reservation")
+
+    assert result is resource
+    assert len(warnings) == int(expected_warning)
+    if warnings:
+        assert "less capacity than requested" in warnings[0]
+        assert "Subsequent runs" in warnings[0]
+    if expected_warning:
+        assert instance.build_update_plan(resource)["update_needed"] is True
+
+
+@pytest.mark.parametrize("wait,check_mode,configs", [
+    (False, False, [{"instance_shape": "shape", "reserved_count": 2}]),
+    (True, True, [{"instance_shape": "shape", "reserved_count": 2}]),
+    (True, False, None),
+    (True, False, []),
+])
+def test_capacity_warning_exclusions(monkeypatch, wait, check_mode, configs):
+    """Skip capacity warnings for unfinished operations and absent requests."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    instance = make_reservation_module(
+        module_obj, {"wait": wait, "instance_reservation_configs": configs}, check_mode=check_mode
+    )
+    instance.module.warn = raising(AssertionError("Unexpected warning"))
+    instance.warn_if_capacity_incomplete(FakeModel(instance_reservation_configs=[]))
+
+
+def test_capacity_warning_uses_configuration_placement(monkeypatch):
+    """Do not use capacity in another fault domain to satisfy the request."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    instance = make_reservation_module(module_obj, {"instance_reservation_configs": [
+        {"instance_shape": "shape", "reserved_count": 2, "fault_domain": "FD-1"},
+        {"instance_shape": "shape", "reserved_count": 1},
+    ]})
+    warnings = []
+    instance.module.warn = warnings.append
+    instance.warn_if_capacity_incomplete(FakeModel(instance_reservation_configs=[
+        FakeModel(instance_shape="shape", reserved_count=1, fault_domain="FD-1"),
+        FakeModel(instance_shape="shape", reserved_count=2),
+    ]))
+    assert len(warnings) == 1
+
+
+@pytest.mark.parametrize("domain", [None, "AD-1", "AD-2"])
+def test_name_lookup_filters_optional_availability_domain(monkeypatch, domain):
+    """Find duplicate names within the supplied availability domain."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    resources = [FakeModel(id="one", display_name="reserved", availability_domain="AD-1"),
+                 FakeModel(id="two", display_name="reserved", availability_domain="AD-2")]
+    instance = make_reservation_module(module_obj, {
+        "compartment_id": "compartment", "name": "reserved", "availability_domain": domain,
+    }, client=types.SimpleNamespace(list_compute_capacity_reservations="list_method"))
+    calls = []
+
+    def list_resources(method, **filters):
+        calls.append((method, filters))
+        return [item for item in resources if domain is None or item.availability_domain == filters["availability_domain"]]
+
+    instance.list_all_resources = list_resources
+    if domain is None:
+        with pytest.raises(FailJsonCalled) as error:
+            instance.resolve_resource_by_name()
+        assert "Multiple" in error.value.payload["msg"]
+    else:
+        assert instance.resolve_resource_by_name().availability_domain == domain
+    expected_filters = {"compartment_id": "compartment"}
+    if domain is not None:
+        expected_filters["availability_domain"] = domain
+    assert calls == [("list_method", expected_filters)]
+
+
+def test_name_lookup_still_rejects_duplicates_in_one_domain(monkeypatch):
+    """Require an OCID when a domain filter still returns duplicate names."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    instance = make_reservation_module(module_obj, {
+        "compartment_id": "compartment", "name": "reserved", "availability_domain": "AD-1",
+    }, client=types.SimpleNamespace(list_compute_capacity_reservations="list_method"))
+    instance.list_all_resources = lambda *args, **kwargs: [
+        FakeModel(id="one", display_name="reserved"), FakeModel(id="two", display_name="reserved")
+    ]
+    with pytest.raises(FailJsonCalled) as error:
+        instance.resolve_resource_by_name()
+    assert "Multiple" in error.value.payload["msg"]
+
+
+def test_ocid_lookup_does_not_list_reservations(monkeypatch):
+    """Use the OCID directly when a name and domain are also supplied."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance_capacity_reservation")
+    instance = make_reservation_module(module_obj, {
+        "capacity_reservation_id": "reservation", "name": "reserved", "availability_domain": "AD-1",
+    })
+    resource = FakeModel(id="reservation")
+    instance.get_resource_by_id = lambda resource_id: resource
+    instance.list_all_resources = raising(AssertionError("Unexpected list call"))
+    assert instance.resolve_target_resource() is resource

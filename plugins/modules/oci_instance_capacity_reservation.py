@@ -58,6 +58,8 @@ options:
       - Omit this value to keep existing configurations during an update.
       - At least one configuration is required when the module creates a reservation.
       - OCI can reserve less capacity than requested when capacity is unavailable.
+      - After a completed operation, the module warns if reserved capacity is below the requested capacity.
+      - Subsequent runs request missing capacity and can report changes until OCI supplies the requested capacity.
     type: list
     elements: dict
     suboptions:
@@ -197,7 +199,7 @@ resource:
               type: list
               elements: str
         reserved_count:
-          description: The requested instance count.
+          description: The actual number of instances reserved for this configuration.
           type: int
         used_count:
           description: The number of instances in use.
@@ -342,27 +344,51 @@ class OciComputeCapacityReservationModule(OciResourceBase):
     def build_update_plan(self, resource):
         """Reject fault-domain replacements before any update operation."""
         plan = super().build_update_plan(resource)
-        if "instance_reservation_configs" not in plan["update_model_fields"]:
-            return plan
-        current = serialize_oci_model(resource).get("instance_reservation_configs") or []
-        desired = self.module.params["instance_reservation_configs"]
-        current_identity = [{key: value for key, value in item.items() if key != "reserved_count"} for item in current]
-        desired_identity = [{key: value for key, value in item.items() if key != "reserved_count"} for item in desired]
-        retained = match_unordered_subset_list(current_identity, desired_identity, reservation_config_differs)
-        unmatched_current = [item for index, item in enumerate(current_identity) if index not in retained.values()]
-        unmatched_desired = [item for index, item in enumerate(desired_identity) if index not in retained]
-        for wanted in unmatched_desired:
-            without_domain = {key: value for key, value in wanted.items() if key != "fault_domain"}
-            if any(
-                item.get("fault_domain") != wanted.get("fault_domain")
-                and not values_differ_as_subset(item, without_domain)
-                for item in unmatched_current
-            ):
-                self.module.fail_json(
-                    msg="Changing instance_reservation_configs.fault_domain requires deleting the reservation "
-                    "and creating a new reservation. This includes removing a specified fault domain."
-                )
+        if "instance_reservation_configs" in plan["update_model_fields"]:
+            current = serialize_oci_model(resource).get("instance_reservation_configs") or []
+            desired = self.module.params["instance_reservation_configs"]
+            current_identity = [{key: value for key, value in item.items() if key != "reserved_count"} for item in current]
+            desired_identity = [{key: value for key, value in item.items() if key != "reserved_count"} for item in desired]
+            retained = match_unordered_subset_list(current_identity, desired_identity, reservation_config_differs)
+            unmatched_current = [item for index, item in enumerate(current_identity) if index not in retained.values()]
+            unmatched_desired = [item for index, item in enumerate(desired_identity) if index not in retained]
+            for wanted in unmatched_desired:
+                without_domain = {key: value for key, value in wanted.items() if key != "fault_domain"}
+                if any(
+                    item.get("fault_domain") != wanted.get("fault_domain")
+                    and not values_differ_as_subset(item, without_domain)
+                    for item in unmatched_current
+                ):
+                    self.module.fail_json(
+                        msg="Changing instance_reservation_configs.fault_domain requires deleting the reservation "
+                        "and creating a new reservation. This includes removing a specified fault domain."
+                    )
         return plan
+
+    def collect_list_filters(self, *param_groups):
+        """Include the optional availability domain in name lookup filters."""
+        return super().collect_list_filters(*param_groups, ("availability_domain",))
+
+    def warn_if_capacity_incomplete(self, resource):
+        """Warn when a completed operation reserves insufficient capacity."""
+        desired = self.module.params.get("instance_reservation_configs")
+        if self.check_mode or not self.module.params.get("wait", True) or not desired:
+            return
+        current = (serialize_oci_model(resource) or {}).get("instance_reservation_configs") or []
+
+        def insufficient_capacity(actual, wanted):
+            identity = {key: value for key, value in wanted.items() if key != "reserved_count"}
+            return (
+                reservation_config_differs(actual, identity)
+                or actual.get("reserved_count", 0) < wanted["reserved_count"]
+            )
+
+        matches = match_unordered_subset_list(current, desired, insufficient_capacity)
+        if len(matches) < len(desired):
+            self.module.warn(
+                "OCI reserved less capacity than requested. Review the returned instance_reservation_configs. "
+                "Subsequent runs will request missing capacity and can report changes."
+            )
 
     def get_resource_response(self, resource_id):
         """Fetch one capacity reservation by OCID.
@@ -441,9 +467,11 @@ class OciComputeCapacityReservationModule(OciResourceBase):
             self.client.create_compute_capacity_reservation,
             create_compute_capacity_reservation_details=details,
         )
-        return self.wait_for_reservation_work_request(
+        resource = self.wait_for_reservation_work_request(
             response, response.data.id, WAIT_FOR_CAPACITY_RESERVATION_STATES
         )
+        self.warn_if_capacity_incomplete(resource)
+        return resource
 
     def build_update_details(self, update_model_fields):
         """Build the SDK update details model.
@@ -472,9 +500,11 @@ class OciComputeCapacityReservationModule(OciResourceBase):
         Returns:
             The updated reservation model.
         """
-        return self.wait_for_reservation_work_request(
+        resource = self.wait_for_reservation_work_request(
             response, resource_id, WAIT_FOR_CAPACITY_RESERVATION_STATES
         )
+        self.warn_if_capacity_incomplete(resource)
+        return resource
 
     def delete_resource(self, resource):
         """Delete a capacity reservation and wait for its work request.
