@@ -14,15 +14,6 @@
       retries: 3
       ignore_errors: true
 
-    - name: Delete leaked DRG during cleanup
-      ansible.oci.oci_network_drg:
-        state: absent
-        drg_id: "{{ oci_drg_attachment_integration_drg_id }}"
-      when: oci_drg_attachment_integration_drg_id | default('') | length > 0
-      register: oci_cleanup_drg
-      retries: 3
-      ignore_errors: true
-
     - name: Delete leaked VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
@@ -36,6 +27,5 @@
       ansible.builtin.assert:
         that:
           - oci_cleanup_drg_attachment is not failed
-          - oci_cleanup_drg is not failed
           - oci_cleanup_vcn is not failed
         fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

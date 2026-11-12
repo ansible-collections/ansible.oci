@@ -7,3 +7,24 @@ oci_drg_integration_create_tags:
 oci_drg_integration_update_tags:
   phase: update
   role: integration
+oci_drg_attachment_integration_vcn_name: "oci-drg-attachment-integration-vcn"
+oci_drg_attachment_integration_attachment_name: "oci-drg-attachment-integration-attachment"
+oci_drg_attachment_integration_updated_attachment_name: "oci-drg-attachment-integration-attachment-updated"
+oci_drg_attachment_integration_vcn_cidr_block: "10.252.0.0/16"
+oci_drg_attachment_integration_vcn_dns_label: "ocidrgattv"
+oci_drg_attachment_integration_create_tags:
+  phase: create
+  role: integration
+oci_drg_attachment_integration_update_tags:
+  phase: update
+  role: integration
+oci_rpc_integration_peer_drg_name: "oci-rpc-integration-peer-drg"
+oci_rpc_integration_rpc_name: "oci-rpc-integration-rpc"
+oci_rpc_integration_peer_rpc_name: "oci-rpc-integration-peer-rpc"
+oci_rpc_integration_updated_rpc_name: "oci-rpc-integration-rpc-updated"
+oci_rpc_integration_create_tags:
+  phase: create
+  role: integration
+oci_rpc_integration_update_tags:
+  phase: update
+  role: integration

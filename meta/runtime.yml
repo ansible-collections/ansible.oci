@@ -36,6 +36,9 @@ action_groups:
         - oci_network_cpe_info
         - oci_network_ipsec_connection
         - oci_network_ipsec_connection_info
+        - oci_network_remote_peering_connection
+        - oci_network_remote_peering_connection_info
+        - oci_network_remote_peering_connection_connect
         - oci_network_drg
         - oci_network_drg_info
         - oci_network_drg_attachment
