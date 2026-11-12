@@ -410,3 +410,60 @@ def values_differ_as_subset(current_value, desired_value):
     if isinstance(desired_value, list):
         return strip_none_values(current_value or []) != strip_none_values(desired_value)
     return current_value != desired_value
+
+
+def match_unordered_subset_list(current_value, desired_value, item_differs=values_differ_as_subset):
+    """Return a maximum assignment from desired indexes to current indexes.
+
+    Each current item can match once. Earlier matches can move to another item.
+    Inputs remain unchanged.
+
+    Args:
+        current_value: Current serialized items, or None for an empty list.
+        desired_value: Desired serialized items, or None for an empty list.
+        item_differs: Function that returns True when two items differ.
+
+    Returns:
+        A mapping from matched desired indexes to current indexes.
+    """
+    current = current_value or []
+    desired = desired_value or []
+    candidates = [
+        [index for index, item in enumerate(current) if not item_differs(item, wanted)]
+        for wanted in desired
+    ]
+    owners = {}
+
+    def assign(desired_index, visited):
+        for current_index in candidates[desired_index]:
+            if current_index in visited:
+                continue
+            visited.add(current_index)
+            if current_index not in owners or assign(owners[current_index], visited):
+                owners[current_index] = desired_index
+                return True
+        return False
+
+    for desired_index in range(len(desired)):
+        assign(desired_index, set())
+    return {desired_index: current_index for current_index, desired_index in owners.items()}
+
+
+def values_differ_as_unordered_subset_list(current_value, desired_value, item_differs=values_differ_as_subset):
+    """Compare unordered lists through a complete assignment of subset matches.
+
+    Added or removed items count as changes. Inputs remain unchanged.
+
+    Args:
+        current_value: Current serialized items, or None for an empty list.
+        desired_value: Desired serialized items, or None for an empty list.
+        item_differs: Function that returns True when two items differ.
+
+    Returns:
+        True when no complete assignment exists between equal-length lists.
+    """
+    current = current_value or []
+    desired = desired_value or []
+    if len(current) != len(desired):
+        return True
+    return len(match_unordered_subset_list(current, desired, item_differs)) != len(desired)

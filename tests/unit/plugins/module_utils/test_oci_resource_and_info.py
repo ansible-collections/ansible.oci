@@ -2536,3 +2536,23 @@ def test_oci_resource_base_delete_conflict_message_uses_resource_id_field(monkey
         )
 
     assert "Cannot delete topic ocid1.topic.oc1..123" in exc_info.value.payload["msg"]
+
+
+@pytest.mark.parametrize(
+    "compare,current,desired,differs",
+    [
+        (None, ["a", "b"], ["b", "a"], True),
+        ("eq", ["a", "b"], ["b", "a"], True),
+        ("sorted_list", ["a", "b"], ["b", "a"], False),
+        ("subset_dict", [{"shape": "a", "used_count": 0}], [{"shape": "a"}], True),
+        ("unordered_subset_list", [{"shape": "a", "used_count": 0}], [{"shape": "a"}], False),
+    ],
+)
+def test_list_subset_matching_is_explicit(compare, current, desired, differs):
+    """Enable list subset matching only when the field selects the new strategy."""
+    oci_resource = load_collection_module("oci_resource")
+    context = types.SimpleNamespace(enum_keys=frozenset())
+
+    assert oci_resource.OciResourceBase.compare_update_field_values(
+        context, current, desired, compare=compare
+    ) is differs

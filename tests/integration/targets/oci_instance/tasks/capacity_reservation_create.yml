@@ -1,0 +1,209 @@
+---
+- name: Create capacity reservation in check mode
+  ansible.oci.oci_instance_capacity_reservation: &reservation_create
+    state: present
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_instance_integration_instance_name }}-reservation"
+    availability_domain: "{{ oci_instance_integration_availability_domain }}"
+    is_default_reservation: false
+    instance_reservation_configs:
+      - instance_shape: "{{ oci_instance_discovered_shape }}"
+        instance_shape_config: "{{ oci_instance_integration_shape_config }}"
+        reserved_count: 1
+    freeform_tags:
+      phase: create
+  check_mode: true
+  register: reservation_change_check
+
+- name: Verify check mode predicts a change
+  ansible.builtin.assert:
+    that:
+      - reservation_change_check.changed
+
+- name: Read reservation after check mode
+  ansible.oci.oci_instance_capacity_reservation_info:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_instance_integration_instance_name }}-reservation"
+    availability_domain: "{{ oci_instance_integration_availability_domain }}"
+    lifecycle_state: active
+  register: reservation_probe
+
+- name: Verify check mode preserves reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations | length == 0
+
+- name: Create capacity reservation
+  ansible.oci.oci_instance_capacity_reservation: *reservation_create
+  register: reservation_change
+
+- name: Capture reservation ID
+  ansible.builtin.set_fact:
+    oci_instance_capacity_reservation_id: "{{ reservation_change.resource.id }}"
+
+- name: Verify reservation change
+  ansible.builtin.assert:
+    that:
+      - reservation_change.changed
+
+- name: Read reservation after change
+  ansible.oci.oci_instance_capacity_reservation_info:
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+  register: reservation_probe
+
+- name: Verify reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations | length == 1
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 1
+
+- name: Repeat desired reservation state
+  ansible.oci.oci_instance_capacity_reservation: *reservation_create
+  register: reservation_repeat
+
+- name: Repeat desired reservation state in check mode
+  ansible.oci.oci_instance_capacity_reservation: *reservation_create
+  check_mode: true
+  register: reservation_repeat_check
+
+- name: Verify reservation state is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_repeat.changed
+      - not reservation_repeat_check.changed
+
+- name: Update capacity reservation in check mode
+  ansible.oci.oci_instance_capacity_reservation: &reservation_update
+    state: present
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+    name: "{{ oci_instance_integration_instance_name }}-reservation-updated"
+    instance_reservation_configs: &reservation_configs
+      - instance_shape: "{{ oci_instance_discovered_shape }}"
+        instance_shape_config: "{{ oci_instance_integration_shape_config }}"
+        reserved_count: 2
+    freeform_tags: &reservation_tags
+      phase: update
+  check_mode: true
+  register: reservation_change_check
+
+- name: Verify check mode predicts a change
+  ansible.builtin.assert:
+    that:
+      - reservation_change_check.changed
+
+- name: Read reservation after check mode
+  ansible.oci.oci_instance_capacity_reservation_info: &reservation_lookup
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+  register: reservation_probe
+
+- name: Verify check mode preserves reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 1
+
+- name: Update capacity reservation
+  ansible.oci.oci_instance_capacity_reservation: *reservation_update
+  register: reservation_change
+
+- name: Verify reservation change
+  ansible.builtin.assert:
+    that:
+      - reservation_change.changed
+
+- name: Read reservation after change
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify reservation state
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 2
+      - reservation_probe.capacity_reservations[0].name == oci_instance_integration_instance_name ~ '-reservation-updated'
+      - reservation_probe.capacity_reservations[0].freeform_tags.phase == "update"
+
+- name: Repeat desired reservation state
+  ansible.oci.oci_instance_capacity_reservation: *reservation_update
+  register: reservation_repeat
+
+- name: Repeat desired reservation state in check mode
+  ansible.oci.oci_instance_capacity_reservation: *reservation_update
+  check_mode: true
+  register: reservation_repeat_check
+
+- name: Verify reservation state is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_repeat.changed
+      - not reservation_repeat_check.changed
+
+- name: Reject a fault domain replacement in check mode
+  ansible.oci.oci_instance_capacity_reservation:
+    state: present
+    capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
+    instance_reservation_configs:
+      - instance_shape: "{{ oci_instance_discovered_shape }}"
+        instance_shape_config: "{{ oci_instance_integration_shape_config }}"
+        reserved_count: 2
+        fault_domain: FAULT-DOMAIN-1
+  check_mode: true
+  register: reservation_placement_check
+  failed_when: false
+
+- name: Verify the replacement requires deletion and creation
+  ansible.builtin.assert:
+    that:
+      - "'deleting the reservation' in reservation_placement_check.msg"
+      - "'creating a new reservation' in reservation_placement_check.msg"
+
+- name: Read reservation after the rejected replacement
+  ansible.oci.oci_instance_capacity_reservation_info: *reservation_lookup
+  register: reservation_probe
+
+- name: Verify the rejected replacement preserves placement and capacity
+  ansible.builtin.assert:
+    that:
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].fault_domain is none
+      - reservation_probe.capacity_reservations[0].instance_reservation_configs[0].reserved_count == 2
+
+- name: Find updated reservation by name
+  ansible.oci.oci_instance_capacity_reservation_info:
+    compartment_id: "{{ oci_integration_compartment_id }}"
+    name: "{{ oci_instance_integration_instance_name }}-reservation-updated"
+    availability_domain: "{{ oci_instance_integration_availability_domain }}"
+    lifecycle_state: active
+  register: reservation_filtered
+
+- name: Verify reservation list filters
+  ansible.builtin.assert:
+    that:
+      - reservation_filtered.capacity_reservations | length == 1
+      - reservation_filtered.capacity_reservations[0].id == oci_instance_capacity_reservation_id
+
+- name: Repeat reservation state by name
+  ansible.oci.oci_instance_capacity_reservation:
+    state: present
+    name: "{{ oci_instance_integration_instance_name }}-reservation-updated"
+    instance_reservation_configs: *reservation_configs
+    freeform_tags: *reservation_tags
+    compartment_id: "{{ oci_integration_compartment_id }}"
+  register: reservation_by_name
+
+- name: Verify reservation name lookup is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_by_name.changed
+
+- name: Repeat reservation state by name and availability domain
+  ansible.oci.oci_instance_capacity_reservation:
+    state: present
+    name: "{{ oci_instance_integration_instance_name }}-reservation-updated"
+    availability_domain: "{{ oci_instance_integration_availability_domain }}"
+    instance_reservation_configs: *reservation_configs
+    freeform_tags: *reservation_tags
+    compartment_id: "{{ oci_integration_compartment_id }}"
+  register: reservation_by_domain
+
+- name: Verify reservation name lookup with a domain is unchanged
+  ansible.builtin.assert:
+    that:
+      - not reservation_by_domain.changed

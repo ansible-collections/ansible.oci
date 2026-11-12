@@ -17,6 +17,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     rename_aliased_fields,
     serialize_oci_model,
     values_differ_as_subset,
+    values_differ_as_unordered_subset_list,
 )
 
 
@@ -286,11 +287,21 @@ class OciResourceBase(OciModuleBase, ABC):
         self.module.fail_json(msg=message)
 
     def compare_update_field_values(self, current_value, desired_value, compare=None):
-        """Return ``True`` when a planned field value differs from the resource.
+        """Compare current and desired values with the selected strategy.
 
-        ``compare`` selects the comparison strategy. ``None`` and ``"eq"``
-        perform direct inequality checks, while ``"sorted_list"`` compares the
-        values as order-insensitive lists.
+        Existing strategies compare exact values, sorted lists, or dictionary
+        subsets. The unordered subset strategy matches each list item once.
+
+        Args:
+            current_value: The current serialized field value.
+            desired_value: The requested field value.
+            compare: The strategy declared by the update field specification.
+
+        Returns:
+            True when the requested field differs from the current field.
+
+        Raises:
+            ValueError: The comparison strategy is unsupported.
         """
         if compare in (None, "eq"):
             return current_value != desired_value
@@ -299,6 +310,8 @@ class OciResourceBase(OciModuleBase, ABC):
         if compare == "subset_dict":
             desired_value = normalize_enum_values(desired_value or {}, self.enum_keys)
             return values_differ_as_subset(current_value, desired_value)
+        if compare == "unordered_subset_list":
+            return values_differ_as_unordered_subset_list(current_value, desired_value)
         raise ValueError(f"Unsupported update comparison: {compare}")
 
     def execute_update_field_strategy(
