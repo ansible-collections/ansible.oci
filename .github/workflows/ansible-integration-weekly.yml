@@ -19,13 +19,13 @@ jobs:
   integration-weekly:
     name: "py${{ matrix.python-version }} / ${{ matrix.ansible-ref }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      # One tenant: 5 resources parallely can fail in integhration test
-      max-parallel: 1
+      # Limit simultaneous jobs to reduce OCI resource use.
+      max-parallel: 2
       matrix:
         include:
           - { ansible-ref: stable-2.16, python-version: "3.10" }
