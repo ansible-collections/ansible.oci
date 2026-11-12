@@ -11,6 +11,21 @@ import oci.core
 from .conftest import load_collection_module
 
 
+CONFIGURATION_LAUNCH_FIELDS = {
+    "cluster_placement_group_id": "PlacementID",
+    "compute_cluster_id": "ClusterID",
+    "is_ai_enterprise_enabled": False,
+    "security_attributes": {"Namespace": {"Key": "KeepCase"}},
+    "licensing_configs": [
+        {"type": "windows", "license_type": "bring_your_own_license"}
+    ],
+    "placement_constraint_details": {
+        "type": "host_group",
+        "compute_host_group_id": "HostID",
+    },
+}
+
+
 def test_configuration_models_preserve_nested_values(monkeypatch):
     """Build concrete model types and preserve case-sensitive user data."""
     compute = load_collection_module("oci_instance", plugin_dir="module_utils")
@@ -18,15 +33,24 @@ def test_configuration_models_preserve_nested_values(monkeypatch):
     details = compute.build_instance_configuration_details(
         {
             "launch_details": {
+                **CONFIGURATION_LAUNCH_FIELDS,
                 "metadata": {"type": "KeepCase", "firmware": "KeepThisToo"},
                 "platform_config": {"type": "amd_vm"},
-                "source_details": {"source_type": "boot_volume", "boot_volume_id": "BootID"},
+                "source_details": {
+                    "source_type": "boot_volume",
+                    "boot_volume_id": "BootID",
+                },
                 "agent_config": {
                     "monitoring_disabled": True,
-                    "plugins_config": [{"name": "PluginName", "desired_state": "enabled"}],
+                    "plugins_config": [
+                        {"name": "PluginName", "desired_state": "enabled"}
+                    ],
                 },
                 "preemptible_instance_config": {
-                    "preemption_action": {"type": "terminate", "preserve_boot_volume": True},
+                    "preemption_action": {
+                        "type": "terminate",
+                        "preserve_boot_volume": True,
+                    },
                 },
             },
             "block_volumes": [
@@ -34,7 +58,10 @@ def test_configuration_models_preserve_nested_values(monkeypatch):
                     "create_details": {
                         "source_details": {"type": "volume_backup", "id": "BackupID"},
                         "autotune_policies": [
-                            {"autotune_type": "performance_based", "max_vpus_per_gb": 20}
+                            {
+                                "autotune_type": "performance_based",
+                                "max_vpus_per_gb": 20,
+                            }
                         ],
                     },
                 }
@@ -47,6 +74,22 @@ def test_configuration_models_preserve_nested_values(monkeypatch):
         launch.platform_config,
         oci.core.models.InstanceConfigurationAmdVmLaunchInstancePlatformConfig,
     )
+    assert launch.cluster_placement_group_id == "PlacementID"
+    assert launch.compute_cluster_id == "ClusterID"
+    assert launch.is_ai_enterprise_enabled is False
+    assert launch.security_attributes == {"Namespace": {"Key": "KeepCase"}}
+    assert isinstance(
+        launch.licensing_configs[0],
+        oci.core.models.LaunchInstanceWindowsLicensingConfig,
+    )
+    assert launch.licensing_configs[0].type == "WINDOWS"
+    assert launch.licensing_configs[0].license_type == "BRING_YOUR_OWN_LICENSE"
+    assert isinstance(
+        launch.placement_constraint_details,
+        oci.core.models.InstanceConfigurationHostGroupPlacementConstraintDetails,
+    )
+    assert launch.placement_constraint_details.type == "HOST_GROUP"
+    assert launch.placement_constraint_details.compute_host_group_id == "HostID"
     assert launch.metadata == {"type": "KeepCase", "firmware": "KeepThisToo"}
     assert launch.source_details.boot_volume_id == "BootID"
     assert launch.source_details.source_type == "bootVolume"
@@ -76,7 +119,13 @@ def test_configuration_options_build_concrete_compute_entries(monkeypatch):
         {
             "instance_type": "instance_options",
             "options": [
-                {"instance_type": "compute", "launch_details": {"shape": "VM.Standard.E4.Flex"}}
+                {
+                    "instance_type": "compute",
+                    "launch_details": {
+                        "shape": "VM.Standard.E4.Flex",
+                        **CONFIGURATION_LAUNCH_FIELDS,
+                    },
+                }
             ],
         }
     )
@@ -87,6 +136,20 @@ def test_configuration_options_build_concrete_compute_entries(monkeypatch):
         oci.core.models.InstanceConfigurationLaunchInstanceDetails,
     )
     assert details.options[0].launch_details.shape == "VM.Standard.E4.Flex"
+    from ansible.module_utils.common.arg_spec import ArgumentSpecValidator
+
+    launch_fields = deepcopy(CONFIGURATION_LAUNCH_FIELDS)
+    result = ArgumentSpecValidator(compute.INSTANCE_CONFIGURATION_LAUNCH_ARGS).validate(
+        launch_fields
+    )
+    assert not result.error_messages
+    launch = details.options[0].launch_details
+    assert launch.compute_cluster_id == "ClusterID"
+    assert launch.cluster_placement_group_id == "PlacementID"
+    assert launch.is_ai_enterprise_enabled is False
+    assert launch.security_attributes == launch_fields["security_attributes"]
+    assert launch.licensing_configs[0].license_type == "BRING_YOUR_OWN_LICENSE"
+    assert launch.placement_constraint_details.compute_host_group_id == "HostID"
 
 
 def test_configuration_name_maps_only_declared_sdk_model_fields():
@@ -289,3 +352,93 @@ def test_configuration_ignores_omitted_fields_and_preserves_false_and_zero():
     )
     assert details.launch_details.platform_config.percentage_of_cores_enabled == 0
     assert details.launch_details.platform_config.are_virtual_instructions_enabled is False
+
+
+@pytest.mark.parametrize(
+    "assign_ipv6_ip,pairs",
+    [
+        (None, None),
+        (False, []),
+        (True, [{"ipv6_subnet_cidr": "2001:db8::/64", "ipv6_address": None}]),
+    ],
+)
+def test_primary_vnic_network_inputs(assign_ipv6_ip, pairs):
+    """Preserve omission, false values, and typed IPv6 inputs."""
+    compute = load_collection_module("oci_instance")
+    params = dict(
+        assign_ipv6_ip=assign_ipv6_ip,
+        ipv6_address_ipv6_subnet_cidr_pair_details=pairs,
+        subnet_cidr="10.0.1.0/24",
+    )
+    original = deepcopy(params)
+    details = compute.build_create_vnic_details(params)
+    assert details.subnet_cidr == params["subnet_cidr"]
+    assert details.assign_ipv6_ip is assign_ipv6_ip
+    assert params == original
+    actual = details.ipv6_address_ipv6_subnet_cidr_pair_details
+    if pairs:
+        assert isinstance(actual[0], oci.core.models.Ipv6AddressIpv6SubnetCidrPairDetails)
+        assert actual[0].ipv6_subnet_cidr == "2001:db8::/64"
+        assert actual[0].ipv6_address is None
+    else:
+        assert actual == pairs
+
+
+@pytest.mark.parametrize("variant", ["compute", "instance_options"])
+def test_configuration_network_and_local_storage(variant):
+    """Build the new inputs in both template forms and both VNIC locations."""
+    from ansible.module_utils.common.arg_spec import ArgumentSpecValidator
+
+    compute = load_collection_module("oci_instance")
+    vnic = dict(
+        assign_ipv6_ip=False,
+        subnet_cidr="10.0.1.0/24",
+        ipv6_address_ipv6_subnet_cidr_pair_details=[{"ipv6_id": "IPv6ID"}],
+    )
+    launch = dict(create_vnic_details=vnic, shape_config={"local_volume_size_in_gbs": 100})
+    assert (
+        not ArgumentSpecValidator(compute.INSTANCE_CONFIGURATION_LAUNCH_ARGS)
+        .validate(launch)
+        .error_messages
+    )
+    entry = dict(
+        instance_type="compute",
+        launch_details=launch,
+        secondary_vnics=[{"create_vnic_details": deepcopy(vnic)}],
+    )
+    fields = entry if variant == "compute" else dict(instance_type=variant, options=[entry])
+    original = deepcopy(fields)
+    first = compute.build_instance_configuration_details(fields)
+    second = compute.build_instance_configuration_details(fields)
+    assert oci.util.to_dict(first) == oci.util.to_dict(second)
+    assert fields == original
+    module_obj = load_collection_module("oci_instance_configuration", plugin_dir="modules")
+    adapter = object.__new__(module_obj.OciInstanceConfigurationModule)
+    assert not adapter.compare_update_field_values(oci.util.to_dict(first), fields, "subset_dict")
+    resource = first if variant == "compute" else first.options[0]
+    assert resource.launch_details.shape_config.local_volume_size_in_gbs == 100
+    for model in (
+        resource.launch_details.create_vnic_details,
+        resource.secondary_vnics[0].create_vnic_details,
+    ):
+        assert model.assign_ipv6_ip is False
+        assert model.subnet_cidr == "10.0.1.0/24"
+        pair = model.ipv6_address_ipv6_subnet_cidr_pair_details[0]
+        assert isinstance(
+            pair, oci.core.models.InstanceConfigurationIpv6AddressIpv6SubnetCidrPairDetails
+        )
+        assert pair.ipv6_id == "IPv6ID"
+
+
+def test_shared_vnic_schemas_are_independent():
+    """Keep module-specific argument changes out of other VNIC schemas."""
+    from ansible_collections.ansible.oci.plugins.module_utils.oci_network import VNIC_ARGS
+
+    compute = load_collection_module("oci_instance")
+    key = "ipv6_address_ipv6_subnet_cidr_pair_details"
+    direct = compute.COMPUTE_LAUNCH_ARGS[key]
+    template = compute.INSTANCE_CONFIGURATION_VNIC_ARGS[key]
+    assert direct == template == VNIC_ARGS[key]
+    assert direct is not template
+    assert direct["options"] is not template["options"]
+    assert template["options"] is not VNIC_ARGS[key]["options"]

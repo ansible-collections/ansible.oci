@@ -15,10 +15,23 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     rename_aliased_fields,
 )
 
+from ansible_collections.ansible.oci.plugins.module_utils.oci_network import (
+    VNIC_ARGS,
+    build_ipv6_address_pairs,
+)
+
 oci = import_oci_sdk()[0]
 
 
 POLYMORPHIC_MODELS = {
+    "LaunchInstanceLicensingConfig": (
+        "type",
+        {"WINDOWS": "LaunchInstanceWindowsLicensingConfig"},
+    ),
+    "InstanceConfigurationPlacementConstraintDetails": (
+        "type",
+        {"HOST_GROUP": "InstanceConfigurationHostGroupPlacementConstraintDetails"},
+    ),
     "ComputeInstanceDetails": (
         "instance_type",
         {"compute": "ComputeInstanceDetails", "instance_options": "ComputeInstanceOptions"},
@@ -54,6 +67,8 @@ POLYMORPHIC_MODELS = {
 }
 
 MODEL_ENUM_FIELDS = {
+    "LaunchInstanceLicensingConfig": {"type", "license_type"},
+    "InstanceConfigurationPlacementConstraintDetails": {"type"},
     "InstanceConfigurationLaunchInstancePlatformConfig": {"type", "numa_nodes_per_socket"},
     "InstanceConfigurationAutotunePolicy": {"autotune_type"},
     "InstanceConfigurationLaunchOptions": {
@@ -193,7 +208,11 @@ ENUM_KEYS = {
 }
 
 # Nested launch inputs shared by instance and instance-configuration modules.
-COMPUTE_SHAPE_CONFIG_OPTIONS = dict(ocpus=dict(type="float"), memory_in_gbs=dict(type="float"))
+COMPUTE_SHAPE_CONFIG_OPTIONS = dict(
+    ocpus=dict(type="float"),
+    memory_in_gbs=dict(type="float"),
+    local_volume_size_in_gbs=dict(type="int"),
+)
 
 COMPUTE_LAUNCH_ARGS = dict(
     shape_config=dict(type="dict", options=deepcopy(COMPUTE_SHAPE_CONFIG_OPTIONS)),
@@ -202,13 +221,21 @@ COMPUTE_LAUNCH_ARGS = dict(
     boot_volume_size_in_gbs=dict(type="int"),
     boot_volume_vpus_per_gb=dict(type="int"),
     kms_key_id=dict(type="str"),
-    subnet_id=dict(type="str"),
-    assign_public_ip=dict(type="bool"),
+    **{
+        key: deepcopy(VNIC_ARGS[key])
+        for key in (
+            "subnet_id",
+            "assign_public_ip",
+            "private_ip",
+            "private_ip_id",
+            "hostname_label",
+            "nsg_ids",
+            "assign_ipv6_ip",
+            "ipv6_address_ipv6_subnet_cidr_pair_details",
+            "subnet_cidr",
+        )
+    },
     vnic_name=dict(type="str"),
-    private_ip=dict(type="str"),
-    private_ip_id=dict(type="str"),
-    hostname_label=dict(type="str"),
-    nsg_ids=dict(type="list", elements="str"),
     metadata=dict(type="dict"),
     extended_metadata=dict(type="dict"),
     security_attributes=dict(type="dict"),
@@ -299,21 +326,62 @@ INSTANCE_CONFIGURATION_SOURCE_SCALAR_ARGS = {
 
 INSTANCE_CONFIGURATION_VNIC_ARGS = dict(
     **{
-        key: deepcopy(COMPUTE_LAUNCH_ARGS[key])
-        for key in ("assign_public_ip", "hostname_label", "nsg_ids", "private_ip", "subnet_id")
+        key: deepcopy(VNIC_ARGS[key])
+        for key in (
+            "assign_public_ip",
+            "hostname_label",
+            "nsg_ids",
+            "private_ip",
+            "subnet_id",
+            "assign_private_dns_record",
+            "defined_tags",
+            "freeform_tags",
+            "skip_source_dest_check",
+            "assign_ipv6_ip",
+            "ipv6_address_ipv6_subnet_cidr_pair_details",
+            "subnet_cidr",
+        )
     },
-    assign_private_dns_record=dict(type="bool"),
-    defined_tags=dict(type="dict"),
     name=dict(type="str"),
-    freeform_tags=dict(type="dict"),
-    skip_source_dest_check=dict(type="bool"),
 )
 
+
 INSTANCE_CONFIGURATION_LAUNCH_ARGS = dict(
+    **{
+        key: deepcopy(COMPUTE_LAUNCH_ARGS[key])
+        for key in (
+            "cluster_placement_group_id",
+            "compute_cluster_id",
+            "is_ai_enterprise_enabled",
+            "security_attributes",
+        )
+    },
+    licensing_configs=dict(
+        type="list",
+        elements="dict",
+        options=dict(
+            type=dict(type="str", required=True, choices=["windows"]),
+            license_type=dict(
+                type="str",
+                choices=["oci_provided", "bring_your_own_license", "partner_provided"],
+            ),
+        ),
+    ),
+    placement_constraint_details=dict(
+        type="dict",
+        options=dict(
+            type=dict(type="str", required=True, choices=["host_group"]),
+            compute_host_group_id=dict(type="str", required=True),
+        ),
+    ),
     availability_domain=dict(type="str"),
     capacity_reservation_id=dict(type="str"),
     compartment_id=dict(type="str"),
-    create_vnic_details=dict(type="dict", options=INSTANCE_CONFIGURATION_VNIC_ARGS.copy()),
+    create_vnic_details=dict(
+        type="dict",
+        options=deepcopy(INSTANCE_CONFIGURATION_VNIC_ARGS),
+        mutually_exclusive=[("private_ip", "subnet_cidr")],
+    ),
     defined_tags=dict(type="dict"),
     name=dict(type="str"),
     extended_metadata=dict(type="dict"),
@@ -443,7 +511,11 @@ INSTANCE_CONFIGURATION_BLOCK_VOLUME_ARGS = dict(
 )
 
 INSTANCE_CONFIGURATION_SECONDARY_VNIC_ARGS = dict(
-    create_vnic_details=dict(type="dict", options=INSTANCE_CONFIGURATION_VNIC_ARGS.copy()),
+    create_vnic_details=dict(
+        type="dict",
+        options=deepcopy(INSTANCE_CONFIGURATION_VNIC_ARGS),
+        mutually_exclusive=[("private_ip", "subnet_cidr")],
+    ),
     name=dict(type="str"),
     nic_index=dict(type="int"),
 )
@@ -462,6 +534,8 @@ def build_create_vnic_details(params):
         {
             "subnet_id": params.get("subnet_id"),
             "assign_public_ip": params.get("assign_public_ip"),
+            "assign_ipv6_ip": params.get("assign_ipv6_ip"),
+            "subnet_cidr": params.get("subnet_cidr"),
             "display_name": params.get("vnic_name"),
             "private_ip": params.get("private_ip"),
             "private_ip_id": params.get("private_ip_id"),
@@ -469,6 +543,11 @@ def build_create_vnic_details(params):
             "nsg_ids": params.get("nsg_ids"),
         }
     )
+    ipv6_pairs = params.get("ipv6_address_ipv6_subnet_cidr_pair_details")
+    if ipv6_pairs is not None:
+        details["ipv6_address_ipv6_subnet_cidr_pair_details"] = build_ipv6_address_pairs(
+            ipv6_pairs, oci.core.models.Ipv6AddressIpv6SubnetCidrPairDetails
+        )
     if not details:
         return None
     return oci.core.models.CreateVnicDetails(**details)

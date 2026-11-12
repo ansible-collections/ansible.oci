@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 from dataclasses import FrozenInstanceError
+import importlib
 import sys
 import types
 
@@ -85,6 +86,21 @@ def test_update_field_spec_is_immutable_and_uses_planner_defaults(monkeypatch):
 
 def install_fake_oci_sdk(monkeypatch, *, pagination=None, retry=None, wait_until=None):
     """Register a fake ``oci`` module so freshly (re)loaded modules pick it up."""
+    # Restore collection imports as well as the SDK after this test.
+    package = importlib.import_module("ansible_collections.ansible.oci.plugins.module_utils")
+    for name in ("oci_base", "oci_resource", "oci_info"):
+        qualified_name = f"{package.__name__}.{name}"
+        # Register absent entries so teardown removes imports made by this test.
+        monkeypatch.setitem(
+            sys.modules, qualified_name, sys.modules.get(qualified_name)
+        )
+        if sys.modules[qualified_name] is None:
+            monkeypatch.delitem(sys.modules, qualified_name)
+        present = hasattr(package, name)
+        monkeypatch.setattr(package, name, getattr(package, name, None), raising=False)
+        if not present:
+            monkeypatch.delattr(package, name)
+
     oci_module = types.ModuleType("oci")
     exceptions_module = types.ModuleType("oci.exceptions")
 

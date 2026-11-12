@@ -67,11 +67,13 @@ def make_resource(module_obj, params, resource, *, check_mode=False, client=None
     return instance
 
 
-def test_create_check_mode_does_not_call_create(monkeypatch):
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_create_validates_once_and_respects_check_mode(monkeypatch, check_mode):
     module_obj = load_real_configuration_module(monkeypatch)[0]
     create_calls = []
     client = types.SimpleNamespace(
         create_instance_configuration=lambda **kwargs: create_calls.append(kwargs)
+        or FakeResponse(make_instance_configuration(module_obj))
     )
     instance = make_resource(
         module_obj,
@@ -83,15 +85,25 @@ def test_create_check_mode_does_not_call_create(monkeypatch):
             "instance_details": INSTANCE_DETAILS,
         },
         None,
-        check_mode=True,
+        check_mode=check_mode,
         client=client,
     )
+
+    builds = []
+    original = instance.build_template_details
+
+    def build(fields):
+        builds.append(fields)
+        return original(fields)
+
+    monkeypatch.setattr(instance, "build_template_details", build)
 
     with pytest.raises(ExitJsonCalled) as result:
         instance.execute_resource_module()
 
     assert result.value.payload["changed"] is True
-    assert create_calls == []
+    assert len(create_calls) == (0 if check_mode else 1)
+    assert builds == [INSTANCE_DETAILS]
 
 
 def test_repeated_present_with_same_template_is_unchanged(monkeypatch):
