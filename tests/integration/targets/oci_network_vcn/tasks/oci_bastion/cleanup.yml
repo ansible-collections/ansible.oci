@@ -1,0 +1,22 @@
+---
+- name: Delete leaked bastion during cleanup
+  ansible.oci.oci_bastion:
+    state: absent
+    bastion_id: '{{ oci_bastion_id }}'
+  when:
+    - oci_group_started_oci_bastion | default(false)
+    - oci_bastion_id | default('') | length > 0
+  register: oci_vcn_group_cleanup_0
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked bastion during cleanup''] }}'
+  when: oci_vcn_group_cleanup_0 is failed
+
+- name: Check all cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

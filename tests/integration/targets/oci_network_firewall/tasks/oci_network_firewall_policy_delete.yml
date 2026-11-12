@@ -1,0 +1,53 @@
+---
+- name: Check policy deletion
+  ansible.oci.oci_network_firewall_policy:
+    network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+    state: absent
+  check_mode: true
+  register: policy_delete_check
+
+- name: Read the policy after the deletion check
+  ansible.oci.oci_network_firewall_policy_info:
+    network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+  register: policy_after_delete_check
+
+- name: Verify the deletion check left the policy present
+  ansible.builtin.assert:
+    that:
+      - policy_delete_check.changed
+      - policy_after_delete_check.network_firewall_policies | length == 1
+      - policy_after_delete_check.network_firewall_policies[0].lifecycle_state == 'ACTIVE'
+
+- name: Delete the policy
+  ansible.oci.oci_network_firewall_policy:
+    network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+    state: absent
+  register: policy_delete
+  failed_when: not policy_delete.changed
+
+- name: Wait until the policy is absent from the active list
+  ansible.oci.oci_network_firewall_policy_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    lifecycle_state: active
+  register: policy_after_delete
+  until: |-
+    policy_after_delete.network_firewall_policies | selectattr('id', 'equalto',
+    oci_firewall_policy_cleanup_id) | list | length == 0
+  retries: 12
+  delay: 5
+
+- name: Verify deletion is unchanged
+  ansible.oci.oci_network_firewall_policy:
+    network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+    state: absent
+  check_mode: false
+  register: policy_delete_repeat
+  failed_when: policy_delete_repeat.changed
+
+- name: Verify deletion is unchanged in check mode
+  ansible.oci.oci_network_firewall_policy:
+    network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+    state: absent
+  check_mode: true
+  register: policy_delete_repeat
+  failed_when: policy_delete_repeat.changed

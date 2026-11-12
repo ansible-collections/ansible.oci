@@ -1,0 +1,56 @@
+---
+- name: Exercise Object Storage bucket lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Check bucket deletion without changing OCI
+      ansible.oci.oci_object_storage_bucket:
+        state: absent
+        name: '{{ oci_object_storage_bucket_name }}'
+      check_mode: true
+      register: bucket_delete_check
+
+    - name: Read bucket after delete check mode
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_delete_probe
+      failed_when: not bucket_delete_check.changed or bucket_delete_probe.buckets | length != 1
+
+    - name: Delete bucket
+      ansible.oci.oci_object_storage_bucket:
+        state: absent
+        name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_delete
+
+    - name: Read bucket after deletion
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_deleted_info
+
+    - name: Verify bucket was deleted
+      ansible.builtin.assert:
+        that:
+          - bucket_delete.changed | bool
+          - bucket_deleted_info.buckets | length == 0
+
+    - name: Check repeated bucket deletion
+      ansible.oci.oci_object_storage_bucket:
+        state: absent
+        name: '{{ oci_object_storage_bucket_name }}'
+      check_mode: true
+      register: bucket_delete_check_rerun
+
+    - name: Repeat bucket deletion
+      ansible.oci.oci_object_storage_bucket:
+        state: absent
+        name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_delete_rerun
+
+    - name: Verify bucket deletion is idempotent
+      ansible.builtin.assert:
+        that:
+          - not bucket_delete_check_rerun.changed | bool
+          - not bucket_delete_rerun.changed | bool

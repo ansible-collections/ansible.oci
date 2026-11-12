@@ -1,0 +1,59 @@
+---
+- name: Check CPE deletion
+  ansible.oci.oci_network_cpe:
+    state: absent
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  check_mode: true
+  register: oci_ipsec_cpe_delete_check
+
+- name: Assert CPE delete check mode predicts a change
+  ansible.builtin.assert:
+    that: oci_ipsec_cpe_delete_check.changed | bool
+
+- name: Verify CPE remains after delete check mode
+  ansible.oci.oci_network_cpe_info:
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  register: oci_ipsec_cpe_delete_probe
+
+- name: Assert CPE remains after delete check mode
+  ansible.builtin.assert:
+    that: oci_ipsec_cpe_delete_probe.cpes | length == 1
+
+- name: Delete CPE
+  ansible.oci.oci_network_cpe:
+    state: absent
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  register: oci_ipsec_cpe_deleted
+
+- name: Assert CPE deletion changed the resource
+  ansible.builtin.assert:
+    that: oci_ipsec_cpe_deleted.changed | bool
+
+- name: Wait until deleted CPE is absent
+  ansible.oci.oci_network_cpe_info:
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  register: oci_ipsec_cpe_deleted_probe
+  until: oci_ipsec_cpe_deleted_probe.cpes | length == 0
+  retries: 20
+  delay: 15
+
+- name: Verify CPE deletion is idempotent
+  ansible.oci.oci_network_cpe:
+    state: absent
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  register: oci_ipsec_cpe_delete_rerun
+
+- name: Assert CPE delete rerun is unchanged
+  ansible.builtin.assert:
+    that: not oci_ipsec_cpe_delete_rerun.changed | bool
+
+- name: Check repeated CPE deletion
+  ansible.oci.oci_network_cpe:
+    state: absent
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  check_mode: true
+  register: oci_ipsec_cpe_delete_check_rerun
+
+- name: Assert repeated CPE deletion is unchanged in check mode
+  ansible.builtin.assert:
+    that: not oci_ipsec_cpe_delete_check_rerun.changed | bool

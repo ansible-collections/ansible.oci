@@ -1,0 +1,25 @@
+---
+- name: Test the load balancer lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Test private load balancer deletion by ID
+      ansible.builtin.include_tasks: test_lb_scenario.yml
+      vars:
+        oci_lb_lookup_name: '{{ oci_loadbalancer_integration_private_name }}'
+        oci_lb_operation:
+          state: absent
+          load_balancer_id: '{{ oci_lb_id }}'
+        oci_lb_expected: {}
+
+    - name: Test IPv6 with the configured subnet
+      ansible.builtin.include_tasks: ipv6.yml
+      when: oci_loadbalancer_integration_ipv6_subnet_id | length > 0
+
+    - name: Report missing IPv6 subnet
+      ansible.builtin.debug:
+        msg: IPv6 live scenarios skipped; set OCI_LOADBALANCER_IPV6_SUBNET_ID to an IPv6-enabled regional public subnet.
+      when: oci_loadbalancer_integration_ipv6_subnet_id | length == 0

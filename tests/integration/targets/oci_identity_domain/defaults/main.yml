@@ -1,13 +1,38 @@
 ---
-# The integration tenancy used by this collection is homed in US San Jose.
-oci_identity_domain_integration_home_region: "us-sanjose-1"
-oci_identity_domain_integration_name: "oci-identity-domain-integration"
-oci_identity_domain_integration_updated_name: "oci-identity-domain-integration-updated"
-oci_identity_domain_integration_description: "OCI identity domain integration test"
-oci_identity_domain_integration_updated_description: "Updated OCI identity domain integration test"
+oci_identity_domain_integration_home_region: us-sanjose-1
+oci_identity_domain_integration_name: oci-identity-domain-integration
+oci_identity_domain_integration_updated_name: oci-identity-domain-integration-updated
+oci_identity_domain_integration_description: OCI identity domain integration test
+oci_identity_domain_integration_updated_description: Updated OCI identity domain integration test
 oci_identity_domain_integration_create_tags:
   phase: create
   role: integration
 oci_identity_domain_integration_update_tags:
   phase: update
   role: integration
+oci_identity_user_integration_home_region: us-sanjose-1
+oci_identity_user_integration_domain_name: oci-user-integration-domain
+oci_identity_user_integration_domain_description: OCI user integration test domain
+oci_identity_user_integration_name: oci-user-integration
+oci_identity_user_integration_description: OCI user integration test
+oci_identity_group_integration_home_region: us-sanjose-1
+oci_identity_group_integration_domain_name: oci-group-integration-domain
+oci_identity_group_integration_domain_description: OCI group integration test domain
+oci_identity_group_integration_name: oci-group-integration
+oci_identity_dynamic_group_integration_home_region: us-sanjose-1
+oci_identity_dynamic_group_integration_domain_name: oci-dynamic-group-integration-domain
+oci_identity_dynamic_group_integration_domain_description: OCI dynamic group integration test domain
+oci_identity_dynamic_group_integration_name: oci-dynamic-group-integration
+oci_identity_dynamic_group_integration_description: OCI dynamic group integration test
+oci_identity_dynamic_group_integration_matching_rule: instance.compartment.id = '{{ oci_integration_compartment_id }}'
+oci_identity_api_key_integration_home_region: us-sanjose-1
+oci_identity_api_key_integration_domain_name: oci-api-key-integration-domain
+oci_identity_api_key_integration_domain_description: OCI API key integration test domain
+oci_identity_api_key_integration_user_name: oci-api-key-integration
+oci_membership_home_region: us-sanjose-1
+oci_membership_domain_name: oci-membership-integration-domain
+oci_membership_domain_description: OCI membership integration test domain
+oci_membership_domain_id: ''
+oci_membership_domain_url: ''
+oci_membership_user_name: oci-membership-user
+oci_membership_group_name: oci-membership-group

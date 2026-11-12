@@ -1,0 +1,27 @@
+---
+- name: Remove leaked membership during cleanup
+  ansible.oci.oci_identity_user_group_membership:
+    state: absent
+    domain_id: '{{ oci_membership_domain_id }}'
+    user_id: '{{ oci_membership_user_cleanup_id }}'
+    group_id: '{{ oci_membership_group_cleanup_id }}'
+  when:
+    - oci_group_started_oci_identity_user_group_membership | default(false)
+    - oci_membership_domain_id | length > 0
+    - oci_membership_added | default(false)
+    - oci_membership_user_cleanup_id | default('') | length > 0
+    - oci_membership_group_cleanup_id | default('') | length > 0
+  register: oci_group_cleanup_0
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove leaked membership during cleanup''] }}'
+  when: oci_group_cleanup_0 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

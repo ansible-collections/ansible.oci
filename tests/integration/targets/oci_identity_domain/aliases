@@ -1,3 +1,14 @@
 destructive
-time=90m
+oci_identity_api_key
+oci_identity_api_key_info
+oci_identity_domain
 oci_identity_domain_info
+oci_identity_dynamic_group
+oci_identity_dynamic_group_info
+oci_identity_group
+oci_identity_group_info
+oci_identity_user
+oci_identity_user_group_membership
+oci_identity_user_group_membership_info
+oci_identity_user_info
+time=90m

@@ -1,0 +1,299 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: |-
+      Volume backup policy assignment integration tests require oci_integration_compartment_id in
+      tests/integration/integration_config.yml.
+
+- name: Choose unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_volume_backup_policy_assignment_volume_name: '{{ oci_volume_backup_policy_assignment_volume_name ~ ''-'' ~ oci_integration_rpfx
+      }}'
+    oci_volume_backup_policy_assignment_first_policy_name: '{{ oci_volume_backup_policy_assignment_first_policy_name ~ ''-''
+      ~ oci_integration_rpfx }}'
+    oci_volume_backup_policy_assignment_second_policy_name: '{{ oci_volume_backup_policy_assignment_second_policy_name ~ ''-''
+      ~ oci_integration_rpfx }}'
+
+- name: Mark oci_volume_backup_policy_assignment as started
+  ansible.builtin.set_fact:
+    oci_group_started_oci_volume_backup_policy_assignment: true
+
+- name: Exercise volume backup policy assignment lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Use the shared availability domains
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_assignment_ads: '{{ oci_blockstorage_volume_ad_info }}'
+
+    - name: Use the shared volume
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_assignment_volume_create: '{{ oci_prerequisites.volume }}'
+
+    - name: Remember the block volume OCID
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_assignment_volume_id: '{{ oci_volume_backup_policy_assignment_volume_create.resource.id }}'
+
+    - name: Use the shared policy
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_assignment_first_policy_create: '{{ oci_prerequisites.policy }}'
+
+    - name: Remember the first policy OCID
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_assignment_first_policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_create.resource.id
+          }}'
+
+    - name: Create second backup policy
+      ansible.oci.oci_volume_backup_policy:
+        state: present
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_volume_backup_policy_assignment_second_policy_name }}'
+        schedules: '{{ oci_volume_backup_policy_assignment_schedule }}'
+      register: oci_volume_backup_policy_assignment_second_policy_create
+
+    - name: Remember the second policy OCID
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_assignment_second_policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_create.resource.id
+          }}'
+
+    - name: Confirm the volume initially has no assignment
+      ansible.oci.oci_volume_backup_policy_assignment_info:
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_initial_info
+
+    - name: Assert the assignment is initially absent
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_initial_info.volume_backup_policy_assignments | length == 0
+
+    - name: Check assignment creation without changing OCI
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_assignment_create_check
+
+    - name: Assert creation check mode reports change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_create_check.changed | bool
+
+    - name: Confirm creation check mode did not assign a policy
+      ansible.oci.oci_volume_backup_policy_assignment_info:
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_create_probe
+
+    - name: Assert the assignment is still absent
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_create_probe.volume_backup_policy_assignments | length == 0
+
+    - name: Create backup policy assignment
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
+      register: oci_volume_backup_policy_assignment_create
+
+    - name: Assert assignment creation result
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_create.changed | bool
+          - oci_volume_backup_policy_assignment_create.resource.id | length > 0
+          - oci_volume_backup_policy_assignment_create.resource.asset_id == oci_volume_backup_policy_assignment_volume_id
+          - |-
+            oci_volume_backup_policy_assignment_create.resource.policy_id ==
+            oci_volume_backup_policy_assignment_first_policy_id
+          - oci_volume_backup_policy_assignment_create.resource.time_created | length > 0
+
+    - name: Read assignment by asset OCID
+      ansible.oci.oci_volume_backup_policy_assignment_info:
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_info_by_asset
+
+    - name: Assert asset lookup returns the created assignment
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_info_by_asset.volume_backup_policy_assignments | length == 1
+          - |-
+            oci_volume_backup_policy_assignment_info_by_asset.volume_backup_policy_assignments[0].id ==
+            oci_volume_backup_policy_assignment_create.resource.id
+
+    - name: Read assignment by its OCID
+      ansible.oci.oci_volume_backup_policy_assignment_info:
+        volume_backup_policy_assignment_id: '{{ oci_volume_backup_policy_assignment_create.resource.id }}'
+      register: oci_volume_backup_policy_assignment_info_by_id
+
+    - name: Assert assignment OCID lookup returns the created assignment
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_info_by_id.volume_backup_policy_assignments | length == 1
+          - |-
+            oci_volume_backup_policy_assignment_info_by_id.volume_backup_policy_assignments[0].asset_id ==
+            oci_volume_backup_policy_assignment_volume_id
+
+    - name: Reconcile first assignment in check mode
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_assignment_create_check_rerun
+
+    - name: Reconcile first assignment again
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
+      register: oci_volume_backup_policy_assignment_create_rerun
+
+    - name: Assert assignment creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_assignment_create_check_rerun.changed | bool
+          - not oci_volume_backup_policy_assignment_create_rerun.changed | bool
+          - |-
+            oci_volume_backup_policy_assignment_create_rerun.resource.id ==
+            oci_volume_backup_policy_assignment_create.resource.id
+
+    - name: Check policy replacement without changing OCI
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_assignment_update_check
+
+    - name: Assert replacement check mode reports change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_update_check.changed | bool
+
+    - name: Read assignment after replacement check mode
+      ansible.oci.oci_volume_backup_policy_assignment_info:
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_update_probe
+
+    - name: Assert the first policy remains assigned
+      ansible.builtin.assert:
+        that:
+          - |-
+            oci_volume_backup_policy_assignment_update_probe.volume_backup_policy_assignments[0].policy_id ==
+            oci_volume_backup_policy_assignment_first_policy_id
+
+    - name: Replace assigned backup policy
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+      register: oci_volume_backup_policy_assignment_update
+
+    - name: Assert policy replacement result
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_update.changed | bool
+          - oci_volume_backup_policy_assignment_update.resource.asset_id == oci_volume_backup_policy_assignment_volume_id
+          - |-
+            oci_volume_backup_policy_assignment_update.resource.policy_id ==
+            oci_volume_backup_policy_assignment_second_policy_id
+
+    - name: Reconcile replacement in check mode
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_assignment_update_check_rerun
+
+    - name: Reconcile replacement again
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: present
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+      register: oci_volume_backup_policy_assignment_update_rerun
+
+    - name: Assert replacement is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_assignment_update_check_rerun.changed | bool
+          - not oci_volume_backup_policy_assignment_update_rerun.changed | bool
+          - |-
+            oci_volume_backup_policy_assignment_update_rerun.resource.id ==
+            oci_volume_backup_policy_assignment_update.resource.id
+
+    - name: Check assignment deletion without changing OCI
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: absent
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_assignment_delete_check
+
+    - name: Assert deletion check mode reports change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_delete_check.changed | bool
+
+    - name: Read assignment after deletion check mode
+      ansible.oci.oci_volume_backup_policy_assignment_info:
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_delete_probe
+
+    - name: Assert the second policy remains assigned
+      ansible.builtin.assert:
+        that:
+          - |-
+            oci_volume_backup_policy_assignment_delete_probe.volume_backup_policy_assignments[0].policy_id ==
+            oci_volume_backup_policy_assignment_second_policy_id
+
+    - name: Delete backup policy assignment
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: absent
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_delete
+
+    - name: Assert assignment deletion reports change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_delete.changed | bool
+
+    - name: Confirm assignment is absent after deletion
+      ansible.oci.oci_volume_backup_policy_assignment_info:
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_deleted_info
+
+    - name: Assert info lookup is empty after deletion
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_assignment_deleted_info.volume_backup_policy_assignments | length == 0
+
+    - name: Check repeated assignment deletion
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: absent
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_assignment_delete_check_rerun
+
+    - name: Repeat assignment deletion
+      ansible.oci.oci_volume_backup_policy_assignment:
+        state: absent
+        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+      register: oci_volume_backup_policy_assignment_delete_rerun
+
+    - name: Assert assignment deletion is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_assignment_delete_check_rerun.changed | bool
+          - not oci_volume_backup_policy_assignment_delete_rerun.changed | bool
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_backup_policy_assignment/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_volume_backup_policy_assignment: false

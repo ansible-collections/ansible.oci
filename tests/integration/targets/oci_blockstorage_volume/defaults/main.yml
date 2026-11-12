@@ -1,8 +1,8 @@
 ---
-oci_blockstorage_volume_integration_volume_name: "oci-blockstorage-volume-integration-volume"
-oci_blockstorage_volume_integration_updated_volume_name: "oci-blockstorage-volume-integration-volume-updated"
-oci_blockstorage_volume_integration_restore_volume_name: "oci-blockstorage-volume-integration-restore"
-oci_blockstorage_volume_integration_backup_name: "oci-blockstorage-volume-integration-backup"
+oci_blockstorage_volume_integration_volume_name: oci-blockstorage-volume-integration-volume
+oci_blockstorage_volume_integration_updated_volume_name: oci-blockstorage-volume-integration-volume-updated
+oci_blockstorage_volume_integration_restore_volume_name: oci-blockstorage-volume-integration-restore
+oci_blockstorage_volume_integration_backup_name: oci-blockstorage-volume-integration-backup
 oci_blockstorage_volume_integration_size_in_gbs: 50
 oci_blockstorage_volume_integration_updated_size_in_gbs: 100
 oci_blockstorage_volume_integration_vpus_per_gb: 10
@@ -16,3 +16,70 @@ oci_blockstorage_volume_integration_create_tags:
 oci_blockstorage_volume_integration_update_tags:
   phase: update
   role: integration
+oci_volume_backup_integration_volume_name: oci-volume-backup-integration-volume
+oci_volume_backup_integration_size_in_gbs: 50
+oci_volume_backup_integration_backup_name: oci-volume-backup-integration-backup
+oci_volume_backup_integration_updated_backup_name: oci-volume-backup-integration-backup-updated
+oci_volume_backup_integration_backup_type: incremental
+oci_volume_backup_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_backup_integration_update_tags:
+  phase: update
+  role: integration
+oci_volume_group_integration_volume_name: oci-volume-group-integration-volume
+oci_volume_group_integration_second_volume_name: oci-volume-group-integration-volume-2
+oci_volume_group_integration_size_in_gbs: 50
+oci_volume_group_integration_group_name: oci-volume-group-integration-group
+oci_volume_group_integration_updated_group_name: oci-volume-group-integration-group-updated
+oci_volume_group_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_group_integration_update_tags:
+  phase: update
+  role: integration
+oci_volume_group_backup_integration_volume_name: oci-volume-group-backup-integration-volume
+oci_volume_group_backup_integration_size_in_gbs: 50
+oci_volume_group_backup_integration_group_name: oci-volume-group-backup-integration-group
+oci_volume_group_backup_integration_backup_name: oci-volume-group-backup-integration-backup
+oci_volume_group_backup_integration_updated_backup_name: oci-volume-group-backup-integration-backup-updated
+oci_volume_group_backup_integration_backup_type: incremental
+oci_volume_group_backup_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_group_backup_integration_update_tags:
+  phase: update
+  role: integration
+oci_volume_backup_policy_integration_name: oci-volume-backup-policy-integration
+oci_volume_backup_policy_integration_updated_name: oci-volume-backup-policy-integration-updated
+oci_volume_backup_policy_integration_create_schedule:
+  - backup_type: incremental
+    period: one_day
+    offset_type: structured
+    hour_of_day: 2
+    retention_seconds: 604800
+    time_zone: utc
+oci_volume_backup_policy_integration_update_schedule:
+  - backup_type: full
+    period: one_week
+    offset_type: structured
+    hour_of_day: 3
+    day_of_week: sunday
+    retention_seconds: 1209600
+    time_zone: utc
+oci_volume_backup_policy_integration_create_tags:
+  phase: create
+  role: integration
+oci_volume_backup_policy_integration_update_tags:
+  phase: update
+  role: integration
+oci_volume_backup_policy_assignment_volume_name: oci-policy-assignment-volume
+oci_volume_backup_policy_assignment_first_policy_name: oci-policy-assignment-first
+oci_volume_backup_policy_assignment_second_policy_name: oci-policy-assignment-second
+oci_volume_backup_policy_assignment_schedule:
+  - backup_type: incremental
+    period: one_day
+    offset_type: structured
+    hour_of_day: 2
+    retention_seconds: 604800
+    time_zone: utc

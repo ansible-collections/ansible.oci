@@ -1,0 +1,87 @@
+---
+- name: Exercise volume backup policy lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete volume backup policy in check mode
+      ansible.oci.oci_volume_backup_policy:
+        state: absent
+        volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_delete_check.changed | bool
+
+    - name: Read policy after delete check mode
+      ansible.oci.oci_volume_backup_policy_info:
+        volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+      register: oci_volume_backup_policy_delete_check_probe
+
+    - name: Assert delete check mode did not remove the policy
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_delete_check_probe.changed | bool
+          - oci_volume_backup_policy_delete_check_probe.volume_backup_policies | length == 1
+          - oci_volume_backup_policy_delete_check_probe .volume_backup_policies[0].id == oci_volume_backup_policy_id
+
+    - name: Delete volume backup policy
+      ansible.oci.oci_volume_backup_policy:
+        state: absent
+        volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+      register: oci_volume_backup_policy_delete
+
+    - name: Assert policy deletion reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_volume_backup_policy_delete.changed | bool
+
+    - name: Read deleted policy by id
+      ansible.oci.oci_volume_backup_policy_info:
+        volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+      register: oci_volume_backup_policy_info_deleted
+
+    - name: Assert deleted policy is absent from info
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_info_deleted.changed | bool
+          - oci_volume_backup_policy_info_deleted.volume_backup_policies | length == 0
+
+    - name: Delete volume backup policy again in check mode
+      ansible.oci.oci_volume_backup_policy:
+        state: absent
+        volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+      check_mode: true
+      register: oci_volume_backup_policy_delete_check_rerun
+
+    - name: Assert delete check-mode rerun is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_delete_check_rerun.changed | bool
+
+    - name: Delete volume backup policy again
+      ansible.oci.oci_volume_backup_policy:
+        state: absent
+        volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+      register: oci_volume_backup_policy_delete_rerun
+
+    - name: Assert delete rerun is idempotent
+      ansible.builtin.assert:
+        that:
+          - not oci_volume_backup_policy_delete_rerun.changed | bool
+
+    - name: Clear policy id after successful delete
+      ansible.builtin.set_fact:
+        oci_volume_backup_policy_id: ''
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_backup_policy/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_volume_backup_policy: false

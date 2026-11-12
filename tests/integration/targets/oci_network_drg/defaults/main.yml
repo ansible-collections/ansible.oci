@@ -1,9 +1,34 @@
 ---
-oci_drg_integration_drg_name: "oci-drg-integration-drg"
-oci_drg_integration_updated_drg_name: "oci-drg-integration-drg-updated"
+oci_drg_integration_drg_name: oci-drg-integration-drg
+oci_drg_integration_updated_drg_name: oci-drg-integration-drg-updated
 oci_drg_integration_create_tags:
   phase: create
   role: integration
 oci_drg_integration_update_tags:
+  phase: update
+  role: integration
+oci_drg_attachment_integration_vcn_name: oci-drg-attachment-integration-vcn
+oci_drg_attachment_integration_drg_name: oci-drg-attachment-integration-drg
+oci_drg_attachment_integration_attachment_name: oci-drg-attachment-integration-attachment
+oci_drg_attachment_integration_updated_attachment_name: oci-drg-attachment-integration-attachment-updated
+oci_drg_attachment_integration_vcn_cidr_block: 10.252.0.0/16
+oci_drg_attachment_integration_vcn_dns_label: ocidrgattv
+oci_drg_attachment_integration_create_tags:
+  phase: create
+  role: integration
+oci_drg_attachment_integration_update_tags:
+  phase: update
+  role: integration
+oci_ipsec_integration_cpe_name: oci-ipsec-integration-cpe
+oci_ipsec_integration_cpe_updated_name: oci-ipsec-integration-cpe-updated
+oci_ipsec_integration_connection_name: oci-ipsec-integration-connection
+oci_ipsec_integration_connection_updated_name: oci-ipsec-integration-connection-updated
+oci_ipsec_integration_tunnel_name: oci-ipsec-integration-tunnel
+oci_ipsec_integration_tunnel_updated_name: oci-ipsec-integration-tunnel-updated
+oci_ipsec_integration_cpe_ip_address: 203.0.113.2
+oci_ipsec_integration_create_tags:
+  phase: create
+  role: integration
+oci_ipsec_integration_update_tags:
   phase: update
   role: integration

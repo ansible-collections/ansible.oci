@@ -1,51 +1,138 @@
 ---
-- name: Run OKE cluster cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
-  block:
-    - name: Delete leaked clusters during cleanup
-      ansible.oci.oci_oke_cluster:
-        state: absent
-        cluster_id: "{{ item }}"
-      loop: "{{ oci_oke_cleanup_ids | default([]) | unique | list }}"
-      when: item | default('') | length > 0
-      register: oci_cleanup_clusters
-      until: oci_cleanup_clusters is succeeded
-      retries: 10
-      delay: 30
-      ignore_errors: true
+- name: Initialize cleanup failures
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: []
 
-    # The cluster's delete work request can succeed before the endpoint VNIC it
-    # leaves in the subnet is actually released, so the subnet delete needs to
-    # poll past that short window instead of failing on the first attempt.
-    - name: Delete leaked subnet during cleanup
-      ansible.oci.oci_network_subnet:
-        state: absent
-        subnet_id: "{{ oci_oke_subnet_id }}"
-      when: oci_oke_subnet_id | default('') | length > 0
-      register: oci_cleanup_subnet
-      until: oci_cleanup_subnet is succeeded
-      retries: 10
-      delay: 30
-      ignore_errors: true
+- name: Delete leaked node pools during cleanup
+  ansible.oci.oci_oke_node_pool:
+    state: absent
+    node_pool_id: '{{ item }}'
+  loop: '{{ oci_oke_np_cleanup_ids | default([]) | unique | list }}'
+  when:
+    - oci_group_started_oci_oke_node_pool | default(false)
+    - item | default('') | length > 0
+  register: oci_group_cleanup_0
+  until: oci_group_cleanup_0 is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
 
-    - name: Delete leaked VCN during cleanup
-      ansible.oci.oci_network_vcn:
-        state: absent
-        vcn_id: "{{ oci_oke_vcn_id }}"
-      when: oci_oke_vcn_id | default('') | length > 0
-      register: oci_cleanup_vcn
-      until: oci_cleanup_vcn is succeeded
-      retries: 10
-      delay: 30
-      ignore_errors: true
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked node pools during cleanup''] }}'
+  when: oci_group_cleanup_0 is failed
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_clusters is not failed
-          - oci_cleanup_subnet is not failed
-          - oci_cleanup_vcn is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+- name: Delete leaked clusters during cleanup
+  ansible.oci.oci_oke_cluster:
+    state: absent
+    cluster_id: '{{ item }}'
+  loop: '{{ oci_oke_cleanup_ids | default([]) | unique | list }}'
+  when:
+    - oci_group_started_oci_oke_cluster | default(false)
+    - item | default('') | length > 0
+  register: oci_group_cleanup_10
+  until: oci_group_cleanup_10 is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked clusters during cleanup''] }}'
+  when: oci_group_cleanup_10 is failed
+
+- name: Delete leaked subnet during cleanup
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_oke_subnet_id }}'
+  when:
+    - oci_group_started_oci_oke_cluster | default(false)
+    - oci_oke_subnet_id | default('') | length > 0
+  register: oci_group_cleanup_12
+  until: oci_group_cleanup_12 is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked subnet during cleanup''] }}'
+  when: oci_group_cleanup_12 is failed
+
+- name: Delete leaked route table during cleanup
+  ansible.oci.oci_network_route_table:
+    state: absent
+    route_table_id: '{{ oci_oke_np_route_table_id }}'
+  when:
+    - oci_group_started_oci_oke_node_pool | default(false)
+    - oci_oke_np_route_table_id | default('') | length > 0
+  register: oci_group_cleanup_4
+  until: oci_group_cleanup_4 is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked route table during cleanup''] }}'
+  when: oci_group_cleanup_4 is failed
+
+- name: Delete leaked security list during cleanup
+  ansible.oci.oci_network_security_list:
+    state: absent
+    security_list_id: '{{ oci_oke_np_security_list_id }}'
+  when:
+    - oci_group_started_oci_oke_node_pool | default(false)
+    - oci_oke_np_security_list_id | default('') | length > 0
+  register: oci_group_cleanup_6
+  until: oci_group_cleanup_6 is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked security list during cleanup''] }}'
+  when: oci_group_cleanup_6 is failed
+
+- name: Delete leaked internet gateway during cleanup
+  ansible.oci.oci_network_internet_gateway:
+    state: absent
+    internet_gateway_id: '{{ oci_oke_np_igw_id }}'
+  when:
+    - oci_group_started_oci_oke_node_pool | default(false)
+    - oci_oke_np_igw_id | default('') | length > 0
+  register: oci_group_cleanup_8
+  until: oci_group_cleanup_8 is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked internet gateway during cleanup''] }}'
+  when: oci_group_cleanup_8 is failed
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_oke_vcn_id }}'
+  when:
+    - oci_group_started_oci_oke_cluster | default(false)
+    - oci_oke_vcn_id | default('') | length > 0
+  register: oci_group_cleanup_14
+  until: oci_group_cleanup_14 is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked VCN during cleanup''] }}'
+  when: oci_group_cleanup_14 is failed
+
+- name: Check all cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

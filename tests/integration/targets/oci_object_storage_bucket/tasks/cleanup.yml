@@ -1,23 +1,76 @@
 ---
-- name: Clean up Object Storage bucket integration resources
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
-  block:
-    - name: Delete bucket during cleanup
-      ansible.oci.oci_object_storage_bucket:
-        state: absent
-        name: "{{ oci_object_storage_bucket_cleanup_name }}"
-      when: oci_object_storage_bucket_cleanup_name | default('') | length > 0
-      register: oci_cleanup_storage_bucket
-      retries: 3
-      ignore_errors: true
+- name: Initialize cleanup failures
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: []
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_storage_bucket is not failed
-        fail_msg: >-
-          Resource cleanup failed after 3 retries;
-          see the failed cleanup tasks above.
+- name: Remove lifecycle policy left by integration test
+  ansible.oci.oci_object_lifecycle_policy:
+    state: absent
+    bucket_name: '{{ oci_object_lifecycle_policy_bucket_name }}'
+  when:
+    - oci_group_started_oci_object_lifecycle_policy | default(false)
+    - oci_object_lifecycle_policy_bucket_created | default(false)
+  register: oci_group_cleanup_0
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove lifecycle policy left by integration test''] }}'
+  when: oci_group_cleanup_0 is failed
+
+- name: Remove test object
+  ansible.oci.oci_object_storage_object:
+    bucket_name: '{{ oci_object_storage_object_bucket_name }}'
+    object_name: '{{ oci_object_storage_object_name }}'
+    state: absent
+  when:
+    - oci_group_started_oci_object_storage_object | default(false)
+    - oci_object_storage_object_bucket_name | default('') | length > 0
+  register: oci_group_cleanup_2
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove test object''] }}'
+  when: oci_group_cleanup_2 is failed
+
+- name: Remove local test directory
+  ansible.builtin.file:
+    path: '{{ oci_object_storage_object_temp_dir.path }}'
+    state: absent
+  when:
+    - oci_group_started_oci_object_storage_object | default(false)
+    - oci_object_storage_object_temp_dir is defined
+  register: oci_group_cleanup_4
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove local test directory''] }}'
+  when: oci_group_cleanup_4 is failed
+
+- name: Delete bucket during cleanup
+  ansible.oci.oci_object_storage_bucket:
+    state: absent
+    name: '{{ oci_object_storage_bucket_cleanup_name }}'
+    force: true
+  when:
+    - oci_group_started_oci_object_storage_bucket | default(false)
+    - oci_object_storage_bucket_cleanup_name | default('') | length > 0
+  register: oci_group_cleanup_6
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete bucket during cleanup''] }}'
+  when: oci_group_cleanup_6 is failed
+
+- name: Check all cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

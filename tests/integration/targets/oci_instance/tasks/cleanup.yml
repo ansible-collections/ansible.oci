@@ -1,41 +1,225 @@
 ---
-- name: Run compute instance cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
-  block:
-    - name: Delete leaked instance during cleanup
-      ansible.oci.oci_instance:
-        state: absent
-        instance_id: "{{ oci_instance_id }}"
-      when: oci_instance_id | default('') | length > 0
-      register: oci_cleanup_instance
-      retries: 3
-      ignore_errors: true
+- name: Initialize cleanup failures
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: []
 
-    - name: Delete leaked subnet during cleanup
-      ansible.oci.oci_network_subnet:
-        state: absent
-        subnet_id: "{{ oci_instance_subnet_create.resource.id }}"
-      when: oci_instance_subnet_create.resource.id | default('') | length > 0
-      register: oci_cleanup_subnet
-      retries: 3
-      ignore_errors: true
+- name: Delete leaked console connection during cleanup
+  ansible.oci.oci_instance_console_connection:
+    state: absent
+    instance_console_connection_id: '{{ oci_console_connection_id }}'
+  when: oci_console_connection_id | default('') | length > 0
+  register: oci_instance_cleanup_result_0
+  retries: 3
+  ignore_errors: true
 
-    - name: Delete leaked VCN during cleanup
-      ansible.oci.oci_network_vcn:
-        state: absent
-        vcn_id: "{{ oci_instance_vcn_create.resource.id }}"
-      when: oci_instance_vcn_create.resource.id | default('') | length > 0
-      register: oci_cleanup_vcn
-      retries: 3
-      ignore_errors: true
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked console connection during cleanup'']
+      }}'
+  when: oci_instance_cleanup_result_0 is failed
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_instance is not failed
-          - oci_cleanup_subnet is not failed
-          - oci_cleanup_vcn is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+- name: Detach leaked secondary VNIC during cleanup
+  ansible.oci.oci_vnic_attachment:
+    state: absent
+    vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+  when: oci_vnic_attachment_id | default('') | length > 0
+  register: oci_instance_cleanup_result_1
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Detach leaked secondary VNIC during cleanup''] }}'
+  when: oci_instance_cleanup_result_1 is failed
+
+- name: Delete leaked secondary private IP
+  ansible.oci.oci_network_private_ip:
+    state: absent
+    private_ip_id: '{{ oci_network_private_ip_id }}'
+  when: oci_network_private_ip_id | default('') | length > 0
+  register: oci_instance_cleanup_result_2
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked secondary private IP''] }}'
+  when: oci_instance_cleanup_result_2 is failed
+
+- name: Detach leaked volume attachment during cleanup
+  ansible.oci.oci_volume_attachment:
+    state: absent
+    volume_attachment_id: '{{ oci_volume_attachment_id }}'
+  when: oci_volume_attachment_id | default('') | length > 0
+  register: oci_instance_cleanup_result_3
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Detach leaked volume attachment during cleanup'']
+      }}'
+  when: oci_instance_cleanup_result_3 is failed
+
+- name: Delete leaked block volume during cleanup
+  ansible.oci.oci_blockstorage_volume:
+    state: absent
+    volume_id: '{{ oci_volume_attachment_volume_id }}'
+  when: oci_volume_attachment_volume_id | default('') | length > 0
+  register: oci_instance_cleanup_result_4
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked block volume during cleanup''] }}'
+  when: oci_instance_cleanup_result_4 is failed
+
+- name: Delete leaked duplicate boot volume backup during cleanup
+  ansible.oci.oci_boot_volume_backup:
+    state: absent
+    boot_volume_backup_id: '{{ oci_boot_volume_backup_duplicate_id }}'
+  when: oci_boot_volume_backup_duplicate_id | default('') | length > 0
+  register: oci_instance_cleanup_result_5
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked duplicate boot volume backup during
+      cleanup''] }}'
+  when: oci_instance_cleanup_result_5 is failed
+
+- name: Delete leaked boot volume backup during cleanup
+  ansible.oci.oci_boot_volume_backup:
+    state: absent
+    boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+  when: oci_boot_volume_backup_id | default('') | length > 0
+  register: oci_instance_cleanup_result_6
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked boot volume backup during cleanup'']
+      }}'
+  when: oci_instance_cleanup_result_6 is failed
+
+- name: Delete leaked restored boot volume during cleanup
+  ansible.oci.oci_boot_volume:
+    state: absent
+    boot_volume_id: '{{ oci_boot_volume_id }}'
+  when: oci_boot_volume_id | default('') | length > 0
+  register: oci_instance_cleanup_result_7
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked restored boot volume during cleanup'']
+      }}'
+  when: oci_instance_cleanup_result_7 is failed
+
+- name: Delete leaked custom image during cleanup
+  ansible.oci.oci_image:
+    state: absent
+    image_id: '{{ oci_image_id }}'
+  when: oci_image_id | default('') | length > 0
+  register: oci_instance_cleanup_result_8
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked custom image during cleanup''] }}'
+  when: oci_instance_cleanup_result_8 is failed
+
+- name: Delete leaked instance during cleanup
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_id }}'
+  when: oci_instance_id | default('') | length > 0
+  register: oci_instance_cleanup_result_9
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked instance during cleanup''] }}'
+  when: oci_instance_cleanup_result_9 is failed
+
+- name: Delete security groups used for VNIC updates
+  ansible.oci.oci_network_security_group:
+    state: absent
+    network_security_group_id: '{{ item.resource.id }}'
+  loop: '{{ oci_network_vnic_nsgs.results | default([]) }}'
+  when: item.resource.id | default('') | length > 0
+  register: oci_instance_cleanup_result_10
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete security groups used for VNIC updates'']
+      }}'
+  when: oci_instance_cleanup_result_10 is failed
+
+- name: Delete leaked subnet during cleanup
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+  when: oci_instance_subnet_create.resource.id | default('') | length > 0
+  register: oci_instance_cleanup_result_11
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked subnet during cleanup''] }}'
+  when: oci_instance_cleanup_result_11 is failed
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+  when: oci_instance_vcn_create.resource.id | default('') | length > 0
+  register: oci_instance_cleanup_result_12
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Delete leaked VCN during cleanup''] }}'
+  when: oci_instance_cleanup_result_12 is failed
+
+- name: Remove the temporary inventory output
+  ansible.builtin.file:
+    path: '{{ oci_compute_inventory_output.path }}'
+    state: absent
+  when: oci_compute_inventory_output.path | default('') | length > 0
+  register: oci_instance_cleanup_result_13
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Remove the temporary inventory output''] }}'
+  when: oci_instance_cleanup_result_13 is failed
+
+- name: Remove the temporary inventory source
+  ansible.builtin.file:
+    path: '{{ oci_compute_inventory_source.path }}'
+    state: absent
+  when: oci_compute_inventory_source.path | default('') | length > 0
+  register: oci_instance_cleanup_result_14
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_instance_cleanup_failures: '{{ oci_instance_cleanup_failures + [''Remove the temporary inventory source''] }}'
+  when: oci_instance_cleanup_result_14 is failed
+
+- name: Check all cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_instance_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_instance_cleanup_failures | join(", ") }}'

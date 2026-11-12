@@ -1,0 +1,60 @@
+---
+- name: Exercise identity-domain group lifecycle in a temporary domain
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete group in check mode
+      ansible.oci.oci_identity_group:
+        domain_id: '{{ oci_identity_group_domain_id }}'
+        state: absent
+        group_id: '{{ group_create_result.resource.id }}'
+      check_mode: true
+      register: group_delete_check
+      failed_when: not group_delete_check.changed
+
+    - name: Verify delete check mode left group present
+      ansible.oci.oci_identity_group_info:
+        domain_id: '{{ oci_identity_group_domain_id }}'
+        group_id: '{{ group_create_result.resource.id }}'
+      register: group_delete_check_info
+      failed_when: group_delete_check_info.groups | length != 1
+
+    - name: Delete group
+      ansible.oci.oci_identity_group:
+        domain_id: '{{ oci_identity_group_domain_id }}'
+        state: absent
+        group_id: '{{ group_create_result.resource.id }}'
+      register: group_delete
+      failed_when: not group_delete.changed
+
+    - name: Wait until deleted group is absent
+      ansible.oci.oci_identity_group_info:
+        domain_id: '{{ oci_identity_group_domain_id }}'
+        group_id: '{{ group_create_result.resource.id }}'
+      register: group_after_delete
+      until: group_after_delete.groups | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify group deletion is idempotent
+      ansible.oci.oci_identity_group:
+        domain_id: '{{ oci_identity_group_domain_id }}'
+        state: absent
+        group_id: '{{ group_create_result.resource.id }}'
+      register: group_delete_rerun
+      failed_when: group_delete_rerun.changed
+
+    - name: Clear group cleanup marker
+      ansible.builtin.set_fact:
+        oci_identity_group_cleanup_id: ''
+        oci_identity_group_cleanup_name: ''
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_group/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_identity_group: false

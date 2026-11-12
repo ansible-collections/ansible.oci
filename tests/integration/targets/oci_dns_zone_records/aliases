@@ -1,0 +1,8 @@
+destructive
+oci_dns_domain_records
+oci_dns_domain_records_info
+oci_dns_record_set
+oci_dns_record_set_info
+oci_dns_zone_records
+oci_dns_zone_records_info
+time=90m

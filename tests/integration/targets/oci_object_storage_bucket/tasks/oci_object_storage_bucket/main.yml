@@ -1,0 +1,137 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: |-
+      Object Storage bucket integration tests require oci_integration_compartment_id in
+      tests/integration/integration_config.yml.
+
+- name: Choose a unique bucket name for this run
+  ansible.builtin.set_fact:
+    oci_object_storage_bucket_name: '{{ oci_object_storage_bucket_integration_name ~ ''-'' ~ oci_integration_rpfx }}'
+    oci_object_storage_bucket_cleanup_name: ''
+
+- name: Mark oci_object_storage_bucket as started
+  ansible.builtin.set_fact:
+    oci_group_started_oci_object_storage_bucket: true
+
+- name: Exercise Object Storage bucket lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Check bucket creation without changing OCI
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        storage_tier: Standard
+        public_access_type: NoPublicAccess
+        versioning: Disabled
+        metadata: &id001
+          phase: create
+        object_events_enabled: false
+        auto_tiering: Disabled
+        freeform_tags: &id002
+          phase: create
+      check_mode: true
+      register: bucket_create_check
+
+    - name: Verify create check mode left the bucket absent
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_create_probe
+      failed_when: not bucket_create_check.changed or bucket_create_probe.buckets | length != 0
+
+    - name: Create bucket
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        storage_tier: Standard
+        public_access_type: NoPublicAccess
+        versioning: Disabled
+        metadata: *id001
+        object_events_enabled: false
+        auto_tiering: Disabled
+        freeform_tags: *id002
+      register: bucket_create
+
+    - name: Save shared bucket
+      ansible.builtin.set_fact:
+        oci_group_resources: '{{ oci_group_resources | combine({''bucket'': bucket_create}) }}'
+
+    - name: Remember bucket for cleanup
+      ansible.builtin.set_fact:
+        oci_object_storage_bucket_cleanup_name: '{{ oci_object_storage_bucket_name }}'
+
+    - name: Verify created bucket
+      ansible.builtin.assert:
+        that:
+          - bucket_create.changed | bool
+          - bucket_create.resource.name == oci_object_storage_bucket_name
+          - bucket_create.resource.compartment_id == oci_integration_compartment_id
+          - bucket_create.resource.storage_tier == 'Standard'
+          - bucket_create.resource.public_access_type == 'NoPublicAccess'
+          - bucket_create.resource.versioning == 'Disabled'
+          - bucket_create.resource.metadata.phase == 'create'
+          - not bucket_create.resource.object_events_enabled | bool
+          - bucket_create.resource.auto_tiering == 'Disabled'
+          - bucket_create.resource.freeform_tags.phase == 'create'
+
+    - name: Read full bucket details
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_by_name
+
+    - name: List the bucket by compartment and name
+      ansible.oci.oci_object_storage_bucket_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_object_storage_bucket_name }}'
+      register: bucket_by_compartment
+
+    - name: Verify bucket info lookups
+      ansible.builtin.assert:
+        that:
+          - bucket_by_name.buckets | length == 1
+          - bucket_by_name.buckets[0].name == oci_object_storage_bucket_name
+          - bucket_by_compartment.buckets | length == 1
+          - bucket_by_compartment.buckets[0].name == oci_object_storage_bucket_name
+
+    - name: Reconcile created bucket in check mode
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        storage_tier: Standard
+        public_access_type: NoPublicAccess
+        versioning: Disabled
+        metadata: *id001
+        object_events_enabled: false
+        auto_tiering: Disabled
+        freeform_tags: *id002
+      check_mode: true
+      register: bucket_create_check_rerun
+
+    - name: Reconcile created bucket again
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_storage_bucket_name }}'
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        storage_tier: Standard
+        public_access_type: NoPublicAccess
+        versioning: Disabled
+        metadata: *id001
+        object_events_enabled: false
+        auto_tiering: Disabled
+        freeform_tags: *id002
+      register: bucket_create_rerun
+
+    - name: Verify bucket creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not bucket_create_check_rerun.changed | bool
+          - not bucket_create_rerun.changed | bool

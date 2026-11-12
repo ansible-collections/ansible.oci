@@ -1,0 +1,91 @@
+---
+- name: Delete volume backup in check mode
+  ansible.oci.oci_volume_backup:
+    state: absent
+    volume_backup_id: '{{ oci_volume_backup_id }}'
+  check_mode: true
+  register: oci_volume_backup_delete_check
+
+- name: Assert delete check mode reported a change
+  ansible.builtin.assert:
+    that:
+      - oci_volume_backup_delete_check.changed | bool
+
+- name: Read volume backup after delete check mode
+  ansible.oci.oci_volume_backup_info:
+    volume_backup_id: '{{ oci_volume_backup_id }}'
+  register: oci_volume_backup_delete_check_probe
+
+- name: Assert volume backup still exists after delete check mode
+  ansible.builtin.assert:
+    that:
+      - oci_volume_backup_delete_check_probe.volume_backups | length == 1
+
+- name: Delete volume backup
+  ansible.oci.oci_volume_backup:
+    state: absent
+    volume_backup_id: '{{ oci_volume_backup_id }}'
+  register: oci_volume_backup_delete
+
+- name: Assert delete reported a change
+  ansible.builtin.assert:
+    that:
+      - oci_volume_backup_delete.changed | bool
+
+- name: Read volume backup after delete
+  ansible.oci.oci_volume_backup_info:
+    volume_backup_id: '{{ oci_volume_backup_id }}'
+  register: oci_volume_backup_delete_probe
+
+- name: Assert volume backup is terminated after delete
+  ansible.builtin.assert:
+    that:
+      - oci_volume_backup_delete_probe.volume_backups | length == 1
+      - oci_volume_backup_delete_probe.volume_backups[0].id == oci_volume_backup_id
+      - oci_volume_backup_delete_probe.volume_backups[0].lifecycle_state == "TERMINATED"
+
+- name: List available volume backups by name after delete
+  ansible.oci.oci_volume_backup_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_volume_backup_integration_updated_backup_name }}'
+    lifecycle_state: AVAILABLE
+  register: oci_volume_backup_info_available_after_delete
+
+- name: Assert no available volume backup remains after delete
+  ansible.builtin.assert:
+    that:
+      - oci_volume_backup_info_available_after_delete.volume_backups | length == 0
+
+- name: Assert delete is a no-op in check mode
+  ansible.oci.oci_volume_backup:
+    state: absent
+    volume_backup_id: '{{ oci_volume_backup_id }}'
+  check_mode: true
+  register: oci_volume_backup_delete_check_rerun
+
+- name: Verify delete check-mode rerun is a no-op
+  ansible.builtin.assert:
+    that:
+      - not oci_volume_backup_delete_check_rerun.changed | bool
+
+- name: Assert delete is idempotent on rerun
+  ansible.oci.oci_volume_backup:
+    state: absent
+    volume_backup_id: '{{ oci_volume_backup_id }}'
+  register: oci_volume_backup_delete_rerun
+
+- name: Verify delete rerun is a no-op
+  ansible.builtin.assert:
+    that:
+      - not oci_volume_backup_delete_rerun.changed | bool
+
+- name: Clear volume backup id after successful delete
+  ansible.builtin.set_fact:
+    oci_volume_backup_id: ''
+
+- name: Clean up module resources
+  ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_backup/cleanup.yml'
+
+- name: Release module resources
+  ansible.builtin.set_fact:
+    oci_group_started_oci_volume_backup: false

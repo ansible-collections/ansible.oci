@@ -1,0 +1,91 @@
+---
+- name: Exercise boot volume backup module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete boot volume backup in check mode
+      ansible.oci.oci_boot_volume_backup:
+        state: absent
+        boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+      check_mode: true
+      register: oci_boot_volume_backup_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_boot_volume_backup_delete_check.changed | bool
+
+    - name: Read boot volume backup after delete check mode
+      ansible.oci.oci_boot_volume_backup_info:
+        boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+      register: oci_boot_volume_backup_delete_check_probe
+
+    - name: Assert boot volume backup still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_boot_volume_backup_delete_check_probe.boot_volume_backups | length == 1
+
+    - name: Delete boot volume backup
+      ansible.oci.oci_boot_volume_backup:
+        state: absent
+        boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+      register: oci_boot_volume_backup_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_boot_volume_backup_delete.changed | bool
+
+    - name: Read boot volume backup after delete
+      ansible.oci.oci_boot_volume_backup_info:
+        boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+      register: oci_boot_volume_backup_delete_probe
+
+    - name: Assert boot volume backup is terminated after delete
+      ansible.builtin.assert:
+        that:
+          - oci_boot_volume_backup_delete_probe.boot_volume_backups | length == 1
+          - oci_boot_volume_backup_delete_probe.boot_volume_backups[0].id == oci_boot_volume_backup_id
+          - oci_boot_volume_backup_delete_probe.boot_volume_backups[0].lifecycle_state == "TERMINATED"
+
+    - name: List available boot volume backups by name after delete
+      ansible.oci.oci_boot_volume_backup_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_boot_volume_backup_integration_updated_backup_name }}'
+        lifecycle_state: AVAILABLE
+      register: oci_boot_volume_backup_info_available_after_delete
+
+    - name: Assert no available boot volume backup remains after delete
+      ansible.builtin.assert:
+        that:
+          - oci_boot_volume_backup_info_available_after_delete.boot_volume_backups | length == 0
+
+    - name: Assert delete is a no-op in check mode
+      ansible.oci.oci_boot_volume_backup:
+        state: absent
+        boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+      check_mode: true
+      register: oci_boot_volume_backup_delete_check_rerun
+
+    - name: Verify delete check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_boot_volume_backup_delete_check_rerun.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_boot_volume_backup:
+        state: absent
+        boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+      register: oci_boot_volume_backup_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_boot_volume_backup_delete_rerun.changed | bool
+
+    - name: Clear boot volume backup id after successful delete
+      ansible.builtin.set_fact:
+        oci_boot_volume_backup_id: ''

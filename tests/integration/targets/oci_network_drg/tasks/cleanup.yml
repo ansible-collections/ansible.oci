@@ -1,31 +1,206 @@
 ---
-- name: Run DRG cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
-  block:
-    - name: Delete leaked duplicate DRG during cleanup
-      ansible.oci.oci_network_drg:
-        state: absent
-        drg_id: "{{ oci_drg_duplicate_id }}"
-      when: oci_drg_duplicate_id | default('') | length > 0
-      register: oci_cleanup_duplicate_drg
-      retries: 3
-      ignore_errors: true
+- name: Initialize cleanup failures
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: []
 
-    - name: Delete leaked DRG during cleanup
-      ansible.oci.oci_network_drg:
-        state: absent
-        drg_id: "{{ oci_drg_id }}"
-      when: oci_drg_id | default('') | length > 0
-      register: oci_cleanup_drg
-      retries: 3
-      ignore_errors: true
+- name: Find leaked IPSec connection by name
+  ansible.oci.oci_network_ipsec_connection_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_connection_name }}'
+  register: oci_group_cleanup_0
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_connection_id | default('') | length == 0
+  ignore_errors: true
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_duplicate_drg is not failed
-          - oci_cleanup_drg is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Find leaked IPSec connection by name''] }}'
+  when: oci_group_cleanup_0 is failed
+
+- name: Clean up IPSec connection
+  ansible.oci.oci_network_ipsec_connection:
+    state: absent
+    ipsc_id: '{{ oci_ipsec_connection_id | default('''') }}'
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_connection_id | default('') | length > 0
+  register: oci_group_cleanup_2
+  retries: 3
+  delay: 10
+  until: oci_group_cleanup_2 is not failed
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Clean up IPSec connection''] }}'
+  when: oci_group_cleanup_2 is failed
+
+- name: Find leaked CPE by name
+  ansible.oci.oci_network_cpe_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_cpe_name }}'
+  register: oci_group_cleanup_4
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_cpe_id | default('') | length == 0
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Find leaked CPE by name''] }}'
+  when: oci_group_cleanup_4 is failed
+
+- name: Clean up CPE
+  ansible.oci.oci_network_cpe:
+    state: absent
+    cpe_id: '{{ oci_ipsec_cpe_id | default('''') }}'
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_cpe_id | default('') | length > 0
+  register: oci_group_cleanup_6
+  retries: 3
+  delay: 10
+  until: oci_group_cleanup_6 is not failed
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Clean up CPE''] }}'
+  when: oci_group_cleanup_6 is failed
+
+- name: Find leaked DRG by name
+  ansible.oci.oci_network_drg_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_drg_name }}'
+  register: oci_group_cleanup_8
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_drg_id | default('') | length == 0
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Find leaked DRG by name''] }}'
+  when: oci_group_cleanup_8 is failed
+
+- name: Verify connection cleanup by ID
+  ansible.oci.oci_network_ipsec_connection_info:
+    ipsc_id: '{{ oci_ipsec_connection_id }}'
+  register: oci_group_cleanup_10
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_connection_id | default('') | length > 0
+  until: oci_group_cleanup_10.ipsec_connections | length == 0
+  retries: 20
+  delay: 15
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Verify connection cleanup by ID''] }}'
+  when: oci_group_cleanup_10 is failed
+
+- name: Verify CPE cleanup by ID
+  ansible.oci.oci_network_cpe_info:
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  register: oci_group_cleanup_12
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_cpe_id | default('') | length > 0
+  until: oci_group_cleanup_12.cpes | length == 0
+  retries: 20
+  delay: 15
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Verify CPE cleanup by ID''] }}'
+  when: oci_group_cleanup_12 is failed
+
+- name: Verify DRG cleanup by ID
+  ansible.oci.oci_network_drg_info:
+    drg_id: '{{ oci_ipsec_drg_id }}'
+  register: oci_group_cleanup_14
+  when:
+    - oci_group_started_oci_network_ipsec_connection | default(false)
+    - oci_ipsec_drg_id | default('') | length > 0
+  until: oci_group_cleanup_14.drgs | length == 0
+  retries: 20
+  delay: 15
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Verify DRG cleanup by ID''] }}'
+  when: oci_group_cleanup_14 is failed
+
+- name: Delete leaked DRG attachment during cleanup
+  ansible.oci.oci_network_drg_attachment:
+    state: absent
+    drg_attachment_id: '{{ oci_drg_attachment_id }}'
+  when:
+    - oci_group_started_oci_network_drg_attachment | default(false)
+    - oci_drg_attachment_id | default('') | length > 0
+  register: oci_group_cleanup_16
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked DRG attachment during cleanup''] }}'
+  when: oci_group_cleanup_16 is failed
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_drg_attachment_integration_vcn_id }}'
+  when:
+    - oci_group_started_oci_network_drg_attachment | default(false)
+    - oci_drg_attachment_integration_vcn_id | default('') | length > 0
+  register: oci_group_cleanup_18
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked VCN during cleanup''] }}'
+  when: oci_group_cleanup_18 is failed
+
+- name: Delete leaked duplicate DRG during cleanup
+  ansible.oci.oci_network_drg:
+    state: absent
+    drg_id: '{{ oci_drg_duplicate_id }}'
+  when:
+    - oci_group_started_oci_network_drg | default(false)
+    - oci_drg_duplicate_id | default('') | length > 0
+  register: oci_group_cleanup_20
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked duplicate DRG during cleanup''] }}'
+  when: oci_group_cleanup_20 is failed
+
+- name: Delete leaked DRG during cleanup
+  ansible.oci.oci_network_drg:
+    state: absent
+    drg_id: '{{ oci_drg_id }}'
+  when:
+    - oci_group_started_oci_network_drg | default(false)
+    - oci_drg_id | default('') | length > 0
+  register: oci_group_cleanup_22
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked DRG during cleanup''] }}'
+  when: oci_group_cleanup_22 is failed
+
+- name: Check all cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

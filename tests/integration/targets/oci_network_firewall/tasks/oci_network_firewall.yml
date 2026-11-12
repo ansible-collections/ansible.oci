@@ -1,0 +1,55 @@
+---
+- name: Check firewall creation
+  ansible.oci.oci_network_firewall:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_firewall_test_name }}'
+    freeform_tags:
+      phase: create
+    subnet_id: '{{ firewall_subnet.resource.id }}'
+    network_firewall_policy_id: '{{ oci_firewall_policy_cleanup_id }}'
+  check_mode: true
+  register: firewall_create_check
+
+- name: Read firewalls after the creation check
+  ansible.oci.oci_network_firewall_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_firewall_test_name }}'
+  register: firewall_before_create
+
+- name: Verify the creation check left the firewall absent
+  ansible.builtin.assert:
+    that:
+      - firewall_create_check.changed
+      - firewall_before_create.network_firewalls | length == 0
+
+- name: Read active firewalls with the test name
+  ansible.oci.oci_network_firewall_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_firewall_test_name }}'
+    lifecycle_state: active
+  register: firewall_active_list
+
+- name: Verify the firewall list results
+  ansible.builtin.assert:
+    that:
+      - not firewall_before_create.changed
+      - not firewall_active_list.changed
+      - firewall_active_list.network_firewalls | length == 0
+
+- name: Verify deletion of an absent firewall is unchanged in check mode
+  ansible.oci.oci_network_firewall:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_firewall_test_name }}'
+    state: absent
+  check_mode: true
+  register: firewall_delete_check
+  failed_when: firewall_delete_check.changed
+
+- name: Verify deletion of an absent firewall is unchanged
+  ansible.oci.oci_network_firewall:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_firewall_test_name }}'
+    state: absent
+  check_mode: false
+  register: firewall_delete_repeat
+  failed_when: firewall_delete_repeat.changed

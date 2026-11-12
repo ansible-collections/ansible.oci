@@ -1,40 +1,72 @@
 ---
-- name: Run tag namespace cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
-  block:
-    - name: Delete leaked tag namespaces by ID
-      ansible.oci.oci_identity_tag_namespace:
-        state: absent
-        tag_namespace_id: "{{ item.id }}"
-      loop: &oci_identity_tag_namespace_cleanup_resources
-        - id: "{{ oci_identity_tag_namespace_active_id | default('') }}"
-          name: "{{ oci_identity_tag_namespace_cleanup_name | default('') }}"
-        - id: "{{ oci_identity_tag_namespace_retired_id | default('') }}"
-          name: "{{ oci_identity_tag_namespace_cleanup_retired_name | default('') }}"
-      when: item.id | length > 0
-      register: oci_cleanup_tag_namespace_by_id
-      retries: 3
-      ignore_errors: true
+- name: Initialize cleanup failures
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: []
 
-    - name: Delete leaked tag namespaces by name when no ID was captured
-      ansible.oci.oci_identity_tag_namespace:
-        state: absent
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        name: "{{ item.name }}"
-      loop: *oci_identity_tag_namespace_cleanup_resources
-      when:
-        - item.id | length == 0
-        - item.name | length > 0
-      register: oci_cleanup_tag_namespace_by_name
-      retries: 3
-      ignore_errors: true
+- name: Delete temporary enum tag
+  ansible.oci.oci_identity_tag:
+    state: absent
+    tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
+    name: '{{ oci_identity_tag_integration_enum_name }}'
+  when:
+    - oci_group_started_oci_identity_tag | default(false)
+    - oci_identity_tag_integration_namespace_id | length > 0
+  register: oci_group_cleanup_0
+  retries: 3
+  ignore_errors: true
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_tag_namespace_by_id is not failed
-          - oci_cleanup_tag_namespace_by_name is not failed
-        fail_msg: Resource cleanup failed after 3 retries. Read the failed cleanup tasks above.
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete temporary enum tag''] }}'
+  when: oci_group_cleanup_0 is failed
+
+- name: Delete leaked tag namespaces by ID
+  ansible.oci.oci_identity_tag_namespace:
+    state: absent
+    tag_namespace_id: '{{ item.id }}'
+  loop:
+    - id: '{{ oci_identity_tag_namespace_active_id | default('''') }}'
+      name: '{{ oci_identity_tag_namespace_cleanup_name | default('''') }}'
+    - id: '{{ oci_identity_tag_namespace_retired_id | default('''') }}'
+      name: '{{ oci_identity_tag_namespace_cleanup_retired_name | default('''') }}'
+  when:
+    - oci_group_started_oci_identity_tag_namespace | default(false)
+    - item.id | length > 0
+  register: oci_group_cleanup_2
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked tag namespaces by ID''] }}'
+  when: oci_group_cleanup_2 is failed
+
+- name: Delete leaked tag namespaces by name when no ID was captured
+  ansible.oci.oci_identity_tag_namespace:
+    state: absent
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ item.name }}'
+  loop:
+    - id: '{{ oci_identity_tag_namespace_active_id | default('''') }}'
+      name: '{{ oci_identity_tag_namespace_cleanup_name | default('''') }}'
+    - id: '{{ oci_identity_tag_namespace_retired_id | default('''') }}'
+      name: '{{ oci_identity_tag_namespace_cleanup_retired_name | default('''') }}'
+  when:
+    - oci_group_started_oci_identity_tag_namespace | default(false)
+    - item.id | length == 0
+    - item.name | length > 0
+  register: oci_group_cleanup_4
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked tag namespaces by name when no ID was captured'']
+      }}'
+  when: oci_group_cleanup_4 is failed
+
+- name: Check all cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

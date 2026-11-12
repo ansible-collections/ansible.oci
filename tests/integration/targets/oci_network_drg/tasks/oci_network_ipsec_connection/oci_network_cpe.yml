@@ -1,0 +1,131 @@
+---
+- name: Check CPE creation
+  ansible.oci.oci_network_cpe:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_cpe_name }}'
+    ip_address: '{{ oci_ipsec_integration_cpe_ip_address }}'
+    freeform_tags: '{{ oci_ipsec_integration_create_tags }}'
+  check_mode: true
+  register: oci_ipsec_cpe_create_check
+
+- name: Assert CPE check mode predicts a change
+  ansible.builtin.assert:
+    that: oci_ipsec_cpe_create_check.changed | bool
+
+- name: Verify CPE check mode did not create a resource
+  ansible.oci.oci_network_cpe_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_cpe_name }}'
+  register: oci_ipsec_cpe_check_probe
+
+- name: Assert CPE is absent after check mode
+  ansible.builtin.assert:
+    that: oci_ipsec_cpe_check_probe.cpes | length == 0
+
+- name: Create CPE
+  ansible.oci.oci_network_cpe:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_cpe_name }}'
+    ip_address: '{{ oci_ipsec_integration_cpe_ip_address }}'
+    freeform_tags: '{{ oci_ipsec_integration_create_tags }}'
+  register: oci_ipsec_cpe
+
+- name: Save CPE identifier
+  ansible.builtin.set_fact:
+    oci_ipsec_cpe_id: '{{ oci_ipsec_cpe.resource.id }}'
+
+- name: Assert CPE creation changed the resource
+  ansible.builtin.assert:
+    that:
+      - oci_ipsec_cpe.changed | bool
+      - oci_ipsec_cpe_id | length > 0
+
+- name: Verify CPE creation is idempotent
+  ansible.oci.oci_network_cpe:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_cpe_name }}'
+    ip_address: '{{ oci_ipsec_integration_cpe_ip_address }}'
+    freeform_tags: '{{ oci_ipsec_integration_create_tags }}'
+  register: oci_ipsec_cpe_rerun
+
+- name: Assert CPE rerun is unchanged
+  ansible.builtin.assert:
+    that: not oci_ipsec_cpe_rerun.changed | bool
+
+- name: Check CPE creation rerun
+  ansible.oci.oci_network_cpe:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_cpe_name }}'
+    ip_address: '{{ oci_ipsec_integration_cpe_ip_address }}'
+    freeform_tags: '{{ oci_ipsec_integration_create_tags }}'
+  check_mode: true
+  register: oci_ipsec_cpe_create_check_rerun
+
+- name: Assert CPE creation check rerun is unchanged
+  ansible.builtin.assert:
+    that: not oci_ipsec_cpe_create_check_rerun.changed | bool
+
+- name: Check CPE update
+  ansible.oci.oci_network_cpe:
+    state: present
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+    name: '{{ oci_ipsec_cpe_updated_name }}'
+    freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
+  check_mode: true
+  register: oci_ipsec_cpe_update_check
+
+- name: Assert CPE update check mode predicts a change
+  ansible.builtin.assert:
+    that: oci_ipsec_cpe_update_check.changed | bool
+
+- name: Verify CPE update check mode did not change the resource
+  ansible.oci.oci_network_cpe_info:
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  register: oci_ipsec_cpe_update_check_probe
+
+- name: Assert CPE remains unchanged after update check mode
+  ansible.builtin.assert:
+    that:
+      - oci_ipsec_cpe_update_check_probe.cpes | length == 1
+      - oci_ipsec_cpe_update_check_probe.cpes[0].name == oci_ipsec_cpe_name
+
+- name: Update CPE
+  ansible.oci.oci_network_cpe:
+    state: present
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+    name: '{{ oci_ipsec_cpe_updated_name }}'
+    freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
+  register: oci_ipsec_cpe_updated
+
+- name: Assert CPE update changed the resource
+  ansible.builtin.assert:
+    that: oci_ipsec_cpe_updated.changed | bool
+
+- name: Verify CPE update is idempotent
+  ansible.oci.oci_network_cpe:
+    state: present
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+    name: '{{ oci_ipsec_cpe_updated_name }}'
+    freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
+  register: oci_ipsec_cpe_update_rerun
+
+- name: Assert CPE update rerun is unchanged
+  ansible.builtin.assert:
+    that: not oci_ipsec_cpe_update_rerun.changed | bool
+
+- name: Check CPE update rerun
+  ansible.oci.oci_network_cpe:
+    state: present
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+    name: '{{ oci_ipsec_cpe_updated_name }}'
+    freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
+  check_mode: true
+  register: oci_ipsec_cpe_update_check_rerun
+
+- name: Assert CPE update check rerun is unchanged
+  ansible.builtin.assert:
+    that: not oci_ipsec_cpe_update_check_rerun.changed | bool

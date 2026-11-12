@@ -1,0 +1,51 @@
+---
+- name: Exercise block volume module lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Delete block volume in check mode
+      ansible.oci.oci_blockstorage_volume:
+        state: '{{ oci_blockstorage_volume_delete_params.state }}'
+        volume_id: '{{ oci_blockstorage_volume_delete_params.volume_id }}'
+      check_mode: true
+      register: oci_blockstorage_volume_delete_check
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_delete_check.changed | bool
+
+    - name: Read block volume after delete check mode
+      ansible.oci.oci_blockstorage_volume_info:
+        volume_id: '{{ oci_blockstorage_volume_id }}'
+      register: oci_blockstorage_volume_delete_check_probe
+
+    - name: Assert block volume still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_delete_check_probe.volumes | length == 1
+
+    - name: Delete block volume
+      ansible.oci.oci_blockstorage_volume:
+        state: '{{ oci_blockstorage_volume_delete_params.state }}'
+        volume_id: '{{ oci_blockstorage_volume_delete_params.volume_id }}'
+      register: oci_blockstorage_volume_delete
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_blockstorage_volume_delete.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_blockstorage_volume:
+        state: '{{ oci_blockstorage_volume_delete_params.state }}'
+        volume_id: '{{ oci_blockstorage_volume_delete_params.volume_id }}'
+      register: oci_blockstorage_volume_delete_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_blockstorage_volume_delete_rerun.changed | bool

@@ -1,0 +1,53 @@
+---
+- name: Check policy deletion
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    state: absent
+  check_mode: true
+  register: oci_waf_policy_delete_check
+
+- name: Read the policy after the deletion check
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  register: oci_waf_policy_after_delete_check
+
+- name: Verify the deletion check left the policy present
+  ansible.builtin.assert:
+    that:
+      - oci_waf_policy_delete_check.changed
+      - oci_waf_policy_after_delete_check.web_app_firewall_policies | length == 1
+      - oci_waf_policy_after_delete_check.web_app_firewall_policies[0].lifecycle_state == 'ACTIVE'
+
+- name: Delete the policy
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    state: absent
+  register: oci_waf_policy_delete
+  failed_when: not oci_waf_policy_delete.changed
+
+- name: Wait until the policy is absent from the active list
+  ansible.oci.oci_waf_web_app_firewall_policy_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    lifecycle_state: active
+  register: oci_waf_policy_after_delete
+  until: |-
+    oci_waf_policy_after_delete.web_app_firewall_policies | selectattr('id', 'equalto',
+    oci_waf_policy_cleanup_id) | list | length == 0
+  retries: 12
+  delay: 5
+
+- name: Verify deletion is unchanged
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    state: absent
+  check_mode: false
+  register: oci_waf_policy_delete_repeat
+  failed_when: oci_waf_policy_delete_repeat.changed
+
+- name: Verify deletion is unchanged in check mode
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+    state: absent
+  check_mode: true
+  register: oci_waf_policy_delete_repeat
+  failed_when: oci_waf_policy_delete_repeat.changed

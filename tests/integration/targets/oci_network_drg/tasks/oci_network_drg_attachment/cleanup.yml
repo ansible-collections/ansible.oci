@@ -1,0 +1,38 @@
+---
+- name: Delete leaked DRG attachment during cleanup
+  ansible.oci.oci_network_drg_attachment:
+    state: absent
+    drg_attachment_id: '{{ oci_drg_attachment_id }}'
+  when:
+    - oci_group_started_oci_network_drg_attachment | default(false)
+    - oci_drg_attachment_id | default('') | length > 0
+  register: oci_group_cleanup_16
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked DRG attachment during cleanup''] }}'
+  when: oci_group_cleanup_16 is failed
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_drg_attachment_integration_vcn_id }}'
+  when:
+    - oci_group_started_oci_network_drg_attachment | default(false)
+    - oci_drg_attachment_integration_vcn_id | default('') | length > 0
+  register: oci_group_cleanup_18
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked VCN during cleanup''] }}'
+  when: oci_group_cleanup_18 is failed
+
+- name: Check module cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'

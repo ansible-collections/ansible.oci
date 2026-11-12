@@ -1,0 +1,51 @@
+---
+- name: Define record set inputs
+  ansible.builtin.set_fact:
+    oci_dns_records_domain: www.{{ oci_dns_records_case.zone }}
+    oci_dns_records_initial:
+      - domain: www.{{ oci_dns_records_case.zone }}
+        rtype: a
+        rdata: 192.0.2.10
+        ttl: 300
+      - domain: www.{{ oci_dns_records_case.zone }}
+        rtype: aaaa
+        rdata: 2001:db8::10
+        ttl: 300
+      - domain: www.{{ oci_dns_records_case.zone }}
+        rtype: txt
+        rdata: '"oci integration"'
+        ttl: 300
+      - domain: sentinel.{{ oci_dns_records_case.zone }}
+        rtype: txt
+        rdata: '"keep this record"'
+        ttl: 300
+    oci_dns_records_updated:
+      - domain: www.{{ oci_dns_records_case.zone }}
+        rtype: a
+        rdata: 192.0.2.11
+        ttl: 600
+      - domain: www.{{ oci_dns_records_case.zone }}
+        rtype: aaaa
+        rdata: 2001:db8::11
+        ttl: 600
+
+- name: Run oci_dns_zone_records tests
+  ansible.builtin.include_tasks: oci_dns_zone_records.yml
+
+- name: Run oci_dns_domain_records tests
+  ansible.builtin.include_tasks: oci_dns_domain_records.yml
+
+- name: Run oci_dns_record_set tests
+  ansible.builtin.include_tasks: oci_dns_record_set.yml
+
+- name: Run info tests
+  ansible.builtin.include_tasks: info.yml
+
+- name: Run oci_dns_record_set_delete tests
+  ansible.builtin.include_tasks: oci_dns_record_set_delete.yml
+
+- name: Run oci_dns_domain_records_delete tests
+  ansible.builtin.include_tasks: oci_dns_domain_records_delete.yml
+
+- name: Run oci_dns_zone_records_delete tests
+  ansible.builtin.include_tasks: oci_dns_zone_records_delete.yml

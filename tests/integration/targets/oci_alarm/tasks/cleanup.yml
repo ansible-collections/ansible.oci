@@ -2,14 +2,14 @@
 - name: Run alarm and notification topic cleanup with shared OCI auth defaults
   module_defaults:
     group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
   block:
-    # The alarm references the topic, so remove it first.
+
     - name: Delete leaked alarm by id
       ansible.oci.oci_alarm:
         state: absent
-        alarm_id: "{{ oci_alarm_id }}"
+        alarm_id: '{{ oci_alarm_id }}'
       when: oci_alarm_id | default('') | length > 0
       register: oci_cleanup_alarm_by_id
       retries: 3
@@ -18,8 +18,8 @@
     - name: Delete leaked alarm by exact scoped name when no id was captured
       ansible.oci.oci_alarm:
         state: absent
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        name: "{{ oci_alarm_cleanup_name }}"
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_alarm_cleanup_name }}'
       when:
         - oci_alarm_id | default('') | length == 0
         - oci_alarm_cleanup_name | default('') | length > 0
@@ -30,7 +30,7 @@
     - name: Delete leaked topic by id
       ansible.oci.oci_notification_topic:
         state: absent
-        topic_id: "{{ oci_notification_topic_cleanup_id }}"
+        topic_id: '{{ oci_notification_topic_cleanup_id }}'
       when: oci_notification_topic_cleanup_id | default('') | length > 0
       register: oci_cleanup_topic_by_id
       retries: 3
@@ -39,8 +39,8 @@
     - name: Delete leaked topic by exact scoped name when no id was captured
       ansible.oci.oci_notification_topic:
         state: absent
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        name: "{{ oci_notification_topic_cleanup_name }}"
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_notification_topic_cleanup_name }}'
       when:
         - oci_notification_topic_cleanup_id | default('') | length == 0
         - oci_notification_topic_cleanup_name | default('') | length > 0

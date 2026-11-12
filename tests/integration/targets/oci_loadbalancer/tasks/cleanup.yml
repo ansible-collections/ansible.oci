@@ -1,53 +1,127 @@
 ---
-- name: Run load balancer cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+- name: Initialize cleanup failures
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: []
 
-  block:
-    - name: Delete leaked load balancers during cleanup
-      ansible.oci.oci_loadbalancer:
-        state: absent
-        load_balancer_id: "{{ item }}"
-      loop: "{{ oci_lb_cleanup_ids | default([]) | unique | list }}"
-      when: item | default('') | length > 0
-      register: oci_cleanup_load_balancers
-      retries: 3
-      ignore_errors: true
+- name: Delete the test firewall during cleanup
+  ansible.oci.oci_waf_web_app_firewall:
+    state: absent
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+  when:
+    - oci_group_started_oci_waf_web_app_firewall | default(false)
+    - oci_waf_firewall_cleanup_id | default('') | length > 0
+  register: oci_group_cleanup_0
+  retries: 3
+  until: oci_group_cleanup_0 is succeeded
+  ignore_errors: true
 
-    - name: Delete the test-owned reserved public IP during cleanup
-      ansible.oci.oci_network_public_ip:
-        state: absent
-        public_ip_id: "{{ oci_lb_reserved_ip_id }}"
-      when: oci_lb_reserved_ip_id | default('') | length > 0
-      register: oci_cleanup_reserved_ip
-      retries: 3
-      ignore_errors: true
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the test firewall during cleanup''] }}'
+  when: oci_group_cleanup_0 is failed
 
-    - name: Delete leaked subnet during cleanup
-      ansible.oci.oci_network_subnet:
-        state: absent
-        subnet_id: "{{ oci_lb_subnet_id }}"
-      when: oci_lb_subnet_id | default('') | length > 0
-      register: oci_cleanup_subnet
-      retries: 3
-      ignore_errors: true
+- name: Delete the test replacement policy during cleanup
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    state: absent
+    web_app_firewall_policy_id: '{{ oci_waf_policy_replacement.resource.id }}'
+  when:
+    - oci_group_started_oci_waf_web_app_firewall | default(false)
+    - oci_waf_policy_replacement.resource.id | default('') | length > 0
+  register: oci_group_cleanup_2
+  retries: 3
+  until: oci_group_cleanup_2 is succeeded
+  ignore_errors: true
 
-    - name: Delete leaked VCN during cleanup
-      ansible.oci.oci_network_vcn:
-        state: absent
-        vcn_id: "{{ oci_lb_vcn_id }}"
-      when: oci_lb_vcn_id | default('') | length > 0
-      register: oci_cleanup_vcn
-      retries: 3
-      ignore_errors: true
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the test replacement policy during cleanup''] }}'
+  when: oci_group_cleanup_2 is failed
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_load_balancers is not failed
-          - oci_cleanup_reserved_ip is not failed
-          - oci_cleanup_subnet is not failed
-          - oci_cleanup_vcn is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+- name: Delete the test policy during cleanup
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    state: absent
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  when:
+    - oci_group_started_oci_waf_web_app_firewall | default(false)
+    - oci_waf_policy_cleanup_id | default('') | length > 0
+  register: oci_group_cleanup_4
+  retries: 3
+  until: oci_group_cleanup_4 is succeeded
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the test policy during cleanup''] }}'
+  when: oci_group_cleanup_4 is failed
+
+- name: Delete leaked load balancers during cleanup
+  ansible.oci.oci_loadbalancer:
+    state: absent
+    load_balancer_id: '{{ item }}'
+  loop: '{{ oci_lb_cleanup_ids | default([]) | unique | list }}'
+  when:
+    - oci_group_started_oci_loadbalancer | default(false)
+    - item | default('') | length > 0
+  register: oci_group_cleanup_6
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked load balancers during cleanup''] }}'
+  when: oci_group_cleanup_6 is failed
+
+- name: Delete the test-owned reserved public IP during cleanup
+  ansible.oci.oci_network_public_ip:
+    state: absent
+    public_ip_id: '{{ oci_lb_reserved_ip_id }}'
+  when:
+    - oci_group_started_oci_loadbalancer | default(false)
+    - oci_lb_reserved_ip_id | default('') | length > 0
+  register: oci_group_cleanup_8
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the test-owned reserved public IP during cleanup'']
+      }}'
+  when: oci_group_cleanup_8 is failed
+
+- name: Delete leaked subnet during cleanup
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_lb_subnet_id }}'
+  when:
+    - oci_group_started_oci_loadbalancer | default(false)
+    - oci_lb_subnet_id | default('') | length > 0
+  register: oci_group_cleanup_10
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked subnet during cleanup''] }}'
+  when: oci_group_cleanup_10 is failed
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_lb_vcn_id }}'
+  when:
+    - oci_group_started_oci_loadbalancer | default(false)
+    - oci_lb_vcn_id | default('') | length > 0
+  register: oci_group_cleanup_12
+  retries: 3
+  ignore_errors: true
+
+- name: Record cleanup failure
+  ansible.builtin.set_fact:
+    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked VCN during cleanup''] }}'
+  when: oci_group_cleanup_12 is failed
+
+- name: Check all cleanup results
+  ansible.builtin.assert:
+    that:
+      - oci_group_cleanup_failures | length == 0
+    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'
