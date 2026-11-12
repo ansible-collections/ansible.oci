@@ -3,6 +3,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 DOCUMENTATION = r"""
@@ -10,27 +11,23 @@ DOCUMENTATION = r"""
 module: oci_instance
 short_description: Manage a Compute instance resource in Oracle Cloud Infrastructure
 description:
-  - Launch, update, and terminate OCI Compute instances.
-  - Uses the shared OCI helper layer for authentication, waiting, retry
-    behavior, and result shaping.
-  - Create requests must omit C(instance_id). After create, capture the
-    returned instance ID and use it for later C(state=present) and
-    C(state=absent) tasks.
-  - C(power_state) drives OCI power actions (start/stop) independently of
-    C(state). It is evaluated after create and on every C(state=present) run.
-  - This module does not support attaching extra volumes at launch
-    (C(launch_volume_attachments)), placement-constraint-based capacity
-    topologies, or C(licensing_configs). It also does not update
-    C(create_vnic_details) fields (for example C(subnet_id) or
-    C(assign_public_ip)) after create.
-version_added: "1.0.0"
+- Launch, update, and terminate OCI Compute instances.
+- Uses the shared OCI helper layer for authentication, waiting, retry behavior, and result shaping.
+- Create requests must omit C(instance_id). After create, capture the returned instance ID and use it
+  for later C(state=present) and C(state=absent) tasks.
+- C(power_state) drives OCI power actions (start/stop) independently of C(state). It is evaluated after
+  create and on every C(state=present) run.
+- This module does not support attaching extra volumes at launch (C(launch_volume_attachments)), placement-constraint-based
+  capacity topologies, or C(licensing_configs). It also does not update C(create_vnic_details) fields
+  (for example C(subnet_id) or C(assign_public_ip)) after create.
+version_added: 1.0.0
 author:
-  - Ron Gershburg (@ronger4)
+- Ron Gershburg (@ronger4)
 extends_documentation_fragment:
-  - ansible.oci.oci_auth_options
-  - ansible.oci.oci_name_lookup_options
-  - ansible.oci.oci_wait_options
-  - ansible.oci.oci_tags_options
+- ansible.oci.oci_auth_options
+- ansible.oci.oci_name_lookup_options
+- ansible.oci.oci_wait_options
+- ansible.oci.oci_tags_options
 options:
   state:
     description:
@@ -42,36 +39,31 @@ options:
     description:
       - The OCID of the instance.
       - When provided, the module manages this exact instance.
-      - Required to distinguish between multiple instances that share the
-        same scoped C(name).
+      - Required to distinguish between multiple instances that share the same scoped C(name).
     type: str
   name:
     description:
       - Human-readable name for the instance.
       - Required when creating an instance.
-      - When C(instance_id) is omitted, the module uses
-        C(compartment_id + name) to find an existing instance.
-      - If exactly one instance matches, C(state=present) manages it as the
-        update target and C(state=absent) terminates it.
-      - If more than one instance matches, the task fails and the caller must
-        supply C(instance_id).
+      - When C(instance_id) is omitted, the module uses C(compartment_id + name) to find an existing instance.
+      - If exactly one instance matches, C(state=present) manages it as the update target and C(state=absent)
+        terminates it.
+      - If more than one instance matches, the task fails and the caller must supply C(instance_id).
     type: str
   compartment_id:
     description:
       - The OCID of the compartment containing the instance.
       - Required when creating an instance.
       - The module does not move an existing instance to another compartment.
-      - Also scopes name-based instance lookups when C(instance_id) is
-        omitted.
+      - Also scopes name-based instance lookups when C(instance_id) is omitted.
     type: str
   availability_domain:
     description:
       - The availability domain to launch the instance in.
       - Required when creating an instance.
       - The module does not update this field after create.
-      - Availability domain names are tenancy-specific; use
-        M(ansible.oci.oci_identity_availability_domain_info) to discover the valid
-        names for your tenancy and region instead of hardcoding them.
+      - Availability domain names are tenancy-specific; use M(ansible.oci.oci_identity_availability_domain_info)
+        to discover the valid names for your tenancy and region instead of hardcoding them.
     type: str
   fault_domain:
     description:
@@ -81,50 +73,51 @@ options:
   shape:
     description:
       - The shape of the instance, for example C(VM.Standard.E4.Flex).
-      - Required when creating an instance.
-      - Use M(ansible.oci.oci_shape_info) to discover compatible shape names and
-        their capabilities before launching an instance.
-      - Supports updates. OCI requires the instance to be stopped before
-        changing its shape.
-      - OCI stages shape changes made while the instance is stopped and only
-        applies them the next time the instance starts. C(resource) reflects
-        the previous value until then; rerunning this module with C(wait=true)
-        after C(power_state=running) confirms the change applied.
+      - Required for creation unless C(instance_configuration_id) supplies the shape.
+      - Use M(ansible.oci.oci_shape_info) to discover compatible shape names and their capabilities before
+        launching an instance.
+      - Supports updates. OCI requires the instance to be stopped before changing its shape.
+      - OCI stages shape changes made while the instance is stopped and only applies them the next time
+        the instance starts. C(resource) reflects the previous value until then; rerunning this module
+        with C(wait=true) after C(power_state=running) confirms the change applied.
     type: str
   shape_config:
     description:
       - Flexible shape configuration for shapes that support it.
-      - Supports updates. OCI requires the instance to be stopped before
-        changing shape configuration.
-      - OCI stages shape_config changes made while the instance is stopped and
-        only applies them the next time the instance starts. C(resource)
-        reflects the previous values until then; rerunning this module with
-        C(wait=true) after C(power_state=running) confirms the resize applied.
+      - Supports updates. OCI requires the instance to be stopped before changing shape configuration.
+      - OCI stages shape_config changes made while the instance is stopped and only applies them the next
+        time the instance starts. C(resource) reflects the previous values until then; rerunning this
+        module with C(wait=true) after C(power_state=running) confirms the resize applied.
     type: dict
     suboptions:
       ocpus:
         description:
           - The total number of OCPUs available to the instance.
         type: float
+      local_volume_size_in_gbs:
+        version_added: 1.3.0
+        description:
+          - Set the local storage capacity in gigabytes for a flexible DenseLV shape.
+          - DenseLV shapes require a positive value. Omit this option for other shapes.
+        type: int
       memory_in_gbs:
         description:
-          - The total amount of memory available to the instance, in
-            gigabytes.
+          - The total amount of memory available to the instance, in gigabytes.
         type: float
   image_id:
     description:
       - The OCID of the image used to launch the instance.
-      - Use M(ansible.oci.oci_image_info) to discover platform and custom image
-        OCIDs before launching an instance.
-      - Exactly one of C(image_id) or C(boot_volume_id) is required when
-        creating an instance.
+      - Use M(ansible.oci.oci_image_info) to discover platform and custom image OCIDs before launching
+        an instance.
+      - Creation requires C(image_id) or C(boot_volume_id) unless C(instance_configuration_id) supplies
+        the boot source.
       - The module does not update this field after create.
     type: str
   boot_volume_id:
     description:
       - The OCID of an existing boot volume to launch the instance from.
-      - Exactly one of C(image_id) or C(boot_volume_id) is required when
-        creating an instance.
+      - Creation requires C(image_id) or C(boot_volume_id) unless C(instance_configuration_id) supplies
+        the boot source.
       - The module does not update this field after create.
     type: str
   boot_volume_size_in_gbs:
@@ -135,9 +128,8 @@ options:
     type: int
   boot_volume_vpus_per_gb:
     description:
-      - The number of volume performance units per GB used to baseline boot
-        volume I/O performance, for example C(10) for balanced or C(20) for
-        higher performance.
+      - The number of volume performance units per GB used to baseline boot volume I/O performance, for
+        example C(10) for balanced or C(20) for higher performance.
       - Only used when creating from C(image_id).
       - The module does not update this field after create.
     type: int
@@ -149,17 +141,50 @@ options:
     type: str
   preserve_boot_volume_on_delete:
     description:
-      - Whether to preserve the boot volume when terminating the instance with
-        C(state=absent).
+      - Whether to preserve the boot volume when terminating the instance with C(state=absent).
       - If omitted or set to C(false), OCI deletes the boot volume.
       - Only used when deleting an instance.
     type: bool
   subnet_id:
     description:
       - The OCID of the subnet for the instance's primary VNIC.
-      - Required when creating an instance.
-      - The module does not support moving an existing instance to another
-        subnet.
+      - Required for creation unless C(instance_configuration_id) supplies the subnet.
+      - The module does not support moving an existing instance to another subnet.
+    type: str
+  assign_ipv6_ip:
+    version_added: 1.3.0
+    description:
+      - This option does not update existing VNICs.
+      - Allocate an IPv6 address from an IPv6-enabled subnet when creating the VNIC.
+      - Omit this option to use the OCI default or the stored configuration value.
+    type: bool
+  ipv6_address_ipv6_subnet_cidr_pair_details:
+    version_added: 1.3.0
+    description:
+      - This option does not update existing VNICs.
+      - Select IPv6 prefixes, addresses, or reserved IPv6 identifiers for the new VNIC.
+    type: list
+    elements: dict
+    suboptions:
+      ipv6_id:
+        description:
+          - The OCID of a previously reserved IPv6 address.
+        type: str
+      ipv6_subnet_cidr:
+        description:
+          - An IPv6 prefix allocated to the subnet.
+        type: str
+      ipv6_address:
+        description:
+          - An available IPv6 address from the subnet prefix.
+        type: str
+  subnet_cidr:
+    version_added: 1.3.0
+    description:
+      - This option does not update existing VNICs.
+      - Select an IPv4 CIDR within the subnet for automatic private IP allocation.
+      - Supply C(subnet_id) to identify the subnet.
+      - Do not combine this option with a fixed private IP address or identifier.
     type: str
   assign_public_ip:
     description:
@@ -173,15 +198,13 @@ options:
     type: str
   private_ip:
     description:
-      - A manually assigned private IPv4 address for the instance's primary
-        VNIC.
+      - A manually assigned private IPv4 address for the instance's primary VNIC.
       - Mutually exclusive with C(private_ip_id).
       - The module does not update this field after create.
     type: str
   private_ip_id:
     description:
-      - The OCID of an existing reserved private IPv4 address to assign to the
-        instance's primary VNIC.
+      - The OCID of an existing reserved private IPv4 address to assign to the instance's primary VNIC.
       - Mutually exclusive with C(private_ip).
       - The module does not update this field after create.
     type: str
@@ -198,32 +221,28 @@ options:
     elements: str
   metadata:
     description:
-      - Custom metadata key/value pairs, for example C(ssh_authorized_keys)
-        and C(user_data) for cloud-init.
-      - C(user_data) must already be base64-encoded, matching the OCI API
-        contract.
+      - Custom metadata key/value pairs, for example C(ssh_authorized_keys) and C(user_data) for cloud-init.
+      - C(user_data) must already be base64-encoded, matching the OCI API contract.
       - Supports updates.
     type: dict
   extended_metadata:
     description:
-      - Additional metadata key/value pairs that support nested JSON objects,
-        for backward compatibility with older tooling that expects them
-        separate from C(metadata).
+      - Additional metadata key/value pairs that support nested JSON objects, for backward compatibility
+        with older tooling that expects them separate from C(metadata).
       - Supports updates.
     type: dict
   security_attributes:
     description:
-      - Zero Trust Packet Routing security attributes to apply to the
-        instance, keyed by security attribute namespace.
+      - Zero Trust Packet Routing security attributes to apply to the instance, keyed by security attribute
+        namespace.
       - Supports updates.
     type: dict
   launch_options:
     description:
-      - Advanced boot and network emulation options. OCI infers safe defaults
-        for most shapes and images; only set these to override that
-        inference.
-      - Supports updates, but OCI generally requires the instance to be
-        stopped for the new values to take effect.
+      - Advanced boot and network emulation options. OCI infers safe defaults for most shapes and images;
+        only set these to override that inference.
+      - Supports updates, but OCI generally requires the instance to be stopped for the new values to
+        take effect.
     type: dict
     suboptions:
       boot_volume_type:
@@ -244,19 +263,16 @@ options:
         choices: [acceleratedpv, e1000, paravirtualized, vfio]
       remote_data_volume_type:
         description:
-          - The emulation type for attached block volumes other than the boot
-            volume.
+          - The emulation type for attached block volumes other than the boot volume.
         type: str
         choices: [ide, iscsi, paravirtualized, scsi, vfio]
       is_pv_encryption_in_transit_enabled:
         description:
-          - Whether to enable in-transit encryption for the data volume's
-            paravirtualized attachment.
+          - Whether to enable in-transit encryption for the data volume's paravirtualized attachment.
         type: bool
       is_consistent_volume_naming_enabled:
         description:
-          - Whether to enable consistent, OCI-assigned device naming for
-            attached volumes.
+          - Whether to enable consistent, OCI-assigned device naming for attached volumes.
         type: bool
   instance_options:
     description:
@@ -266,101 +282,86 @@ options:
     suboptions:
       are_legacy_imds_endpoints_disabled:
         description:
-          - Whether to disable the legacy (v1) instance metadata service
-            endpoints, allowing only the more secure v2 endpoints.
+          - Whether to disable the legacy (v1) instance metadata service endpoints, allowing only the
+            more secure v2 endpoints.
         type: bool
   availability_config:
     description:
-      - Options controlling what happens to the instance when the underlying
-        infrastructure it runs on undergoes maintenance.
+      - Options controlling what happens to the instance when the underlying infrastructure it runs on
+        undergoes maintenance.
       - Supports updates.
     type: dict
     suboptions:
       is_live_migration_preferred:
         description:
-          - Whether to prefer live migration over a reboot migration when
-            infrastructure maintenance requires moving the instance.
+          - Whether to prefer live migration over a reboot migration when infrastructure maintenance requires
+            moving the instance.
         type: bool
       recovery_action:
         description:
-          - What to do with the instance when infrastructure maintenance
-            requires rebooting it.
+          - What to do with the instance when infrastructure maintenance requires rebooting it.
         type: str
         choices: [restore_instance, stop_instance]
   preemptible_instance_config:
     description:
-      - Marks the instance as preemptible, letting OCI reclaim its capacity
-        when needed in exchange for lower cost.
-      - Only used when creating an instance. The module does not update this
-        field after create, and does not detect drift on it.
+      - Marks the instance as preemptible, letting OCI reclaim its capacity when needed in exchange for
+        lower cost.
+      - Only used when creating an instance. The module does not update this field after create, and does
+        not detect drift on it.
     type: dict
     suboptions:
       preserve_boot_volume:
         description:
-          - Whether to preserve the boot volume when OCI reclaims a
-            preemptible instance.
+          - Whether to preserve the boot volume when OCI reclaims a preemptible instance.
         type: bool
   agent_config:
     description:
-      - Configuration for the Oracle Cloud Agent software running on the
-        instance.
+      - Configuration for the Oracle Cloud Agent software running on the instance.
       - Supports updates.
     type: dict
     suboptions:
       all_plugins_disabled:
         description:
-          - When C(true), every Oracle Cloud Agent plugin is stopped,
-            overriding C(management_disabled), C(monitoring_disabled), and
-            C(plugins_config). This includes the management plugins (OS
-            Management Service Agent, Compute Instance Run Command), the
-            monitoring plugins (Compute Instance Monitoring, Custom Logs
-            Monitoring), and every other plugin (for example Bastion, Block
-            Volume Management, Vulnerability Scanning, OS Management Hub
-            Agent, Management Agent).
-          - When C(false), enablement is decided by C(management_disabled),
-            C(monitoring_disabled), and C(plugins_config) instead. Plugins
-            listed in C(plugins_config) can still report C(ENABLED) on the
-            resource while this is C(true); they are configured but not
-            running.
+          - When C(true), every Oracle Cloud Agent plugin is stopped, overriding C(management_disabled),
+            C(monitoring_disabled), and C(plugins_config). This includes the management plugins (OS Management
+            Service Agent, Compute Instance Run Command), the monitoring plugins (Compute Instance Monitoring,
+            Custom Logs Monitoring), and every other plugin (for example Bastion, Block Volume Management,
+            Vulnerability Scanning, OS Management Hub Agent, Management Agent).
+          - When C(false), enablement is decided by C(management_disabled), C(monitoring_disabled), and
+            C(plugins_config) instead. Plugins listed in C(plugins_config) can still report C(ENABLED)
+            on the resource while this is C(true); they are configured but not running.
           - Returned by OCI as C(are_all_plugins_disabled).
         type: bool
       management_disabled:
         description:
-          - When C(true), the management plugins (OS Management Service
-            Agent, Compute Instance Run Command) are stopped regardless of
-            C(plugins_config).
-          - When C(false), those two plugins follow their C(plugins_config)
-            entries (or their platform default when unset).
+          - When C(true), the management plugins (OS Management Service Agent, Compute Instance Run Command)
+            are stopped regardless of C(plugins_config).
+          - When C(false), those two plugins follow their C(plugins_config) entries (or their platform
+            default when unset).
           - Returned by OCI as C(is_management_disabled).
         type: bool
       monitoring_disabled:
         description:
-          - When C(true), the monitoring plugins (Compute Instance
-            Monitoring, Custom Logs Monitoring) are stopped regardless of
-            C(plugins_config).
-          - When C(false), those two plugins follow their C(plugins_config)
-            entries (or their platform default when unset).
+          - When C(true), the monitoring plugins (Compute Instance Monitoring, Custom Logs Monitoring)
+            are stopped regardless of C(plugins_config).
+          - When C(false), those two plugins follow their C(plugins_config) entries (or their platform
+            default when unset).
           - Returned by OCI as C(is_monitoring_disabled).
         type: bool
       plugins_config:
         description:
-          - Per-plugin desired state, for example the Bastion or OS
-            Management Hub Agent plugin. Available plugin names depend on
-            the instance's image; use the names returned by
-            M(ansible.oci.oci_instance_info) rather than hardcoding a list.
-          - C(all_plugins_disabled), and C(management_disabled) or
-            C(monitoring_disabled) for the plugins they cover, override the
-            per-plugin C(desired_state) set here.
-          - This list is compared as a whole against the resource, not
-            matched element by element per plugin name. If this task lists
-            only a subset of the plugins OCI returns (for example only
-            Bastion, while OCI also returns Compute Instance Monitoring and
-            others), the comparison always detects drift and the module
-            reports C(changed) on every run, even though the unlisted
-            plugins are left alone. To make this idempotent, supply the
-            full C(plugins_config) list the instance already has (for
-            example built from a prior M(ansible.oci.oci_instance_info)
-            read), not just the plugins you intend to change.
+          - Per-plugin desired state, for example the Bastion or OS Management Hub Agent plugin. Available
+            plugin names depend on the instance's image; use the names returned by M(ansible.oci.oci_instance_info)
+            rather than hardcoding a list.
+          - C(all_plugins_disabled), and C(management_disabled) or C(monitoring_disabled) for the plugins
+            they cover, override the per-plugin C(desired_state) set here.
+          - This list is compared as a whole against the resource, not matched element by element per
+            plugin name. If this task lists only a subset of the plugins OCI returns (for example only
+            Bastion, while OCI also returns Compute Instance Monitoring and others), the comparison always
+            detects drift and the module reports C(changed) on every run, even though the unlisted plugins
+            are left alone. To make this idempotent, supply the full C(plugins_config) list the instance
+            already has (for example built from a prior M(ansible.oci.oci_instance_info) read), not just
+            the plugins you intend to change.
         type: list
         elements: dict
         suboptions:
@@ -375,22 +376,20 @@ options:
             choices: [enabled, disabled]
   platform_config:
     description:
-      - Platform-specific configuration, including confidential-computing
-        options such as Secure Boot and firmware measurement.
-      - Which suboptions are accepted depends on C(type); virtual machine
-        shapes only support the confidential-computing booleans, while bare
-        metal shapes also support the NUMA and core-count options.
-      - Supports updates, though OCI may not support updating C(type) itself
-        or bare-metal-only suboptions after create.
+      - Platform-specific configuration, including confidential-computing options such as Secure Boot
+        and firmware measurement.
+      - Which suboptions are accepted depends on C(type); virtual machine shapes only support the confidential-computing
+        booleans, while bare metal shapes also support the NUMA and core-count options.
+      - Supports updates, though OCI may not support updating C(type) itself or bare-metal-only suboptions
+        after create.
     type: dict
     suboptions:
       type:
         description:
-          - The platform configuration family, matching the instance's shape.
-            Not every shape supports C(platform_config); use
-            M(ansible.oci.oci_shape_info) to look up the value for your shape
-            (returned as C(shapes[].platform_config_options.type)) before
-            setting this, since supported types can change as OCI adds shapes.
+          - The platform configuration family, matching the instance's shape. Not every shape supports
+            C(platform_config); use M(ansible.oci.oci_shape_info) to look up the value for your shape
+            (returned as C(shapes[].platform_config_options.type)) before setting this, since supported
+            types can change as OCI adds shapes.
         type: str
       is_secure_boot_enabled:
         description:
@@ -414,40 +413,35 @@ options:
         type: bool
       numa_nodes_per_socket:
         description:
-          - The NUMA nodes per socket. Only used for bare metal C(type)
-            values.
+          - The NUMA nodes per socket. Only used for bare metal C(type) values.
         type: str
         choices: [nps0, nps1, nps2, nps4, nps6]
       is_access_control_service_enabled:
         description:
-          - Whether the Access Control Service is enabled. Only used for bare
-            metal C(type) values.
+          - Whether the Access Control Service is enabled. Only used for bare metal C(type) values.
         type: bool
       are_virtual_instructions_enabled:
         description:
-          - Whether virtualization instructions are available for nested
-            virtualization. Only used for bare metal C(type) values.
+          - Whether virtualization instructions are available for nested virtualization. Only used for
+            bare metal C(type) values.
         type: bool
       is_input_output_memory_management_unit_enabled:
         description:
-          - Whether an I/O Memory Management Unit is enabled. Only used for
-            bare metal C(type) values.
+          - Whether an I/O Memory Management Unit is enabled. Only used for bare metal C(type) values.
         type: bool
       percentage_of_cores_enabled:
         description:
-          - The percentage of cores enabled, for fractional bare metal
-            billing. Only used for bare metal C(type) values.
+          - The percentage of cores enabled, for fractional bare metal billing. Only used for bare metal
+            C(type) values.
         type: int
   capacity_reservation_id:
     description:
-      - The OCID of the compute capacity reservation this instance launches
-        into.
+      - The OCID of the compute capacity reservation this instance launches into.
       - Supports updates.
     type: str
   dedicated_vm_host_id:
     description:
-      - The OCID of the dedicated virtual machine host this instance launches
-        onto.
+      - The OCID of the dedicated virtual machine host this instance launches onto.
       - Supports updates.
     type: str
   cluster_placement_group_id:
@@ -457,14 +451,15 @@ options:
     type: str
   compute_cluster_id:
     description:
-      - The OCID of the compute cluster this instance launches into, for
-        remote direct memory access (RDMA) network placement.
+      - The OCID of the compute cluster this instance launches into, for remote direct memory access (RDMA)
+        network placement.
       - The module does not update this field after create.
     type: str
   instance_configuration_id:
     description:
-      - The OCID of the instance configuration used as a template for this
-        launch.
+      - The OCID of the instance configuration used as a template for this launch.
+      - Explicit launch values override values stored in the configuration.
+      - Supply any required launch values omitted from the configuration.
       - The module does not update this field after create.
     type: str
   ipxe_script:
@@ -474,30 +469,34 @@ options:
     type: str
   is_pv_encryption_in_transit_enabled:
     description:
-      - Whether in-transit encryption is enabled for the boot volume's
-        paravirtualized attachment.
-      - The module does not update this field after create, and does not
-        detect drift on it.
+      - Whether in-transit encryption is enabled for the boot volume's paravirtualized attachment.
+      - The module does not update this field after create, and does not detect drift on it.
     type: bool
   is_ai_enterprise_enabled:
     description:
       - Whether NVIDIA AI Enterprise (NVAIE) is enabled for this instance.
-      - Only relevant for supported NVIDIA GPU shapes. OCI ignores this on
-        shapes that don't support NVIDIA AI Enterprise.
+      - Only relevant for supported NVIDIA GPU shapes. OCI ignores this on shapes that don't support NVIDIA
+        AI Enterprise.
       - Supports updates.
     type: bool
   power_state:
     description:
       - The desired power state of the instance.
-      - When set, the module issues an OCI power action to reach this state
-        whenever it differs from the instance's current C(lifecycle_state).
-      - Applied on create (after the instance reaches C(running)) and on
-        every C(state=present) run.
+      - When set, the module issues an OCI power action to reach this state whenever it differs from the
+        instance's current C(lifecycle_state).
+      - Applied on create (after the instance reaches C(running)) and on every C(state=present) run.
     type: str
     choices: [running, stopped]
 """
 
 EXAMPLES = r"""
+- name: Launch an instance from a complete configuration
+  ansible.oci.oci_instance:
+    compartment_id: ocid1.compartment.oc1..example
+    availability_domain: Uocm:PHX-AD-1
+    name: configured-instance
+    instance_configuration_id: ocid1.instanceconfiguration.oc1..example
+
 - name: Launch an instance
   ansible.oci.oci_instance:
     state: present
@@ -840,6 +839,8 @@ resource:
     time_created: "2026-01-01T00:00:00.000Z"
 """
 
+from copy import deepcopy
+
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
@@ -850,11 +851,18 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
-    rename_aliased_fields,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
     UpdateFieldSpec,
+)
+from ansible_collections.ansible.oci.plugins.module_utils.oci_instance import (
+    AGENT_CONFIG_PARAM_TO_OCI,
+    COMPUTE_LAUNCH_ARGS,
+    ENUM_KEYS,
+    build_agent_config,
+    build_create_instance_details,
+    build_platform_config,
 )
 
 oci = import_oci_sdk()[0]
@@ -879,197 +887,6 @@ POWER_STATE_ACTIONS = {
     LIFECYCLE_RUNNING: "START",
     LIFECYCLE_STOPPED: "STOP",
 }
-
-# Module inputs use lowercase snake_case choices (Ansible convention), while
-# OCI's wire format and returned resources use upper-case constants (for
-# example RECOVERY_ACTION_STOP_INSTANCE -> "STOP_INSTANCE"). Every enum-like
-# suboption this module exposes converts cleanly with a plain str.upper(), so
-# a single normalization helper keyed on field name covers all of them,
-# instead of one-off conversions scattered across each builder function. This
-# set is also assigned to OciInstanceModule.enum_keys so the shared
-# "subset_dict" comparator (see oci_resource.py) normalizes the same way.
-ENUM_KEYS = {
-    "power_state",
-    "recovery_action",
-    "desired_state",
-    "type",
-    "boot_volume_type",
-    "firmware",
-    "network_type",
-    "remote_data_volume_type",
-    "numa_nodes_per_socket",
-}
-
-# For mapping input to SDK model fields.
-AGENT_CONFIG_PARAM_TO_OCI = {
-    "all_plugins_disabled": "are_all_plugins_disabled",
-    "management_disabled": "is_management_disabled",
-    "monitoring_disabled": "is_monitoring_disabled",
-}
-
-
-def build_create_vnic_details(params):
-    details = filter_none_values(
-        {
-            "subnet_id": params.get("subnet_id"),
-            "assign_public_ip": params.get("assign_public_ip"),
-            "display_name": params.get("vnic_name"),
-            "private_ip": params.get("private_ip"),
-            "private_ip_id": params.get("private_ip_id"),
-            "hostname_label": params.get("hostname_label"),
-            "nsg_ids": params.get("nsg_ids"),
-        }
-    )
-    if not details:
-        return None
-    return oci.core.models.CreateVnicDetails(**details)
-
-
-def build_source_details(params):
-    image_id = params.get("image_id")
-    boot_volume_id = params.get("boot_volume_id")
-    if image_id:
-        details = filter_none_values(
-            {
-                "image_id": image_id,
-                "boot_volume_size_in_gbs": params.get("boot_volume_size_in_gbs"),
-                "boot_volume_vpus_per_gb": params.get("boot_volume_vpus_per_gb"),
-                "kms_key_id": params.get("kms_key_id"),
-            }
-        )
-        return oci.core.models.InstanceSourceViaImageDetails(**details)
-    if boot_volume_id:
-        return oci.core.models.InstanceSourceViaBootVolumeDetails(
-            boot_volume_id=boot_volume_id
-        )
-    return None
-
-
-def build_preemptible_instance_config(params):
-    preemptible_instance_config = params.get("preemptible_instance_config")
-    if not preemptible_instance_config:
-        return None
-    preemption_action = oci.core.models.TerminatePreemptionAction(
-        **filter_none_values(
-            {"preserve_boot_volume": preemptible_instance_config.get("preserve_boot_volume")}
-        )
-    )
-    return oci.core.models.PreemptibleInstanceConfigDetails(
-        preemption_action=preemption_action
-    )
-
-
-def build_agent_config(params, model_class):
-    agent_config = params.get("agent_config")
-    if not agent_config:
-        return None
-    agent_config = rename_aliased_fields(agent_config, AGENT_CONFIG_PARAM_TO_OCI)
-    plugins_config = agent_config.get("plugins_config")
-    plugins = None
-    if plugins_config:
-        plugins = [
-            build_model(
-                plugin_config,
-                oci.core.models.InstanceAgentPluginConfigDetails,
-                enum_keys=ENUM_KEYS,
-            )
-            for plugin_config in plugins_config
-        ]
-    details = filter_none_values(
-        {
-            "are_all_plugins_disabled": agent_config.get("are_all_plugins_disabled"),
-            "is_management_disabled": agent_config.get("is_management_disabled"),
-            "is_monitoring_disabled": agent_config.get("is_monitoring_disabled"),
-            "plugins_config": plugins,
-        }
-    )
-    return model_class(**details)
-
-
-# OCI uses distinct model classes per operation for several nested configs
-# (for example LaunchInstanceAvailabilityConfigDetails vs
-# UpdateInstanceAvailabilityConfigDetails vs the response-only
-# InstanceAvailabilityConfig), even though the field sets are identical.
-# platform_config is additionally polymorphic on "type", and bare-metal
-# platform_config types have no update-context class at all (OCI does not
-# support updating their platform_config after launch).
-def build_platform_config(params, class_suffix):
-    platform_config = params.get("platform_config")
-    if not platform_config:
-        return None
-    normalized = normalize_enum_values(dict(platform_config), ENUM_KEYS)
-    platform_type = normalized.pop("type", None)
-    # OCI's SDK codegen names each polymorphic subtype's class after its
-    # "type" discriminator converted to PascalCase, e.g. "AMD_MILAN_BM" ->
-    # "AmdMilanBm". Deriving it avoids hand-maintaining a type->class map
-    # that would otherwise need a manual update every time OCI adds a new
-    # shape family.
-    class_prefix = "".join(word.capitalize() for word in (platform_type or "").split("_"))
-    model_class = getattr(oci.core.models, f"{class_prefix}{class_suffix}", None)
-    if model_class is None:
-        is_known_type = any(
-            name.startswith(class_prefix) for name in dir(oci.core.models)
-        )
-        if not is_known_type:
-            raise ValueError(f"Unsupported platform_config type: {platform_config.get('type')}")
-        raise ValueError(
-            f"platform_config type {platform_config.get('type')} does not support this operation"
-        )
-    details = filter_none_values(normalized)
-    details["type"] = platform_type
-    return model_class(**details)
-
-
-def build_create_instance_details(params):
-    details = filter_none_values(
-        {
-            "availability_domain": params.get("availability_domain"),
-            "compartment_id": params.get("compartment_id"),
-            "display_name": params.get("name"),
-            "shape": params.get("shape"),
-            "shape_config": build_model(
-                params.get("shape_config"),
-                oci.core.models.LaunchInstanceShapeConfigDetails,
-            ),
-            "source_details": build_source_details(params),
-            "create_vnic_details": build_create_vnic_details(params),
-            "metadata": params.get("metadata"),
-            "extended_metadata": params.get("extended_metadata"),
-            "security_attributes": params.get("security_attributes"),
-            "launch_options": build_model(
-                params.get("launch_options") or None,
-                oci.core.models.LaunchOptions,
-                enum_keys=ENUM_KEYS,
-            ),
-            "instance_options": build_model(
-                params.get("instance_options"), oci.core.models.InstanceOptions
-            ),
-            "availability_config": build_model(
-                params.get("availability_config") or None,
-                oci.core.models.LaunchInstanceAvailabilityConfigDetails,
-                enum_keys=ENUM_KEYS,
-            ),
-            "preemptible_instance_config": build_preemptible_instance_config(params),
-            "agent_config": build_agent_config(
-                params, oci.core.models.LaunchInstanceAgentConfigDetails
-            ),
-            "platform_config": build_platform_config(params, "LaunchInstancePlatformConfig"),
-            "fault_domain": params.get("fault_domain"),
-            "capacity_reservation_id": params.get("capacity_reservation_id"),
-            "dedicated_vm_host_id": params.get("dedicated_vm_host_id"),
-            "cluster_placement_group_id": params.get("cluster_placement_group_id"),
-            "compute_cluster_id": params.get("compute_cluster_id"),
-            "instance_configuration_id": params.get("instance_configuration_id"),
-            "ipxe_script": params.get("ipxe_script"),
-            "is_pv_encryption_in_transit_enabled": params.get(
-                "is_pv_encryption_in_transit_enabled"
-            ),
-            "is_ai_enterprise_enabled": params.get("is_ai_enterprise_enabled"),
-            "freeform_tags": params.get("freeform_tags"),
-            "defined_tags": params.get("defined_tags"),
-        }
-    )
-    return oci.core.models.LaunchInstanceDetails(**details)
 
 
 # Builders reused for the update path. Each takes a single-key params-shaped
@@ -1109,7 +926,6 @@ class OciInstanceModule(OciResourceBase):
 
     resource_id_param = "instance_id"
     list_resource_method = "list_instances"
-    create_required_fields = CREATE_REQUIRED_FIELDS
     create_resource_name = "instance"
     update_method_name = "update_instance"
     update_details_name = "update_instance_details"
@@ -1219,6 +1035,17 @@ class OciInstanceModule(OciResourceBase):
         ),
     )
 
+    @property
+    def create_required_fields(self):
+        """Return required inputs for the selected launch source."""
+        if self.module.params.get("instance_configuration_id"):
+            return [
+                field
+                for field in CREATE_REQUIRED_FIELDS
+                if field not in ("shape", "subnet_id")
+            ]
+        return CREATE_REQUIRED_FIELDS
+
     def plan_power_state_strategy(self, resource, resource_dict, spec, desired_value):
         current_state = resource_dict.get("lifecycle_state")
         desired_state = normalize_enum_values({"power_state": desired_value}, ENUM_KEYS)[
@@ -1250,8 +1077,10 @@ class OciInstanceModule(OciResourceBase):
 
     def validate_create_request(self):
         super().validate_create_request()
-        if not self.module.params.get("image_id") and not self.module.params.get(
-            "boot_volume_id"
+        if (
+            not self.module.params.get("instance_configuration_id")
+            and not self.module.params.get("image_id")
+            and not self.module.params.get("boot_volume_id")
         ):
             self.module.fail_json(
                 msg="Creating an instance requires either image_id or boot_volume_id"
@@ -1320,9 +1149,7 @@ class OciInstanceModule(OciResourceBase):
         delete_kwargs = filter_none_values(
             {
                 "instance_id": resource.id,
-                "preserve_boot_volume": self.module.params.get(
-                    "preserve_boot_volume_on_delete"
-                ),
+                "preserve_boot_volume": self.module.params.get("preserve_boot_volume_on_delete"),
             }
         )
         return self.delete_resource_and_wait(
@@ -1333,116 +1160,16 @@ class OciInstanceModule(OciResourceBase):
 
 
 def main():
+    """Run the Compute instance module."""
     argument_spec = dict(
         OCI_COMMON_ARGS,
+        **deepcopy(COMPUTE_LAUNCH_ARGS),
         state=dict(type="str", choices=["present", "absent"], default="present"),
         instance_id=dict(type="str"),
         availability_domain=dict(type="str"),
         fault_domain=dict(type="str"),
         shape=dict(type="str"),
-        shape_config=dict(
-            type="dict",
-            options=dict(
-                ocpus=dict(type="float"),
-                memory_in_gbs=dict(type="float"),
-            ),
-        ),
-        image_id=dict(type="str"),
-        boot_volume_id=dict(type="str"),
-        boot_volume_size_in_gbs=dict(type="int"),
-        boot_volume_vpus_per_gb=dict(type="int"),
-        kms_key_id=dict(type="str"),
         preserve_boot_volume_on_delete=dict(type="bool"),
-        subnet_id=dict(type="str"),
-        assign_public_ip=dict(type="bool"),
-        vnic_name=dict(type="str"),
-        private_ip=dict(type="str"),
-        private_ip_id=dict(type="str"),
-        hostname_label=dict(type="str"),
-        nsg_ids=dict(type="list", elements="str"),
-        metadata=dict(type="dict"),
-        extended_metadata=dict(type="dict"),
-        security_attributes=dict(type="dict"),
-        launch_options=dict(
-            type="dict",
-            options=dict(
-                boot_volume_type=dict(
-                    type="str", choices=["ide", "iscsi", "paravirtualized", "scsi", "vfio"]
-                ),
-                firmware=dict(type="str", choices=["bios", "uefi_64"]),
-                network_type=dict(
-                    type="str", choices=["acceleratedpv", "e1000", "paravirtualized", "vfio"]
-                ),
-                remote_data_volume_type=dict(
-                    type="str", choices=["ide", "iscsi", "paravirtualized", "scsi", "vfio"]
-                ),
-                is_pv_encryption_in_transit_enabled=dict(type="bool"),
-                is_consistent_volume_naming_enabled=dict(type="bool"),
-            ),
-        ),
-        instance_options=dict(
-            type="dict",
-            options=dict(
-                are_legacy_imds_endpoints_disabled=dict(type="bool"),
-            ),
-        ),
-        availability_config=dict(
-            type="dict",
-            options=dict(
-                is_live_migration_preferred=dict(type="bool"),
-                recovery_action=dict(
-                    type="str", choices=["restore_instance", "stop_instance"]
-                ),
-            ),
-        ),
-        preemptible_instance_config=dict(
-            type="dict",
-            options=dict(
-                preserve_boot_volume=dict(type="bool"),
-            ),
-        ),
-        agent_config=dict(
-            type="dict",
-            options=dict(
-                all_plugins_disabled=dict(type="bool"),
-                management_disabled=dict(type="bool"),
-                monitoring_disabled=dict(type="bool"),
-                plugins_config=dict(
-                    type="list",
-                    elements="dict",
-                    options=dict(
-                        name=dict(type="str"),
-                        desired_state=dict(type="str", choices=["enabled", "disabled"]),
-                    ),
-                ),
-            ),
-        ),
-        platform_config=dict(
-            type="dict",
-            options=dict(
-                type=dict(type="str"),
-                is_secure_boot_enabled=dict(type="bool"),
-                is_trusted_platform_module_enabled=dict(type="bool"),
-                is_measured_boot_enabled=dict(type="bool"),
-                is_memory_encryption_enabled=dict(type="bool"),
-                is_symmetric_multi_threading_enabled=dict(type="bool"),
-                numa_nodes_per_socket=dict(
-                    type="str", choices=["nps0", "nps1", "nps2", "nps4", "nps6"]
-                ),
-                is_access_control_service_enabled=dict(type="bool"),
-                are_virtual_instructions_enabled=dict(type="bool"),
-                is_input_output_memory_management_unit_enabled=dict(type="bool"),
-                percentage_of_cores_enabled=dict(type="int"),
-            ),
-        ),
-        capacity_reservation_id=dict(type="str"),
-        dedicated_vm_host_id=dict(type="str"),
-        cluster_placement_group_id=dict(type="str"),
-        compute_cluster_id=dict(type="str"),
-        instance_configuration_id=dict(type="str"),
-        ipxe_script=dict(type="str"),
-        is_pv_encryption_in_transit_enabled=dict(type="bool"),
-        is_ai_enterprise_enabled=dict(type="bool"),
         power_state=dict(type="str", choices=["running", "stopped"]),
     )
 
@@ -1451,7 +1178,7 @@ def main():
         supports_check_mode=True,
         mutually_exclusive=[
             ("image_id", "boot_volume_id"),
-            ("private_ip", "private_ip_id"),
+            ("private_ip", "private_ip_id", "subnet_cidr"),
         ],
     )
 

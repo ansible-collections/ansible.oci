@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 import types
@@ -7,6 +8,7 @@ import pytest
 
 from .conftest import (
     DummyModule,
+    ExitJsonCalled,
     FakeModel,
     FakeResponse,
     FailJsonCalled,
@@ -15,11 +17,11 @@ from .conftest import (
     make_module_instance,
 )
 
-
 INSTANCE_MODEL_NAMES = (
     "LaunchInstanceDetails",
     "UpdateInstanceDetails",
     "CreateVnicDetails",
+    "Ipv6AddressIpv6SubnetCidrPairDetails",
     "InstanceSourceViaImageDetails",
     "InstanceSourceViaBootVolumeDetails",
     "LaunchInstanceShapeConfigDetails",
@@ -39,10 +41,16 @@ INSTANCE_MODEL_NAMES = (
 
 
 def install_fake_oci(monkeypatch):
-    return shared_install_fake_oci(
+    result = shared_install_fake_oci(
         monkeypatch,
         model_names=INSTANCE_MODEL_NAMES,
     )
+    import sys
+
+    compute = sys.modules.get("ansible_collections.ansible.oci.plugins.module_utils.oci_instance")
+    if compute is not None:
+        monkeypatch.setattr(compute, "oci", result[0])
+    return result
 
 
 def make_instance_module(module_obj, params, client=None):
@@ -84,12 +92,9 @@ def test_main_exposes_power_state_argument(monkeypatch):
     assert captured["argument_spec"]["shape_config"]["type"] == "dict"
     assert "display_name" not in captured["argument_spec"]
     assert captured["argument_spec"]["boot_volume_id"] == {"type": "str"}
-    assert (
-        captured["argument_spec"]["availability_config"]["options"]["recovery_action"][
-            "choices"
-        ]
-        == ["restore_instance", "stop_instance"]
-    )
+    assert captured["argument_spec"]["availability_config"]["options"]["recovery_action"][
+        "choices"
+    ] == ["restore_instance", "stop_instance"]
 
 
 def test_build_create_instance_details_includes_supported_fields(monkeypatch):
@@ -374,9 +379,7 @@ def test_update_resource_retries_transient_conflict_on_update_instance(monkeypat
             retry_kwargs["max_retries"] = kwargs.get("max_retries")
             retry_kwargs["retry_on"] = kwargs.get("retry_on")
         call_kwargs = {
-            key: value
-            for key, value in kwargs.items()
-            if key not in ("max_retries", "retry_on")
+            key: value for key, value in kwargs.items() if key not in ("max_retries", "retry_on")
         }
         return fn(*args, **call_kwargs)
 
@@ -522,7 +525,7 @@ def test_build_source_details_uses_boot_volume_when_image_id_absent(monkeypatch)
     install_fake_oci(monkeypatch)
 
     instance_module = load_collection_module("oci_instance")
-    details = instance_module.build_source_details(
+    details = load_collection_module("oci_instance", plugin_dir="module_utils").build_source_details(
         {"boot_volume_id": "ocid1.bootvolume.oc1..example"}
     )
 
@@ -787,3 +790,165 @@ def test_validate_create_request_passes_with_boot_volume_id(monkeypatch):
     )
 
     instance.validate_create_request()
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize(
+    "overrides",
+    [{}, {"shape": "OverrideShape", "subnet_id": "SubnetID", "image_id": "ImageID"}],
+)
+def test_launch_from_configuration(monkeypatch, check_mode, overrides):
+    """Use configuration launch values and preserve explicit overrides."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance")
+    calls = []
+    params = dict(
+        state="present",
+        name="configured-instance",
+        compartment_id="CompartmentID",
+        availability_domain="AD",
+        instance_configuration_id="ConfigurationID",
+        **overrides,
+    )
+    client = types.SimpleNamespace(
+        launch_instance=lambda **kwargs: calls.append(kwargs)
+        or FakeResponse(FakeModel(id="InstanceID"))
+    )
+    instance = make_instance_module(module_obj, params, client=client)
+    instance.check_mode = check_mode
+    instance.module.check_mode = check_mode
+    instance.resolve_target_resource = lambda: None
+    instance.call_with_retry = lambda fn, **kwargs: fn(**kwargs)
+    instance.get_mutation_result = lambda data, *args: data
+    with pytest.raises(ExitJsonCalled) as result:
+        instance.execute_resource_module()
+    assert result.value.payload["changed"] is True
+    assert len(calls) == (0 if check_mode else 1)
+    if calls:
+        details = calls[0]["launch_instance_details"]
+        assert details.instance_configuration_id == "ConfigurationID"
+        assert getattr(details, "shape", None) == overrides.get("shape")
+        if overrides:
+            assert details.create_vnic_details.subnet_id == "SubnetID"
+            assert details.source_details.image_id == "ImageID"
+        else:
+            assert getattr(details, "source_details", None) is None
+            assert getattr(details, "create_vnic_details", None) is None
+
+
+@pytest.mark.parametrize(
+    "configuration_id,missing",
+    [
+        (None, field)
+        for field in (
+            "compartment_id",
+            "availability_domain",
+            "name",
+            "shape",
+            "subnet_id",
+        )
+    ]
+    + [
+        ("ConfigurationID", field)
+        for field in ("compartment_id", "availability_domain", "name")
+    ],
+)
+def test_launch_requires_resource_fields(monkeypatch, configuration_id, missing):
+    """Require resource fields for ordinary and configuration launches."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance")
+    params = dict(
+        name="instance",
+        compartment_id="CompartmentID",
+        availability_domain="AD",
+        shape="Shape",
+        subnet_id="SubnetID",
+        image_id="ImageID",
+        instance_configuration_id=configuration_id,
+    )
+    del params[missing]
+    instance = make_instance_module(module_obj, params)
+    with pytest.raises(FailJsonCalled) as result:
+        instance.validate_create_request()
+    assert missing in result.value.payload["msg"]
+
+
+def test_local_storage_create_update_and_idempotency(monkeypatch):
+    """Send local storage sizing through launch and update models."""
+    install_fake_oci(monkeypatch)
+    module_obj = load_collection_module("oci_instance")
+    params = {"shape_config": {"local_volume_size_in_gbs": 100}}
+    launched = module_obj.build_create_instance_details(params)
+    assert launched.shape_config.local_volume_size_in_gbs == 100
+    instance = make_instance_module(module_obj, params)
+    current = FakeModel(id="InstanceID", shape_config={"local_volume_size_in_gbs": 50})
+    plan = instance.get_update_plan(current)
+    update = instance.build_update_details(plan["update_model_fields"])
+    assert update.shape_config.local_volume_size_in_gbs == 100
+    same = make_instance_module(module_obj, params)
+    assert not same.needs_update(
+        FakeModel(id="InstanceID", shape_config={"local_volume_size_in_gbs": 100})
+    )
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize(
+    "surface",
+    ["instance", "configuration", "configuration-secondary", "options", "options-secondary"],
+)
+def test_cidr_conflicts_fail_before_mutation(monkeypatch, check_mode, surface):
+    """Reject conflicting private IP selection in normal mode and check mode."""
+    from ansible.module_utils import basic
+
+    install_fake_oci(monkeypatch)
+    name = "oci_instance" if surface == "instance" else "oci_instance_configuration"
+    module_obj = load_collection_module(name)
+    captured = {}
+
+    def capture(**kwargs):
+        captured.update(kwargs)
+        return DummyModule({})
+
+    class Adapter:
+        def __init__(self, module):
+            pass
+
+        def execute_resource_module(self):
+            pass
+
+    monkeypatch.setattr(module_obj, "AnsibleModule", capture)
+    monkeypatch.setattr(
+        module_obj,
+        "OciInstanceModule" if surface == "instance" else "OciInstanceConfigurationModule",
+        Adapter,
+    )
+    module_obj.main()
+    vnic = {"subnet_cidr": "10.0.1.0/24", "private_ip": "10.0.1.5"}
+    if surface == "instance":
+        params = vnic
+    else:
+        entry = {"instance_type": "compute"}
+        if surface.endswith("secondary"):
+            entry["secondary_vnics"] = [{"create_vnic_details": vnic}]
+        else:
+            entry["launch_details"] = {"create_vnic_details": vnic}
+        details = (
+            entry
+            if surface.startswith("configuration")
+            else {"instance_type": "instance_options", "options": [entry]}
+        )
+        params = {"instance_details": details}
+    params["_ansible_check_mode"] = check_mode
+    monkeypatch.setattr(basic, "_load_params", lambda: params)
+
+    def fail(module, **kwargs):
+        raise FailJsonCalled(kwargs)
+
+    monkeypatch.setattr(basic.AnsibleModule, "fail_json", fail)
+    with pytest.raises(FailJsonCalled) as result:
+        basic.AnsibleModule(
+            captured["argument_spec"],
+            supports_check_mode=True,
+            mutually_exclusive=captured.get("mutually_exclusive"),
+        )
+    assert "mutually exclusive" in result.value.payload["msg"]
