@@ -181,6 +181,53 @@ def test_values_differ_as_subset_compares_nested_lists_as_a_whole():
     assert oci_common.values_differ_as_subset(current_value, drifted_value) is True
 
 
+def test_values_differ_as_subset_compares_ordered_list_item_subsets():
+    oci_common = load_collection_module("oci_common")
+    current_value = {
+        "rules": [
+            {"name": "first", "condition": "allow", "server_default": 1},
+            {"name": "second", "condition": "deny", "server_default": 2},
+        ]
+    }
+    desired_value = {
+        "rules": [
+            {"name": "first", "condition": "allow"},
+            {"name": "second", "condition": "deny"},
+        ]
+    }
+
+    assert oci_common.values_differ_as_subset(
+        current_value, desired_value, compare_list_items=True
+    ) is False
+    assert oci_common.values_differ_as_subset(current_value, desired_value) is True
+    assert oci_common.values_differ_as_subset(
+        current_value,
+        {"rules": list(reversed(desired_value["rules"]))},
+        compare_list_items=True,
+    ) is True
+    assert oci_common.values_differ_as_subset(
+        current_value,
+        {"rules": desired_value["rules"][:1]},
+        compare_list_items=True,
+    ) is True
+
+
+def test_values_differ_as_subset_compares_nested_item_subsets_recursively():
+    oci_common = load_collection_module("oci_common")
+    current_value = {
+        "groups": [
+            {"name": "first", "rules": [{"action": "allow", "state": "ACTIVE"}]}
+        ]
+    }
+    desired_value = {
+        "groups": [{"name": "first", "rules": [{"action": "allow"}]}]
+    }
+
+    assert oci_common.values_differ_as_subset(
+        current_value, desired_value, compare_list_items=True
+    ) is False
+
+
 class FakeOciNestedModel:
     swagger_types = {"name": "str"}
     attribute_map = {"name": "name"}

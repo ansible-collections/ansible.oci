@@ -5,10 +5,8 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 from abc import abstractmethod
-from collections.abc import Mapping
-
+from ansible_collections.ansible.oci.plugins.module_utils import oci_common
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
-    build_model,
     merge_mappings,
     serialize_oci_model,
 )
@@ -18,51 +16,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     oci,
 )
 
-
-def build_nested_model(
-    model_class,
-    fields,
-    nested_models,
-    list_models,
-    model_builder,
-    skip_none_items=(),
-    convert_field=None,
-):
-    """Build a model with supported fields and typed nested values.
-
-    Args:
-        model_class: SDK class for the containing model.
-        fields: Source fields, or None for an empty model.
-        nested_models: Field names mapped to nested model names.
-        list_models: Field names mapped to model names for list items.
-        model_builder: Service function that builds a nested model by name.
-        skip_none_items: List fields whose None items must be removed.
-        convert_field: Optional service conversion for supported field values.
-
-    Returns:
-        An SDK model. Existing nested SDK objects retain their identity.
-    """
-    supported = model_class().swagger_types
-    selected = {}
-    for name, value in (fields or {}).items():
-        if name not in supported or value is None:
-            continue
-        if name in nested_models and isinstance(value, Mapping):
-            value = model_builder(nested_models[name], value)
-        elif name in list_models:
-            value = [
-                (
-                    model_builder(list_models[name], item)
-                    if isinstance(item, Mapping)
-                    else item
-                )
-                for item in value
-                if item is not None or name not in skip_none_items
-            ]
-        if convert_field is not None:
-            value = convert_field(name, value)
-        selected[name] = value
-    return build_model(selected, model_class)
+build_nested_model = oci_common.build_nested_model
 
 
 def merge_load_balancer_fields(current, desired):

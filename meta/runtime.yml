@@ -67,6 +67,8 @@ action_groups:
         - oci_instance_info
         - oci_instance_capacity_reservation
         - oci_instance_capacity_reservation_info
+        - oci_instance_configuration
+        - oci_instance_configuration_info
         - oci_image
         - oci_image_info
         - oci_shape_info

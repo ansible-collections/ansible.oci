@@ -201,10 +201,19 @@ class OciResourceBase(OciModuleBase, ABC):
     def update_resource(self, resource):
         """Apply the shared update plan and return the updated resource model.
 
-        ``resource`` is the current OCI SDK model. The base implementation uses
-        subclass metadata such as ``update_method_name`` and
-        ``update_details_name`` to build the update payload, call the OCI SDK,
-        and optionally wait for the resource to settle before returning it.
+        Args:
+            resource: The current OCI SDK model.
+
+        Returns:
+            The current model when no update is needed. Otherwise, the updated
+            model or the update response data when waiting is disabled.
+
+        Raises:
+            ValueError: If update metadata is missing or wait states are empty.
+
+        The method uses subclass metadata to build and send the update payload.
+        If ``update_wait_states`` is None, it returns the immediate response.
+        Otherwise, it waits for one of the configured states.
         """
         if self.update_method_name is None:
             raise ValueError(
@@ -214,7 +223,7 @@ class OciResourceBase(OciModuleBase, ABC):
             raise ValueError(
                 f"{type(self).__name__} must define update_details_name or override update_resource()"
             )
-        if not self.update_wait_states:
+        if self.update_wait_states is not None and not self.update_wait_states:
             raise ValueError(
                 f"{type(self).__name__} must define update_wait_states or override update_resource()"
             )
@@ -242,13 +251,12 @@ class OciResourceBase(OciModuleBase, ABC):
             resource_id: The OCID of the resource.
 
         Returns:
-            The immediate resource or the result from the resource waiter.
+            The immediate response data when ``update_wait_states`` is None.
+            Otherwise, the result from the resource waiter.
         """
-        return self.get_mutation_result(
-            response.data,
-            resource_id,
-            self.update_wait_states,
-        )
+        if self.update_wait_states is None:
+            return response.data
+        return self.get_mutation_result(response.data, resource_id, self.update_wait_states)
 
     def build_update_details(self, update_model_fields):
         """Build the OCI update-details model from planned field changes.
