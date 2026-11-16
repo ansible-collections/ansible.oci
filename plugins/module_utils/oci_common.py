@@ -290,6 +290,52 @@ def build_model(source, model_class, keys=None, enum_keys=None):
     return model_class(**filter_none_values(selected))
 
 
+def build_nested_model(
+    model_class,
+    fields,
+    nested_models,
+    list_models,
+    model_builder,
+    skip_none_items=(),
+    convert_field=None,
+):
+    """Build an SDK model with supported nested model fields.
+
+    Args:
+        model_class: SDK class for the containing model.
+        fields: Source fields, or None for an empty model.
+        nested_models: Field names mapped to nested model names.
+        list_models: Field names mapped to model names for list items.
+        model_builder: Service function that builds a nested model by name.
+        skip_none_items: List fields whose None items must be removed.
+        convert_field: Optional conversion function for field values.
+
+    Returns:
+        An SDK model. Existing nested SDK objects retain their identity.
+    """
+    supported = model_class().swagger_types
+    selected = {}
+    for name, value in (fields or {}).items():
+        if name not in supported or value is None:
+            continue
+        if name in nested_models and isinstance(value, Mapping):
+            value = model_builder(nested_models[name], value)
+        elif name in list_models:
+            value = [
+                (
+                    model_builder(list_models[name], item)
+                    if isinstance(item, Mapping)
+                    else item
+                )
+                for item in value
+                if item is not None or name not in skip_none_items
+            ]
+        if convert_field is not None:
+            value = convert_field(name, value)
+        selected[name] = value
+    return build_model(selected, model_class)
+
+
 def choice_values(value_map):
     """Return lowercase choices and legacy spellings for the transition."""
     return list(dict.fromkeys(list(value_map) + list(value_map.values())))
@@ -386,17 +432,25 @@ def strip_none_values(value):
     return value
 
 
-def values_differ_as_subset(current_value, desired_value):
-    """Return ``True`` when ``desired_value``'s populated fields differ.
+def values_differ_as_subset(
+    current_value, desired_value, compare_list_items=False
+):
+    """Compare populated desired fields with current values.
 
-    OCI often echoes back fully populated nested objects that include
-    fields the caller never set, so a plain equality check would always
-    report drift. This recurses into nested dicts, comparing only the keys
-    the caller actually supplied (after dropping ``None`` placeholders, see
-    ``strip_none_values``) at every nesting level. Nested lists are compared
-    as a whole after stripping ``None`` placeholders from their elements,
-    since matching list entries individually (for example by name) isn't
-    supported.
+    Args:
+        current_value: Current OCI value, usually a mapping or list.
+        desired_value: Desired value. None fields are not compared.
+        compare_list_items: Compare list items in order as field subsets.
+
+    Returns:
+        True when a desired value differs from the current value.
+
+    OCI responses can include nested fields that the caller did not set.
+    This function compares only supplied fields in nested mappings. By default,
+    it compares lists as whole values after it removes None placeholders.
+    When ``compare_list_items`` is True, both lists must have equal lengths.
+    The function then compares each desired item with the item at the same
+    index in the current list. Extra current fields in each item are ignored.
     """
     if isinstance(desired_value, dict):
         current_value = current_value or {}
@@ -404,9 +458,75 @@ def values_differ_as_subset(current_value, desired_value):
             key: item for key, item in desired_value.items() if item is not None
         }
         return any(
-            values_differ_as_subset(current_value.get(key), item)
+            values_differ_as_subset(
+                current_value.get(key), item, compare_list_items=compare_list_items
+            )
             for key, item in desired_value.items()
         )
     if isinstance(desired_value, list):
+        if compare_list_items:
+            current_items = strip_none_values(current_value or [])
+            desired_items = strip_none_values(desired_value)
+            return len(current_items) != len(desired_items) or any(
+                values_differ_as_subset(current_item, desired_item, True)
+                for current_item, desired_item in zip(current_items, desired_items)
+            )
         return strip_none_values(current_value or []) != strip_none_values(desired_value)
     return current_value != desired_value
+
+
+def match_unordered_subset_list(current_value, desired_value, item_differs=values_differ_as_subset):
+    """Return a maximum assignment from desired indexes to current indexes.
+
+    Each current item can match once. Earlier matches can move to another item.
+    Inputs remain unchanged.
+
+    Args:
+        current_value: Current serialized items, or None for an empty list.
+        desired_value: Desired serialized items, or None for an empty list.
+        item_differs: Function that returns True when two items differ.
+
+    Returns:
+        A mapping from matched desired indexes to current indexes.
+    """
+    current = current_value or []
+    desired = desired_value or []
+    candidates = [
+        [index for index, item in enumerate(current) if not item_differs(item, wanted)]
+        for wanted in desired
+    ]
+    owners = {}
+
+    def assign(desired_index, visited):
+        for current_index in candidates[desired_index]:
+            if current_index in visited:
+                continue
+            visited.add(current_index)
+            if current_index not in owners or assign(owners[current_index], visited):
+                owners[current_index] = desired_index
+                return True
+        return False
+
+    for desired_index in range(len(desired)):
+        assign(desired_index, set())
+    return {desired_index: current_index for current_index, desired_index in owners.items()}
+
+
+def values_differ_as_unordered_subset_list(current_value, desired_value, item_differs=values_differ_as_subset):
+    """Compare unordered lists through a complete assignment of subset matches.
+
+    Added or removed items count as changes. Inputs remain unchanged.
+
+    Args:
+        current_value: Current serialized items, or None for an empty list.
+        desired_value: Desired serialized items, or None for an empty list.
+        item_differs: Function that returns True when two items differ.
+
+    Returns:
+        True when no complete assignment exists between equal-length lists.
+    """
+    current = current_value or []
+    desired = desired_value or []
+    if len(current) != len(desired):
+        return True
+    return len(match_unordered_subset_list(current, desired, item_differs)) != len(desired)

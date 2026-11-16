@@ -17,6 +17,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     rename_aliased_fields,
     serialize_oci_model,
     values_differ_as_subset,
+    values_differ_as_unordered_subset_list,
 )
 
 
@@ -200,10 +201,19 @@ class OciResourceBase(OciModuleBase, ABC):
     def update_resource(self, resource):
         """Apply the shared update plan and return the updated resource model.
 
-        ``resource`` is the current OCI SDK model. The base implementation uses
-        subclass metadata such as ``update_method_name`` and
-        ``update_details_name`` to build the update payload, call the OCI SDK,
-        and optionally wait for the resource to settle before returning it.
+        Args:
+            resource: The current OCI SDK model.
+
+        Returns:
+            The current model when no update is needed. Otherwise, the updated
+            model or the update response data when waiting is disabled.
+
+        Raises:
+            ValueError: If update metadata is missing or wait states are empty.
+
+        The method uses subclass metadata to build and send the update payload.
+        If ``update_wait_states`` is None, it returns the immediate response.
+        Otherwise, it waits for one of the configured states.
         """
         if self.update_method_name is None:
             raise ValueError(
@@ -213,7 +223,7 @@ class OciResourceBase(OciModuleBase, ABC):
             raise ValueError(
                 f"{type(self).__name__} must define update_details_name or override update_resource()"
             )
-        if not self.update_wait_states:
+        if self.update_wait_states is not None and not self.update_wait_states:
             raise ValueError(
                 f"{type(self).__name__} must define update_wait_states or override update_resource()"
             )
@@ -241,13 +251,12 @@ class OciResourceBase(OciModuleBase, ABC):
             resource_id: The OCID of the resource.
 
         Returns:
-            The immediate resource or the result from the resource waiter.
+            The immediate response data when ``update_wait_states`` is None.
+            Otherwise, the result from the resource waiter.
         """
-        return self.get_mutation_result(
-            response.data,
-            resource_id,
-            self.update_wait_states,
-        )
+        if self.update_wait_states is None:
+            return response.data
+        return self.get_mutation_result(response.data, resource_id, self.update_wait_states)
 
     def build_update_details(self, update_model_fields):
         """Build the OCI update-details model from planned field changes.
@@ -286,11 +295,21 @@ class OciResourceBase(OciModuleBase, ABC):
         self.module.fail_json(msg=message)
 
     def compare_update_field_values(self, current_value, desired_value, compare=None):
-        """Return ``True`` when a planned field value differs from the resource.
+        """Compare current and desired values with the selected strategy.
 
-        ``compare`` selects the comparison strategy. ``None`` and ``"eq"``
-        perform direct inequality checks, while ``"sorted_list"`` compares the
-        values as order-insensitive lists.
+        Existing strategies compare exact values, sorted lists, or dictionary
+        subsets. The unordered subset strategy matches each list item once.
+
+        Args:
+            current_value: The current serialized field value.
+            desired_value: The requested field value.
+            compare: The strategy declared by the update field specification.
+
+        Returns:
+            True when the requested field differs from the current field.
+
+        Raises:
+            ValueError: The comparison strategy is unsupported.
         """
         if compare in (None, "eq"):
             return current_value != desired_value
@@ -299,6 +318,8 @@ class OciResourceBase(OciModuleBase, ABC):
         if compare == "subset_dict":
             desired_value = normalize_enum_values(desired_value or {}, self.enum_keys)
             return values_differ_as_subset(current_value, desired_value)
+        if compare == "unordered_subset_list":
+            return values_differ_as_unordered_subset_list(current_value, desired_value)
         raise ValueError(f"Unsupported update comparison: {compare}")
 
     def execute_update_field_strategy(

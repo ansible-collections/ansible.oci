@@ -1,0 +1,235 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI instance configuration tests require
+      oci_integration_compartment_id to be set in the integration environment.
+
+- name: Exercise instance configuration lifecycle
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Confirm no configuration uses the test name
+      ansible.oci.oci_instance_configuration_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_configuration_integration_name }}"
+      register: oci_instance_configuration_before_create
+
+    - name: Assert the test name is unused
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_before_create.instance_configurations | length == 0
+
+    - name: Predict configuration creation
+      ansible.oci.oci_instance_configuration:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_configuration_integration_name }}"
+        source: none
+        instance_details: "{{ oci_instance_configuration_integration_details }}"
+      check_mode: true
+      register: oci_instance_configuration_create_check
+
+    - name: Assert create check mode reports a change
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_create_check.changed | bool
+
+    - name: Confirm create check mode did not create a configuration
+      ansible.oci.oci_instance_configuration_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_configuration_integration_name }}"
+      register: oci_instance_configuration_after_create_check
+
+    - name: Assert create check mode left the configuration absent
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_after_create_check.instance_configurations | length == 0
+
+    - name: Create the instance configuration
+      ansible.oci.oci_instance_configuration:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_configuration_integration_name }}"
+        source: none
+        instance_details: "{{ oci_instance_configuration_integration_details }}"
+      register: oci_instance_configuration_create
+
+    - name: Save the created configuration id
+      ansible.builtin.set_fact:
+        oci_instance_configuration_test_id: "{{ oci_instance_configuration_create.resource.id }}"
+
+    - name: Repeat configuration creation
+      ansible.oci.oci_instance_configuration:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_configuration_integration_name }}"
+        source: none
+        instance_details: "{{ oci_instance_configuration_integration_details }}"
+      register: oci_instance_configuration_create_repeat
+
+    - name: Repeat configuration creation in check mode
+      ansible.oci.oci_instance_configuration:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_configuration_integration_name }}"
+        source: none
+        instance_details: "{{ oci_instance_configuration_integration_details }}"
+      check_mode: true
+      register: oci_instance_configuration_create_repeat_check
+
+    - name: Assert repeated creation is unchanged
+      ansible.builtin.assert:
+        that:
+          - >-
+            oci_instance_configuration_create_repeat.resource.instance_details.launch_details.display_name
+            == oci_instance_configuration_integration_details.launch_details.name
+          - not oci_instance_configuration_create_repeat.changed | bool
+          - not oci_instance_configuration_create_repeat_check.changed | bool
+
+    - name: Get the created configuration by id
+      ansible.oci.oci_instance_configuration_info:
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      register: oci_instance_configuration_get
+
+    - name: List the created configuration by name
+      ansible.oci.oci_instance_configuration_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_instance_configuration_integration_name }}"
+      register: oci_instance_configuration_list
+
+    - name: Assert get and list return the created configuration
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_get.instance_configurations | length == 1
+          - oci_instance_configuration_list.instance_configurations | length == 1
+          - oci_instance_configuration_get.instance_configurations[0].id == oci_instance_configuration_test_id
+
+    - name: Predict the name update
+      ansible.oci.oci_instance_configuration:
+        state: present
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+        name: "{{ oci_instance_configuration_integration_updated_name }}"
+      check_mode: true
+      register: oci_instance_configuration_update_check
+
+    - name: Assert update check mode reports a change
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_update_check.changed | bool
+
+    - name: Confirm update check mode preserved the original name
+      ansible.oci.oci_instance_configuration_info:
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      register: oci_instance_configuration_after_update_check
+
+    - name: Assert update check mode did not change the resource
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_after_update_check.instance_configurations[0].name == oci_instance_configuration_integration_name
+
+    - name: Update the configuration name
+      ansible.oci.oci_instance_configuration:
+        state: present
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+        name: "{{ oci_instance_configuration_integration_updated_name }}"
+      register: oci_instance_configuration_update
+
+    - name: Assert the configuration name changed
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_update.changed | bool
+          - oci_instance_configuration_update.resource.name == oci_instance_configuration_integration_updated_name
+
+    - name: Repeat the configuration update
+      ansible.oci.oci_instance_configuration:
+        state: present
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+        name: "{{ oci_instance_configuration_integration_updated_name }}"
+      register: oci_instance_configuration_update_repeat
+
+    - name: Repeat the configuration update in check mode
+      ansible.oci.oci_instance_configuration:
+        state: present
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+        name: "{{ oci_instance_configuration_integration_updated_name }}"
+      check_mode: true
+      register: oci_instance_configuration_update_repeat_check
+
+    - name: Assert repeated updates are unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_configuration_update_repeat.changed | bool
+          - not oci_instance_configuration_update_repeat_check.changed | bool
+
+    - name: Predict configuration deletion
+      ansible.oci.oci_instance_configuration:
+        state: absent
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      check_mode: true
+      register: oci_instance_configuration_delete_check
+
+    - name: Assert delete check mode reports a change
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_delete_check.changed | bool
+
+    - name: Confirm delete check mode preserved the configuration
+      ansible.oci.oci_instance_configuration_info:
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      register: oci_instance_configuration_after_delete_check
+
+    - name: Assert delete check mode did not delete the resource
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_after_delete_check.instance_configurations | length == 1
+
+    - name: Delete the instance configuration
+      ansible.oci.oci_instance_configuration:
+        state: absent
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      register: oci_instance_configuration_delete
+
+    - name: Assert the configuration was deleted
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_delete.changed | bool
+
+    - name: Confirm the deleted configuration is absent
+      ansible.oci.oci_instance_configuration_info:
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      register: oci_instance_configuration_after_delete
+
+    - name: Assert get returns no deleted configuration
+      ansible.builtin.assert:
+        that:
+          - oci_instance_configuration_after_delete.instance_configurations | length == 0
+
+    - name: Repeat deletion of the absent configuration
+      ansible.oci.oci_instance_configuration:
+        state: absent
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      register: oci_instance_configuration_delete_repeat
+
+    - name: Repeat deletion of the absent configuration in check mode
+      ansible.oci.oci_instance_configuration:
+        state: absent
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      check_mode: true
+      register: oci_instance_configuration_delete_repeat_check
+
+    - name: Assert repeated deletion is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_instance_configuration_delete_repeat.changed | bool
+          - not oci_instance_configuration_delete_repeat_check.changed | bool
+  always:
+    - name: Clean up the test configuration
+      ansible.oci.oci_instance_configuration:
+        state: absent
+        instance_configuration_id: "{{ oci_instance_configuration_test_id }}"
+      when: oci_instance_configuration_test_id is defined

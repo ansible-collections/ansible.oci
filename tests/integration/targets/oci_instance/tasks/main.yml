@@ -208,6 +208,9 @@
         name: "{{ oci_instance_integration_subnet_name }}"
       register: oci_instance_subnet_create
 
+    - name: Create and update capacity reservation
+      ansible.builtin.include_tasks: capacity_reservation_create.yml
+
     - name: Define instance create and delete parameters
       ansible.builtin.set_fact:
         oci_instance_create_params:
@@ -217,6 +220,7 @@
           name: "{{ oci_instance_integration_instance_name }}"
           shape: "{{ oci_instance_discovered_shape }}"
           shape_config: "{{ oci_instance_integration_shape_config }}"
+          capacity_reservation_id: "{{ oci_instance_capacity_reservation_id }}"
           image_id: "{{ oci_instance_discovered_image_id }}"
           subnet_id: "{{ oci_instance_subnet_create.resource.id }}"
           freeform_tags: "{{ oci_instance_integration_create_tags }}"
@@ -235,6 +239,7 @@
         name: "{{ oci_instance_create_params.name }}"
         shape: "{{ oci_instance_create_params.shape }}"
         shape_config: "{{ oci_instance_create_params.shape_config }}"
+        capacity_reservation_id: "{{ oci_instance_create_params.capacity_reservation_id }}"
         image_id: "{{ oci_instance_create_params.image_id }}"
         subnet_id: "{{ oci_instance_create_params.subnet_id }}"
         freeform_tags: "{{ oci_instance_create_params.freeform_tags }}"
@@ -333,6 +338,9 @@
       ansible.builtin.assert:
         that:
           - not oci_instance_create_rerun.changed | bool
+
+    - name: Release reserved capacity before resizing the instance
+      ansible.builtin.include_tasks: capacity_reservation_release.yml
 
     - name: Stop the instance
       ansible.oci.oci_instance:
@@ -498,7 +506,9 @@
     - name: Assert each requested plugin is ENABLED on the resource
       ansible.builtin.assert:
         that:
-          - item.name in (oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config | default([], true) | selectattr('desired_state', 'equalto', 'ENABLED') | map(attribute='name') | list)
+          - item.name in (oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config
+            | default([], true) | selectattr('desired_state', 'equalto', 'ENABLED')
+            | map(attribute='name') | list)
       loop: "{{ oci_instance_integration_enable_plugins_config }}"
       loop_control:
         label: "{{ item.name }}"
