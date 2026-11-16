@@ -11,7 +11,7 @@ module: oci_notification_subscription_info
 short_description: Retrieve OCI Notifications subscription information
 description:
   - Retrieve one or more OCI Notifications subscriptions.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:

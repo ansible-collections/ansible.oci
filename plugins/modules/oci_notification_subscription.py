@@ -11,7 +11,7 @@ module: oci_notification_subscription
 short_description: Manage an OCI Notifications subscription
 description:
   - Create, update, and delete OCI Notifications subscriptions.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:
