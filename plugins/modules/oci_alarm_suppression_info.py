@@ -14,7 +14,7 @@ description:
   - Use C(alarm_suppression_id) to fetch a single suppression, or C(alarm_id)
     or C(compartment_id) to list suppressions.
   - This is a read-only module and does not modify resources.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:

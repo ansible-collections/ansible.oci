@@ -28,3 +28,8 @@ oci_notification_subscription_integration_create_tags:
 oci_notification_subscription_integration_update_tags:
   phase: update
   role: integration
+oci_alarm_suppression_integration_alarm_name: "oci-alarm-suppression-integration-alarm"
+oci_alarm_suppression_integration_name: "oci-alarm-suppression-integration"
+oci_alarm_suppression_integration_description: "OCI alarm suppression integration test"
+oci_alarm_suppression_integration_recurrence: "FREQ=DAILY;BYHOUR=2"
+oci_alarm_suppression_integration_duration: "PT1H"

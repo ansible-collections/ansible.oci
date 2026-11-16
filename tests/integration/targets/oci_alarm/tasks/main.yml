@@ -4,21 +4,34 @@
     that:
       - oci_integration_compartment_id | default('', true) | length > 0
     fail_msg: >-
-      OCI alarm, notification topic, and notification subscription integration tests require
-      oci_integration_compartment_id to be defined in tests/integration/integration_config.yml.
+      OCI alarm, alarm suppression, notification topic, and notification subscription integration
+      tests require oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
 
 - name: Compute unique resource names and initialize cleanup markers
   ansible.builtin.set_fact:
     oci_alarm_id: ""
     oci_alarm_cleanup_name: "{{ oci_alarm_integration_alarm_name }}-{{ oci_integration_rpfx }}"
     oci_alarm_integration_alarm_name: "{{ oci_alarm_integration_alarm_name }}-{{ oci_integration_rpfx }}"
+    oci_alarm_suppression_id: ""
+    oci_alarm_suppression_compartment_suppression_id: ""
+    oci_alarm_suppression_dimension_suppression_id: ""
+    oci_alarm_suppression_alarm_id: ""
+    oci_alarm_suppression_alarm_cleanup_name: "{{ oci_alarm_suppression_integration_alarm_name }}-{{ oci_integration_rpfx }}"
+    oci_alarm_suppression_integration_alarm_name: "{{ oci_alarm_suppression_integration_alarm_name }}-{{ oci_integration_rpfx }}"
+    oci_alarm_suppression_integration_name: "{{ oci_alarm_suppression_integration_name }}-{{ oci_integration_rpfx }}"
+    # Computed once so every suppression task in the run requests the same window.
+    oci_alarm_suppression_time_from: >-
+      {{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + 3600, utc=true) }}
+    oci_alarm_suppression_time_until: >-
+      {{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + 86400, utc=true) }}
     oci_notification_subscription_cleanup_id: ""
     oci_notification_subscription_integration_endpoint: "{{ oci_notification_subscription_integration_endpoint }}-{{ oci_integration_rpfx }}"
     oci_notification_topic_cleanup_id: ""
     oci_notification_topic_cleanup_name: "{{ oci_notification_topic_integration_name }}-{{ oci_integration_rpfx }}"
     oci_notification_topic_integration_name: "{{ oci_notification_topic_integration_name }}-{{ oci_integration_rpfx }}"
 
-- name: Exercise notification topic, subscription, and alarm module lifecycles
+- name: Exercise notification topic, subscription, alarm, and alarm suppression module lifecycles
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
@@ -40,9 +53,13 @@
     - name: Create, update, and delete the alarm
       ansible.builtin.import_tasks: alarm.yml
 
+    # Suppressions need an alarm, so they bring up their own on the same topic.
+    - name: Create and delete the alarm suppressions
+      ansible.builtin.import_tasks: alarm_suppression.yml
+
     - name: Delete the notification topic
       ansible.builtin.import_tasks: notification_topic_delete.yml
 
   always:
-    - name: Run alarm, notification subscription, and notification topic cleanup
+    - name: Run alarm, alarm suppression, notification subscription, and notification topic cleanup
       ansible.builtin.include_tasks: cleanup.yml

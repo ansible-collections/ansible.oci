@@ -217,12 +217,32 @@ def test_build_create_details_for_compartment_target(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "params, expected_filters",
+    "params, target_type, expected_filters",
     [
-        ({"alarm_id": ALARM_ID, "name": "n"}, {"alarm_id": ALARM_ID}),
+        (
+            {"alarm_id": ALARM_ID, "name": "n"},
+            "ALARM",
+            {"alarm_id": ALARM_ID, "target_type": "ALARM"},
+        ),
+        (
+            {"compartment_id": COMPARTMENT_ID, "name": "n"},
+            "COMPARTMENT",
+            {"compartment_id": COMPARTMENT_ID, "target_type": "COMPARTMENT"},
+        ),
+        (
+            {
+                "compartment_id": COMPARTMENT_ID,
+                "compartment_id_in_subtree": True,
+                "name": "n",
+            },
+            "COMPARTMENT",
+            {"compartment_id": COMPARTMENT_ID, "target_type": "COMPARTMENT"},
+        ),
     ],
 )
-def test_name_lookup_is_scoped_to_target(monkeypatch, params, expected_filters):
+def test_name_lookup_is_scoped_to_target(
+    monkeypatch, params, target_type, expected_filters
+):
     module_obj = load_suppression_module(monkeypatch)
     list_calls = []
     instance = make_suppression_module(module_obj, params)
@@ -230,7 +250,7 @@ def test_name_lookup_is_scoped_to_target(monkeypatch, params, expected_filters):
         id=SUPPRESSION_ID,
         display_name="n",
         lifecycle_state="ACTIVE",
-        alarm_suppression_target={"target_type": "ALARM", "alarm_id": ALARM_ID},
+        alarm_suppression_target={"target_type": target_type},
     )
     other = FakeModel(id="other", display_name="x", lifecycle_state="ACTIVE")
 
@@ -264,38 +284,80 @@ def test_alarm_name_lookup_skips_compartment_targeted_match(monkeypatch):
     assert instance.resolve_resource_by_name() is None
 
 
-def test_compartment_name_lookup_is_skipped_for_present(monkeypatch):
+def test_compartment_name_lookup_skips_alarm_targeted_match(monkeypatch):
     module_obj = load_suppression_module(monkeypatch)
     instance = make_suppression_module(
-        module_obj,
-        {"compartment_id": COMPARTMENT_ID, "name": "n", "state": "present"},
+        module_obj, {"compartment_id": COMPARTMENT_ID, "name": "n"}
     )
-    list_calls = []
+    alarm_targeted = FakeModel(
+        id="alarm-targeted",
+        display_name="n",
+        lifecycle_state="ACTIVE",
+        alarm_suppression_target={"target_type": "ALARM", "alarm_id": ALARM_ID},
+    )
 
     def fake_list_all(list_fn, **kwargs):
-        list_calls.append(kwargs)
-        return []
+        return [alarm_targeted]
 
     instance.client = types.SimpleNamespace(list_alarm_suppressions=None)
     monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
 
     assert instance.resolve_resource_by_name() is None
-    assert list_calls == []
 
 
-def test_compartment_name_lookup_fails_for_absent(monkeypatch):
+def test_present_compartment_target_is_idempotent_by_name(monkeypatch):
     module_obj = load_suppression_module(monkeypatch)
-    instance = make_suppression_module(
-        module_obj,
-        {"compartment_id": COMPARTMENT_ID, "name": "n", "state": "absent"},
+    existing = FakeModel(
+        id=SUPPRESSION_ID,
+        display_name="nightly",
+        compartment_id=COMPARTMENT_ID,
+        alarm_suppression_target={
+            "target_type": "COMPARTMENT",
+            "compartment_id": COMPARTMENT_ID,
+        },
+        time_suppress_from=TIME_FROM,
+        time_suppress_until=TIME_UNTIL,
+        lifecycle_state="ACTIVE",
     )
 
-    with pytest.raises(FailJsonCalled) as exc_info:
-        instance.resolve_resource_by_name()
+    def get_alarm_suppression(alarm_suppression_id):
+        return FakeResponse(data=existing)
 
-    msg = exc_info.value.payload["msg"]
-    assert "alarm_suppression_id" in msg
-    assert "compartment-targeted" in msg
+    instance = make_suppression_module(
+        module_obj,
+        {
+            "state": "present",
+            "name": "nightly",
+            "compartment_id": COMPARTMENT_ID,
+            "time_suppress_from": TIME_FROM,
+            "time_suppress_until": TIME_UNTIL,
+        },
+        client=types.SimpleNamespace(
+            get_alarm_suppression=get_alarm_suppression,
+            list_alarm_suppressions=None,
+            create_alarm_suppression=lambda **kwargs: pytest.fail(
+                "an existing compartment suppression must not be created again"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        lambda list_fn, **kwargs: [
+            FakeModel(
+                id=SUPPRESSION_ID,
+                display_name="nightly",
+                lifecycle_state="ACTIVE",
+                alarm_suppression_target={"target_type": "COMPARTMENT"},
+            )
+        ],
+    )
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert exc_info.value.payload["changed"] is False
+    assert exc_info.value.payload["resource"]["id"] == SUPPRESSION_ID
 
 
 def test_name_lookup_requires_target_scope(monkeypatch):
@@ -379,6 +441,59 @@ def test_equivalent_recurrence_rule_is_unchanged(monkeypatch, returned_rule):
     )
 
     assert instance.needs_update(resource) is False
+
+
+@pytest.mark.parametrize(
+    "returned_rule",
+    [
+        "FREQ=WEEKLY;BYDAY=MO",
+        # BYHOUR, BYMINUTE, and BYSECOND all default to 00:00:00 UTC, so OCI
+        # may expand a midnight rule with any of them.
+        "FREQ=WEEKLY;BYDAY=MO;BYHOUR=0",
+        "FREQ=WEEKLY;BYDAY=MO;BYHOUR=0;BYMINUTE=0;BYSECOND=0",
+        "RRULE:FREQ=WEEKLY;BYDAY=MO;BYHOUR=00;BYMINUTE=00;BYSECOND=00",
+    ],
+)
+def test_midnight_recurrence_rule_is_unchanged(monkeypatch, returned_rule):
+    module_obj = load_suppression_module(monkeypatch)
+    conditions = [
+        {
+            "condition_type": "RECURRENCE",
+            "suppression_recurrence": "FREQ=WEEKLY;BYDAY=MO",
+            "suppression_duration": "PT2H",
+        }
+    ]
+    instance = make_suppression_module(
+        module_obj, dict(MATCHING_PARAMS, suppression_conditions=conditions)
+    )
+    resource = matching_resource(
+        suppression_conditions=[
+            dict(conditions[0], suppression_recurrence=returned_rule)
+        ]
+    )
+
+    assert instance.needs_update(resource) is False
+
+
+def test_explicit_non_default_start_time_is_drift(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(module_obj, dict(MATCHING_PARAMS))
+    resource = matching_resource(
+        suppression_conditions=[
+            {
+                "condition_type": "RECURRENCE",
+                # Only the zero defaults are dropped, so a real start-time
+                # change is still reported.
+                "suppression_recurrence": "FREQ=DAILY;BYHOUR=2;BYMINUTE=30",
+                "suppression_duration": "PT2H",
+            }
+        ]
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.needs_update(resource)
+
+    assert "suppression_conditions" in exc_info.value.payload["msg"]
 
 
 def test_unreported_suppression_conditions_are_not_drift(monkeypatch):

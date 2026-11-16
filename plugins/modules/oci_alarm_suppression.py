@@ -13,7 +13,7 @@ description:
   - Create and delete OCI Monitoring alarm suppressions.
   - A suppression stops notifications for one alarm, or for every alarm in a
     compartment, during a time window.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:
@@ -25,18 +25,16 @@ notes:
   - OCI does not support updating an alarm suppression. When an existing
     suppression differs from any supplied option, including tags, the task
     fails. Delete the suppression and create it again to change it.
-  - The OCI list API requires an alarm, so compartment-targeted
-    suppressions cannot be found by name. Creating one by name does not
-    detect duplicates, so every run creates a new suppression; use the
-    returned C(resource.id) as C(alarm_suppression_id) for idempotent runs.
-    Deleting a compartment-targeted suppression requires
-    C(alarm_suppression_id).
+  - Name lookups are scoped to the requested target, so a suppression that
+    targets C(alarm_id) and a compartment-wide suppression of the same name
+    never match each other. A compartment-targeted lookup searches
+    C(compartment_id) itself, not its sub-compartments.
   - Recurrence rules are compared semantically, so a rule that OCI returns
     with its parts reordered, prefixed with C(RRULE:), zero-padded
-    (C(BYHOUR=02)), or expanded with the parts that default to zero
-    (C(BYMINUTE=0), C(BYSECOND=0)) is treated as unchanged. When OCI does
-    not report suppression conditions for an existing suppression, changes
-    to them cannot be detected.
+    (C(BYHOUR=02)), or expanded with the start-time parts that default to
+    zero (C(BYHOUR=0), C(BYMINUTE=0), C(BYSECOND=0)) is treated as
+    unchanged. When OCI does not report suppression conditions for an
+    existing suppression, changes to them cannot be detected.
   - Time values accept fractional seconds of up to six digits (microseconds),
     and the C(T) and C(Z) characters must be uppercase.
 options:
@@ -78,9 +76,9 @@ options:
       - Mutually exclusive with C(alarm_id).
       - One of C(alarm_id) or C(compartment_id) is required when creating an
         alarm suppression or looking it up by C(name).
-      - Suppressions that target a compartment cannot be looked up by
-        C(name), so creating one does not detect duplicates and deleting one
-        requires C(alarm_suppression_id).
+      - A C(name) lookup scoped by C(compartment_id) only matches
+        suppressions that target the whole compartment, not suppressions
+        that target individual alarms in it.
     type: str
   compartment_id_in_subtree:
     description:
@@ -362,9 +360,10 @@ def normalize_time_parameters(module):
             module.fail_json(msg=f"Invalid {param_name}: {exc}")
 
 
-# RRULE parts that OCI documents as defaulting to zero when omitted, so the
-# service may return an abbreviated rule expanded with them.
-DEFAULT_RRULE_PARTS = {"BYMINUTE": "0", "BYSECOND": "0"}
+# RRULE parts that OCI documents as defaulting to zero when omitted, because
+# BYHOUR, BYMINUTE, and BYSECOND together default to 00:00:00 UTC. The service
+# may return an abbreviated rule expanded with them.
+DEFAULT_RRULE_PARTS = {"BYHOUR": "0", "BYMINUTE": "0", "BYSECOND": "0"}
 
 
 def normalize_recurrence_rule(value):
@@ -564,34 +563,37 @@ class OciAlarmSuppressionModule(OciResourceBase):
         """
         return ("alarm_id",) if self.target_type == "ALARM" else ("compartment_id",)
 
+    def collect_list_filters(self, *param_groups):
+        """Scope the name-lookup list call to the requested target type.
+
+        Listing by alarm_id or by compartment_id alone also returns
+        suppressions with the other target type, so target_type is sent as a
+        list filter: C(ALARM) lists the suppressions of a single alarm, and
+        C(COMPARTMENT) lists the suppressions that target the compartment
+        itself.
+
+        Args:
+            *param_groups: The parameter-name groups to collect.
+
+        Returns:
+            The collected list filters, including target_type.
+        """
+        list_filters = super().collect_list_filters(*param_groups)
+        list_filters["target_type"] = self.target_type
+        return list_filters
+
     def find_resources_by_name(self):
         """List name matches restricted to the requested suppression target.
 
-        Overridden because the OCI list API requires an alarm, so a
-        compartment-targeted suppression cannot be found by name. For
-        state=present the lookup is skipped and the suppression is created
-        without duplicate detection; state=absent fails because the
-        suppression cannot be located. Alarm-targeted lookups list by
-        alarm_id and the matches are restricted locally to the requested
-        target type so a compartment-wide suppression of the same name can
-        never match.
+        Overridden to drop any match whose target type differs from the
+        requested one, so a compartment-wide suppression and an
+        alarm-targeted suppression that share a name never match each other
+        even if the service ignores the target_type list filter.
 
         Returns:
-            The live name matches that target the requested alarm, or an
-            empty list for compartment-targeted suppressions.
+            The live name matches that target the requested alarm or
+            compartment.
         """
-        self.validate_name_lookup_scope()
-        if self.target_type == "COMPARTMENT":
-            if self.module.params.get("state", "present") == "absent":
-                self.module.fail_json(
-                    msg=(
-                        "Deleting a compartment-targeted alarm suppression by "
-                        "name is not supported because OCI requires an alarm "
-                        "to list alarm suppressions. Provide "
-                        "alarm_suppression_id to delete it."
-                    )
-                )
-            return []
         return [
             resource
             for resource in super().find_resources_by_name()
