@@ -154,3 +154,5 @@ action_groups:
         - oci_dns_domain_records_info
         - oci_dns_record_set
         - oci_dns_record_set_info
+        - oci_notification_subscription
+        - oci_notification_subscription_info
