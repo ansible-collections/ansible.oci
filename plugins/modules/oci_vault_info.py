@@ -13,7 +13,7 @@ description:
   - Get a vault by OCID or list the vaults in a compartment.
   - Listing returns vault summaries, which contain a subset of the fields returned when a vault is fetched with C(vault_id).
   - This is a read-only module and does not modify resources.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:

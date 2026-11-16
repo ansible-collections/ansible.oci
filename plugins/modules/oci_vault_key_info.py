@@ -14,7 +14,7 @@ description:
   - Keys are served from the management endpoint of their vault, so either C(vault_id) or C(management_endpoint) is always required.
   - Listing returns key summaries, which contain a subset of the fields returned when a key is fetched with C(key_id).
   - This is a read-only module and does not modify resources.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:

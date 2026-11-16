@@ -11,7 +11,7 @@ module: oci_vault
 short_description: Manage an Oracle Cloud Infrastructure Vault
 description:
   - Create, update, schedule for deletion, and restore OCI Vaults.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:

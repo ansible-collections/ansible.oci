@@ -13,7 +13,7 @@ description:
   - Create, update, rotate, schedule for deletion, and restore OCI Vault master encryption keys.
   - Uses the shared OCI helper layer for authentication, waiting, retry
     behavior, and result shaping.
-version_added: "1.2.0"
+version_added: "1.3.0"
 author:
   - Mike Morency (@mikemorency)
 extends_documentation_fragment:
