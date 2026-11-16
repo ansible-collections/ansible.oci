@@ -1,0 +1,24 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: >-
+      OCI health check integration tests require oci_integration_compartment_id to be defined in
+      tests/integration/integration_config.yml.
+
+- name: Test health check resource lifecycles
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Test each monitor type and protocol
+      ansible.builtin.include_tasks: protocol_matrix.yml
+      loop:
+        - { monitor_type: http, protocol: http }
+        - { monitor_type: http, protocol: https }
+        - { monitor_type: ping, protocol: icmp }
+        - { monitor_type: ping, protocol: tcp }
+      loop_control:
+        loop_var: oci_health_check_case
