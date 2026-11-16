@@ -26,8 +26,10 @@ OCI_VAULT_ENDPOINT_MUTUALLY_EXCLUSIVE = [["vault_id", "management_endpoint"]]
 
 STATE_PENDING_DELETION = "PENDING_DELETION"
 STATE_SCHEDULING_DELETION = "SCHEDULING_DELETION"
+STATE_CANCELLING_DELETION = "CANCELLING_DELETION"
 STATE_DELETING = "DELETING"
 STATE_DELETED = "DELETED"
+RESTORED_STATES = ("ACTIVE", "ENABLED", "DISABLED")
 MIN_DELETION_DAYS = 7
 MAX_DELETION_DAYS = 30
 
@@ -152,6 +154,48 @@ class OciScheduledDeletionMixin:
             tuple(self.dead_states - {STATE_SCHEDULING_DELETION}),
         )
 
+    def resolve_target_resource(self):
+        """Return the target resource, waiting out a deletion transition.
+
+        A ``state=present`` task can find a resource that is still in the
+        transient ``SCHEDULING_DELETION`` state, for example after a
+        ``state=absent`` task with ``wait: false``. The restoration checks
+        only recognize ``PENDING_DELETION``, so the transition is waited out
+        here before the base flow evaluates restoration, honoring the task's
+        ``wait`` settings.
+
+        Returns:
+            The current resource, refreshed when it was scheduling deletion.
+        """
+        resource = super(OciScheduledDeletionMixin, self).resolve_target_resource()
+        if (
+            self.module.params.get("state", "present") == "present"
+            and getattr(resource, "lifecycle_state", None)
+            == STATE_SCHEDULING_DELETION
+        ):
+            resource = self.wait_for_deletion_transition(resource)
+        return resource
+
+    def wait_for_deletion_transition(self, resource):
+        """Wait for a scheduling resource to settle into a stable state.
+
+        ``SCHEDULING_DELETION`` only lasts until OCI accepts the schedule, so
+        the wait ends at ``PENDING_DELETION`` or at a state another actor
+        restored the resource to. ``DELETING`` and ``DELETED`` fail the wait
+        rather than letting the task silently report no change.
+
+        Args:
+            resource: The resource that is scheduling deletion.
+
+        Returns:
+            The refreshed resource.
+        """
+        return self.wait_for_resource_id(
+            self.get_resource_ocid(resource),
+            (STATE_PENDING_DELETION, "ACTIVE", "ENABLED", "DISABLED"),
+            failure_states=(STATE_DELETING, STATE_DELETED),
+        )
+
     @staticmethod
     def is_pending_deletion(resource):
         """Return ``True`` when ``resource`` is scheduled for deletion.
@@ -180,6 +224,75 @@ class OciScheduledDeletionMixin:
             f"{type(self).__name__} must define cancel_deletion()"
         )
 
+    def restore_resource(self, resource):
+        """Cancel a pending deletion and wait for the restoration to finish.
+
+        ``cancel_deletion`` honors the task's ``wait`` setting, so with
+        ``wait: false`` it returns while the resource is still in the
+        transient ``CANCELLING_DELETION`` state. OCI rejects updates and key
+        rotation in that state, and the update or rotation this task was
+        asked to perform follows immediately, so the transition is waited
+        out here regardless of ``wait``.
+
+        Args:
+            resource: The resource that is pending deletion.
+
+        Returns:
+            The restored resource.
+        """
+        resource = self.cancel_deletion(resource)
+        if getattr(resource, "lifecycle_state", None) == STATE_CANCELLING_DELETION:
+            resource = self.wait_for_restoration(resource)
+        return resource
+
+    def wait_for_restoration(self, resource):
+        """Wait for a resource that is cancelling deletion to become usable.
+
+        Unlike the shared wait helpers this wait ignores ``wait: false``,
+        because the operations that follow a restoration cannot succeed
+        while the resource is still in ``CANCELLING_DELETION``. The
+        ``wait_timeout`` and ``wait_interval`` settings still bound it.
+
+        Args:
+            resource: The resource in ``CANCELLING_DELETION``.
+
+        Returns:
+            The refreshed resource in a stable state.
+        """
+        resource_id = self.get_resource_ocid(resource)
+
+        def fetch(response=None):
+            return self.call_with_retry(self.get_resource_response, resource_id)
+
+        waiter_result = oci.wait_until(
+            self.client,
+            fetch(),
+            max_wait_seconds=self.module.params.get("wait_timeout", 1200),
+            max_interval_seconds=self.module.params.get("wait_interval", 30),
+            evaluate_response=partial(
+                self._restoration_wait_complete, resource_id
+            ),
+            fetch_func=fetch,
+        )
+        return getattr(waiter_result, "data", None)
+
+    def _restoration_wait_complete(self, resource_id, response):
+        """Evaluate one restoration poll, failing on a lost resource.
+
+        Args:
+            resource_id: The OCID of the resource being restored.
+            response: The current ``get`` response.
+
+        Returns:
+            Whether the resource reached a stable restored state.
+        """
+        state = getattr(response.data, "lifecycle_state", None)
+        if state in (STATE_DELETING, STATE_DELETED):
+            self.module.fail_json(
+                msg=f"Resource {resource_id} entered failure state: {state}"
+            )
+        return state in RESTORED_STATES
+
     def update_resource(self, resource):
         """Restore a resource pending deletion, then apply the shared update plan.
 
@@ -194,7 +307,7 @@ class OciScheduledDeletionMixin:
             The updated resource.
         """
         if self.is_pending_deletion(resource):
-            resource = self.cancel_deletion(resource)
+            resource = self.restore_resource(resource)
         return super(OciScheduledDeletionMixin, self).update_resource(resource)
 
     def extra_change_needed(self, resource):
@@ -225,7 +338,7 @@ class OciScheduledDeletionMixin:
             The resource, restored when it was pending deletion.
         """
         if self.is_pending_deletion(resource):
-            resource = self.cancel_deletion(resource)
+            resource = self.restore_resource(resource)
         return resource
 
     def validate_delete_request(self):

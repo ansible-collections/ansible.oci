@@ -43,6 +43,19 @@ def install_fake_oci(monkeypatch):
     oci_module.retry.RetryStrategyBuilder = lambda **kwargs: types.SimpleNamespace(
         get_retry_strategy=lambda: oci_module.retry.DEFAULT_RETRY_STRATEGY
     )
+
+    def fake_wait_until(wait_client, response, *args, **kwargs):
+        evaluate_response = kwargs.get("evaluate_response")
+        if evaluate_response is None:
+            return response
+        fetch_func = kwargs.get("fetch_func")
+        while not evaluate_response(response):
+            if fetch_func is None:
+                raise AssertionError("fake wait_until: condition never met")
+            response = fetch_func(response=response)
+        return response
+
+    oci_module.wait_until = fake_wait_until
     return oci_module, service_error
 
 
@@ -73,6 +86,8 @@ class FakeKmsClient:
 
     def get_key(self, key_id):
         self.calls.append(("get_key", key_id))
+        if self.key.lifecycle_state == "CANCELLING_DELETION":
+            self.key.lifecycle_state = self.restored_state
         return FakeResponse(self.key)
 
     def create_key(self, create_key_details):
@@ -82,16 +97,25 @@ class FakeKmsClient:
 
     def update_key(self, key_id, update_key_details):
         self.calls.append(("update_key", key_id, update_key_details))
-        assert self.key.lifecycle_state != "PENDING_DELETION"
+        assert self.key.lifecycle_state not in (
+            "PENDING_DELETION",
+            "CANCELLING_DELETION",
+            "SCHEDULING_DELETION",
+        )
         return FakeResponse(self.key)
 
     def cancel_key_deletion(self, key_id):
         self.calls.append(("cancel_key_deletion", key_id))
-        self.key.lifecycle_state = self.restored_state
+        self.key.lifecycle_state = "CANCELLING_DELETION"
         return FakeResponse(self.key)
 
     def create_key_version(self, key_id):
         self.calls.append(("create_key_version", key_id))
+        assert self.key.lifecycle_state not in (
+            "PENDING_DELETION",
+            "CANCELLING_DELETION",
+            "SCHEDULING_DELETION",
+        )
         return FakeResponse(FakeModel(id="ocid1.keyversion.oc1..example"))
 
     def get_key_version(self, key_id, key_version_id):
@@ -609,6 +633,18 @@ def test_present_on_pending_key_cancels_deletion(monkeypatch, restored_state):
     assert client.call_names() == ["cancel_key_deletion"]
 
 
+def test_pending_key_restoration_fails_when_key_is_deleted(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsClient(make_key("PENDING_DELETION"))
+    client.restored_state = "DELETED"
+
+    with pytest.raises(FailJsonCalled) as excinfo:
+        run_module(module_obj, {}, client)
+
+    assert "failure state" in excinfo.value.payload["msg"]
+
+
 def test_present_on_pending_key_check_mode_does_not_call_oci(monkeypatch):
     install_fake_oci(monkeypatch)
     module_obj = load_module()
@@ -639,3 +675,69 @@ def test_present_on_pending_key_with_rotate_cancels_then_rotates_once(monkeypatc
     run_module(module_obj, {"rotate": True}, client)
 
     assert client.call_names() == ["cancel_key_deletion", "create_key_version"]
+
+
+def test_pending_key_without_wait_updates_after_cancellation_completes(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsClient(make_key("PENDING_DELETION"))
+
+    payload = run_module(module_obj, {"name": "renamed-key"}, client)
+
+    assert payload["changed"] is True
+    names = [call[0] for call in client.calls]
+    cancel_at = names.index("cancel_key_deletion")
+    update_at = names.index("update_key")
+    assert "get_key" in names[cancel_at + 1 : update_at]
+
+
+def test_pending_key_without_wait_rotates_after_cancellation_completes(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsClient(make_key("PENDING_DELETION"))
+
+    run_module(module_obj, {"rotate": True}, client)
+
+    names = [call[0] for call in client.calls]
+    cancel_at = names.index("cancel_key_deletion")
+    rotate_at = names.index("create_key_version")
+    assert "get_key" in names[cancel_at + 1 : rotate_at]
+
+
+def test_present_on_scheduling_key_waits_for_transition_then_cancels(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsClient(make_key("SCHEDULING_DELETION"))
+    waited = {}
+    instance = make_module_instance(
+        module_obj,
+        "OciVaultKeyModule",
+        {"state": "present", "key_id": KEY_ID, "wait": True, "rotate": False},
+        client=client,
+    )
+    instance._update_plan_cache = None
+    instance.call_with_retry = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+
+    def fake_wait(resource_id, target_states, failure_states=None):
+        if not waited:
+            waited.update(
+                resource_id=resource_id,
+                target_states=set(target_states),
+                failure_states=set(failure_states or ()),
+            )
+        if client.key.lifecycle_state == "SCHEDULING_DELETION":
+            client.key.lifecycle_state = "PENDING_DELETION"
+        return client.key
+
+    instance.wait_for_resource_id = fake_wait
+
+    with pytest.raises(ExitJsonCalled) as excinfo:
+        instance.execute_resource_module()
+
+    payload = excinfo.value.payload
+    assert payload["changed"] is True
+    assert payload["resource"]["lifecycle_state"] == "ENABLED"
+    assert waited["resource_id"] == KEY_ID
+    assert "PENDING_DELETION" in waited["target_states"]
+    assert "DELETING" in waited["failure_states"]
+    assert client.call_names() == ["cancel_key_deletion"]

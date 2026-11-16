@@ -39,6 +39,19 @@ def install_fake_oci(monkeypatch):
             **{model_name: FakeModel for model_name in VAULT_MODEL_NAMES}
         ),
     )
+
+    def fake_wait_until(wait_client, response, *args, **kwargs):
+        evaluate_response = kwargs.get("evaluate_response")
+        if evaluate_response is None:
+            return response
+        fetch_func = kwargs.get("fetch_func")
+        while not evaluate_response(response):
+            if fetch_func is None:
+                raise AssertionError("fake wait_until: condition never met")
+            response = fetch_func(response=response)
+        return response
+
+    oci_module.wait_until = fake_wait_until
     return oci_module, service_error
 
 
@@ -65,6 +78,8 @@ class FakeKmsVaultClient:
 
     def get_vault(self, vault_id):
         self.calls.append(("get_vault", vault_id))
+        if self.vault.lifecycle_state == "CANCELLING_DELETION":
+            self.vault.lifecycle_state = "ACTIVE"
         return FakeResponse(self.vault)
 
     def create_vault(self, create_vault_details):
@@ -74,12 +89,16 @@ class FakeKmsVaultClient:
 
     def update_vault(self, vault_id, update_vault_details):
         self.calls.append(("update_vault", vault_id, update_vault_details))
-        assert self.vault.lifecycle_state != "PENDING_DELETION"
+        assert self.vault.lifecycle_state not in (
+            "PENDING_DELETION",
+            "CANCELLING_DELETION",
+            "SCHEDULING_DELETION",
+        )
         return FakeResponse(self.vault)
 
     def cancel_vault_deletion(self, vault_id):
         self.calls.append(("cancel_vault_deletion", vault_id))
-        self.vault.lifecycle_state = "ACTIVE"
+        self.vault.lifecycle_state = "CANCELLING_DELETION"
         return FakeResponse(self.vault)
 
     def schedule_vault_deletion(self, vault_id, schedule_vault_deletion_details):
@@ -516,3 +535,72 @@ def test_present_on_pending_vault_with_update_cancels_once_before_update(monkeyp
 
     assert payload["changed"] is True
     assert client.call_names() == ["cancel_vault_deletion", "update_vault"]
+
+
+def test_present_on_scheduling_vault_waits_for_transition_then_cancels(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsVaultClient(make_vault("SCHEDULING_DELETION"))
+    waited = {}
+    instance = make_instance(
+        module_obj, {"vault_id": VAULT_ID, "wait": True}, client
+    )
+
+    def fake_wait(resource_id, target_states, failure_states=None):
+        if not waited:
+            waited.update(
+                resource_id=resource_id,
+                target_states=set(target_states),
+                failure_states=set(failure_states or ()),
+            )
+        if client.vault.lifecycle_state == "SCHEDULING_DELETION":
+            client.vault.lifecycle_state = "PENDING_DELETION"
+        return client.vault
+
+    instance.wait_for_resource_id = fake_wait
+
+    with pytest.raises(ExitJsonCalled) as excinfo:
+        instance.execute_resource_module()
+
+    payload = excinfo.value.payload
+    assert payload["changed"] is True
+    assert payload["resource"]["lifecycle_state"] == "ACTIVE"
+    assert waited["resource_id"] == VAULT_ID
+    assert "PENDING_DELETION" in waited["target_states"]
+    assert "DELETING" in waited["failure_states"]
+    assert client.call_names() == ["cancel_vault_deletion"]
+
+
+def test_present_on_scheduling_vault_without_wait_cancels_after_refetch(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsVaultClient(make_vault("SCHEDULING_DELETION"))
+
+    def get_vault(vault_id):
+        client.calls.append(("get_vault", vault_id))
+        if client.vault.lifecycle_state == "SCHEDULING_DELETION":
+            client.vault.lifecycle_state = "PENDING_DELETION"
+        elif client.vault.lifecycle_state == "CANCELLING_DELETION":
+            client.vault.lifecycle_state = "ACTIVE"
+        return FakeResponse(client.vault)
+
+    client.get_vault = get_vault
+
+    payload = run_module(module_obj, {}, client)
+
+    assert payload["changed"] is True
+    assert client.call_names() == ["cancel_vault_deletion"]
+
+
+def test_pending_vault_without_wait_updates_after_cancellation_completes(monkeypatch):
+    install_fake_oci(monkeypatch)
+    module_obj = load_module()
+    client = FakeKmsVaultClient(make_vault("PENDING_DELETION"))
+
+    payload = run_module(module_obj, {"name": "renamed-vault"}, client)
+
+    assert payload["changed"] is True
+    names = [call[0] for call in client.calls]
+    cancel_at = names.index("cancel_vault_deletion")
+    update_at = names.index("update_vault")
+    assert "get_vault" in names[cancel_at + 1 : update_at]
