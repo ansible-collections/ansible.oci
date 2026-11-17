@@ -1,0 +1,190 @@
+---
+# The controller applies this jq query to each module result.
+# Only the complete OCID determines identity. Display names can change.
+# The record name uses the OCID because names must be unique within a job.
+# Each candidate field identifies the returned resource, not its parent.
+# Identity Domains results require ocid; their id is a separate identifier.
+# Membership results require membership_ocid. Topic results require topic_id.
+# Missing OCIDs produce no records. Bucket list summaries have no OCID.
+# Delete results and some check mode results contain no resource.
+# Nested resource references do not produce records.
+#
+# The following 32 modules have no usable OCID in their current results.
+# DNS record results omit the complete zone identity:
+#   oci_dns_domain_records, oci_dns_domain_records_info,
+#   oci_dns_record_set, oci_dns_record_set_info,
+#   oci_dns_zone_records, oci_dns_zone_records_info.
+# Load balancer child results omit complete parent identities:
+#   oci_loadbalancer_backend, oci_loadbalancer_backend_info,
+#   oci_loadbalancer_backend_set, oci_loadbalancer_backend_set_info,
+#   oci_loadbalancer_health_checker, oci_loadbalancer_health_checker_info,
+#   oci_loadbalancer_listener, oci_loadbalancer_listener_info,
+#   oci_loadbalancer_routing_policy, oci_loadbalancer_routing_policy_info,
+#   oci_network_loadbalancer_backend, oci_network_loadbalancer_backend_info,
+#   oci_network_loadbalancer_backend_set, oci_network_loadbalancer_backend_set_info,
+#   oci_network_loadbalancer_health_checker, oci_network_loadbalancer_health_checker_info,
+#   oci_network_loadbalancer_listener, oci_network_loadbalancer_listener_info.
+# The rule ID requires a parent security group ID that the result omits:
+#   oci_network_security_group_rule.
+# Lifecycle policy results omit the complete bucket identity:
+#   oci_object_lifecycle_policy, oci_object_lifecycle_policy_info.
+# Object results contain headers or summaries without complete storage identities:
+#   oci_object_storage_object, oci_object_storage_object_info.
+# The wallet result contains a local path:
+#   oci_autonomous_database_wallet.
+# Available configuration results do not identify managed resources:
+#   oci_shape_info, oci_oke_node_pool_options_info.
+ansible.oci.*:
+  query: |-
+    def valid_ocid:
+      if type == "string" then
+        test("^ocid1\\.[a-z0-9_-]+\\.[a-z0-9_-]+\\.[a-z0-9_-]*\\.[A-Za-z0-9_.-]+\\z")
+      else false end;
+    def objects:
+      if type == "array" then .[] | select(type == "object")
+      else empty end;
+    . as $result
+    | {
+      "instance": "compute",
+      "image": "compute",
+      "computecapacityreservation": "compute",
+      "instanceconfiguration": "compute",
+      "instanceconsoleconnection": "compute",
+      "cluster": "compute",
+      "nodepool": "compute",
+      "volume": "storage",
+      "bootvolume": "storage",
+      "volumebackup": "storage",
+      "bootvolumebackup": "storage",
+      "volumegroup": "storage",
+      "volumegroupbackup": "storage",
+      "volumebackuppolicy": "storage",
+      "volumebackuppolicyassignment": "storage",
+      "volumeattachment": "storage",
+      "bucket": "storage",
+      "vcn": "networking",
+      "subnet": "networking",
+      "vnic": "networking",
+      "vnicattachment": "networking",
+      "privateip": "networking",
+      "publicip": "networking",
+      "dhcpoptions": "networking",
+      "drg": "networking",
+      "drgattachment": "networking",
+      "internetgateway": "networking",
+      "natgateway": "networking",
+      "servicegateway": "networking",
+      "localpeeringgateway": "networking",
+      "remotepeeringconnection": "networking",
+      "routetable": "networking",
+      "cpe": "networking",
+      "ipsecconnection": "networking",
+      "loadbalancer": "networking",
+      "networkloadbalancer": "networking",
+      "dnsresolver": "networking",
+      "dnsresolverendpoint": "networking",
+      "dnsresolvervnicendpoint": "networking",
+      "networksecuritygroup": "security_identity",
+      "securitylist": "security_identity",
+      "networkfirewall": "security_identity",
+      "networkfirewallpolicy": "security_identity",
+      "webappfirewall": "security_identity",
+      "webappfirewallpolicy": "security_identity",
+      "bastion": "security_identity",
+      "user": "security_identity",
+      "group": "security_identity",
+      "dynamicgroup": "security_identity",
+      "domain": "security_identity",
+      "policy": "security_identity",
+      "apikey": "security_identity",
+      "key": "security_identity",
+      "usergroupmembership": "security_identity",
+      "compartment": "governance_ops",
+      "tag": "governance_ops",
+      "tagdefinition": "governance_ops",
+      "tagnamespace": "governance_ops",
+      "availabilitydomain": "governance_ops",
+      "autonomousdatabase": "database",
+      "alarm": "monitoring",
+      "httpmonitor": "monitoring",
+      "pingmonitor": "monitoring",
+      "onstopic": "app_integration_messaging"
+    } as $buckets
+    | $result
+    | select(type == "object")
+    | (
+        (.resource | select(type == "object")),
+        (.alarms | objects),
+        (.api_keys | objects),
+        (.autonomous_databases | objects),
+        (.availability_domains | objects),
+        (.bastions | objects),
+        (.boot_volume_backups | objects),
+        (.boot_volumes | objects),
+        (.buckets | objects),
+        (.capacity_reservations | objects),
+        (.clusters | objects),
+        (.compartments | objects),
+        (.cpes | objects),
+        (.dhcp_options | objects),
+        (.domains | objects),
+        (.drg_attachments | objects),
+        (.drgs | objects),
+        (.dynamic_groups | objects),
+        (.endpoints | objects),
+        (.groups | objects),
+        (.health_checks | objects),
+        (.images | objects),
+        (.instance_configurations | objects),
+        (.instance_console_connections | objects),
+        (.instances | objects),
+        (.internet_gateways | objects),
+        (.ipsec_connections | objects),
+        (.load_balancers | objects),
+        (.local_peering_gateways | objects),
+        (.nat_gateways | objects),
+        (.network_firewall_policies | objects),
+        (.network_firewalls | objects),
+        (.network_load_balancers | objects),
+        (.network_security_groups | objects),
+        (.node_pools | objects),
+        (.policies | objects),
+        (.remote_peering_connections | objects),
+        (.resolvers | objects),
+        (.route_tables | objects),
+        (.security_lists | objects),
+        (.service_gateways | objects),
+        (.subnets | objects),
+        (.tag_namespaces | objects),
+        (.tags | objects),
+        (.topics | objects),
+        (.user_group_memberships | objects),
+        (.users | objects),
+        (.vcns | objects),
+        (.vnic_attachments | objects),
+        (.vnics | objects),
+        (.volume_attachments | objects),
+        (.volume_backup_policies | objects),
+        (.volume_backup_policy_assignments | objects),
+        (.volume_backups | objects),
+        (.volume_group_backups | objects),
+        (.volume_groups | objects),
+        (.volumes | objects),
+        (.web_app_firewall_policies | objects),
+        (.web_app_firewalls | objects)
+      ) as $data
+    | ([ $data.id, $data.ocid, $data.membership_ocid, $data.topic_id ]
+       | map(select(valid_ocid)) | .[0] // empty) as $id
+    | ($id | split(".")[1]) as $node_type
+    | {
+        name: $id,
+        canonical_facts: {id: $id},
+        facts: {
+          name: ([$data.name, $data.display_name]
+                 | map(select(type == "string" and length > 0)) | .[0] // $id),
+          infra_type: "public_cloud",
+          infra_bucket: ($buckets[$node_type] // "unknown"),
+          device_type: $node_type,
+          node_type: $node_type
+        }
+      }
