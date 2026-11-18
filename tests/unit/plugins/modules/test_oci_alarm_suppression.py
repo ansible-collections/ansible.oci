@@ -227,7 +227,11 @@ def test_build_create_details_for_compartment_target(monkeypatch):
         (
             {"compartment_id": COMPARTMENT_ID, "name": "n"},
             "COMPARTMENT",
-            {"compartment_id": COMPARTMENT_ID, "target_type": "COMPARTMENT"},
+            {
+                "compartment_id": COMPARTMENT_ID,
+                "target_type": "COMPARTMENT",
+                "compartment_id_in_subtree": False,
+            },
         ),
         (
             {
@@ -236,7 +240,11 @@ def test_build_create_details_for_compartment_target(monkeypatch):
                 "name": "n",
             },
             "COMPARTMENT",
-            {"compartment_id": COMPARTMENT_ID, "target_type": "COMPARTMENT"},
+            {
+                "compartment_id": COMPARTMENT_ID,
+                "target_type": "COMPARTMENT",
+                "compartment_id_in_subtree": True,
+            },
         ),
     ],
 )

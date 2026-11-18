@@ -220,6 +220,28 @@ class OciAlarmSuppressionInfoModule(OciInfoBase):
         "lifecycle_state",
     )
 
+    def collect_list_filters(self, *param_groups):
+        """Collect list filters, defaulting compartment_id_in_subtree.
+
+        A C(COMPARTMENT) list is rejected with C(MissingParameter) unless
+        C(compartment_id_in_subtree) is sent, so it is defaulted to C(False)
+        here when the caller scopes the query to a compartment but leaves it
+        unset, instead of being dropped as an unset filter.
+
+        Args:
+            *param_groups: The parameter-name groups to collect.
+
+        Returns:
+            The collected list filters.
+        """
+        list_filters = super().collect_list_filters(*param_groups)
+        if (
+            list_filters.get("target_type") == "COMPARTMENT"
+            and "compartment_id_in_subtree" not in list_filters
+        ):
+            list_filters["compartment_id_in_subtree"] = False
+        return list_filters
+
 
 def main():
     """Build the argument spec and run the info module."""

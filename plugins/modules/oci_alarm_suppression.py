@@ -572,6 +572,11 @@ class OciAlarmSuppressionModule(OciResourceBase):
         C(COMPARTMENT) lists the suppressions that target the compartment
         itself.
 
+        For a C(COMPARTMENT) lookup the service rejects the list call with
+        C(MissingParameter) unless C(compartment_id_in_subtree) is also sent,
+        so it is always included (defaulting to C(False)) rather than dropped
+        as an unset filter.
+
         Args:
             *param_groups: The parameter-name groups to collect.
 
@@ -580,6 +585,10 @@ class OciAlarmSuppressionModule(OciResourceBase):
         """
         list_filters = super().collect_list_filters(*param_groups)
         list_filters["target_type"] = self.target_type
+        if self.target_type == "COMPARTMENT":
+            list_filters["compartment_id_in_subtree"] = bool(
+                self.module.params.get("compartment_id_in_subtree")
+            )
         return list_filters
 
     def find_resources_by_name(self):

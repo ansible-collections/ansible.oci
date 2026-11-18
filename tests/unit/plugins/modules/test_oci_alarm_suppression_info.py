@@ -167,6 +167,77 @@ def test_fetch_resources_passes_filters_and_filters_by_name(monkeypatch):
     ]
 
 
+def test_compartment_list_defaults_subtree_filter(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_alarm_suppression_info")
+    list_calls = []
+
+    instance = make_module_instance(
+        info_module,
+        "OciAlarmSuppressionInfoModule",
+        {
+            "alarm_suppression_id": None,
+            "alarm_id": None,
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "target_type": "COMPARTMENT",
+            "name": None,
+        },
+        client=types.SimpleNamespace(list_alarm_suppressions=object()),
+    )
+
+    def fake_list_all(fn, **kwargs):
+        list_calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
+
+    instance.fetch_resources()
+    assert list_calls == [
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "target_type": "COMPARTMENT",
+            "compartment_id_in_subtree": False,
+        }
+    ]
+
+
+def test_compartment_list_keeps_explicit_subtree_filter(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    info_module = load_collection_module("oci_alarm_suppression_info")
+    list_calls = []
+
+    instance = make_module_instance(
+        info_module,
+        "OciAlarmSuppressionInfoModule",
+        {
+            "alarm_suppression_id": None,
+            "alarm_id": None,
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "compartment_id_in_subtree": True,
+            "target_type": "COMPARTMENT",
+            "name": None,
+        },
+        client=types.SimpleNamespace(list_alarm_suppressions=object()),
+    )
+
+    def fake_list_all(fn, **kwargs):
+        list_calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
+
+    instance.fetch_resources()
+    assert list_calls == [
+        {
+            "compartment_id": "ocid1.compartment.oc1..example",
+            "target_type": "COMPARTMENT",
+            "compartment_id_in_subtree": True,
+        }
+    ]
+
+
 def test_execute_info_module_exits_with_serialized_suppressions(monkeypatch):
     install_fake_oci(monkeypatch)
 
