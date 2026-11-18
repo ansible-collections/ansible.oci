@@ -191,8 +191,9 @@
     oci_alarm_suppression_dimension_suppression_id: ""
 
 # ---------------------------------------------------------------- compartment target
-# Name lookups are scoped by target type, so a compartment-wide suppression is
-# found by compartment_id and name alone.
+# OCI's list API requires an alarm, so a compartment-targeted suppression
+# cannot be found by name: state=present always creates, and idempotency and
+# deletion are keyed on alarm_suppression_id.
 - name: Create compartment suppression in check mode
   ansible.oci.oci_alarm_suppression: &oci_alarm_suppression_compartment
     compartment_id: "{{ oci_integration_compartment_id }}"
@@ -221,21 +222,6 @@
       - oci_alarm_suppression_compartment.resource.alarm_suppression_target.compartment_id ==
           oci_integration_compartment_id
 
-- name: Verify compartment suppression is idempotent by name lookup
-  ansible.oci.oci_alarm_suppression:
-    <<: *oci_alarm_suppression_compartment
-  register: oci_alarm_suppression_compartment_rerun
-  failed_when: >-
-    oci_alarm_suppression_compartment_rerun.changed or
-    oci_alarm_suppression_compartment_rerun.resource.id != oci_alarm_suppression_compartment_suppression_id
-
-- name: Verify compartment suppression is idempotent by name lookup in check mode
-  ansible.oci.oci_alarm_suppression:
-    <<: *oci_alarm_suppression_compartment
-  check_mode: true
-  register: oci_alarm_suppression_compartment_check_rerun
-  failed_when: oci_alarm_suppression_compartment_check_rerun.changed
-
 - name: Verify compartment suppression is idempotent by id
   ansible.oci.oci_alarm_suppression:
     <<: *oci_alarm_suppression_compartment
@@ -245,27 +231,47 @@
     oci_alarm_suppression_compartment_rerun_by_id.changed or
     oci_alarm_suppression_compartment_rerun_by_id.resource.id != oci_alarm_suppression_compartment_suppression_id
 
-# A compartment-targeted name lookup must not match the alarm-targeted
-# suppression that lives in the same compartment.
-- name: Read compartment-targeted suppressions by name
+- name: Verify compartment suppression is idempotent by id in check mode
+  ansible.oci.oci_alarm_suppression:
+    <<: *oci_alarm_suppression_compartment
+    alarm_suppression_id: "{{ oci_alarm_suppression_compartment_suppression_id }}"
+  check_mode: true
+  register: oci_alarm_suppression_compartment_check_rerun
+  failed_when: oci_alarm_suppression_compartment_check_rerun.changed
+
+# Compartment-targeted suppressions are discoverable only through an alarm they
+# affect, using is_all_suppressions with target_type=compartment.
+- name: List compartment-targeted suppressions affecting the alarm
   ansible.oci.oci_alarm_suppression_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
+    alarm_id: "{{ oci_alarm_suppression_alarm_id }}"
+    is_all_suppressions: true
     target_type: compartment
-    name: "{{ oci_alarm_suppression_integration_name }}-compartment"
   register: oci_alarm_suppression_compartment_info
 
-- name: Assert only the compartment-targeted suppression matched
+- name: Assert the compartment-targeted suppression is listed for the alarm
   ansible.builtin.assert:
     that:
-      - oci_alarm_suppression_compartment_info.alarm_suppressions | length == 1
-      - oci_alarm_suppression_compartment_info.alarm_suppressions[0].id ==
-          oci_alarm_suppression_compartment_suppression_id
+      - oci_alarm_suppression_compartment_suppression_id in
+          (oci_alarm_suppression_compartment_info.alarm_suppressions | map(attribute='id') | list)
 
-- name: Delete compartment suppression by name
+- name: Attempt to delete compartment suppression by name
   ansible.oci.oci_alarm_suppression:
     state: absent
     compartment_id: "{{ oci_integration_compartment_id }}"
     name: "{{ oci_alarm_suppression_integration_name }}-compartment"
+  register: oci_alarm_suppression_compartment_delete_by_name
+  ignore_errors: true
+
+- name: Assert delete by name is rejected and requires the id
+  ansible.builtin.assert:
+    that:
+      - oci_alarm_suppression_compartment_delete_by_name.failed
+      - "'alarm_suppression_id' in oci_alarm_suppression_compartment_delete_by_name.msg"
+
+- name: Delete compartment suppression by id
+  ansible.oci.oci_alarm_suppression:
+    state: absent
+    alarm_suppression_id: "{{ oci_alarm_suppression_compartment_suppression_id }}"
   register: oci_alarm_suppression_compartment_delete
   failed_when: not oci_alarm_suppression_compartment_delete.changed
 

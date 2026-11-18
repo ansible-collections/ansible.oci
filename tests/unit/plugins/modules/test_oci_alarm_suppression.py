@@ -216,49 +216,15 @@ def test_build_create_details_for_compartment_target(monkeypatch):
     assert not hasattr(details, "suppression_conditions")
 
 
-@pytest.mark.parametrize(
-    "params, target_type, expected_filters",
-    [
-        (
-            {"alarm_id": ALARM_ID, "name": "n"},
-            "ALARM",
-            {"alarm_id": ALARM_ID, "target_type": "ALARM"},
-        ),
-        (
-            {"compartment_id": COMPARTMENT_ID, "name": "n"},
-            "COMPARTMENT",
-            {
-                "compartment_id": COMPARTMENT_ID,
-                "target_type": "COMPARTMENT",
-                "compartment_id_in_subtree": False,
-            },
-        ),
-        (
-            {
-                "compartment_id": COMPARTMENT_ID,
-                "compartment_id_in_subtree": True,
-                "name": "n",
-            },
-            "COMPARTMENT",
-            {
-                "compartment_id": COMPARTMENT_ID,
-                "target_type": "COMPARTMENT",
-                "compartment_id_in_subtree": True,
-            },
-        ),
-    ],
-)
-def test_name_lookup_is_scoped_to_target(
-    monkeypatch, params, target_type, expected_filters
-):
+def test_alarm_name_lookup_is_scoped_to_target(monkeypatch):
     module_obj = load_suppression_module(monkeypatch)
     list_calls = []
-    instance = make_suppression_module(module_obj, params)
+    instance = make_suppression_module(module_obj, {"alarm_id": ALARM_ID, "name": "n"})
     match = FakeModel(
         id=SUPPRESSION_ID,
         display_name="n",
         lifecycle_state="ACTIVE",
-        alarm_suppression_target={"target_type": target_type},
+        alarm_suppression_target={"target_type": "ALARM"},
     )
     other = FakeModel(id="other", display_name="x", lifecycle_state="ACTIVE")
 
@@ -270,7 +236,27 @@ def test_name_lookup_is_scoped_to_target(
     monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
 
     assert instance.resolve_resource_by_name() is match
-    assert list_calls == [expected_filters]
+    assert list_calls == [{"alarm_id": ALARM_ID, "target_type": "ALARM"}]
+
+
+def test_compartment_name_lookup_does_not_list(monkeypatch):
+    # OCI's list API requires an alarm, so a compartment-targeted lookup must
+    # not call list_alarm_suppressions and resolves to no match (create).
+    module_obj = load_suppression_module(monkeypatch)
+    list_calls = []
+    instance = make_suppression_module(
+        module_obj, {"compartment_id": COMPARTMENT_ID, "name": "n"}
+    )
+
+    def fake_list_all(list_fn, **kwargs):
+        list_calls.append(kwargs)
+        return []
+
+    instance.client = types.SimpleNamespace(list_alarm_suppressions=None)
+    monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
+
+    assert instance.resolve_resource_by_name() is None
+    assert list_calls == []
 
 
 def test_alarm_name_lookup_skips_compartment_targeted_match(monkeypatch):
@@ -292,44 +278,25 @@ def test_alarm_name_lookup_skips_compartment_targeted_match(monkeypatch):
     assert instance.resolve_resource_by_name() is None
 
 
-def test_compartment_name_lookup_skips_alarm_targeted_match(monkeypatch):
+def test_present_compartment_target_creates_without_lookup(monkeypatch):
+    # OCI cannot find a compartment-targeted suppression by name, so present
+    # must create one without ever listing (no duplicate detection).
     module_obj = load_suppression_module(monkeypatch)
-    instance = make_suppression_module(
-        module_obj, {"compartment_id": COMPARTMENT_ID, "name": "n"}
-    )
-    alarm_targeted = FakeModel(
-        id="alarm-targeted",
-        display_name="n",
-        lifecycle_state="ACTIVE",
-        alarm_suppression_target={"target_type": "ALARM", "alarm_id": ALARM_ID},
-    )
+    create_calls = []
 
-    def fake_list_all(list_fn, **kwargs):
-        return [alarm_targeted]
-
-    instance.client = types.SimpleNamespace(list_alarm_suppressions=None)
-    monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
-
-    assert instance.resolve_resource_by_name() is None
-
-
-def test_present_compartment_target_is_idempotent_by_name(monkeypatch):
-    module_obj = load_suppression_module(monkeypatch)
-    existing = FakeModel(
-        id=SUPPRESSION_ID,
-        display_name="nightly",
-        compartment_id=COMPARTMENT_ID,
-        alarm_suppression_target={
-            "target_type": "COMPARTMENT",
-            "compartment_id": COMPARTMENT_ID,
-        },
-        time_suppress_from=TIME_FROM,
-        time_suppress_until=TIME_UNTIL,
-        lifecycle_state="ACTIVE",
-    )
-
-    def get_alarm_suppression(alarm_suppression_id):
-        return FakeResponse(data=existing)
+    def create_alarm_suppression(create_alarm_suppression_details):
+        create_calls.append(create_alarm_suppression_details)
+        return FakeResponse(
+            data=FakeModel(
+                id=SUPPRESSION_ID,
+                display_name="nightly",
+                alarm_suppression_target={
+                    "target_type": "COMPARTMENT",
+                    "compartment_id": COMPARTMENT_ID,
+                },
+                lifecycle_state="ACTIVE",
+            )
+        )
 
     instance = make_suppression_module(
         module_obj,
@@ -339,46 +306,113 @@ def test_present_compartment_target_is_idempotent_by_name(monkeypatch):
             "compartment_id": COMPARTMENT_ID,
             "time_suppress_from": TIME_FROM,
             "time_suppress_until": TIME_UNTIL,
+            "wait": False,
         },
         client=types.SimpleNamespace(
-            get_alarm_suppression=get_alarm_suppression,
+            create_alarm_suppression=create_alarm_suppression,
             list_alarm_suppressions=None,
-            create_alarm_suppression=lambda **kwargs: pytest.fail(
-                "an existing compartment suppression must not be created again"
-            ),
         ),
     )
     monkeypatch.setattr(
         instance,
         "list_all_resources",
-        lambda list_fn, **kwargs: [
-            FakeModel(
-                id=SUPPRESSION_ID,
-                display_name="nightly",
-                lifecycle_state="ACTIVE",
-                alarm_suppression_target={"target_type": "COMPARTMENT"},
-            )
-        ],
+        lambda *args, **kwargs: pytest.fail(
+            "a compartment-targeted lookup must not list"
+        ),
     )
 
     with pytest.raises(ExitJsonCalled) as exc_info:
         instance.execute_resource_module()
 
-    assert exc_info.value.payload["changed"] is False
+    assert exc_info.value.payload["changed"] is True
     assert exc_info.value.payload["resource"]["id"] == SUPPRESSION_ID
+    assert create_calls and create_calls[0].display_name == "nightly"
 
 
-def test_name_lookup_requires_target_scope(monkeypatch):
+def test_absent_compartment_target_requires_id(monkeypatch):
     module_obj = load_suppression_module(monkeypatch)
-    instance = make_suppression_module(module_obj, {"name": "n"})
+    instance = make_suppression_module(
+        module_obj,
+        {"state": "absent", "name": "nightly", "compartment_id": COMPARTMENT_ID},
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        lambda *args, **kwargs: pytest.fail(
+            "a compartment-targeted delete must not list"
+        ),
+    )
 
     with pytest.raises(FailJsonCalled) as exc_info:
-        instance.find_resources_by_name()
+        instance.execute_resource_module()
 
-    msg = exc_info.value.payload["msg"]
-    assert "one of" in msg
-    assert "alarm_id" in msg
-    assert "compartment_id" in msg
+    assert "alarm_suppression_id" in exc_info.value.payload["msg"]
+
+
+def test_absent_compartment_target_deletes_by_id(monkeypatch):
+    module_obj = load_suppression_module(monkeypatch)
+    deleted = []
+    instance = make_suppression_module(
+        module_obj,
+        {
+            "state": "absent",
+            "compartment_id": COMPARTMENT_ID,
+            "alarm_suppression_id": SUPPRESSION_ID,
+        },
+    )
+    monkeypatch.setattr(
+        instance,
+        "resolve_target_resource",
+        lambda: matching_resource(
+            alarm_suppression_target={
+                "target_type": "COMPARTMENT",
+                "compartment_id": COMPARTMENT_ID,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        instance, "delete_resource", lambda resource: deleted.append(resource.id)
+    )
+
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert exc_info.value.payload == {"changed": True}
+    assert deleted == [SUPPRESSION_ID]
+
+
+def test_alarm_name_lookup_requires_alarm_scope(monkeypatch):
+    # An alarm-targeted lookup still validates its list scope via the base.
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(module_obj, {"alarm_id": ALARM_ID, "name": "n"})
+    instance.client = types.SimpleNamespace(list_alarm_suppressions=None)
+    captured = {}
+    monkeypatch.setattr(
+        instance,
+        "validate_name_lookup_scope",
+        lambda: captured.setdefault("validated", True),
+    )
+    monkeypatch.setattr(instance, "list_all_resources", lambda *a, **k: [])
+
+    instance.find_resources_by_name()
+
+    assert captured.get("validated") is True
+
+
+def test_compartment_name_lookup_skips_scope_validation(monkeypatch):
+    # A compartment-targeted lookup never lists, so it returns no matches
+    # without attempting a scoped list.
+    module_obj = load_suppression_module(monkeypatch)
+    instance = make_suppression_module(
+        module_obj, {"compartment_id": COMPARTMENT_ID, "name": "n"}
+    )
+    monkeypatch.setattr(
+        instance,
+        "list_all_resources",
+        lambda *a, **k: pytest.fail("compartment lookup must not list"),
+    )
+
+    assert instance.find_resources_by_name() == []
 
 
 def test_needs_update_false_when_resource_matches(monkeypatch):

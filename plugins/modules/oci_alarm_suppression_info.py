@@ -12,7 +12,11 @@ short_description: Retrieve alarm suppression information from Oracle Cloud Infr
 description:
   - Retrieve details about one or more OCI Monitoring alarm suppressions.
   - Use C(alarm_suppression_id) to fetch a single suppression, or C(alarm_id)
-    or C(compartment_id) to list suppressions.
+    to list the suppressions that affect an alarm.
+  - OCI's list API lists suppressions only for a specific alarm, so listing
+    requires C(alarm_id); compartment-targeted suppressions cannot be listed by
+    compartment and are retrieved by C(alarm_suppression_id), or seen with
+    C(alarm_id) plus C(is_all_suppressions=true).
   - This is a read-only module and does not modify resources.
 version_added: "1.3.0"
 author:
@@ -27,26 +31,16 @@ options:
     type: str
   alarm_id:
     description:
-      - List suppressions that target this alarm.
+      - List suppressions that affect this alarm.
+      - Required to list suppressions, because OCI's list API lists suppressions
+        only for a specific alarm.
     type: str
-  compartment_id:
-    description:
-      - List suppressions in this compartment.
-      - When C(target_type) is not set, this lists every suppression defined
-        in the compartment, including suppressions that target individual
-        alarms.
-    type: str
-  compartment_id_in_subtree:
-    description:
-      - When true, also list suppressions in all compartments under
-        C(compartment_id).
-      - OCI only allows this when C(compartment_id) is the tenancy OCID.
-    type: bool
   target_type:
     description:
       - List only suppressions with this target type.
-      - C(alarm) requires C(alarm_id) and C(compartment) requires
-        C(compartment_id).
+      - C(compartment) lists the compartment- or tenancy-targeted suppressions
+        that affect C(alarm_id), and is typically combined with
+        C(is_all_suppressions=true).
     type: str
     choices: [alarm, compartment]
   is_all_suppressions:
@@ -82,9 +76,10 @@ EXAMPLES = r"""
     alarm_id: ocid1.alarm.oc1..example
     is_all_suppressions: true
 
-- name: List compartment-wide suppressions
+- name: List compartment- or tenancy-targeted suppressions affecting an alarm
   ansible.oci.oci_alarm_suppression_info:
-    compartment_id: ocid1.compartment.oc1..example
+    alarm_id: ocid1.alarm.oc1..example
+    is_all_suppressions: true
     target_type: compartment
 
 - name: Find a suppression by name
@@ -212,35 +207,11 @@ class OciAlarmSuppressionInfoModule(OciInfoBase):
     list_resource_method = "list_alarm_suppressions"
     list_filter_params = (
         "alarm_id",
-        "compartment_id",
-        "compartment_id_in_subtree",
         "target_type",
         "is_all_suppressions",
         "level",
         "lifecycle_state",
     )
-
-    def collect_list_filters(self, *param_groups):
-        """Collect list filters, defaulting compartment_id_in_subtree.
-
-        A C(COMPARTMENT) list is rejected with C(MissingParameter) unless
-        C(compartment_id_in_subtree) is sent, so it is defaulted to C(False)
-        here when the caller scopes the query to a compartment but leaves it
-        unset, instead of being dropped as an unset filter.
-
-        Args:
-            *param_groups: The parameter-name groups to collect.
-
-        Returns:
-            The collected list filters.
-        """
-        list_filters = super().collect_list_filters(*param_groups)
-        if (
-            list_filters.get("target_type") == "COMPARTMENT"
-            and "compartment_id_in_subtree" not in list_filters
-        ):
-            list_filters["compartment_id_in_subtree"] = False
-        return list_filters
 
 
 def main():
@@ -249,8 +220,6 @@ def main():
         OCI_AUTH_ARGS,
         alarm_suppression_id=dict(type="str"),
         alarm_id=dict(type="str"),
-        compartment_id=dict(type="str"),
-        compartment_id_in_subtree=dict(type="bool"),
         target_type=dict(
             type="str", choices=list(CHOICE_VALUE_MAPS[("target_type",)])
         ),
@@ -265,16 +234,8 @@ def main():
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        required_one_of=[["alarm_suppression_id", "alarm_id", "compartment_id"]],
-        required_if=[
-            ["target_type", "alarm", ["alarm_id"]],
-            ["target_type", "compartment", ["compartment_id"]],
-        ],
-        required_by={
-            "compartment_id_in_subtree": ["compartment_id"],
-            "is_all_suppressions": ["alarm_id"],
-        },
-        mutually_exclusive=[["alarm_id", "compartment_id_in_subtree"]],
+        required_one_of=[["alarm_suppression_id", "alarm_id"]],
+        required_by={"is_all_suppressions": ["alarm_id"]},
     )
 
     normalize_choice_parameters(module, CHOICE_VALUE_MAPS)

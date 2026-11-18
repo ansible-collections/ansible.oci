@@ -59,21 +59,13 @@ def test_main_wiring(monkeypatch):
         "lifecycle_state": "DELETED",
     }
     spec = captured["argument_spec"]
-    assert captured["required_one_of"] == [
-        ["alarm_suppression_id", "alarm_id", "compartment_id"]
-    ]
-    assert captured["required_if"] == [
-        ["target_type", "alarm", ["alarm_id"]],
-        ["target_type", "compartment", ["compartment_id"]],
-    ]
-    assert captured["required_by"] == {
-        "compartment_id_in_subtree": ["compartment_id"],
-        "is_all_suppressions": ["alarm_id"],
-    }
-    assert captured["mutually_exclusive"] == [
-        ["alarm_id", "compartment_id_in_subtree"]
-    ]
+    assert captured["required_one_of"] == [["alarm_suppression_id", "alarm_id"]]
+    assert "required_if" not in captured
+    assert captured["required_by"] == {"is_all_suppressions": ["alarm_id"]}
+    assert "mutually_exclusive" not in captured
     assert captured["supports_check_mode"] is True
+    assert "compartment_id" not in spec
+    assert "compartment_id_in_subtree" not in spec
     assert spec["alarm_suppression_id"] == {"type": "str"}
     assert spec["is_all_suppressions"] == {"type": "bool"}
     assert spec["target_type"]["choices"] == ["alarm", "compartment"]
@@ -167,7 +159,9 @@ def test_fetch_resources_passes_filters_and_filters_by_name(monkeypatch):
     ]
 
 
-def test_compartment_list_defaults_subtree_filter(monkeypatch):
+def test_compartment_targeted_suppressions_listed_via_alarm(monkeypatch):
+    # Compartment/tenancy suppressions affecting an alarm are listed by
+    # alarm_id + is_all_suppressions, scoped with target_type=COMPARTMENT.
     install_fake_oci(monkeypatch)
 
     info_module = load_collection_module("oci_alarm_suppression_info")
@@ -178,8 +172,8 @@ def test_compartment_list_defaults_subtree_filter(monkeypatch):
         "OciAlarmSuppressionInfoModule",
         {
             "alarm_suppression_id": None,
-            "alarm_id": None,
-            "compartment_id": "ocid1.compartment.oc1..example",
+            "alarm_id": ALARM_ID,
+            "is_all_suppressions": True,
             "target_type": "COMPARTMENT",
             "name": None,
         },
@@ -195,45 +189,9 @@ def test_compartment_list_defaults_subtree_filter(monkeypatch):
     instance.fetch_resources()
     assert list_calls == [
         {
-            "compartment_id": "ocid1.compartment.oc1..example",
+            "alarm_id": ALARM_ID,
+            "is_all_suppressions": True,
             "target_type": "COMPARTMENT",
-            "compartment_id_in_subtree": False,
-        }
-    ]
-
-
-def test_compartment_list_keeps_explicit_subtree_filter(monkeypatch):
-    install_fake_oci(monkeypatch)
-
-    info_module = load_collection_module("oci_alarm_suppression_info")
-    list_calls = []
-
-    instance = make_module_instance(
-        info_module,
-        "OciAlarmSuppressionInfoModule",
-        {
-            "alarm_suppression_id": None,
-            "alarm_id": None,
-            "compartment_id": "ocid1.compartment.oc1..example",
-            "compartment_id_in_subtree": True,
-            "target_type": "COMPARTMENT",
-            "name": None,
-        },
-        client=types.SimpleNamespace(list_alarm_suppressions=object()),
-    )
-
-    def fake_list_all(fn, **kwargs):
-        list_calls.append(kwargs)
-        return []
-
-    monkeypatch.setattr(instance, "list_all_resources", fake_list_all)
-
-    instance.fetch_resources()
-    assert list_calls == [
-        {
-            "compartment_id": "ocid1.compartment.oc1..example",
-            "target_type": "COMPARTMENT",
-            "compartment_id_in_subtree": True,
         }
     ]
 

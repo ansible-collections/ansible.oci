@@ -25,10 +25,15 @@ notes:
   - OCI does not support updating an alarm suppression. When an existing
     suppression differs from any supplied option, including tags, the task
     fails. Delete the suppression and create it again to change it.
-  - Name lookups are scoped to the requested target, so a suppression that
-    targets C(alarm_id) and a compartment-wide suppression of the same name
-    never match each other. A compartment-targeted lookup searches
-    C(compartment_id) itself, not its sub-compartments.
+  - OCI's list API lists alarm suppressions only for a specific alarm, so a
+    compartment-targeted suppression cannot be found by C(name). Creating one
+    by C(name) does not detect an existing suppression, so every run creates a
+    new one; capture the returned C(resource.id) and pass it as
+    C(alarm_suppression_id) for idempotent runs. Deleting a compartment-targeted
+    suppression requires C(alarm_suppression_id).
+  - Name lookups for an C(alarm_id) target are scoped to that alarm, so an
+    alarm-targeted suppression and a compartment-wide suppression of the same
+    name never match each other.
   - Recurrence rules are compared semantically, so a rule that OCI returns
     with its parts reordered, prefixed with C(RRULE:), zero-padded
     (C(BYHOUR=02)), or expanded with the start-time parts that default to
@@ -57,11 +62,13 @@ options:
       - The human-readable name of the alarm suppression, sent to OCI as the
         display name.
       - Required when creating an alarm suppression.
-      - When C(alarm_suppression_id) is omitted, the module finds an existing
-        suppression by C(name) among the suppressions that target C(alarm_id)
-        or C(compartment_id).
-      - If more than one suppression matches, the task fails and the caller
-        must supply C(alarm_suppression_id).
+      - When C(alarm_suppression_id) is omitted and C(alarm_id) is set, the
+        module finds an existing suppression by C(name) among the suppressions
+        that target that alarm. If more than one matches, the task fails and the
+        caller must supply C(alarm_suppression_id).
+      - Compartment-targeted suppressions cannot be found by C(name) because
+        OCI's list API requires an alarm, so a C(name) lookup is not performed
+        for a C(compartment_id) target.
     type: str
   alarm_id:
     description:
@@ -75,10 +82,10 @@ options:
       - The OCID of the compartment whose alarms are suppressed.
       - Mutually exclusive with C(alarm_id).
       - One of C(alarm_id) or C(compartment_id) is required when creating an
-        alarm suppression or looking it up by C(name).
-      - A C(name) lookup scoped by C(compartment_id) only matches
-        suppressions that target the whole compartment, not suppressions
-        that target individual alarms in it.
+        alarm suppression.
+      - A compartment-targeted suppression cannot be looked up by C(name), so
+        C(state=present) always creates one and C(state=absent) requires
+        C(alarm_suppression_id).
     type: str
   compartment_id_in_subtree:
     description:
@@ -566,16 +573,10 @@ class OciAlarmSuppressionModule(OciResourceBase):
     def collect_list_filters(self, *param_groups):
         """Scope the name-lookup list call to the requested target type.
 
-        Listing by alarm_id or by compartment_id alone also returns
-        suppressions with the other target type, so target_type is sent as a
-        list filter: C(ALARM) lists the suppressions of a single alarm, and
-        C(COMPARTMENT) lists the suppressions that target the compartment
-        itself.
-
-        For a C(COMPARTMENT) lookup the service rejects the list call with
-        C(MissingParameter) unless C(compartment_id_in_subtree) is also sent,
-        so it is always included (defaulting to C(False)) rather than dropped
-        as an unset filter.
+        Only alarm-targeted lookups reach this method (compartment-targeted
+        lookups are skipped in C(find_resources_by_name)), but target_type is
+        still sent so that listing by alarm_id returns only that alarm's own
+        suppressions and never a compartment-wide one of the same name.
 
         Args:
             *param_groups: The parameter-name groups to collect.
@@ -585,29 +586,47 @@ class OciAlarmSuppressionModule(OciResourceBase):
         """
         list_filters = super().collect_list_filters(*param_groups)
         list_filters["target_type"] = self.target_type
-        if self.target_type == "COMPARTMENT":
-            list_filters["compartment_id_in_subtree"] = bool(
-                self.module.params.get("compartment_id_in_subtree")
-            )
         return list_filters
 
     def find_resources_by_name(self):
         """List name matches restricted to the requested suppression target.
 
-        Overridden to drop any match whose target type differs from the
-        requested one, so a compartment-wide suppression and an
-        alarm-targeted suppression that share a name never match each other
-        even if the service ignores the target_type list filter.
+        Overridden because OCI's list_alarm_suppressions requires an alarm, so
+        a compartment-targeted suppression cannot be found by name: the lookup
+        is skipped (an empty match list) and C(state=present) creates one
+        without duplicate detection. Alarm-targeted lookups list by alarm_id
+        and the matches are restricted locally to the requested target type so
+        a compartment-wide suppression of the same name can never match.
 
         Returns:
-            The live name matches that target the requested alarm or
-            compartment.
+            The live name matches that target the requested alarm, or an empty
+            list for a compartment-targeted suppression.
         """
+        if self.target_type == "COMPARTMENT":
+            return []
         return [
             resource
             for resource in super().find_resources_by_name()
             if get_suppression_target_type(resource) == self.target_type
         ]
+
+    def validate_delete_request(self) -> None:
+        """Require alarm_suppression_id to delete a compartment-targeted one.
+
+        OCI's list API requires an alarm, so a compartment-targeted suppression
+        cannot be located by name for deletion; the caller must identify it by
+        C(alarm_suppression_id). Alarm-targeted deletes still resolve by name
+        through the base implementation.
+        """
+        if self.target_type == "COMPARTMENT" and not self.resource_id:
+            self.module.fail_json(
+                msg=(
+                    "Deleting a compartment-targeted alarm suppression requires "
+                    "alarm_suppression_id because OCI's list API requires an "
+                    "alarm and cannot find the suppression by name."
+                )
+            )
+        super().validate_delete_request()
 
     def validate_create_request(self) -> None:
         """Fail when a create request omits the suppression target.
