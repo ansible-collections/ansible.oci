@@ -12,7 +12,7 @@
     oci_vault_key_integration_key_name: "{{ oci_vault_key_integration_key_name }}-{{ oci_integration_rpfx }}"
     oci_vault_key_integration_renamed_key_name: "{{ oci_vault_key_integration_renamed_key_name }}-{{ oci_integration_rpfx }}"
 
-- name: Exercise vault and vault key module lifecycles
+- name: Exercise vault key module lifecycle against the shared vault
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
@@ -22,45 +22,58 @@
     ansible.oci.oci_vault_key_info:
       vault_id: "{{ oci_vault_id | default(omit) }}"
   block:
-    # ---------------------------------------------------------- vault create
-    # Vault deletion is only scheduled at least 7 days out, so the vault is long-lived: the first run creates it and
-    # later runs find it by name. Tags are not set here so the per-run tag update below does not make this task drift.
-    - name: Ensure shared vault exists in check mode
-      ansible.oci.oci_vault: &oci_vault_create_module_options
-        state: present
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        name: "{{ oci_vault_integration_vault_name }}"
-      check_mode: true
-      register: oci_vault_create_check
-
-    - name: Read shared vault by name after create check mode
+    # ------------------------------------------------- shared vault bootstrap
+    # The vault is long-lived and shared by every run: the first run creates it and later runs find it by name. This
+    # bootstrap is the only vault mutation in the regular run so that concurrent runs cannot replace each other's
+    # tags or otherwise race on the shared vault; the create, rename, retag, delete, and restore coverage for the
+    # oci_vault module lives in the oci_vault_lifecycle target, which is excluded from regular runs.
+    - name: Read the shared vault by name
       ansible.oci.oci_vault_info:
         compartment_id: "{{ oci_integration_compartment_id }}"
         name: "{{ oci_vault_integration_vault_name }}"
-      register: oci_vault_create_check_probe
+      register: oci_vault_bootstrap_lookup
 
-    - name: Assert create check mode did not create a vault
+    - name: Create the shared vault when it is missing
+      ansible.oci.oci_vault:
+        state: present
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_vault_integration_vault_name }}"
+      when: >-
+        (oci_vault_bootstrap_lookup.vaults
+        | rejectattr('lifecycle_state', 'in', ['DELETED', 'DELETING']) | list | length) == 0
+      register: oci_vault_bootstrap_create
+
+    - name: Keep the vaults found by the initial lookup
+      ansible.builtin.set_fact:
+        oci_vault_bootstrap_vaults: "{{ oci_vault_bootstrap_lookup.vaults
+          | rejectattr('lifecycle_state', 'in', ['DELETED', 'DELETING']) | list }}"
+      when: oci_vault_bootstrap_create is skipped
+
+    - name: Read the shared vault by name after create
+      ansible.oci.oci_vault_info:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_vault_integration_vault_name }}"
+      register: oci_vault_bootstrap_created
+      when: oci_vault_bootstrap_create is not skipped
+
+    - name: Capture the vaults found after create
+      ansible.builtin.set_fact:
+        oci_vault_bootstrap_vaults: "{{ oci_vault_bootstrap_created.vaults
+          | rejectattr('lifecycle_state', 'in', ['DELETED', 'DELETING']) | list }}"
+      when: oci_vault_bootstrap_create is not skipped
+
+    - name: Assert the shared vault bootstrap left exactly one active vault
       ansible.builtin.assert:
         that:
-          - >-
-            (oci_vault_create_check_probe.vaults | rejectattr('lifecycle_state', 'in', ['DELETED', 'DELETING'])
-            | list | length) == (0 if oci_vault_create_check.changed else 1)
-
-    - name: Ensure shared vault exists
-      ansible.oci.oci_vault:
-        <<: *oci_vault_create_module_options
-      register: oci_vault_create
+          - oci_vault_bootstrap_vaults | length == 1
+        fail_msg: >-
+          Expected exactly one active vault named {{ oci_vault_integration_vault_name }};
+          found {{ oci_vault_bootstrap_vaults | length }}. Concurrent bootstrap runs may have created
+          duplicates; remove the extras and rerun.
 
     - name: Capture vault id
       ansible.builtin.set_fact:
-        oci_vault_id: "{{ oci_vault_create.resource.id }}"
-
-    - name: Assert check mode predicted the create result and the vault is active
-      ansible.builtin.assert:
-        that:
-          - oci_vault_create.changed == oci_vault_create_check.changed
-          - oci_vault_create.resource.lifecycle_state == "ACTIVE"
-          - oci_vault_create.resource.name == oci_vault_integration_vault_name
+        oci_vault_id: "{{ oci_vault_bootstrap_vaults[0].id }}"
 
     - name: Read vault by id
       ansible.oci.oci_vault_info:
@@ -76,106 +89,6 @@
           - oci_vault_info_by_id.vaults[0].lifecycle_state == "ACTIVE"
           - oci_vault_info_by_id.vaults[0].vault_type == "DEFAULT"
           - oci_vault_info_by_id.vaults[0].management_endpoint | length > 0
-
-    - name: Rerun vault create by name
-      ansible.oci.oci_vault:
-        <<: *oci_vault_create_module_options
-      register: oci_vault_create_again
-
-    - name: Rerun vault create by name in check mode
-      ansible.oci.oci_vault:
-        <<: *oci_vault_create_module_options
-      check_mode: true
-      register: oci_vault_create_again_check
-
-    - name: Assert vault create reruns are idempotent
-      ansible.builtin.assert:
-        that:
-          - not oci_vault_create_again.changed | bool
-          - not oci_vault_create_again_check.changed | bool
-          - oci_vault_create_again.resource.id == oci_vault_id
-
-    # ---------------------------------------------------------- vault update
-    # Only tags are updated, with a per-run value so the update is a real change on every run. Renaming would break
-    # the name lookup that later runs rely on.
-    - name: Update vault tags in check mode
-      ansible.oci.oci_vault: &oci_vault_update_module_options
-        state: present
-        vault_id: "{{ oci_vault_id }}"
-        freeform_tags:
-          role: integration
-          run: "{{ oci_integration_rpfx | string }}"
-      check_mode: true
-      register: oci_vault_update_check
-
-    - name: Read vault after update check mode
-      ansible.oci.oci_vault_info:
-        vault_id: "{{ oci_vault_id }}"
-      register: oci_vault_update_check_probe
-
-    - name: Assert vault update check mode reported a change without modifying the vault
-      ansible.builtin.assert:
-        that:
-          - oci_vault_update_check.changed | bool
-          - oci_vault_update_check_probe.vaults[0].freeform_tags == oci_vault_info_by_id.vaults[0].freeform_tags
-
-    - name: Update vault tags
-      ansible.oci.oci_vault:
-        <<: *oci_vault_update_module_options
-      register: oci_vault_update
-
-    - name: Read vault after update
-      ansible.oci.oci_vault_info:
-        vault_id: "{{ oci_vault_id }}"
-      register: oci_vault_update_probe
-
-    - name: Assert vault update changed the vault
-      ansible.builtin.assert:
-        that:
-          - oci_vault_update.changed | bool
-          - oci_vault_update.resource.id == oci_vault_id
-          - oci_vault_update_probe.vaults[0].freeform_tags | length == 2
-          - oci_vault_update_probe.vaults[0].freeform_tags.role == "integration"
-          - oci_vault_update_probe.vaults[0].freeform_tags.run == oci_integration_rpfx | string
-          - oci_vault_update_probe.vaults[0].lifecycle_state == "ACTIVE"
-
-    - name: Rerun vault update
-      ansible.oci.oci_vault:
-        <<: *oci_vault_update_module_options
-      register: oci_vault_update_again
-
-    - name: Rerun vault update in check mode
-      ansible.oci.oci_vault:
-        <<: *oci_vault_update_module_options
-      check_mode: true
-      register: oci_vault_update_again_check
-
-    - name: Assert vault update reruns are idempotent
-      ansible.builtin.assert:
-        that:
-          - not oci_vault_update_again.changed | bool
-          - not oci_vault_update_again_check.changed | bool
-
-    # ---------------------------------------------------------- vault delete
-    # Deleting the shared vault would force the next run to create another one, so delete is only covered in check mode.
-    - name: Schedule vault deletion in check mode
-      ansible.oci.oci_vault:
-        state: absent
-        vault_id: "{{ oci_vault_id }}"
-        deletion_days: 7
-      check_mode: true
-      register: oci_vault_delete_check
-
-    - name: Read vault after delete check mode
-      ansible.oci.oci_vault_info:
-        vault_id: "{{ oci_vault_id }}"
-      register: oci_vault_delete_check_probe
-
-    - name: Assert vault delete check mode reported a change without scheduling deletion
-      ansible.builtin.assert:
-        that:
-          - oci_vault_delete_check.changed | bool
-          - oci_vault_delete_check_probe.vaults[0].lifecycle_state == "ACTIVE"
 
     # ------------------------------------------------------------ key create
     - name: Create key in check mode

@@ -1,5 +1,7 @@
 ---
-# Long-lived vault shared by every run. The first run creates it; later runs find it by name and leave it unchanged.
+# Long-lived vault shared by every run. The first run creates it; later runs find it by name. The vault itself is
+# never mutated after creation in this target so concurrent runs stay parallel safe; oci_vault module lifecycle
+# coverage lives in the oci_vault_lifecycle target.
 oci_vault_integration_vault_name: "ansible-oci-integration-vault"
 oci_vault_key_integration_key_name: "oci-vault-key-integration"
 oci_vault_key_integration_renamed_key_name: "oci-vault-key-integration-renamed"
