@@ -205,7 +205,7 @@ class OciCompartmentMove(OciModuleBase):
         """
         selector = 'all'
         if resource_type:
-            if not re.fullmatch(r'[A-Za-z0-9_]+', resource_type):
+            if not re.fullmatch(r'\w+', resource_type, flags=re.ASCII):
                 raise ValueError('OCI returned an invalid Search resource type.')
             selector = resource_type
 
@@ -256,6 +256,27 @@ class OciCompartmentMove(OciModuleBase):
             'OCI bulk move does not support resource type: ' + resource.resource_type
         )
 
+    @staticmethod
+    def metadata_strings(*sources):
+        """Merge metadata sources and retain only nonblank strings.
+
+        Later sources replace earlier values only when the new value is valid.
+        Preserve spaces within valid values.
+
+        Args:
+            *sources: Metadata dictionaries, or None when absent.
+
+        Returns:
+            dict[str, str]: Nonblank strings from the supplied sources.
+        """
+        values = {}
+        for source in sources:
+            values.update({
+                key: value for key, value in (source or {}).items()
+                if isinstance(value, str) and value.strip()
+            })
+        return values
+
     def resolve_metadata(self, resource, move_type):
         """Discover the additional identifiers required for the move.
 
@@ -273,11 +294,7 @@ class OciCompartmentMove(OciModuleBase):
             ValueError: Required identifiers are unavailable or the source compartment changed.
         """
         required_keys = set(move_type.metadata_keys or [])
-        values = {
-            key: value
-            for key, value in (resource.identity_context or {}).items()
-            if isinstance(value, str) and value.strip()
-        }
+        values = self.metadata_strings(resource.identity_context)
 
         if required_keys - values.keys():
             expanded = self.find_resource(resource.resource_type)
@@ -291,11 +308,7 @@ class OciCompartmentMove(OciModuleBase):
                 )
 
             additional_details = expanded.additional_details or {}
-            for source in (additional_details, expanded.identity_context or {}):
-                values.update({
-                    key: value for key, value in source.items()
-                    if isinstance(value, str) and value.strip()
-                })
+            values.update(self.metadata_strings(additional_details, expanded.identity_context))
 
             if move_type.name.lower() == 'bucket':
                 values['bucketName'] = values.get('bucketName') or expanded.display_name
@@ -523,7 +536,7 @@ class OciCompartmentMove(OciModuleBase):
         """
         for key in ('resource_id', 'target_compartment_id'):
             value = self.module.params[key]
-            if not re.fullmatch(r'ocid1\.[A-Za-z0-9_]+\.[A-Za-z0-9_.:-]+', value):
+            if not re.fullmatch(r'ocid1\.\w+\.[\w.:-]+', value, flags=re.ASCII):
                 raise ValueError(key + ' must be an OCID.')
 
         if not self.module.params['target_compartment_id'].startswith(('ocid1.compartment.', 'ocid1.tenancy.')):

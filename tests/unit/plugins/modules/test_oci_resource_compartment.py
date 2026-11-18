@@ -108,14 +108,16 @@ def test_move_waits_for_search_and_routes_identity(mover, target, work_client):
     mover.search.search_resources.side_effect = [response(resource()), response(resource()), response(resource(mover.module.params['target_compartment_id']))]
     with patch.object(m.time, 'sleep'):
         result = execute(mover)
-    assert result['changed'] and not result.get('failed')
+    assert result['changed']
+    assert not result.get('failed')
     assert result['resource']['compartment_id'] == mover.module.params['target_compartment_id']
     mover.client.base_client.set_region.assert_called_once_with('home')
     work_client.base_client.set_region.assert_called_once_with('home')
     mover.search.base_client.set_region.assert_called_once_with('resource-region')
     args, kwargs = mover.client.bulk_move_resources.call_args
     assert args[1].target_compartment_id == target
-    assert args[0] == 'source' and len(args[1].resources) == 1
+    assert args[0] == 'source'
+    assert len(args[1].resources) == 1
     assert args[1].resources[0].identifier == mover.module.params['resource_id']
     assert kwargs['opc_retry_token']
 
@@ -142,7 +144,8 @@ def test_no_wait(mover, work_client):
 def test_unsupported_type(mover):
     mover.search.search_resources.return_value = response(resource(kind='Unsupported'))
     result = execute(mover)
-    assert result['failed'] and 'does not support' in result['msg']
+    assert result['failed']
+    assert 'does not support' in result['msg']
     mover.client.bulk_move_resources.assert_not_called()
 
 
@@ -163,24 +166,28 @@ def test_work_failure_preserves_acceptance(mover, state, work_client):
     work_client.list_work_request_errors.return_value.data = [
         m.oci.work_requests.models.WorkRequestError(code='MoveFailed', message='Move denied')]
     result = execute(mover)
-    assert result['failed'] and result['changed'] and result['work_request_id'] == 'work'
+    assert result['failed']
+    assert result['changed']
+    assert result['work_request_id'] == 'work'
     assert 'Move denied' in result['msg']
     assert result['work_request_status'] == ('UNKNOWN_ENUM_VALUE' if state == 'FUTURE_STATUS' else state)
 
 
 def test_search_timeout_is_distinct(mover, clock):
     result = execute(mover)
-    assert result['failed'] and result['changed']
+    assert result['failed']
+    assert result['changed']
     assert 'OCI completed the move' in result['msg']
 
 
 def test_work_timeout(mover, clock, work_client):
     work_client.get_work_request.return_value.data.status = 'IN_PROGRESS'
     result = execute(mover)
-    assert result['failed'] and 'work request' in result['msg']
+    assert result['failed']
+    assert 'work request' in result['msg']
 
 
-@pytest.mark.parametrize('value', ["ocid1.instance.oc1..x' or identifier != 'x", '', 'bucket-name'])
+@pytest.mark.parametrize('value', ["ocid1.instance.oc1..x' or identifier != 'x", '', 'bucket-name', 'ocid1.instancé.oc1..id', 'ocid1.instance.oc1..résource'])
 def test_invalid_id_never_queries(mover, value):
     mover.module.params['resource_id'] = value
     assert execute(mover)['failed']
@@ -218,7 +225,8 @@ def test_submission_failure_and_missing_work_id(mover, missing):
     else:
         mover.client.bulk_move_resources.side_effect = ValueError('Submission rejected')
     result = execute(mover)
-    assert result['failed'] and result['changed'] is missing
+    assert result['failed']
+    assert result['changed'] is missing
 
 
 def test_work_request_not_visible_then_success(mover, work_client):
@@ -227,7 +235,8 @@ def test_work_request_not_visible_then_success(mover, work_client):
     mover.search.search_resources.side_effect = [response(resource()), response(resource(mover.module.params['target_compartment_id']))]
     with patch.object(m.time, 'sleep'):
         result = execute(mover)
-    assert not result.get('failed') and result['changed']
+    assert not result.get('failed')
+    assert result['changed']
 
 
 @pytest.mark.parametrize('check', [False, True])
@@ -241,7 +250,8 @@ def test_bucket_metadata_is_discovered(mover, check, bucket_type):
     expanded.additional_details = {'namespace': 'namespace'}
     mover.search.search_resources.side_effect = [response(resource(kind='Bucket')), response(expanded)]
     result = execute(mover)
-    assert result['changed'] and not result.get('failed')
+    assert result['changed']
+    assert not result.get('failed')
     query = mover.search.search_resources.call_args.args[0].query
     assert 'query Bucket resources return allAdditionalFields where identifier' in query
     if check:
@@ -261,7 +271,8 @@ def test_incomplete_discovery_never_submits(mover, mode, bucket_type):
     mover.search.search_resources.side_effect = [
         response(resource(kind='Bucket')), response() if mode == 'not_found' else response(expanded)]
     result = execute(mover)
-    assert result['failed'] and not result['changed']
+    assert result['failed']
+    assert not result['changed']
     mover.client.bulk_move_resources.assert_not_called()
 
 
@@ -279,7 +290,8 @@ def test_generic_identifiers_from_expanded_search(mover):
 def test_work_and_search_share_deadline(mover, clock, work_client):
     work_client.get_work_request.side_effect = [work_response('IN_PROGRESS'), work_client.get_work_request.return_value]
     result = execute(mover)
-    assert result['failed'] and 'OCI completed the move' in result['msg']
+    assert result['failed']
+    assert 'OCI completed the move' in result['msg']
     assert work_client.get_work_request.call_count == 2
 
 
@@ -303,7 +315,8 @@ def test_unchanged_skips_identity_discovery(mover, check):
     mover.client.list_region_subscriptions.side_effect = ValueError('Unavailable')
     mover.client.list_bulk_action_resource_types.side_effect = ValueError('Unavailable')
     result = execute(mover)
-    assert not result.get('failed') and not result['changed']
+    assert not result.get('failed')
+    assert not result['changed']
     assert result['resource_type'] == 'Instance'
     mover.client.list_region_subscriptions.assert_not_called()
     mover.client.list_bulk_action_resource_types.assert_not_called()
@@ -339,14 +352,18 @@ def test_diagnostic_failure_keeps_primary_error(mover, work_client):
     work_client.get_work_request.return_value = work_response('FAILED')
     work_client.list_work_request_errors.side_effect = ValueError('Diagnostic unavailable')
     result = execute(mover)
-    assert result['failed'] and result['changed']
+    assert result['failed']
+    assert result['changed']
     assert result['work_request_id'] == 'work'
     assert result['work_request_status'] == 'FAILED'
     assert 'Bulk move failed with status FAILED' in result['msg']
     assert 'Diagnostic unavailable' in result['msg']
 
 
-@pytest.mark.parametrize('target', ['ocid1.instance.oc1..target', 'ocid1.tenancyextra.oc1..target', 'root', "ocid1.tenancy.oc1..x'"])
+@pytest.mark.parametrize('target', [
+    'ocid1.instance.oc1..target', 'ocid1.tenancyextra.oc1..target', 'root',
+    "ocid1.tenancy.oc1..x'", 'ocid1.compartment.oc1..targét',
+])
 def test_invalid_destination_never_queries(mover, target):
     mover.module.params['target_compartment_id'] = target
     assert execute(mover)['failed']
@@ -385,7 +402,8 @@ def test_late_sdk_success_fails(mover, clock, phase, work_client):
             return late_response()
         mover.search.search_resources.side_effect = search
     result = execute(mover)
-    assert result['failed'] and result['changed']
+    assert result['failed']
+    assert result['changed']
     assert work_client.base_client.timeout == (10, 60)
     assert mover.search.base_client.timeout == (10, 60)
 
@@ -394,7 +412,8 @@ def test_retries_stop_at_deadline(mover, clock, work_client):
     mover.module.params['wait_interval'] = 20
     work_client.get_work_request.side_effect = m.oci.exceptions.ServiceError(503, 'Unavailable', {}, 'Retry')
     result = execute(mover)
-    assert result['failed'] and result['changed']
+    assert result['failed']
+    assert result['changed']
     assert clock.now == 30
     assert work_client.get_work_request.call_count == 2
     assert isinstance(work_client.get_work_request.call_args.kwargs['retry_strategy'], m.oci.retry.NoneRetryStrategy)
@@ -410,7 +429,8 @@ def test_search_pages_share_deadline(mover, clock):
 
     mover.search.search_resources.side_effect = search
     result = execute(mover)
-    assert result['failed'] and result['changed']
+    assert result['failed']
+    assert result['changed']
     assert mover.search.search_resources.call_count == 3
     assert clock.now == 30
 
@@ -419,7 +439,8 @@ def test_diagnostic_retries_keep_failure(mover, clock, work_client):
     work_client.get_work_request.return_value = work_response('FAILED')
     work_client.list_work_request_errors.side_effect = m.oci.exceptions.ServiceError(503, 'Unavailable', {}, 'Retry')
     result = execute(mover)
-    assert result['failed'] and result['work_request_status'] == 'FAILED'
+    assert result['failed']
+    assert result['work_request_status'] == 'FAILED'
     assert 'Bulk move failed with status FAILED' in result['msg']
     assert 'Timed out retrieving' in result['msg']
     assert clock.now == 30
@@ -443,7 +464,8 @@ def test_search_retry_uses_shared_deadline(mover, clock):
         response(resource(mover.module.params['target_compartment_id'])),
     ]
     result = execute(mover)
-    assert not result.get('failed') and result['changed']
+    assert not result.get('failed')
+    assert result['changed']
     assert clock.now == 1
     assert mover.search.search_resources.call_count == 3
 
@@ -456,7 +478,8 @@ def test_diagnostic_pagination(mover, work_client):
             m.oci.work_requests.models.WorkRequestError(code='Denied', message='Permission denied')], None),
     ]
     result = execute(mover)
-    assert result['failed'] and 'Permission denied' in result['msg']
+    assert result['failed']
+    assert 'Permission denied' in result['msg']
     assert work_client.list_work_request_errors.call_args.kwargs['page'] == 'next'
 
 
@@ -497,7 +520,8 @@ def test_work_client_initializes_after_acceptance(mover, client_factory, work_cl
 def test_work_client_initialization_failure_preserves_acceptance(mover, client_factory):
     client_factory.side_effect = ValueError('Work Requests unavailable')
     result = execute(mover)
-    assert result['failed'] and result['changed']
+    assert result['failed']
+    assert result['changed']
     assert result['work_request_id'] == 'work'
     assert 'Work Requests unavailable' in result['msg']
 
@@ -517,7 +541,8 @@ def test_foreign_root_fails_before_discovery(mover, check, source):
     else:
         mover.client.base_client.signer.tenancy_id = tenancy
     result = execute(mover)
-    assert result['failed'] and not result['changed']
+    assert result['failed']
+    assert not result['changed']
     assert 'must match' in result['msg']
     mover.search.search_resources.assert_not_called()
     mover.client.bulk_move_resources.assert_not_called()
@@ -528,7 +553,8 @@ def test_root_requires_resolved_tenancy(mover):
     mover.client.base_client.config = {}
     mover.client.base_client.signer.tenancy_id = None
     result = execute(mover)
-    assert result['failed'] and 'Set tenancy' in result['msg']
+    assert result['failed']
+    assert 'Set tenancy' in result['msg']
     mover.search.search_resources.assert_not_called()
 
 
@@ -553,10 +579,19 @@ def test_submission_uses_one_sdk_retry_policy(mover):
     client.circuit_breaker_callback = None
     mover.client = client
     move_type = m.oci.identity.models.BulkActionResourceType(name='Instance', metadata_keys=[])
+    source_resource = resource()
     with patch('oci.retry.retry.time.sleep'), pytest.raises(m.oci.exceptions.ServiceError):
-        mover.submit_move(resource(), move_type, {})
+        mover.submit_move(source_resource, move_type, {})
     calls = client.base_client.call_api.call_args_list
     assert len(calls) == 8
     tokens = {call.kwargs['header_params']['opc-retry-token'] for call in calls}
-    assert len(tokens) == 1 and next(iter(tokens))
+    assert len(tokens) == 1
+    assert next(iter(tokens))
     assert not mover.result['changed']
+
+
+@pytest.mark.parametrize('resource_type', ['Instancé', "Instance'", 'Instance Type'])
+def test_invalid_search_type_never_queries(mover, resource_type):
+    with pytest.raises(ValueError, match='invalid Search resource type'):
+        mover.find_resource(resource_type)
+    mover.search.search_resources.assert_not_called()
