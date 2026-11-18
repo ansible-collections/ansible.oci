@@ -116,7 +116,10 @@ class OciCompartmentMove(OciModuleBase):
         result (dict): Ansible result, including any accepted move details.
     """
 
-    client_class = oci.identity.IdentityClient if oci else None
+    @property
+    def client_class(self):
+        """Return the Identity client class after the shared SDK check."""
+        return oci.identity.IdentityClient
 
     def __init__(self, module):
         """Create the clients through the collection authentication helper.
