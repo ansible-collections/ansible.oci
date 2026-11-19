@@ -1,0 +1,6 @@
+# The controller supports collection wildcards for audit queries.
+# Keep this exception until the lint rule accepts wildcard module keys.
+extensions/audit/event_query.yml event-query[module-key-format] skip
+# Keep OCI resource types in device_type for the shared query.
+# The lint rule requires a literal taxonomy value and rejects this expression.
+extensions/audit/event_query.yml event-query[device-type] skip
