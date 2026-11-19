@@ -159,3 +159,7 @@ action_groups:
         - oci_dns_record_set_info
         - oci_notification_subscription
         - oci_notification_subscription_info
+        - oci_vault
+        - oci_vault_info
+        - oci_vault_key
+        - oci_vault_key_info

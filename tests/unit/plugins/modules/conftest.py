@@ -9,6 +9,15 @@ import types
 def load_collection_module(module_name, plugin_dir="modules"):
     qualified_name = f"ansible_collections.ansible.oci.plugins.{plugin_dir}.{module_name}"
     sys.modules.pop(qualified_name, None)
+    if plugin_dir == "modules":
+        # Shared module_utils helpers (e.g. oci_vault) bind the fake OCI SDK
+        # at import time. Drop any cached copy, usually installed by a
+        # module_utils test with a different fake, so the helper rebinds
+        # against this test's fake when the module under test imports it.
+        helper_name = (
+            f"ansible_collections.ansible.oci.plugins.module_utils.{module_name}"
+        )
+        sys.modules.pop(helper_name, None)
     return importlib.import_module(qualified_name)
 
 
