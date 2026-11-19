@@ -123,6 +123,7 @@ action_groups:
         - oci_loadbalancer_health_checker_info
         - oci_loadbalancer_routing_policy
         - oci_loadbalancer_routing_policy_info
+        - oci_loadbalancer_certificate
         - oci_oke_node_pool
         - oci_oke_node_pool_info
         - oci_oke_node_pool_options_info
