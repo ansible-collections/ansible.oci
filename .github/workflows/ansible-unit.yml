@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   unit-galaxy:
-    uses: ansible/ansible-content-actions/.github/workflows/unit.yaml@cbdec1f72eeee38b7e60d0f2346c66e622eea02a # main
+    uses: ansible/ansible-content-actions/.github/workflows/unit.yaml@200ecc2700e264c0fd90c78f73de9a9900211dbd # main
     with:
       extra_matrix_entries: >-
         [{"name":"unit-py3.11-2.16","python":"3.11"},

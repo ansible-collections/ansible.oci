@@ -1,0 +1,12 @@
+---
+- name: Exercise instance actions and wait for the target state
+  ansible.builtin.include_tasks: test_instance_action.yml
+  loop:
+    - action: stop
+      target_state: STOPPED
+    - action: start
+      target_state: RUNNING
+    - action: reset
+      target_state: RUNNING
+  loop_control:
+    loop_var: oci_instance_action_case

@@ -1,18 +1,54 @@
 ---
-- name: Run alarm, notification subscription, and notification topic cleanup with shared OCI auth defaults
+- name: Run alarm, alarm suppression, notification subscription, and notification topic cleanup with shared OCI auth defaults
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
-    # The subscription and alarm depend on the topic, so remove them first.
+    # Suppressions reference an alarm, the subscription and alarms reference
+    # the topic, so everything is removed innermost first.
+    - name: Delete leaked alarm suppression by id
+      ansible.oci.oci_alarm_suppression:
+        state: absent
+        alarm_suppression_id: "{{ oci_alarm_suppression_id }}"
+      when: oci_alarm_suppression_id | default('') | length > 0
+      register: oci_cleanup_suppression
+      until: oci_cleanup_suppression is not failed
+      retries: 3
+      delay: 5
+      ignore_errors: true
+
+    - name: Delete leaked compartment suppression by id
+      ansible.oci.oci_alarm_suppression:
+        state: absent
+        alarm_suppression_id: "{{ oci_alarm_suppression_compartment_suppression_id }}"
+      when: oci_alarm_suppression_compartment_suppression_id | default('') | length > 0
+      register: oci_cleanup_compartment_suppression
+      until: oci_cleanup_compartment_suppression is not failed
+      retries: 3
+      delay: 5
+      ignore_errors: true
+
+    - name: Delete leaked dimension suppression by id
+      ansible.oci.oci_alarm_suppression:
+        state: absent
+        alarm_suppression_id: "{{ oci_alarm_suppression_dimension_suppression_id }}"
+      when: oci_alarm_suppression_dimension_suppression_id | default('') | length > 0
+      register: oci_cleanup_dimension_suppression
+      until: oci_cleanup_dimension_suppression is not failed
+      retries: 3
+      delay: 5
+      ignore_errors: true
+
     - name: Delete leaked subscription by id
       ansible.oci.oci_notification_subscription:
         state: absent
         subscription_id: "{{ oci_notification_subscription_cleanup_id }}"
       when: oci_notification_subscription_cleanup_id | default('') | length > 0
       register: oci_cleanup_subscription_by_id
+      until: oci_cleanup_subscription_by_id is not failed
       retries: 3
+      delay: 5
       ignore_errors: true
 
     - name: Delete leaked alarm by id
@@ -21,7 +57,9 @@
         alarm_id: "{{ oci_alarm_id }}"
       when: oci_alarm_id | default('') | length > 0
       register: oci_cleanup_alarm_by_id
+      until: oci_cleanup_alarm_by_id is not failed
       retries: 3
+      delay: 5
       ignore_errors: true
 
     - name: Delete leaked alarm by exact scoped name when no id was captured
@@ -33,7 +71,34 @@
         - oci_alarm_id | default('') | length == 0
         - oci_alarm_cleanup_name | default('') | length > 0
       register: oci_cleanup_alarm_by_name
+      until: oci_cleanup_alarm_by_name is not failed
       retries: 3
+      delay: 5
+      ignore_errors: true
+
+    - name: Delete leaked suppressed alarm by id
+      ansible.oci.oci_alarm:
+        state: absent
+        alarm_id: "{{ oci_alarm_suppression_alarm_id }}"
+      when: oci_alarm_suppression_alarm_id | default('') | length > 0
+      register: oci_cleanup_suppression_alarm_by_id
+      until: oci_cleanup_suppression_alarm_by_id is not failed
+      retries: 3
+      delay: 5
+      ignore_errors: true
+
+    - name: Delete leaked suppressed alarm by exact scoped name when no id was captured
+      ansible.oci.oci_alarm:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_alarm_suppression_alarm_cleanup_name }}"
+      when:
+        - oci_alarm_suppression_alarm_id | default('') | length == 0
+        - oci_alarm_suppression_alarm_cleanup_name | default('') | length > 0
+      register: oci_cleanup_suppression_alarm_by_name
+      until: oci_cleanup_suppression_alarm_by_name is not failed
+      retries: 3
+      delay: 5
       ignore_errors: true
 
     - name: Delete leaked topic by id
@@ -42,7 +107,9 @@
         topic_id: "{{ oci_notification_topic_cleanup_id }}"
       when: oci_notification_topic_cleanup_id | default('') | length > 0
       register: oci_cleanup_topic_by_id
+      until: oci_cleanup_topic_by_id is not failed
       retries: 3
+      delay: 5
       ignore_errors: true
 
     - name: Delete leaked topic by exact scoped name when no id was captured
@@ -54,15 +121,22 @@
         - oci_notification_topic_cleanup_id | default('') | length == 0
         - oci_notification_topic_cleanup_name | default('') | length > 0
       register: oci_cleanup_topic_by_name
+      until: oci_cleanup_topic_by_name is not failed
       retries: 3
+      delay: 5
       ignore_errors: true
 
     - name: Verify resource cleanup succeeded
       ansible.builtin.assert:
         that:
+          - oci_cleanup_suppression is not failed
+          - oci_cleanup_compartment_suppression is not failed
+          - oci_cleanup_dimension_suppression is not failed
           - oci_cleanup_subscription_by_id is not failed
           - oci_cleanup_alarm_by_id is not failed
           - oci_cleanup_alarm_by_name is not failed
+          - oci_cleanup_suppression_alarm_by_id is not failed
+          - oci_cleanup_suppression_alarm_by_name is not failed
           - oci_cleanup_topic_by_id is not failed
           - oci_cleanup_topic_by_name is not failed
         fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
