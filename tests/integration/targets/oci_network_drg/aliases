@@ -5,4 +5,3 @@ oci_network_drg_attachment
 oci_network_drg_attachment_info
 oci_network_remote_peering_connection
 oci_network_remote_peering_connection_info
-oci_network_remote_peering_connection_connect
