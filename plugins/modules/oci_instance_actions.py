@@ -130,16 +130,9 @@ class OciInstanceActionsModule(OciModuleBase):
         """
         return oci.core.ComputeClient
 
-    def process_action(self):
-        """Submit the requested instance action and return the OCI response.
-
-        Returns:
-            A tuple with the change flag and the OCI response.
-        Raises:
-            Exception: If OCI rejects the action or the waiter fails.
-        """
+    def _build_operation_kwargs(self, action):
+        """Build the optional request body for the specified action."""
         params = self.module.params
-        action = params["action"]
         options = {}
 
         if action == "rebootmigrate" and params.get("delete_local_storage") is not None:
@@ -162,14 +155,11 @@ class OciInstanceActionsModule(OciModuleBase):
                 oci.core.models, model_name
             )(**options)
 
-        sdk_action = ACTION_TO_SDK[action]
-        if self.module.check_mode:
-            response = self.call_with_retry(
-                self.client.get_instance,
-                params["instance_id"],
-            )
-            return True, response
+        return operation_kwargs
 
+    def _build_waiter_options(self, action):
+        """Return the lifecycle states and settings for the wait operation."""
+        params = self.module.params
         wait_states = []
         waiter_kwargs = {}
 
@@ -181,9 +171,16 @@ class OciInstanceActionsModule(OciModuleBase):
                 "max_interval_seconds": params.get("wait_interval", 30),
             }
 
+        return wait_states, waiter_kwargs
+
+    def _submit_action(self, instance_id, action, operation_kwargs):
+        """Submit the action with the configured wait settings."""
+        sdk_action = ACTION_TO_SDK[action]
+        wait_states, waiter_kwargs = self._build_waiter_options(action)
+
         composite = oci.core.ComputeClientCompositeOperations(self.client)
-        response = composite.instance_action_and_wait_for_state(
-            params["instance_id"],
+        return composite.instance_action_and_wait_for_state(
+            instance_id,
             sdk_action,
             wait_for_states=wait_states,
             operation_kwargs={
@@ -193,11 +190,25 @@ class OciInstanceActionsModule(OciModuleBase):
             waiter_kwargs=waiter_kwargs,
         )
 
-        if params.get("wait") and response.data.lifecycle_state in FAILED_STATES:
+    def _validate_wait_result(self, response):
+        """Fail if the wait ends in a terminal lifecycle state."""
+        if self.module.params.get("wait") and response.data.lifecycle_state in FAILED_STATES:
             raise RuntimeError(
                 "Instance entered lifecycle state %s" % response.data.lifecycle_state
             )
 
+    def process_action(self):
+        """Return the change flag and the OCI response."""
+        params = self.module.params
+        action = params["action"]
+        instance_id = params["instance_id"]
+        operation_kwargs = self._build_operation_kwargs(action)
+
+        if self.module.check_mode:
+            return True, self.call_with_retry(self.client.get_instance, instance_id)
+
+        response = self._submit_action(instance_id, action, operation_kwargs)
+        self._validate_wait_result(response)
         return True, response
 
 
