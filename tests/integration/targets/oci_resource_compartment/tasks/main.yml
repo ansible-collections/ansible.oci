@@ -1,0 +1,79 @@
+---
+- name: Validate required OCI integration variables
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+    fail_msg: Define oci_integration_compartment_id in tests/integration/integration_config.yml.
+
+- name: Exercise a compartment move
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+  block:
+    - name: Create a child compartment
+      ansible.oci.oci_identity_compartment:
+        parent_compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_resource_compartment_integration_child_name }}-{{ oci_integration_rpfx }}"
+        description: Compartment move integration test
+      register: move_child
+
+    - name: Create a VCN in the main compartment
+      ansible.oci.oci_network_vcn:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        name: "{{ oci_resource_compartment_integration_vcn_name }}-{{ oci_integration_rpfx }}"
+        cidr_blocks:
+          - "{{ oci_resource_compartment_integration_vcn_cidr }}"
+      register: move_vcn
+
+    - name: Predict the move after Search indexes the VCN
+      ansible.oci.oci_resource_compartment: &move_options
+        resource_id: "{{ move_vcn.resource.id }}"
+        target_compartment_id: "{{ move_child.resource.id }}"
+      check_mode: true
+      register: move_prediction
+      until: move_prediction is succeeded
+      retries: 40
+      delay: 15
+
+    - name: Read the VCN after check mode
+      ansible.oci.oci_network_vcn_info:
+        vcn_id: "{{ move_vcn.resource.id }}"
+      register: move_before
+
+    - name: Verify check mode leaves the VCN in the main compartment
+      ansible.builtin.assert:
+        that:
+          - move_prediction.changed | bool
+          - move_before.vcns[0].compartment_id == oci_integration_compartment_id
+
+    - name: Move the VCN to the child compartment
+      ansible.oci.oci_resource_compartment: *move_options
+      register: move_applied
+
+    - name: Repeat the move
+      ansible.oci.oci_resource_compartment: *move_options
+      register: move_repeated
+
+    - name: Check the completed move
+      ansible.oci.oci_resource_compartment: *move_options
+      check_mode: true
+      register: move_checked
+
+    - name: Read the VCN from its service
+      ansible.oci.oci_network_vcn_info:
+        vcn_id: "{{ move_vcn.resource.id }}"
+      register: move_after
+
+    - name: Verify the move and repeated execution
+      ansible.builtin.assert:
+        that:
+          - move_applied.changed | bool
+          - not move_repeated.changed | bool
+          - not move_checked.changed | bool
+          - move_applied.previous_compartment_id == oci_integration_compartment_id
+          - move_after.vcns[0].compartment_id == move_child.resource.id
+          - move_repeated.resource.compartment_id == move_child.resource.id
+  always:
+    - name: Run compartment move cleanup
+      ansible.builtin.include_tasks: cleanup.yml
