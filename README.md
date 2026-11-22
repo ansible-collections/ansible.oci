@@ -106,6 +106,8 @@ The collection defines the action group `group/ansible.oci.oci` so a play or rol
 
 ## Use cases
 
+Run the [standalone example playbooks](examples/README.md) to see how to create, inspect, and clean up OCI resources.
+
 ### Provision a VCN and subnet
 
 Create a Virtual Cloud Network and a subnet that later tasks can attach compute or gateways to:

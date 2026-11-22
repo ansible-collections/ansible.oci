@@ -1,0 +1,92 @@
+---
+- name: Upload a sample file to OCI Object Storage
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    example_cleanup: true
+    example_bucket_name: oci-example-object-storage
+  tasks:
+    # Use an unused name to keep the example separate from existing buckets.
+    - name: Look up the example bucket name
+      ansible.oci.oci_object_storage_bucket_info:
+        bucket_name: "{{ example_bucket_name }}"
+      register: example_bucket_lookup
+
+    # Stop before creating anything if the bucket already exists.
+    - name: Check that the bucket name is unused
+      ansible.builtin.assert:
+        that: example_bucket_lookup.buckets | length == 0
+        fail_msg: The bucket name is in use. Set example_bucket_name to an unused name.
+
+    - name: Create a private bucket and upload a sample file
+      block:
+        # Local sample
+        # Create a temporary file so the example can run on its own.
+        - name: Create a temporary sample file
+          ansible.builtin.tempfile:
+            state: file
+          register: example_temp
+
+        # Write the text that the upload task will send to OCI.
+        - name: Write the sample text
+          ansible.builtin.copy:
+            content: |
+              Oracle Cloud Infrastructure example file.
+            dest: "{{ example_temp.path }}"
+            mode: "0600"
+
+        # Object Storage
+        # Restrict access to the bucket.
+        - name: Create the private example bucket
+          ansible.oci.oci_object_storage_bucket:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            name: "{{ example_bucket_name }}"
+            public_access_type: no_public_access
+          register: example_bucket
+
+        # Upload the file as sample.txt in the new bucket.
+        - name: Upload and inspect the sample
+          when: example_bucket is succeeded and example_bucket is changed
+          block:
+            - name: Upload the sample file
+              ansible.oci.oci_object_storage_object:
+                state: present
+                bucket_name: "{{ example_bucket_name }}"
+                object_name: sample.txt
+                src: "{{ example_temp.path }}"
+                content_type: text/plain
+              register: example_upload
+
+            # Show the metadata that OCI returns for the upload.
+            - name: Show the uploaded object details
+              ansible.builtin.debug:
+                var: example_upload.resource
+      always:
+        # Cleanup
+        # Remove the local file even when the user keeps the bucket.
+        - name: Delete the local sample file
+          ansible.builtin.file:
+            state: absent
+            path: "{{ example_temp.path }}"
+          when: example_temp.path is defined
+
+        # Clean up only after this run reports that it created the bucket.
+        - name: Clean up the example bucket
+          when:
+            - example_cleanup | bool
+            - example_bucket is defined and example_bucket is succeeded and example_bucket is changed
+          block:
+            # Remove the sample object before deleting its bucket.
+            - name: Delete the example object
+              ansible.oci.oci_object_storage_object:
+                state: absent
+                bucket_name: "{{ example_bucket_name }}"
+                object_name: sample.txt
+
+            # OCI rejects the deletion if the bucket still contains objects.
+            - name: Delete the empty example bucket
+              ansible.oci.oci_object_storage_bucket:
+                state: absent
+                name: "{{ example_bucket_name }}"
