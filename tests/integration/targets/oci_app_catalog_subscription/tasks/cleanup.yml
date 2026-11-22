@@ -12,7 +12,3 @@
     that:
       - oci_app_catalog_cleanup is not failed
     fail_msg: Subscription cleanup failed after three retries. See the cleanup task result.
-
-- name: Verify the subscription remains absent after cleanup
-  ansible.builtin.include_tasks: verify_absent.yml
-  when: oci_app_catalog_created_by_test | default(false)

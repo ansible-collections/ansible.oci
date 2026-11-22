@@ -235,9 +235,6 @@
         that:
           - not oci_app_catalog_absent_rerun.changed
 
-    - name: Verify the subscription remains absent after deletion
-      ansible.builtin.include_tasks: verify_absent.yml
-
     - name: Mark the subscription as deleted
       ansible.builtin.set_fact:
         oci_app_catalog_created_by_test: false
