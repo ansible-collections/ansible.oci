@@ -67,6 +67,10 @@ action_groups:
         - oci_network_local_peering_gateway_info
         - oci_network_route_table
         - oci_network_route_table_info
+        - oci_app_catalog_info
+        - oci_app_catalog_resource_version_info
+        - oci_app_catalog_resource_version_agreement_info
+        - oci_app_catalog_subscription
         - oci_instance
         - oci_instance_info
         - oci_instance_capacity_reservation

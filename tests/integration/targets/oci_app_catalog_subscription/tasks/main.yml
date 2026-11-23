@@ -1,0 +1,243 @@
+---
+- name: Validate the integration compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Validate the App Catalog fixture
+  ansible.builtin.assert:
+    that:
+      - oci_app_catalog_integration_listing_id | default('', true) | length > 0
+      - oci_app_catalog_integration_listing_resource_version | default('', true) | length > 0
+    fail_msg: >-
+      Set oci_app_catalog_integration_listing_id and
+      oci_app_catalog_integration_listing_resource_version in
+      tests/integration/targets/oci_app_catalog_subscription/defaults/main.yml.
+
+- name: Exercise App Catalog discovery and subscription
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: "{{ oci_integration_config_file_location }}"
+      config_profile_name: "{{ oci_integration_config_profile_name }}"
+    ansible.oci.oci_app_catalog_subscription:
+      compartment_id: "{{ oci_integration_compartment_id }}"
+      listing_id: "{{ oci_app_catalog_integration_listing_id }}"
+      listing_resource_version: "{{ oci_app_catalog_integration_listing_resource_version }}"
+  block:
+    - name: Initialize subscription ownership
+      ansible.builtin.set_fact:
+        oci_app_catalog_created_by_test: false
+
+    - name: List App Catalog listings without filters
+      ansible.oci.oci_app_catalog_info: {}
+      check_mode: true
+      register: oci_app_catalog_listings
+
+    - name: Assert unfiltered listing discovery is read-only
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_listings.changed
+          - oci_app_catalog_listings.listings | length > 0
+
+    - name: Get the configured App Catalog listing
+      ansible.oci.oci_app_catalog_info:
+        listing_id: "{{ oci_app_catalog_integration_listing_id }}"
+      check_mode: true
+      register: oci_app_catalog_listing
+
+    - name: Assert the configured listing exists
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_listing.changed
+          - oci_app_catalog_listing.listings | length == 1
+
+    - name: Filter listings by name
+      ansible.oci.oci_app_catalog_info:
+        name: "{{ oci_app_catalog_listing.listings[0].name }}"
+      check_mode: true
+      register: oci_app_catalog_listings_by_name
+
+    - name: Assert name filtering is exact
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_listings_by_name.changed
+          - >-
+            oci_app_catalog_listings_by_name.listings
+            | rejectattr('name', 'equalto', oci_app_catalog_listing.listings[0].name)
+            | list | length == 0
+          - >-
+            oci_app_catalog_listings_by_name.listings
+            | selectattr('listing_id', 'equalto', oci_app_catalog_integration_listing_id)
+            | list | length == 1
+
+    - name: List all resource versions
+      ansible.oci.oci_app_catalog_resource_version_info:
+        listing_id: "{{ oci_app_catalog_integration_listing_id }}"
+      check_mode: true
+      register: oci_app_catalog_versions
+
+    - name: Assert version discovery includes the configured version
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_versions.changed
+          - >-
+            oci_app_catalog_versions.listing_resource_versions
+            | selectattr('listing_resource_version', 'equalto', oci_app_catalog_integration_listing_resource_version)
+            | list | length == 1
+
+    - name: Get the configured resource version
+      ansible.oci.oci_app_catalog_resource_version_info:
+        listing_id: "{{ oci_app_catalog_integration_listing_id }}"
+        listing_resource_version: "{{ oci_app_catalog_integration_listing_resource_version }}"
+      check_mode: true
+      register: oci_app_catalog_version
+
+    - name: Assert the resource version exposes an image ID
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_version.changed
+          - oci_app_catalog_version.listing_resource_versions | length == 1
+          - oci_app_catalog_version.listing_resource_versions[0].listing_resource_id | length > 0
+
+    - name: Get the App Catalog agreement
+      no_log: true
+      ansible.oci.oci_app_catalog_resource_version_agreement_info:
+        listing_id: "{{ oci_app_catalog_integration_listing_id }}"
+        listing_resource_version: "{{ oci_app_catalog_integration_listing_resource_version }}"
+      check_mode: true
+      register: oci_app_catalog_agreement
+
+    - name: Assert the agreement contains subscription fields
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_agreement.changed
+          - oci_app_catalog_agreement.agreements | length == 1
+          - oci_app_catalog_agreement.agreements[0].signature | length > 0
+          - oci_app_catalog_agreement.agreements[0].time_retrieved | length > 0
+          - oci_app_catalog_agreement.agreements[0].oracle_terms_of_use_link | length > 0
+
+    - name: Check subscription state before the test
+      ansible.oci.oci_app_catalog_subscription:
+        state: absent
+      check_mode: true
+      register: oci_app_catalog_initial_subscription
+
+    - name: Fail when the configured subscription already exists
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_initial_subscription.changed
+        fail_msg: "The configured App Catalog subscription already exists. Use a clean test listing."
+
+    - name: Create the subscription in check mode
+      ansible.oci.oci_app_catalog_subscription: &oci_app_catalog_subscription_options
+        state: present
+        signature: "{{ oci_app_catalog_agreement.agreements[0].signature }}"
+        time_retrieved: "{{ oci_app_catalog_agreement.agreements[0].time_retrieved }}"
+        oracle_terms_of_use_link: "{{ oci_app_catalog_agreement.agreements[0].oracle_terms_of_use_link }}"
+        eula_link: "{{ oci_app_catalog_agreement.agreements[0].eula_link | default(omit, true) }}"
+      check_mode: true
+      register: oci_app_catalog_subscription_check
+
+    - name: Assert create check mode predicts a change
+      ansible.builtin.assert:
+        that:
+          - oci_app_catalog_subscription_check.changed
+
+    - name: Verify create check mode left the subscription absent
+      ansible.oci.oci_app_catalog_subscription:
+        state: absent
+      check_mode: true
+      register: oci_app_catalog_after_create_check
+
+    - name: Assert create check mode did not create a subscription
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_after_create_check.changed
+
+    - name: Mark the subscription as owned by this test
+      ansible.builtin.set_fact:
+        oci_app_catalog_created_by_test: true
+
+    - name: Create the subscription
+      ansible.oci.oci_app_catalog_subscription:
+        <<: *oci_app_catalog_subscription_options
+      register: oci_app_catalog_subscription_create
+
+    - name: Assert subscription creation returned the full resource
+      ansible.builtin.assert:
+        that:
+          - oci_app_catalog_subscription_create.changed
+          - oci_app_catalog_subscription_create.resource.listing_id == oci_app_catalog_integration_listing_id
+          - oci_app_catalog_subscription_create.resource.listing_resource_version == oci_app_catalog_integration_listing_resource_version
+          - oci_app_catalog_subscription_create.resource.compartment_id == oci_integration_compartment_id
+
+    - name: Verify the subscription present read is idempotent
+      ansible.oci.oci_app_catalog_subscription:
+        <<: *oci_app_catalog_subscription_options
+      register: oci_app_catalog_subscription_rerun
+
+    - name: Assert the subscription present read is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_subscription_rerun.changed
+          - oci_app_catalog_subscription_rerun.resource.listing_id == oci_app_catalog_integration_listing_id
+
+    - name: Verify the subscription present read in check mode
+      ansible.oci.oci_app_catalog_subscription:
+        <<: *oci_app_catalog_subscription_options
+      check_mode: true
+      register: oci_app_catalog_subscription_check_rerun
+
+    - name: Assert the present check-mode read is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_subscription_check_rerun.changed
+
+    - name: Delete the subscription in check mode
+      ansible.oci.oci_app_catalog_subscription:
+        state: absent
+      check_mode: true
+      register: oci_app_catalog_delete_check
+
+    - name: Assert delete check mode predicts a change
+      ansible.builtin.assert:
+        that:
+          - oci_app_catalog_delete_check.changed
+
+    - name: Verify the subscription still exists after delete check mode
+      ansible.oci.oci_app_catalog_subscription:
+        <<: *oci_app_catalog_subscription_options
+      check_mode: true
+      register: oci_app_catalog_after_delete_check
+
+    - name: Assert delete check mode did not change the subscription
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_after_delete_check.changed
+
+    - name: Delete the subscription
+      ansible.oci.oci_app_catalog_subscription:
+        state: absent
+      register: oci_app_catalog_delete
+
+    - name: Assert subscription deletion changed state
+      ansible.builtin.assert:
+        that:
+          - oci_app_catalog_delete.changed
+
+    - name: Repeat absent state normally
+      ansible.oci.oci_app_catalog_subscription:
+        state: absent
+      register: oci_app_catalog_absent_rerun
+
+    - name: Assert repeated absent state is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_app_catalog_absent_rerun.changed
+
+    - name: Mark the subscription as deleted
+      ansible.builtin.set_fact:
+        oci_app_catalog_created_by_test: false
+  always:
+    - name: Clean up integration resources
+      ansible.builtin.include_tasks: cleanup.yml
