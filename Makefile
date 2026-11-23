@@ -22,7 +22,11 @@ endif
 
 # Targets marked `manual` in their aliases file are excluded from full
 # integration runs; pass INTEGRATION_TARGETS to run them explicitly.
-MANUAL_INTEGRATION_TARGETS := $(shell grep -l '^manual$$' $(COLLECTION_ROOT)/tests/integration/targets/*/aliases 2>/dev/null | xargs -r -n1 dirname | xargs -r -n1 basename)
+# Recursive (`=`) on purpose: when running from outside the collection tree this
+# must be evaluated at recipe time, after upgrade-collections has installed the
+# collection to COLLECTION_ROOT. A simple (`:=`) assignment expands at parse
+# time, before the install exists, and silently drops every --exclude.
+MANUAL_INTEGRATION_TARGETS = $(shell grep -l '^manual$$' $(COLLECTION_ROOT)/tests/integration/targets/*/aliases 2>/dev/null | xargs -r -n1 dirname | xargs -r -n1 basename)
 
 .PHONY: generate-integration-runtime
 generate-integration-runtime:
