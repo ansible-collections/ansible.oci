@@ -129,6 +129,9 @@
           - user_by_id.users[0].name == 'OCI User Integration'
           - user_by_id.users[0].email == oci_identity_user_integration_name
 
+    - name: Test UI password reset
+      ansible.builtin.include_tasks: ui_password.yml
+
     - name: Update user
       ansible.oci.oci_identity_user: &user_updated
         domain_id: "{{ oci_integration_domain_id }}"
