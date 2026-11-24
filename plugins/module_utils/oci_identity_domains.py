@@ -9,6 +9,7 @@ from ansible.module_utils.basic import missing_required_lib
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_auth import (
     create_service_client,
+    get_oci_config,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
@@ -34,28 +35,298 @@ OCI_IDENTITY_DOMAIN_ARGS = {
     "domain_url": dict(type="str"),
 }
 
+IDENTITY_DOMAIN_PASSWORD_ARGS = {
+    "domain_id": dict(type="str"),
+    "domain_url": dict(type="str"),
+    "domain_name": dict(type="str"),
+    "compartment_id": dict(type="str"),
+    "user_id": dict(type="str"),
+    "user_ocid": dict(type="str"),
+    "user_name": dict(type="str"),
+}
+
+PASSWORD_STATE_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User"
+PASSWORD_STATE_ATTRIBUTES = ",".join(
+    f"{PASSWORD_STATE_SCHEMA}:{field}"
+    for field in ("cantChange", "cantExpire", "mustChange", "expired", "lastSuccessfulSetDate")
+)
+PASSWORD_STATE_ATTRIBUTE = (
+    "urn_ietf_params_scim_schemas_oracle_idcs_extension_password_state_user"
+)
+
+
+class IdentityDomainUserError(Exception):
+    """Report a missing or ambiguous Identity Domains user selector."""
+
+
+class IdentityDomainConfigurationError(Exception):
+    """Report invalid Identity Domains lookup settings."""
+
 
 def escape_scim_filter_value(value):
     """Escape a string embedded in a quoted SCIM filter value."""
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def resolve_domain_url(module):
-    """Return the explicit domain URL or resolve a domain OCID to its URL."""
+def resolve_identity_domain(module):
+    """Return the selected identity domain OCID and service URL.
+
+    Args:
+        module: The Ansible module with domain and authentication parameters.
+
+    Returns:
+        A tuple with the identity domain OCID and service URL.
+
+    Raises:
+        IdentityDomainConfigurationError: If domain settings are incomplete.
+    """
     domain_url = module.params.get("domain_url")
     if domain_url:
-        return domain_url.rstrip("/")
+        return module.params.get("domain_id"), domain_url.rstrip("/")
 
     domain_id = module.params.get("domain_id")
     identity_client = create_service_client(module, oci.identity.IdentityClient)
-    response = oci.retry.DEFAULT_RETRY_STRATEGY.make_retrying_call(
-        identity_client.get_domain,
-        domain_id=domain_id,
-    )
-    domain_url = getattr(response.data, "url", None)
+    if domain_id or "domain_name" not in module.params:
+        response = oci.retry.DEFAULT_RETRY_STRATEGY.make_retrying_call(
+            identity_client.get_domain,
+            domain_id=domain_id,
+        )
+        domain = response.data
+    else:
+        domain_name = module.params.get("domain_name") or "Default"
+        compartment_id = (
+            module.params.get("compartment_id") or module.params.get("tenancy")
+        )
+        if not compartment_id:
+            compartment_id = get_oci_config(module).get("tenancy")
+        if not compartment_id:
+            raise IdentityDomainConfigurationError(
+                "Set compartment_id or configure tenancy to select an identity domain"
+            )
+        domains = _list_identity_domains_by_name(
+            identity_client,
+            compartment_id,
+            domain_name,
+        )
+        if len(domains) != 1:
+            raise IdentityDomainConfigurationError(
+                "Identity domain name did not match exactly one domain"
+            )
+        domain = domains[0]
+
+    domain_url = getattr(domain, "url", None)
     if not domain_url:
-        module.fail_json(msg=f"Identity domain {domain_id} does not expose a service URL")
-    return domain_url.rstrip("/")
+        raise IdentityDomainConfigurationError(
+            "The selected identity domain does not expose a service URL"
+        )
+    return getattr(domain, "id", None) or domain_id, domain_url.rstrip("/")
+
+
+def _list_identity_domains_by_name(identity_client, compartment_id, domain_name):
+    """Return all identity domains that match an exact name.
+
+    Args:
+        identity_client: An OCI IdentityClient instance.
+        compartment_id: The tenancy or compartment OCID.
+        domain_name: The exact identity domain name to find.
+
+    Returns:
+        Matching identity domain models from every response page.
+    """
+    response = oci.pagination.list_call_get_all_results(
+        identity_client.list_domains,
+        compartment_id=compartment_id,
+        name=domain_name,
+        limit=1000,
+        retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY,
+    )
+    return [
+        domain
+        for domain in (response.data or [])
+        if getattr(domain, "display_name", None) == domain_name
+    ]
+
+
+def find_identity_domain_user(module, client, attributes=None):
+    """Find one Identity Domains user by SCIM ID, OCID, or user name.
+
+    Args:
+        module: The Ansible module with user selector parameters.
+        client: An IdentityDomainsClient instance.
+        attributes: Optional SCIM attributes to return.
+
+    Returns:
+        The matching user model, or None when the service cannot find the user.
+
+    Raises:
+        IdentityDomainUserError: If the selector matches multiple users or is invalid.
+    """
+    selector, value = identity_domain_user_selector(module.params)
+    response_kwargs = {
+        "attributes": attributes or "id,ocid,userName,domainOcid",
+        "attribute_sets": ["default"],
+    }
+    try:
+        if selector == "user_id":
+            return oci.retry.DEFAULT_RETRY_STRATEGY.make_retrying_call(
+                client.get_user,
+                user_id=value,
+                **response_kwargs,
+            ).data
+        return _find_identity_domain_user_by_filter(
+            client,
+            selector,
+            value,
+            response_kwargs,
+        )
+    except Exception as exc:
+        if getattr(exc, "status", None) == 404:
+            return None
+        raise
+
+
+def identity_domain_user_selector(params):
+    """Return the one selected user key and value.
+
+    Args:
+        params: The Ansible module parameters.
+
+    Returns:
+        A tuple with the selector name and its value.
+
+    Raises:
+        IdentityDomainUserError: If no valid single selector is set.
+    """
+    selectors = [
+        name for name in ("user_id", "user_ocid", "user_name") if params.get(name)
+    ]
+    if len(selectors) != 1:
+        raise IdentityDomainUserError(
+            "Set exactly one of user_id, user_ocid, or user_name"
+        )
+    selector = selectors[0]
+    value = params[selector]
+    if selector == "user_id" and value.lower().startswith("ocid1."):
+        raise IdentityDomainUserError(
+            "user_id requires a SCIM ID; use user_ocid for an OCID"
+        )
+    return selector, value
+
+
+def _find_identity_domain_user_by_filter(client, selector, value, response_kwargs):
+    """Return the unique user that matches an OCID or sign-in name.
+
+    Args:
+        client: An IdentityDomainsClient instance.
+        selector: The selector name, either ``user_ocid`` or ``user_name``.
+        value: The OCID or sign-in name to match.
+        response_kwargs: SCIM response attributes for list_users.
+
+    Returns:
+        The matching user model, or None when no user matches.
+
+    Raises:
+        IdentityDomainUserError: If multiple users match the selector.
+    """
+    attribute = "ocid" if selector == "user_ocid" else "userName"
+    filter_value = escape_scim_filter_value(value)
+    request_kwargs = {
+        "filter": f'{attribute} eq "{filter_value}"',
+        "count": 1000,
+        "retry_strategy": oci.retry.DEFAULT_RETRY_STRATEGY,
+        **response_kwargs,
+    }
+    users = _list_identity_domain_users(client, request_kwargs)
+    users = [
+        user
+        for user in (users or [])
+        if selector != "user_ocid" or getattr(user, "ocid", None) == value
+    ]
+    if len(users) > 1:
+        raise IdentityDomainUserError("The user selector matched multiple users")
+    return users[0] if users else None
+
+
+def _list_identity_domain_users(client, request_kwargs):
+    """Return users from each SCIM page for the same filter.
+
+    Args:
+        client: An IdentityDomainsClient instance.
+        request_kwargs: Filter, attribute, and pagination options for list_users.
+
+    Returns:
+        Matching user models from every SCIM page.
+    """
+    users = []
+    start_index = 1
+    count = request_kwargs["count"]
+    while True:
+        response = client.list_users(start_index=start_index, **request_kwargs)
+        page = response.data
+        page_users = getattr(page, "resources", None) or []
+        users.extend(page_users)
+        items_per_page = getattr(page, "items_per_page", None) or len(page_users)
+        total_results = getattr(page, "total_results", None)
+        next_start_index = (getattr(page, "start_index", None) or start_index) + items_per_page
+        if not page_users or (
+            total_results is not None and next_start_index > total_results
+        ) or (total_results is None and items_per_page < count):
+            break
+        if next_start_index <= start_index:
+            break
+        start_index = next_start_index
+    return users
+
+
+def serialize_identity_domain_password_user(user, domain_id=None):
+    """Return selected user identifiers and password state metadata.
+
+    Args:
+        user: An Identity Domains user model.
+        domain_id: Resolved identity domain OCID, when available.
+
+    Returns:
+        A dictionary with user identifiers and approved password state fields.
+    """
+    state = getattr(user, PASSWORD_STATE_ATTRIBUTE, None)
+    password_state = {}
+    if state is not None:
+        password_state = {
+            name: getattr(state, name, None)
+            for name in (
+                "cant_change",
+                "cant_expire",
+                "must_change",
+                "expired",
+                "last_successful_set_date",
+            )
+        }
+    return {
+        "user_id": getattr(user, "id", None),
+        "user_ocid": getattr(user, "ocid", None),
+        "user_name": getattr(user, "user_name", None),
+        "domain_id": getattr(user, "domain_ocid", None) or domain_id,
+        "password_state": password_state,
+    }
+
+
+def serialize_identity_domain_password_reset(user, response, domain_id=None):
+    """Return selected user identifiers and any temporary password.
+
+    Args:
+        user: An Identity Domains user model.
+        response: The response model from the password reset operation.
+        domain_id: Resolved identity domain OCID, when available.
+
+    Returns:
+        A dictionary with user identifiers and the returned password, if present.
+    """
+    result = serialize_identity_domain_password_user(user, domain_id)
+    result.pop("password_state")
+    password = getattr(response, "one_time_password", None)
+    if password is not None:
+        result["password"] = password
+    return result
 
 
 class OciIdentityDomainsMixin:
@@ -64,9 +335,20 @@ class OciIdentityDomainsMixin:
     scim_response_attributes = ()
 
     def __init__(self, module):
+        """Resolve the domain and create its configured client.
+
+        Args:
+            module: The Ansible module with domain and authentication parameters.
+        """
         if not HAS_OCI_SDK:
             module.fail_json(msg=missing_required_lib("oci"))
-        self.identity_domain_url = resolve_domain_url(module)
+        error = None
+        try:
+            self.identity_domain_id, self.identity_domain_url = resolve_identity_domain(module)
+        except IdentityDomainConfigurationError as exc:
+            error = str(exc)
+        if error:
+            module.fail_json(msg=error)
         super(OciIdentityDomainsMixin, self).__init__(module)
 
     @property
