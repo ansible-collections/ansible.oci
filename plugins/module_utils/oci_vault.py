@@ -1,8 +1,9 @@
-"""Helpers shared by OCI Vault and key management resource and info modules."""
+"""Helpers shared by OCI Vault, key, and secret resource and info modules."""
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+import base64
 from datetime import datetime, timedelta, timezone
 from functools import partial
 
@@ -13,6 +14,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_auth import (
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     import_oci_sdk,
+    threaded_map,
 )
 
 oci, HAS_OCI_SDK = import_oci_sdk()
@@ -32,6 +34,9 @@ STATE_DELETED = "DELETED"
 RESTORED_STATES = ("ACTIVE", "ENABLED", "DISABLED")
 MIN_DELETION_DAYS = 7
 MAX_DELETION_DAYS = 30
+SECRET_MIN_DELETION_DAYS = 1
+DELETION_SCHEDULE_MARGIN = timedelta(minutes=10)
+SECRET_CONTENT_ENCODINGS = ("text", "base64")
 
 
 def resolve_management_endpoint(module):
@@ -103,6 +108,9 @@ class OciScheduledDeletionMixin:
     by cancelling the schedule. Concrete adapters implement
     :meth:`cancel_deletion` with their resource's cancel operation.
     """
+
+    min_deletion_days = MIN_DELETION_DAYS
+    max_deletion_days = MAX_DELETION_DAYS
 
     @property
     def dead_states(self):
@@ -348,16 +356,9 @@ class OciScheduledDeletionMixin:
         OCI enforces only after the request is sent.
         """
         super(OciScheduledDeletionMixin, self).validate_delete_request()
-        deletion_days = self.module.params.get("deletion_days")
-        if deletion_days is not None and not (
-            MIN_DELETION_DAYS <= deletion_days <= MAX_DELETION_DAYS
-        ):
-            self.module.fail_json(
-                msg=(
-                    f"deletion_days must be between {MIN_DELETION_DAYS} and "
-                    f"{MAX_DELETION_DAYS}, got {deletion_days}"
-                )
-            )
+        validate_deletion_days(
+            self.module, self.min_deletion_days, self.max_deletion_days
+        )
 
     def build_deletion_schedule(self):
         """Return the fields of a schedule-deletion details model.
@@ -367,9 +368,225 @@ class OciScheduledDeletionMixin:
             empty dict so OCI applies its default window when
             ``deletion_days`` is omitted.
         """
-        deletion_days = self.module.params.get("deletion_days")
-        if deletion_days is None:
-            return {}
-        return {
-            "time_of_deletion": datetime.now(timezone.utc) + timedelta(days=deletion_days)
-        }
+        return build_deletion_schedule(
+            self.module.params.get("deletion_days"), self.max_deletion_days
+        )
+
+
+def validate_deletion_days(module, min_days, max_days):
+    """Fail when ``deletion_days`` falls outside the window OCI accepts.
+
+    OCI enforces the window only after the request is sent, so checking it
+    first gives a clear error before any change is made.
+
+    Args:
+        module: The active Ansible module.
+        min_days: The smallest accepted number of days.
+        max_days: The largest accepted number of days.
+    """
+    deletion_days = module.params.get("deletion_days")
+    if deletion_days is not None and not min_days <= deletion_days <= max_days:
+        module.fail_json(
+            msg=(
+                f"deletion_days must be between {min_days} and "
+                f"{max_days}, got {deletion_days}"
+            )
+        )
+
+
+def build_deletion_schedule(deletion_days, max_days=MAX_DELETION_DAYS):
+    """Return the fields of a schedule-deletion details model.
+
+    OCI checks the deletion window when it receives the request, so a time
+    exactly at the minimum would already be too early. A short margin is
+    added, capped so the time never passes the maximum.
+
+    Args:
+        deletion_days: The number of days from now until deletion, or None.
+        max_days: The largest number of days OCI accepts.
+
+    Returns:
+        ``{"time_of_deletion": ...}`` set about ``deletion_days`` from now, or
+        an empty dict so OCI applies its default window when
+        ``deletion_days`` is None.
+    """
+    if deletion_days is None:
+        return {}
+    now = datetime.now(timezone.utc)
+    return {
+        "time_of_deletion": min(
+            now + timedelta(days=deletion_days) + DELETION_SCHEDULE_MARGIN,
+            now + timedelta(days=max_days),
+        )
+    }
+
+
+def secret_content_to_bytes(content, encoding):
+    """Return the raw bytes of secret content supplied in ``encoding``.
+
+    Args:
+        content: The secret content as text or as a base64 string.
+        encoding: ``text`` or ``base64``.
+
+    Returns:
+        The decoded content bytes.
+    """
+    if encoding == "base64":
+        return base64.b64decode(content)
+    return content.encode("utf-8")
+
+
+def encode_secret_content(content, encoding):
+    """Return secret content as the base64 string OCI stores.
+
+    Args:
+        content: The secret content as text or as a base64 string.
+        encoding: ``text`` or ``base64``.
+
+    Returns:
+        The base64-encoded content.
+    """
+    return base64.b64encode(secret_content_to_bytes(content, encoding)).decode("ascii")
+
+
+def decode_secret_content(module, content, encoding):
+    """Return base64 content from a secret bundle in ``encoding``.
+
+    Args:
+        module: The active Ansible module, used to report undecodable text.
+        content: The base64 content of a secret bundle.
+        encoding: ``text`` or ``base64``.
+
+    Returns:
+        The content as UTF-8 text, or unchanged when ``encoding`` is
+        ``base64``.
+    """
+    if encoding == "base64":
+        return content
+    try:
+        return base64.b64decode(content).decode("utf-8")
+    except UnicodeDecodeError:
+        module.fail_json(
+            msg="Secret content is not valid UTF-8 text; use content_encoding=base64"
+        )
+
+
+class OciSecretBundleMixin:
+    """Read secret content, which the Vault management API never returns.
+
+    Secret content is only served by ``SecretsClient.get_secret_bundle``,
+    which needs the ``read secret-bundles`` permission, so the client is
+    created only when content is actually read.
+    """
+
+    _secrets_client = None
+
+    @property
+    def secrets_client(self):
+        """Return the lazily created secret retrieval client.
+
+        Returns:
+            An ``oci.secrets.SecretsClient``.
+        """
+        if self._secrets_client is None:
+            self._secrets_client = create_service_client(
+                self.module, oci.secrets.SecretsClient
+            )
+        return self._secrets_client
+
+    def get_secret_bundle_content(self, secret_id, **selector):
+        """Return the base64 content of one secret version.
+
+        Args:
+            secret_id: The OCID of the secret.
+            **selector: ``stage`` or ``version_number`` passed to
+                ``get_secret_bundle``; the ``CURRENT`` version when empty.
+
+        Returns:
+            The base64 content, or None when no version matches the selector.
+        """
+        try:
+            response = self.call_with_retry(
+                self.secrets_client.get_secret_bundle,
+                secret_id=secret_id,
+                **selector,
+            )
+        except Exception as exc:
+            if getattr(exc, "status", None) == 404:
+                return None
+            raise
+        return response.data.secret_bundle_content.content
+
+
+class OciSecretContentInfoMixin(OciSecretBundleMixin):
+    """Attach secret content to info module results when requested.
+
+    Concrete adapters implement :meth:`content_request` to say which secret
+    version, if any, can be read for each listed resource.
+    """
+
+    def content_request(self, resource):
+        """Return the bundle lookup for ``resource``, or None when unreadable.
+
+        Args:
+            resource: One resource returned by ``fetch_resources``.
+
+        Returns:
+            A ``(secret_id, selector)`` tuple for ``get_secret_bundle_content``,
+            or None to report no content for the resource.
+
+        Raises:
+            NotImplementedError: When the concrete adapter does not implement it.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must define content_request()"
+        )
+
+    def fetch_contents(self, resources):
+        """Read the content of every readable resource in parallel.
+
+        Args:
+            resources: The resources returned by ``fetch_resources``.
+
+        Returns:
+            The content of each resource in ``content_encoding``, in input
+            order, with None for resources that are unreadable or have no
+            matching version.
+        """
+        requests = [self.content_request(resource) for resource in resources]
+        readable = [request for request in requests if request is not None]
+        if readable:
+            # Create the lazy client once so the workers share it.
+            self.secrets_client
+        encoded_contents = iter(
+            threaded_map(
+                lambda request: self.get_secret_bundle_content(
+                    request[0], **request[1]
+                ),
+                readable,
+            )
+        )
+        encoding = self.module.params["content_encoding"]
+        contents = []
+        for request in requests:
+            content = None if request is None else next(encoded_contents)
+            contents.append(
+                None
+                if content is None
+                else decode_secret_content(self.module, content, encoding)
+            )
+        return contents
+
+    def execute_info_module(self):
+        """Exit with the serialized resources, adding content when requested.
+
+        The inherited implementation serializes each resource on its own, but
+        secret content is not part of the resource model and is fetched for
+        all resources in parallel, so it is attached after serialization.
+        """
+        resources = self.fetch_resources()
+        results = [self.serialize_result_resource(resource) for resource in resources]
+        if self.module.params["include_content"]:
+            for result, content in zip(results, self.fetch_contents(resources)):
+                result["content"] = content
+        self.module.exit_json(changed=False, **{self.results_key: results})
