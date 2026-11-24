@@ -142,6 +142,23 @@ def test_main_reads_password_state_in_check_mode(monkeypatch):
     assert calls == ["read"]
 
 
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_main_reports_missing_sdk_before_client_creation(monkeypatch, check_mode):
+    """Return the dependency failure when the OCI SDK is absent."""
+    module_obj = load_password_info_module(monkeypatch)
+    module = DummyModule({"user_id": "SCIM-ID"}, check_mode=check_mode)
+    monkeypatch.setattr(module_obj, "AnsibleModule", lambda **kwargs: module)
+    monkeypatch.setattr(module_obj, "oci", None)
+    monkeypatch.setattr(
+        module_obj,
+        "OciIdentityUiPasswordInfoModule",
+        lambda active: pytest.fail("unexpected client creation"),
+    )
+
+    with pytest.raises(FailJsonCalled, match="oci"):
+        module_obj.main()
+
+
 @pytest.mark.parametrize("error_kind", ["service", "generic", "constructor"])
 def test_main_reports_safe_errors_without_active_exception(monkeypatch, error_kind):
     """Return safe error fields and clear exception context before failure."""

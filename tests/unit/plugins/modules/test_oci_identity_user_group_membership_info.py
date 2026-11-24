@@ -50,7 +50,7 @@ def test_missing_oci_sdk_fails_before_domain_lookup(monkeypatch):
     helper = sys.modules[module_obj.OciIdentityDomainsMixin.__module__]
     monkeypatch.setattr(helper, "HAS_OCI_SDK", False)
     monkeypatch.setattr(
-        helper, "resolve_domain_url", lambda module: pytest.fail("unexpected lookup")
+        helper, "resolve_identity_domain", lambda module: pytest.fail("unexpected lookup")
     )
     with pytest.raises(FailJsonCalled) as failure:
         module_obj.OciIdentityUserGroupMembershipInfoModule(DummyModule({"domain_id": "domain1"}))

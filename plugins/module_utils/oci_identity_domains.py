@@ -64,18 +64,6 @@ def escape_scim_filter_value(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def resolve_domain_url(module):
-    """Return the service URL for the selected identity domain.
-
-    Args:
-        module: The Ansible module with domain and authentication parameters.
-
-    Returns:
-        The identity domain service URL.
-    """
-    return resolve_identity_domain(module)[1]
-
-
 def resolve_identity_domain(module):
     """Return the selected identity domain OCID and service URL.
 
@@ -169,7 +157,7 @@ def find_identity_domain_user(module, client, attributes=None):
     Raises:
         IdentityDomainUserError: If the selector matches multiple users or is invalid.
     """
-    selector, value = _identity_domain_user_selector(module.params)
+    selector, value = identity_domain_user_selector(module.params)
     response_kwargs = {
         "attributes": attributes or "id,ocid,userName,domainOcid",
         "attribute_sets": ["default"],
@@ -193,7 +181,7 @@ def find_identity_domain_user(module, client, attributes=None):
         raise
 
 
-def _identity_domain_user_selector(params):
+def identity_domain_user_selector(params):
     """Return the one selected user key and value.
 
     Args:
@@ -350,7 +338,13 @@ class OciIdentityDomainsMixin:
         """
         if not HAS_OCI_SDK:
             module.fail_json(msg=missing_required_lib("oci"))
-        self.identity_domain_id, self.identity_domain_url = resolve_identity_domain(module)
+        error = None
+        try:
+            self.identity_domain_id, self.identity_domain_url = resolve_identity_domain(module)
+        except IdentityDomainConfigurationError as exc:
+            error = str(exc)
+        if error:
+            module.fail_json(msg=error)
         super(OciIdentityDomainsMixin, self).__init__(module)
 
     @property

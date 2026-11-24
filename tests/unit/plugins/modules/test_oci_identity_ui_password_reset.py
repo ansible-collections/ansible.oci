@@ -60,16 +60,6 @@ def make_password(module_obj, params, client=None, check_mode=False):
     )
 
 
-def make_domain_password(module_obj, params, client):
-    """Create a domain reset helper without client construction."""
-    instance = object.__new__(module_obj.OciIdentityDomainUiPasswordResetModule)
-    instance.module = DummyModule(params)
-    instance.client = client
-    instance.identity_domain_id = params.get("domain_id", "domain-id")
-    instance.identity_domain_url = params.get("domain_url", "https://identity.example.com")
-    return instance
-
-
 def test_main_defines_reset_contract(monkeypatch):
     """Verify the required user argument and check mode support.
 
@@ -218,6 +208,39 @@ def test_check_mode_does_not_call_sdk_and_returns_changed(monkeypatch, no_log):
         module_obj.main()
 
     assert result.value.payload == {"changed": True, "action": "reset"}
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_main_rejects_ocid_in_scim_selector_before_client_creation(monkeypatch, check_mode):
+    """Reject an OCID in user_id without an OCI request."""
+    module_obj = load_password_module(monkeypatch)
+    module = DummyModule({"user_id": "ocid1.user.oc1..example"}, check_mode=check_mode)
+    monkeypatch.setattr(module_obj, "AnsibleModule", lambda **kwargs: module)
+    monkeypatch.setattr(
+        module_obj,
+        "OciIdentityDomainUiPasswordResetModule",
+        lambda active: pytest.fail("unexpected client creation"),
+    )
+
+    with pytest.raises(FailJsonCalled, match="SCIM ID"):
+        module_obj.main()
+
+
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_main_reports_missing_sdk_before_client_creation(monkeypatch, check_mode):
+    """Return the dependency failure when the OCI SDK is absent."""
+    module_obj = load_password_module(monkeypatch)
+    module = DummyModule({"user_id": "SCIM-ID"}, check_mode=check_mode)
+    monkeypatch.setattr(module_obj, "AnsibleModule", lambda **kwargs: module)
+    monkeypatch.setattr(module_obj, "oci", None)
+    monkeypatch.setattr(
+        module_obj,
+        "OciIdentityDomainUiPasswordResetModule",
+        lambda active: pytest.fail("unexpected client creation"),
+    )
+
+    with pytest.raises(FailJsonCalled, match="oci"):
+        module_obj.main()
 
 
 @pytest.mark.parametrize(

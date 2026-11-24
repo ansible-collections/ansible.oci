@@ -95,8 +95,8 @@ def test_domain_id_is_resolved_through_control_plane(monkeypatch):
     monkeypatch.setattr(
         helper, "create_service_client", lambda module, client_class: identity_client
     )
-    assert helper.resolve_domain_url(DummyModule({"domain_id": "domain1"})) == (
-        "https://identity.example.com"
+    assert helper.resolve_identity_domain(DummyModule({"domain_id": "domain1"})) == (
+        "domain1", "https://identity.example.com"
     )
     assert calls == [{"domain_id": "domain1"}]
 
@@ -107,12 +107,34 @@ def test_missing_sdk_fails_before_domain_id_resolution(monkeypatch):
     monkeypatch.setattr(helper, "HAS_OCI_SDK", False)
     monkeypatch.setattr(
         helper,
-        "resolve_domain_url",
+        "resolve_identity_domain",
         lambda module: pytest.fail("domain lookup must not run without OCI SDK"),
     )
 
     with pytest.raises(FailJsonCalled, match="oci"):
         module_obj.OciIdentityUserModule(DummyModule({"domain_id": "domain1"}))
+
+
+def test_missing_domain_url_returns_clean_failure(monkeypatch):
+    """Return a module failure when the domain has no service URL."""
+    module_obj = load_user_module(monkeypatch)
+    helper = sys.modules[module_obj.OciIdentityDomainResourceBase.__module__]
+    client = types.SimpleNamespace(
+        get_domain=lambda **kwargs: FakeResponse(FakeModel(url=None))
+    )
+    monkeypatch.setattr(helper, "create_service_client", lambda module, cls: client)
+    module = DummyModule({"domain_id": "domain1"})
+    active_exceptions = []
+
+    def fail_json(**kwargs):
+        """Capture the failure and its active exception."""
+        active_exceptions.append(sys.exc_info()[1])
+        raise FailJsonCalled(kwargs)
+
+    monkeypatch.setattr(module, "fail_json", fail_json)
+    with pytest.raises(FailJsonCalled, match="service URL"):
+        module_obj.OciIdentityUserModule(module)
+    assert active_exceptions == [None]
 
 
 @pytest.mark.parametrize(

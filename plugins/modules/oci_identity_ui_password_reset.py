@@ -20,38 +20,7 @@ author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - ansible.oci.oci_auth_options
-options:
-  domain_id:
-    description:
-      - OCID of the identity domain. This option cannot be used with C(domain_url) or C(domain_name).
-    type: str
-  domain_url:
-    description:
-      - Service endpoint of the identity domain. This option cannot be used with C(domain_id) or C(domain_name).
-    type: str
-  domain_name:
-    description:
-      - Exact name of the identity domain. The module uses C(Default) when you omit all domain selectors.
-      - This option cannot be used with C(domain_id) or C(domain_url).
-    type: str
-  compartment_id:
-    description:
-      - Compartment OCID for the domain name lookup. The module uses the tenancy OCID when you omit this option.
-    type: str
-  user_id:
-    description:
-      - SCIM user ID from C(resource.id) in C(oci_identity_user).
-      - Do not use the user OCID with this option.
-    type: str
-  user_ocid:
-    description:
-      - User OCID from C(resource.ocid) in C(oci_identity_user).
-      - Do not use the SCIM user ID with this option.
-    type: str
-  user_name:
-    description:
-      - User sign-in name. The module fails when the name matches multiple users.
-    type: str
+  - ansible.oci.oci_identity_password_options
 seealso:
   - name: OCI User Credentials
     description: Learn about Console password credentials.
@@ -113,7 +82,7 @@ request_id:
   type: str
 """
 
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 
 from ansible_collections.ansible.oci.plugins.module_utils.oci_base import OciModuleBase
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
@@ -126,6 +95,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains i
     IdentityDomainUserError,
     OciIdentityDomainsMixin,
     find_identity_domain_user,
+    identity_domain_user_selector,
     serialize_identity_domain_password_reset,
 )
 
@@ -186,6 +156,17 @@ def main():
             ["domain_id", "domain_url", "domain_name"],
         ],
     )
+    if oci is None:
+        module.fail_json(msg=missing_required_lib("oci"))
+
+    error = None
+    try:
+        identity_domain_user_selector(module.params)
+    except IdentityDomainUserError as exc:
+        error = str(exc)
+    if error:
+        module.fail_json(msg=error)
+
     if module.check_mode:
         module.exit_json(changed=True, action="reset")
 
