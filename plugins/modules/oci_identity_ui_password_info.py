@@ -98,7 +98,7 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains i
     IdentityDomainConfigurationError,
     IdentityDomainUserError,
     OciIdentityDomainsMixin,
-    PASSWORD_STATE_SCHEMA,
+    PASSWORD_STATE_ATTRIBUTES,
     find_identity_domain_user,
     serialize_identity_domain_password_user,
 )
@@ -117,7 +117,7 @@ class OciIdentityUiPasswordInfoModule(OciIdentityDomainsMixin, OciInfoBase):
         Returns:
             A list with the matching user, or an empty list.
         """
-        attributes = "id,ocid,userName,domainOcid," + PASSWORD_STATE_SCHEMA
+        attributes = "id,ocid,userName,domainOcid," + PASSWORD_STATE_ATTRIBUTES
         user = find_identity_domain_user(self.module, self.client, attributes=attributes)
         return [user] if user is not None else []
 

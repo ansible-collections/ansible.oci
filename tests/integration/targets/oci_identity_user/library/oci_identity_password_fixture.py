@@ -10,6 +10,7 @@ import string
 from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 from ansible_collections.ansible.oci.plugins.module_utils.oci_auth import create_service_client
 from ansible_collections.ansible.oci.plugins.module_utils.oci_common import OCI_AUTH_ARGS, import_oci_sdk
+from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains import PASSWORD_STATE_ATTRIBUTES
 
 oci = import_oci_sdk()[0]
 
@@ -41,7 +42,7 @@ def set_fixture_password(client, user_id):
     )
     user = client.get_user(
         user_id=user_id,
-        attributes="urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User",
+        attributes=PASSWORD_STATE_ATTRIBUTES,
         attribute_sets=["default"],
         retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY,
     ).data

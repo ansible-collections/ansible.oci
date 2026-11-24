@@ -215,11 +215,13 @@ def test_main_reports_safe_errors_without_active_exception(monkeypatch, error_ki
     assert "generated-secret" not in str(failure.value.payload)
 
 
-def test_fetch_uses_user_getter_and_serializes_metadata(monkeypatch):
-    """Get one SCIM user and serialize selected password state.
+@pytest.mark.parametrize("selector", ["user_id", "user_ocid", "user_name"])
+def test_fetch_requests_password_fields_and_serializes_metadata(monkeypatch, selector):
+    """Request each password state field for every user selector.
 
     Args:
         monkeypatch: Pytest fixture for temporary changes.
+        selector: The user selector for the request.
     """
     module_obj = load_password_info_module(monkeypatch)
     resource = FakeModel(
@@ -242,15 +244,31 @@ def test_fetch_uses_user_getter_and_serializes_metadata(monkeypatch):
         calls.append(kwargs)
         return FakeResponse(resource)
 
-    client = types.SimpleNamespace(get_user=get_user)
-    instance = make_password_info(module_obj, {"user_id": "SCIM-ID"}, client=client)
+    def list_users(**kwargs):
+        """Record a filtered SCIM request and return one user."""
+        calls.append(kwargs)
+        return FakeResponse(FakeModel(resources=[resource], total_results=1))
+
+    client = types.SimpleNamespace(get_user=get_user, list_users=list_users)
+    value = {"user_id": "SCIM-ID", "user_ocid": "user.ocid", "user_name": "alice"}[selector]
+    instance = make_password_info(module_obj, {selector: value}, client=client)
 
     assert instance.fetch_resources() == [resource]
-    assert calls == [{
-        "user_id": "SCIM-ID",
-        "attributes": "id,ocid,userName,domainOcid,urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User",
-        "attribute_sets": ["default"],
-    }]
+    assert len(calls) == 1
+    assert calls[0]["attributes"].split(",") == [
+        "id", "ocid", "userName", "domainOcid",
+        "urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User:cantChange",
+        "urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User:cantExpire",
+        "urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User:mustChange",
+        "urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User:expired",
+        "urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User:lastSuccessfulSetDate",
+    ]
+    assert calls[0]["attribute_sets"] == ["default"]
+    if selector == "user_id":
+        assert calls[0]["user_id"] == value
+    else:
+        field = "ocid" if selector == "user_ocid" else "userName"
+        assert calls[0]["filter"] == f'{field} eq "{value}"'
     assert instance.serialize_result_resource(resource) == {
         "user_id": "SCIM-ID",
         "user_ocid": "user.ocid",

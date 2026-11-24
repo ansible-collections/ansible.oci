@@ -46,6 +46,10 @@ IDENTITY_DOMAIN_PASSWORD_ARGS = {
 }
 
 PASSWORD_STATE_SCHEMA = "urn:ietf:params:scim:schemas:oracle:idcs:extension:passwordState:User"
+PASSWORD_STATE_ATTRIBUTES = ",".join(
+    f"{PASSWORD_STATE_SCHEMA}:{field}"
+    for field in ("cantChange", "cantExpire", "mustChange", "expired", "lastSuccessfulSetDate")
+)
 PASSWORD_STATE_ATTRIBUTE = (
     "urn_ietf_params_scim_schemas_oracle_idcs_extension_password_state_user"
 )
