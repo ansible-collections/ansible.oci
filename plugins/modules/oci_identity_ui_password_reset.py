@@ -8,42 +8,70 @@ __metaclass__ = type
 DOCUMENTATION = r"""
 ---
 module: oci_identity_ui_password_reset
-short_description: Reset an OCI IAM user console password
+short_description: Reset an OCI Identity Domains user's password
 description:
-  - Resets the specified user's Console password through the OCI Identity service.
-  - This module only submits password resets and is not idempotent.
-  - Each successful normal invocation submits a new reset and reports a change.
-  - In check mode, the module reports a change without calling OCI.
-  - "We recommend C(no_log: true) for this task and later tasks that handle returned passwords."
-  - Deliver any returned password to the user through a secure channel.
-  - A temporary password expires after seven days. The user must change it at the next sign in.
-  - For identity domain users, OCI can send a password reset email with a link.
-  - The user must reset the password before the link expires. Run this module again if the link expires.
-  - This IAM operation can return HTTP 404 for users in non-default identity domains.
+  - Resets a user's password in Default and non-default OCI identity domains.
+  - Requires an OCI tenancy with Identity Domains.
+  - This operation is not idempotent. Each successful run submits a new reset.
+  - OCI can send a password reset email instead of returning a temporary password.
+  - "C(no_log: true) is recommended for this task and later tasks that handle returned passwords."
 version_added: "1.3.0"
 author:
   - Ron Gershburg (@ronger4)
 extends_documentation_fragment:
   - ansible.oci.oci_auth_options
 options:
+  domain_id:
+    description:
+      - OCID of the identity domain. This option cannot be used with C(domain_url) or C(domain_name).
+    type: str
+  domain_url:
+    description:
+      - Service endpoint of the identity domain. This option cannot be used with C(domain_id) or C(domain_name).
+    type: str
+  domain_name:
+    description:
+      - Exact name of the identity domain. The module uses C(Default) when you omit all domain selectors.
+      - This option cannot be used with C(domain_id) or C(domain_url).
+    type: str
+  compartment_id:
+    description:
+      - Compartment OCID for the domain name lookup. The module uses the tenancy OCID when you omit this option.
+    type: str
   user_id:
     description:
-      - OCID of the user returned as C(resource.ocid) by C(oci_identity_user).
-      - Do not use the SCIM C(resource.id) value.
-      - The Console login remains the C(user_name) set when the user was created.
+      - SCIM user ID from C(resource.id) in C(oci_identity_user).
+      - Do not use the user OCID with this option.
     type: str
-    required: true
+  user_ocid:
+    description:
+      - User OCID from C(resource.ocid) in C(oci_identity_user).
+      - Do not use the SCIM user ID with this option.
+    type: str
+  user_name:
+    description:
+      - User sign-in name. The module fails when the name matches multiple users.
+    type: str
 seealso:
   - name: OCI User Credentials
     description: Learn about Console password credentials.
     link: https://docs.oracle.com/en-us/iaas/Content/Identity/usercred/usercredentials.htm
+  - name: OCI identity domains
+    description: Learn about OCI identity domains.
+    link: https://docs.oracle.com/en-us/iaas/Content/Identity/domains/identity-domains.htm
 """
 
 EXAMPLES = r"""
-- name: Reset a user's console password
+- name: Reset a user's password
   no_log: true
   ansible.oci.oci_identity_ui_password_reset:
-    user_id: "{{ user.resource.ocid }}"
+    user_id: "{{ user.resource.id }}"
+
+- name: Reset a user's password by OCID
+  no_log: true
+  ansible.oci.oci_identity_ui_password_reset:
+    domain_id: "{{ user.resource.domain_id }}"
+    user_ocid: "{{ user.resource.ocid }}"
 """
 
 RETURN = r"""
@@ -52,27 +80,27 @@ action:
   returned: always
   type: str
 resource:
-  description: Password information returned by OCI. OCI can include a temporary password.
+  description: User identifiers and a temporary password, when OCI returns one.
   returned: when the reset succeeds
   type: dict
   contains:
     password:
-      description: Temporary password, when OCI returns one.
+      description: Temporary password. This field is omitted when OCI returns no password.
       type: str
     user_id:
+      description: SCIM user ID.
+      type: str
+    user_ocid:
       description: OCID of the user.
       type: str
-    time_created:
-      description: Time when OCI created the password, in RFC 3339 format.
+    user_name:
+      description: Sign-in name of the user.
       type: str
-    lifecycle_state:
-      description: State of the password. Wait until C(ACTIVE) before the user signs in.
+    domain_id:
+      description: OCID of the identity domain.
       type: str
-    inactive_status:
-      description: Inactive status code, when OCI returns one.
-      type: int
 status:
-  description: OCI service error HTTP status code.
+  description: OCI service error status.
   returned: on OCI service error
   type: int
 code:
@@ -92,71 +120,105 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     OCI_AUTH_ARGS,
     import_oci_sdk,
 )
+from ansible_collections.ansible.oci.plugins.module_utils.oci_identity_domains import (
+    IDENTITY_DOMAIN_PASSWORD_ARGS,
+    IdentityDomainConfigurationError,
+    IdentityDomainUserError,
+    OciIdentityDomainsMixin,
+    find_identity_domain_user,
+    serialize_identity_domain_password_reset,
+)
 
 oci = import_oci_sdk()[0]
 
 
-class OciIdentityUiPasswordResetModule(OciModuleBase):
-    """Reset a user's console password with the OCI Identity client."""
+class OciIdentityDomainUiPasswordResetModule(OciIdentityDomainsMixin, OciModuleBase):
+    """Reset a selected user's password through Identity Domains."""
 
-    @property
-    def client_class(self):
-        """Return the OCI IdentityClient class.
+    def find_user(self):
+        """Return the selected user with only identifiers.
 
         Returns:
-            The OCI IdentityClient class.
+            The matching Identity Domains user model.
+
+        Raises:
+            IdentityDomainUserError: If no user matches the selector.
         """
-        return oci.identity.IdentityClient
+        user = find_identity_domain_user(
+            self.module,
+            self.client,
+            attributes="id,ocid,userName,domainOcid",
+        )
+        if user is None:
+            raise IdentityDomainUserError("The selected user was not found")
+        return user
 
-    def reset_password(self):
-        """Reset the configured user's console password.
+    def reset_password(self, user):
+        """Submit a password reset for the selected SCIM user.
+
+        Args:
+            user: The user model returned by Identity Domains.
 
         Returns:
-            The OCI response with password information.
+            The OCI password reset response.
 
         Raises:
             Exception: If OCI cannot reset the password.
         """
-        return self.client.create_or_reset_ui_password(
-            user_id=self.module.params["user_id"],
+        request = oci.identity_domains.models.UserPasswordResetter(
+            schemas=["urn:ietf:params:scim:schemas:oracle:idcs:UserPasswordResetter"]
+        )
+        return self.client.put_user_password_resetter(
+            user_password_resetter_id=user.id,
+            user_password_resetter=request,
             retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY,
         )
 
 
 def main():
-    """Run the requested reset and return the OCI response."""
+    """Run a domain password reset with safe error output."""
     module = AnsibleModule(
-        argument_spec=dict(
-            OCI_AUTH_ARGS,
-            user_id={"type": "str", "required": True},
-        ),
+        argument_spec=dict(OCI_AUTH_ARGS, **IDENTITY_DOMAIN_PASSWORD_ARGS),
         supports_check_mode=True,
+        required_one_of=[["user_id", "user_ocid", "user_name"]],
+        mutually_exclusive=[
+            ["user_id", "user_ocid", "user_name"],
+            ["domain_id", "domain_url", "domain_name"],
+        ],
     )
     if module.check_mode:
         module.exit_json(changed=True, action="reset")
 
-    helper = OciIdentityUiPasswordResetModule(module)
     error = None
+    resource = None
     try:
-        response = helper.reset_password()
+        helper = OciIdentityDomainUiPasswordResetModule(module)
+        user = helper.find_user()
+        response = helper.reset_password(user)
+        resource = serialize_identity_domain_password_reset(
+            user,
+            response.data,
+            helper.identity_domain_id,
+        )
     except oci.exceptions.ServiceError as exc:
         error = {
-            "msg": "Failed to reset the user's console password",
-            "status": exc.status,
-            "code": exc.code,
-            "request_id": exc.request_id,
+            "msg": "Failed to reset the identity-domain user's password",
+            "status": getattr(exc, "status", None),
+            "code": getattr(exc, "code", None),
+            "request_id": getattr(exc, "request_id", None),
         }
+    except (IdentityDomainUserError, IdentityDomainConfigurationError) as exc:
+        error = {"msg": str(exc)}
     except Exception:
-        error = {"msg": "Failed to reset the user's console password"}
+        error = {"msg": "Failed to reset the identity-domain user's password"}
 
-    # Call fail_json outside the exception handler to avoid automatic traceback data.
     if error:
         module.fail_json(**error)
 
     module.exit_json(
         changed=True,
         action="reset",
-        resource=helper.serialize_result_resource(response.data),
+        resource=resource,
     )
 
 
