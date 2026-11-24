@@ -94,13 +94,13 @@ def resolve_identity_domain(module):
 
     domain_id = module.params.get("domain_id")
     identity_client = create_service_client(module, oci.identity.IdentityClient)
-    if domain_id:
+    if domain_id or "domain_name" not in module.params:
         response = oci.retry.DEFAULT_RETRY_STRATEGY.make_retrying_call(
             identity_client.get_domain,
             domain_id=domain_id,
         )
         domain = response.data
-    elif "domain_name" in module.params:
+    else:
         domain_name = module.params.get("domain_name") or "Default"
         compartment_id = (
             module.params.get("compartment_id") or module.params.get("tenancy")
@@ -121,12 +121,6 @@ def resolve_identity_domain(module):
                 "Identity domain name did not match exactly one domain"
             )
         domain = domains[0]
-    else:
-        response = oci.retry.DEFAULT_RETRY_STRATEGY.make_retrying_call(
-            identity_client.get_domain,
-            domain_id=domain_id,
-        )
-        domain = response.data
 
     domain_url = getattr(domain, "url", None)
     if not domain_url:
@@ -285,10 +279,11 @@ def _list_identity_domain_users(client, request_kwargs):
         if not page_users or (
             total_results is not None and next_start_index > total_results
         ) or (total_results is None and items_per_page < count):
-            return users
+            break
         if next_start_index <= start_index:
-            return users
+            break
         start_index = next_start_index
+    return users
 
 
 def serialize_identity_domain_password_user(user, domain_id=None):
