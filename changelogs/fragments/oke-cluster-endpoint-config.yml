@@ -1,0 +1,7 @@
+minor_changes:
+  - oci_oke_cluster - Update the network security groups and public IP setting
+    of an existing cluster's endpoint through ``endpoint_config.nsg_ids`` and
+    ``endpoint_config.is_public_ip_enabled``. Previously these were applied only
+    at create time.
+  - oci_oke_cluster - Fail when ``endpoint_config.subnet_id`` differs from the
+    existing cluster's endpoint subnet, instead of silently ignoring it.

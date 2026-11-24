@@ -22,6 +22,12 @@ extends_documentation_fragment:
 notes:
   - Cluster create, update, and delete are asynchronous OCI work requests; with
     C(wait=true) the module waits for the work request to succeed before returning.
+  - Endpoint changes (C(endpoint_config.nsg_ids) and
+    C(endpoint_config.is_public_ip_enabled)) use a separate OCI work request from
+    other cluster updates. When both kinds of change are needed in one run, the
+    module always waits for the cluster update to finish before it starts the
+    endpoint update, even with C(wait=false), because OCI does not run both at
+    once on the same cluster.
 options:
   state:
     description:
@@ -83,23 +89,30 @@ options:
   endpoint_config:
     description:
       - The network configuration for the cluster control-plane endpoint.
-      - Applied only at create time; the module does not reconcile it afterwards.
-        Endpoint network security group changes are planned for a dedicated
-        C(oci_oke_cluster_network_security_groups) module.
+      - For an existing cluster, C(nsg_ids) and C(is_public_ip_enabled) are
+        reconciled in place. Only the sub-options you set are compared; omitted
+        sub-options are left unchanged.
     type: dict
     suboptions:
       subnet_id:
         description:
           - The OCID of the regional subnet that hosts the cluster endpoint.
+          - Set only at create time and immutable afterwards. Requesting a
+            different subnet for an existing cluster fails the module.
         type: str
       nsg_ids:
         description:
           - OCIDs of network security groups applied to the cluster endpoint.
+          - For an existing cluster, the endpoint NSGs are replaced with exactly
+            this list. Order is ignored when comparing. Set to an empty list to
+            remove all NSGs from the endpoint.
         type: list
         elements: str
       is_public_ip_enabled:
         description:
           - Whether the cluster endpoint is assigned a public IP address.
+          - Can be changed for an existing cluster. Enabling it requires the
+            endpoint subnet to allow public IP addresses.
         type: bool
   image_policy_config:
     description:
@@ -243,6 +256,20 @@ EXAMPLES = r"""
       is_policy_enabled: true
       key_details:
         - kms_key_id: ocid1.key.oc1..example
+
+- name: Replace the network security groups on the cluster endpoint
+  ansible.oci.oci_oke_cluster:
+    cluster_id: "{{ created_cluster.resource.id }}"
+    endpoint_config:
+      nsg_ids:
+        - ocid1.networksecuritygroup.oc1..example
+
+- name: Make the cluster endpoint private and remove all endpoint NSGs
+  ansible.oci.oci_oke_cluster:
+    cluster_id: "{{ created_cluster.resource.id }}"
+    endpoint_config:
+      is_public_ip_enabled: false
+      nsg_ids: []
 
 - name: Delete a cluster by OCID
   ansible.oci.oci_oke_cluster:
@@ -553,6 +580,11 @@ class OciOkeClusterModule(OciResourceBase):
             is_mutable=True,
             strategy="plan_image_policy_config",
         ),
+        UpdateFieldSpec(
+            param_name="endpoint_config",
+            is_mutable=True,
+            strategy="plan_endpoint_config",
+        ),
     )
 
     def get_resource_response(self, resource_id):
@@ -775,6 +807,51 @@ class OciOkeClusterModule(OciResourceBase):
 
         return []
 
+    def plan_endpoint_config(self, resource, resource_dict, spec, desired_value):
+        """Plan an in-place reconcile of the cluster endpoint configuration.
+
+        Only the sub-options the caller provided are compared. ``nsg_ids`` is
+        compared order-insensitively and ``is_public_ip_enabled`` directly.
+        ``subnet_id`` cannot be changed after creation, so requesting a
+        different subnet fails the module instead of being silently ignored.
+
+        Args:
+            resource: Current Cluster model.
+            resource_dict: Serialized current cluster attributes.
+            spec: The endpoint_config update field spec.
+            desired_value: The requested endpoint configuration mapping.
+
+        Returns:
+            A list with a single set operation carrying only the changed
+            endpoint fields, or an empty list when the endpoint already matches.
+        """
+        current = resource_dict.get("endpoint_config") or {}
+
+        desired_subnet_id = desired_value.get("subnet_id")
+        if (
+            desired_subnet_id is not None
+            and desired_subnet_id != current.get("subnet_id")
+        ):
+            self.fail_immutable_field_change(
+                "endpoint_config.subnet_id",
+                reason="OCI does not move a cluster endpoint to another subnet",
+            )
+
+        changes = {}
+        desired_nsg_ids = desired_value.get("nsg_ids")
+        if desired_nsg_ids is not None and sorted(desired_nsg_ids) != sorted(
+            current.get("nsg_ids") or []
+        ):
+            changes["nsg_ids"] = desired_nsg_ids
+
+        desired_public_ip = desired_value.get("is_public_ip_enabled")
+        if desired_public_ip is not None and desired_public_ip != bool(
+            current.get("is_public_ip_enabled")
+        ):
+            changes["is_public_ip_enabled"] = desired_public_ip
+
+        return [("set", changes)] if changes else []
+
     def build_update_details(self, update_model_fields):
         """Build the OCI update-cluster model from planned field changes.
 
@@ -787,11 +864,14 @@ class OciOkeClusterModule(OciResourceBase):
         return oci.container_engine.models.UpdateClusterDetails(**update_model_fields)
 
     def update_resource(self, resource):
-        """Apply name, tag, and Kubernetes version updates via a work request.
+        """Apply cluster and endpoint updates via their OCI work requests.
 
-        This override drives the asynchronous update work request, because the
-        update endpoint returns only a work request rather than the cluster. A
-        planned Kubernetes upgrade is folded into the same update-details model.
+        Name, tag, Kubernetes version, and image policy changes go through
+        ``update_cluster``. Endpoint NSG and public IP changes go through the
+        separate ``update_cluster_endpoint_config`` API. Both return only a
+        work request. When both are needed, the cluster update work request is
+        always awaited first, because OCI rejects a second operation on a
+        cluster that is still updating.
 
         Args:
             resource: Current Cluster model.
@@ -801,6 +881,7 @@ class OciOkeClusterModule(OciResourceBase):
         """
         update_plan = self.get_update_plan(resource)
         update_fields = dict(update_plan["update_model_fields"])
+        endpoint_changes = None
 
         for strategy_operation in update_plan["strategy_operations"]:
             param_name = strategy_operation["param_name"]
@@ -813,18 +894,40 @@ class OciOkeClusterModule(OciResourceBase):
                         **_build_image_policy_config(operations[0][1])
                     )
                 )
+            elif param_name == "endpoint_config":
+                endpoint_changes = operations[0][1]
 
-        if not update_fields:
+        if not update_fields and not endpoint_changes:
             return resource
 
-        response = self.call_with_retry(
-            self.client.update_cluster,
-            cluster_id=resource.id,
-            update_cluster_details=self.build_update_details(update_fields),
-        )
-        if self.module.params.get("wait", True):
-            work_request_id = self._work_request_id(response, "update")
-            self.wait_for_work_request(self.client, work_request_id)
+        wait = self.module.params.get("wait", True)
+
+        if update_fields:
+            response = self.call_with_retry(
+                self.client.update_cluster,
+                cluster_id=resource.id,
+                update_cluster_details=self.build_update_details(update_fields),
+            )
+            if wait or endpoint_changes:
+                work_request_id = self._work_request_id(response, "update")
+                self.wait_for_work_request(self.client, work_request_id)
+
+        if endpoint_changes:
+            response = self.call_with_retry(
+                self.client.update_cluster_endpoint_config,
+                cluster_id=resource.id,
+                update_cluster_endpoint_config_details=(
+                    oci.container_engine.models.UpdateClusterEndpointConfigDetails(
+                        **endpoint_changes
+                    )
+                ),
+            )
+            if wait:
+                work_request_id = self._work_request_id(
+                    response, "endpoint config update"
+                )
+                self.wait_for_work_request(self.client, work_request_id)
+
         return self._get_cluster_or_id(resource.id)
 
     def delete_resource(self, resource):
