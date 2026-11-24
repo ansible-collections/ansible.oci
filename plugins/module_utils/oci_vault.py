@@ -430,9 +430,14 @@ def secret_content_to_bytes(content, encoding):
 
     Returns:
         The decoded content bytes.
+
+    Raises:
+        binascii.Error: When base64 ``content`` has characters outside the
+            base64 alphabet or incorrect padding. Whitespace, such as the line
+            breaks of wrapped base64, is ignored.
     """
     if encoding == "base64":
-        return base64.b64decode(content)
+        return base64.b64decode("".join(content.split()), validate=True)
     return content.encode("utf-8")
 
 

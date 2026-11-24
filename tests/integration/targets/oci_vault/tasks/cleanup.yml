@@ -1,10 +1,40 @@
 ---
-- name: Run vault key cleanup with shared OCI auth defaults
+# Secrets are removed by name so cleanup also covers secrets whose id was never captured because the run failed
+# early. The shared vault and the shared secret key are intentionally left in place.
+- name: Run vault key and secret cleanup with shared OCI auth defaults
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: "{{ oci_integration_config_file_location }}"
       config_profile_name: "{{ oci_integration_config_profile_name }}"
   block:
+    - name: Schedule leaked secret for deletion during cleanup
+      ansible.oci.oci_vault_secret:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vault_id: "{{ oci_vault_id }}"
+        name: "{{ oci_vault_secret_integration_secret_name }}"
+        deletion_days: "{{ oci_vault_secret_integration_deletion_days }}"
+      when: oci_vault_id | default('') | length > 0
+      register: oci_cleanup_vault_secret
+      until: oci_cleanup_vault_secret is succeeded
+      retries: 3
+      delay: 10
+      ignore_errors: true
+
+    - name: Schedule leaked auto-generated secret for deletion during cleanup
+      ansible.oci.oci_vault_secret:
+        state: absent
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vault_id: "{{ oci_vault_id }}"
+        name: "{{ oci_vault_secret_integration_generated_secret_name }}"
+        deletion_days: "{{ oci_vault_secret_integration_deletion_days }}"
+      when: oci_vault_id | default('') | length > 0
+      register: oci_cleanup_vault_generated_secret
+      until: oci_cleanup_vault_generated_secret is succeeded
+      retries: 3
+      delay: 10
+      ignore_errors: true
+
     - name: Schedule leaked vault key for deletion during cleanup
       ansible.oci.oci_vault_key:
         state: absent
@@ -21,5 +51,7 @@
     - name: Verify resource cleanup succeeded
       ansible.builtin.assert:
         that:
+          - oci_cleanup_vault_secret is not failed
+          - oci_cleanup_vault_generated_secret is not failed
           - oci_cleanup_vault_key is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup task above.
+        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

@@ -259,6 +259,29 @@ def test_secret_content_to_bytes(monkeypatch):
         vault.secret_content_to_bytes("abc", "base64")
 
 
+def test_secret_content_to_bytes_ignores_whitespace_in_base64(monkeypatch):
+    vault = load_oci_vault(monkeypatch)
+
+    assert vault.secret_content_to_bytes(" aGVs\nbG8=\n", "base64") == b"hello"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param("aGV$sbG8=", id="invalid-character"),
+        pytest.param("####", id="only-invalid-characters"),
+        pytest.param("aGVsbG8", id="missing-padding"),
+        pytest.param("aGVsbG8===", id="extra-padding"),
+        pytest.param("aGVs=bG8=", id="padding-in-the-middle"),
+    ],
+)
+def test_secret_content_to_bytes_rejects_invalid_base64(monkeypatch, content):
+    vault = load_oci_vault(monkeypatch)
+
+    with pytest.raises(ValueError):
+        vault.secret_content_to_bytes(content, "base64")
+
+
 def test_encode_secret_content_returns_base64_of_the_raw_bytes(monkeypatch):
     vault = load_oci_vault(monkeypatch)
 

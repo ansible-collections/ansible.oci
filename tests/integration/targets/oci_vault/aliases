@@ -1,5 +1,9 @@
 destructive
-time=45m
+time=60m
 oci_vault_info
 oci_vault_key
 oci_vault_key_info
+oci_vault_secret
+oci_vault_secret_info
+oci_vault_secret_version
+oci_vault_secret_version_info

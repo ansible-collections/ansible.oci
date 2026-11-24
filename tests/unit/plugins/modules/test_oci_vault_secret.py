@@ -466,10 +466,19 @@ def test_validate_options_rejects_content_with_auto_generation(module_obj):
     assert "enable_auto_generation" in excinfo.value.payload["msg"]
 
 
-def test_validate_options_rejects_invalid_base64(module_obj):
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param("abc", id="truncated"),
+        pytest.param("aGV$sbG8=", id="invalid-character"),
+        pytest.param("####", id="only-invalid-characters"),
+        pytest.param("aGVsbG8", id="missing-padding"),
+    ],
+)
+def test_validate_options_rejects_invalid_base64(module_obj, content):
     with pytest.raises(FailJsonCalled) as excinfo:
         module_obj.validate_options(
-            DummyModule({"content": "abc", "content_encoding": "base64"})
+            DummyModule({"content": content, "content_encoding": "base64"})
         )
 
     assert "base64" in excinfo.value.payload["msg"]
@@ -1036,8 +1045,12 @@ def test_immutable_fields_fail(module_obj, param, value):
     assert client.call_names() == []
 
 
-def test_rules_and_current_version_number_cannot_change_together(module_obj):
-    client = FakeVaultsClient(make_secret(current_version_number=3))
+@pytest.mark.parametrize("check_mode", [False, True])
+@pytest.mark.parametrize("state", ["ACTIVE", "PENDING_DELETION"])
+def test_rules_and_current_version_number_cannot_change_together(
+    module_obj, state, check_mode
+):
+    client = FakeVaultsClient(make_secret(state, current_version_number=3))
 
     msg = run_module_failure(
         module_obj,
@@ -1048,10 +1061,56 @@ def test_rules_and_current_version_number_cannot_change_together(module_obj):
             "current_version_number": 2,
         },
         client,
+        check_mode,
     )
 
     assert "separate tasks" in msg
     assert client.call_names() == []
+
+
+@pytest.mark.parametrize(
+    "secret_overrides, params, expected_field",
+    [
+        (
+            {"current_version_number": 2},
+            {"current_version_number": 2, "secret_rules": []},
+            "secret_rules",
+        ),
+        (
+            {
+                "current_version_number": 3,
+                "secret_rules": [
+                    {
+                        "rule_type": "SECRET_REUSE_RULE",
+                        "is_enforced_on_deleted_secret_versions": True,
+                    }
+                ],
+            },
+            {
+                "current_version_number": 2,
+                "secret_rules": [
+                    rule("SECRET_REUSE_RULE", is_enforced_on_deleted_secret_versions=True)
+                ],
+            },
+            "current_version_number",
+        ),
+    ],
+    ids=["only-rules-differ", "only-version-differs"],
+)
+def test_rules_and_current_version_number_can_be_supplied_when_one_is_unchanged(
+    module_obj, secret_overrides, params, expected_field
+):
+    secret_overrides.setdefault(
+        "secret_rules",
+        [{"rule_type": "SECRET_EXPIRY_RULE", "secret_version_expiry_interval": "P1D"}],
+    )
+    client = FakeVaultsClient(make_secret(**secret_overrides))
+
+    payload = run_module(module_obj, params, client)
+
+    assert payload["changed"] is True
+    details = client.calls_named("update_secret")[0][2]
+    assert vars(details).keys() == {expected_field}
 
 
 def test_update_name_lookup_hydrates_the_summary(module_obj):
@@ -1336,6 +1395,35 @@ def test_rotate_after_update_rotates_once(module_obj):
     assert client.call_names() == ["update_secret", "rotate_secret"]
 
 
+def test_content_update_without_wait_settles_before_rotation(module_obj):
+    client = FakeVaultsClient(make_secret(), updating_after_update=True)
+    client.rotating_polls = 5
+    secrets = new_secrets_client({"CURRENT": b64("old")})
+
+    payload = run_module(
+        module_obj, {"content": "new", "rotate": True}, client, secrets=secrets
+    )
+
+    assert payload["changed"] is True
+    assert client.call_names() == ["update_secret", "rotate_secret"]
+    names = [call[0] for call in client.calls]
+    between = names[names.index("update_secret") + 1 : names.index("rotate_secret")]
+    assert "get_secret" in between
+    # wait: false still applies to the rotation itself.
+    assert payload["resource"]["rotation_status"] == "IN_PROGRESS"
+
+
+def test_content_update_without_rotation_honors_wait_false(module_obj):
+    client = FakeVaultsClient(make_secret(), updating_after_update=True)
+    secrets = new_secrets_client({"CURRENT": b64("old")})
+
+    payload = run_module(module_obj, {"content": "new"}, client, secrets=secrets)
+
+    assert payload["resource"]["lifecycle_state"] == "UPDATING"
+    names = [call[0] for call in client.calls]
+    assert "get_secret" not in names[names.index("update_secret") + 1 :]
+
+
 # replicas
 
 
@@ -1344,13 +1432,22 @@ def test_rotate_after_update_rotates_once(module_obj):
     [{"description": "new"}, {"content": "new"}, {"rotate": True}],
 )
 @pytest.mark.parametrize("check_mode", [False, True])
-def test_replica_cannot_be_changed(module_obj, params, check_mode):
-    client = FakeVaultsClient(make_secret(is_replica=True))
+@pytest.mark.parametrize(
+    "replication_config",
+    [None, FakeModel(replication_targets=[], is_write_forward_enabled=False)],
+    ids=["no-replication-config", "write-forwarding-disabled"],
+)
+def test_replica_without_write_forwarding_cannot_be_changed(
+    module_obj, params, check_mode, replication_config
+):
+    client = FakeVaultsClient(
+        make_secret(is_replica=True, replication_config=replication_config)
+    )
     secrets = new_secrets_client({"CURRENT": b64("old")})
 
     msg = run_module_failure(module_obj, params, client, check_mode, secrets)
 
-    assert "replica" in msg
+    assert "replica without write forwarding" in msg
     assert client.call_names() == []
 
 
@@ -1360,6 +1457,82 @@ def test_unchanged_replica_is_not_an_error(module_obj):
     payload = run_module(module_obj, {"description": "a secret"}, client)
 
     assert payload["changed"] is False
+
+
+def make_forwarding_replica(state="ACTIVE"):
+    return make_secret(
+        state,
+        is_replica=True,
+        replication_config=FakeModel(
+            replication_targets=[], is_write_forward_enabled=True
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "params, expected_calls",
+    [
+        ({"description": "new"}, ["update_secret"]),
+        ({"content": "new"}, ["update_secret"]),
+        ({"rotate": True}, ["rotate_secret"]),
+    ],
+    ids=["update", "content", "rotate"],
+)
+def test_replica_with_write_forwarding_accepts_forwardable_changes(
+    module_obj, params, expected_calls
+):
+    client = FakeVaultsClient(make_forwarding_replica())
+    secrets = new_secrets_client({"CURRENT": b64("old")})
+
+    payload = run_module(module_obj, params, client, secrets=secrets)
+
+    assert payload["changed"] is True
+    assert client.call_names() == expected_calls
+
+
+@pytest.mark.parametrize(
+    "state, params, operation",
+    [
+        (
+            "ACTIVE",
+            {
+                "replication_config": {
+                    "replication_targets": [
+                        {
+                            "target_region": "us-phoenix-1",
+                            "target_vault_id": "vault-2",
+                            "target_key_id": "key-2",
+                        }
+                    ]
+                }
+            },
+            "change replication_config of",
+        ),
+        ("ACTIVE", {"state": "absent"}, "schedule deletion of"),
+        ("PENDING_DELETION", {}, "cancel deletion of"),
+    ],
+    ids=["replication-config", "schedule-deletion", "cancel-deletion"],
+)
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_replica_with_write_forwarding_rejects_unforwardable_operations(
+    module_obj, state, params, operation, check_mode
+):
+    client = FakeVaultsClient(make_forwarding_replica(state))
+
+    msg = run_module_failure(module_obj, params, client, check_mode)
+
+    assert f"Cannot {operation} secret {SECRET_ID}" in msg
+    assert "write forwarding does not support" in msg
+    assert client.call_names() == []
+
+
+@pytest.mark.parametrize("state", ["PENDING_DELETION", "DELETED"])
+def test_absent_on_deleted_replica_is_unchanged(module_obj, state):
+    client = FakeVaultsClient(make_forwarding_replica(state))
+
+    payload = run_module(module_obj, {"state": "absent"}, client)
+
+    assert payload == {"changed": False}
 
 
 # absent

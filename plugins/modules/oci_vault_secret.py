@@ -92,6 +92,9 @@ options:
       - How O(content) is encoded.
       - With C(text) the module sends the UTF-8 bytes of O(content).
       - With C(base64) the module decodes O(content) and sends the resulting bytes.
+        It ignores whitespace, such as line breaks in wrapped base64, and fails
+        when O(content) has other characters outside the base64 alphabet or
+        incorrect padding.
     type: str
     choices: [text, base64]
     default: text
@@ -263,6 +266,14 @@ options:
       is_write_forward_enabled:
         description:
           - Whether a replica secret can forward writes to the source secret.
+          - When a replica has write forwarding enabled, the module can send
+            field updates, content changes, and rotations to the replica, and
+            OCI applies them to the source secret first.
+          - Even with write forwarding, OCI does not let a replica schedule or
+            cancel deletion or change O(replication_config). Do those on the
+            source secret.
+          - A replica without write forwarding is read-only, and the module
+            fails on any change to it.
         type: bool
   current_version_number:
     description:
@@ -964,24 +975,67 @@ class OciVaultSecretModule(OciSecretBundleMixin, OciScheduledDeletionMixin, OciR
             ACTIVE_STATES,
         )
 
-    def fail_if_replica(self, resource):
-        """Fail when ``resource`` is a replica, which OCI only changes at its source.
+    def fail_if_replica(self, resource, operation, forwardable=True):
+        """Fail when ``resource`` is a replica that cannot perform ``operation``.
+
+        A replica is read-only unless write forwarding is enabled, which lets
+        OCI apply the operation to the source secret. Write forwarding does
+        not cover scheduling or cancelling deletion, or changing the
+        replication configuration.
 
         Args:
             resource: The current secret.
+            operation: The operation, phrased to follow "cannot", for errors.
+            forwardable: Whether write forwarding can carry the operation.
         """
-        if getattr(resource, "is_replica", False):
+        if not getattr(resource, "is_replica", False):
+            return
+        if not forwardable:
             self.module.fail_json(
                 msg=(
-                    f"Secret {resource.id} is a replica and cannot be updated. "
-                    "Update its source secret instead"
+                    f"Cannot {operation} secret {resource.id} because it is a "
+                    "replica and write forwarding does not support this "
+                    "operation. Run the task against the source secret instead"
+                )
+            )
+        replication_config = getattr(resource, "replication_config", None)
+        if not getattr(replication_config, "is_write_forward_enabled", False):
+            self.module.fail_json(
+                msg=(
+                    f"Cannot {operation} secret {resource.id} because it is a "
+                    "replica without write forwarding. Update its source "
+                    "secret instead, or enable "
+                    "replication_config.is_write_forward_enabled on the source"
                 )
             )
 
-    def needs_update(self, resource):
-        """Report field drift, failing when it would change a replica.
+    def resolve_target_resource(self):
+        """Return the target secret, failing when ``state=absent`` targets a replica.
 
-        Extends the inherited check so that check mode also rejects the update.
+        Write forwarding never carries a scheduled deletion, so the check runs
+        here, before the check-mode exit, rather than in ``delete_resource``.
+
+        Returns:
+            The current secret, or None when it does not exist.
+        """
+        resource = super(OciVaultSecretModule, self).resolve_target_resource()
+        if (
+            self.module.params.get("state", "present") == "absent"
+            and resource is not None
+            and getattr(resource, "lifecycle_state", None) not in self.dead_states
+        ):
+            self.fail_if_replica(
+                resource, "schedule deletion of", forwardable=False
+            )
+        return resource
+
+    def needs_update(self, resource):
+        """Report field drift, failing on changes OCI would reject.
+
+        The checks run here because the base flow calls this before the
+        check-mode exit and before it cancels a pending deletion. Check mode
+        therefore reports the failure too, and an invalid update cannot
+        restore a secret before it fails.
 
         Args:
             resource: The current secret.
@@ -991,7 +1045,23 @@ class OciVaultSecretModule(OciSecretBundleMixin, OciScheduledDeletionMixin, OciR
         """
         update_needed = super(OciVaultSecretModule, self).needs_update(resource)
         if update_needed:
-            self.fail_if_replica(resource)
+            update_model_fields = self.get_update_plan(resource)["update_model_fields"]
+            if (
+                "secret_rules" in update_model_fields
+                and "current_version_number" in update_model_fields
+            ):
+                self.module.fail_json(
+                    msg=(
+                        "OCI does not allow changing secret_rules and "
+                        "current_version_number in one update. Change them in "
+                        "separate tasks"
+                    )
+                )
+            if "replication_config" in update_model_fields:
+                self.fail_if_replica(
+                    resource, "change replication_config of", forwardable=False
+                )
+            self.fail_if_replica(resource, "update")
         return update_needed
 
     def build_update_details(self, update_model_fields):
@@ -1003,13 +1073,6 @@ class OciVaultSecretModule(OciSecretBundleMixin, OciScheduledDeletionMixin, OciR
         Returns:
             An ``oci.vault.models.UpdateSecretDetails`` instance.
         """
-        if "secret_rules" in update_model_fields and "current_version_number" in update_model_fields:
-            self.module.fail_json(
-                msg=(
-                    "OCI does not allow changing secret_rules and "
-                    "current_version_number in one update. Change them in separate tasks"
-                )
-            )
         return oci.vault.models.UpdateSecretDetails(
             **build_nested_models(update_model_fields)
         )
@@ -1039,7 +1102,7 @@ class OciVaultSecretModule(OciSecretBundleMixin, OciScheduledDeletionMixin, OciR
                 != secret_content_to_bytes(params["content"], params["content_encoding"])
             )
             if self._content_update_needed:
-                self.fail_if_replica(resource)
+                self.fail_if_replica(resource, "update the content of")
         return self._content_update_needed
 
     def extra_change_needed(self, resource):
@@ -1056,18 +1119,22 @@ class OciVaultSecretModule(OciSecretBundleMixin, OciScheduledDeletionMixin, OciR
             ``rotate`` is set.
         """
         if super(OciVaultSecretModule, self).extra_change_needed(resource):
+            self.fail_if_replica(resource, "cancel deletion of", forwardable=False)
             return True
         if self.module.params.get("rotate"):
-            self.fail_if_replica(resource)
+            self.fail_if_replica(resource, "rotate")
             return True
         return self.content_update_needed(resource)
 
     def apply_extra_change(self, resource):
         """Cancel a pending deletion, then write changed content and rotate.
 
-        Extends the inherited cancellation. A preceding field update with
-        ``wait: false`` can leave the secret updating, which OCI rejects a
-        further update or rotation for, so that transition is waited out first.
+        Extends the inherited cancellation. OCI rejects an update or rotation
+        while the secret is still updating. A preceding field update with
+        ``wait: false`` can leave it in that state, and so can the content
+        update when ``rotate`` follows it. Both transitions are waited out
+        regardless of ``wait``. Only the final operation honors
+        ``wait: false``.
 
         Args:
             resource: The current secret.
@@ -1079,9 +1146,12 @@ class OciVaultSecretModule(OciSecretBundleMixin, OciScheduledDeletionMixin, OciR
         resource = super(OciVaultSecretModule, self).apply_extra_change(resource)
         if getattr(resource, "lifecycle_state", None) == SECRET_STATE_UPDATING:
             resource = self.wait_for_restoration(resource)
+        rotate = self.module.params.get("rotate")
         if self.content_update_needed(resource):
             resource = self.update_secret_content(resource)
-        if self.module.params.get("rotate"):
+            if rotate and not self.module.params.get("wait", True):
+                resource = self.wait_for_restoration(resource)
+        if rotate:
             resource = self.rotate_secret(resource)
         return resource
 
