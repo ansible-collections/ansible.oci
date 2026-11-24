@@ -1,4 +1,8 @@
 ---
+# This target changes a shared subscription and cannot run safely in parallel.
+# The manual alias excludes this target from regular CI, as with oci_vault_lifecycle.
+# Run this target only when no other process uses the configured subscription:
+#   make integration-ci INTEGRATION_TARGETS=oci_app_catalog_subscription
 - name: Validate the integration compartment
   ansible.builtin.assert:
     that:
