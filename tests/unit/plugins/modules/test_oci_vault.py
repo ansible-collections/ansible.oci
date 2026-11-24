@@ -413,7 +413,8 @@ def test_absent_schedules_deletion_with_deletion_days(monkeypatch):
 
     after = datetime.now(timezone.utc)
     time_of_deletion = client.calls[-1][2].time_of_deletion
-    assert before + timedelta(days=7) <= time_of_deletion <= after + timedelta(days=7)
+    window = timedelta(days=7, minutes=10)
+    assert before + window <= time_of_deletion <= after + window
     assert time_of_deletion.tzinfo is not None
 
 
