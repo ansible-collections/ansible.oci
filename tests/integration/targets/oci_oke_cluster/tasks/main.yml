@@ -9,6 +9,7 @@
     oci_oke_cleanup_ids: []
     oci_oke_cluster_integration_vcn_name: "{{ oci_oke_cluster_integration_vcn_name }}-{{ oci_integration_rpfx }}"
     oci_oke_cluster_integration_subnet_name: "{{ oci_oke_cluster_integration_subnet_name }}-{{ oci_integration_rpfx }}"
+    oci_oke_cluster_integration_nsg_name: "{{ oci_oke_cluster_integration_nsg_name }}-{{ oci_integration_rpfx }}"
     oci_oke_cluster_integration_name: "{{ oci_oke_cluster_integration_name }}-{{ oci_integration_rpfx }}"
     oci_oke_cluster_integration_updated_name: "{{ oci_oke_cluster_integration_updated_name }}-{{ oci_integration_rpfx }}"
 
@@ -85,6 +86,65 @@
         oci_oke_expected:
           name: "{{ oci_oke_cluster_integration_updated_name }}"
           freeform_tags: { phase: update }
+
+    - name: Create the endpoint network security group
+      ansible.oci.oci_network_security_group:
+        compartment_id: "{{ oci_integration_compartment_id }}"
+        vcn_id: "{{ oci_oke_vcn_id }}"
+        name: "{{ oci_oke_cluster_integration_nsg_name }}"
+      register: oci_oke_nsg
+
+    - name: Save the network security group ID
+      ansible.builtin.set_fact:
+        oci_oke_nsg_id: "{{ oci_oke_nsg.resource.id }}"
+
+    - name: Test attaching a network security group to the cluster endpoint
+      ansible.builtin.include_tasks: test_cluster_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_cluster_integration_updated_name }}"
+        oci_oke_operation:
+          cluster_id: "{{ oci_oke_cluster_id }}"
+          endpoint_config:
+            subnet_id: "{{ oci_oke_subnet_id }}"
+            nsg_ids:
+              - "{{ oci_oke_nsg_id }}"
+        oci_oke_expected: {}
+
+    - name: Check the endpoint uses the network security group
+      ansible.builtin.assert:
+        that:
+          - oci_oke_after.clusters[0].endpoint_config.nsg_ids == [oci_oke_nsg_id]
+          - oci_oke_after.clusters[0].endpoint_config.subnet_id == oci_oke_subnet_id
+          - oci_oke_after.clusters[0].endpoint_config.is_public_ip_enabled | bool
+
+    - name: Test removing all network security groups from the cluster endpoint
+      ansible.builtin.include_tasks: test_cluster_scenario.yml
+      vars:
+        oci_oke_lookup_name: "{{ oci_oke_cluster_integration_updated_name }}"
+        oci_oke_operation:
+          cluster_id: "{{ oci_oke_cluster_id }}"
+          endpoint_config:
+            nsg_ids: []
+        oci_oke_expected: {}
+
+    - name: Check the endpoint has no network security groups
+      ansible.builtin.assert:
+        that:
+          - oci_oke_after.clusters[0].endpoint_config.nsg_ids | default([], true) | length == 0
+
+    - name: Try to move the cluster endpoint to another subnet
+      ansible.oci.oci_oke_cluster:
+        cluster_id: "{{ oci_oke_cluster_id }}"
+        endpoint_config:
+          subnet_id: ocid1.subnet.oc1..doesnotexist
+      register: oci_oke_subnet_change
+      ignore_errors: true
+
+    - name: Check the endpoint subnet change is rejected
+      ansible.builtin.assert:
+        that:
+          - oci_oke_subnet_change is failed
+          - "'endpoint_config.subnet_id' in oci_oke_subnet_change.msg"
 
     - name: Test cluster deletion by ID
       ansible.builtin.include_tasks: test_cluster_scenario.yml

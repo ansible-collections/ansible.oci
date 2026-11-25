@@ -31,6 +31,17 @@
       delay: 30
       ignore_errors: true
 
+    - name: Delete leaked network security group during cleanup
+      ansible.oci.oci_network_security_group:
+        state: absent
+        network_security_group_id: "{{ oci_oke_nsg_id }}"
+      when: oci_oke_nsg_id | default('') | length > 0
+      register: oci_cleanup_nsg
+      until: oci_cleanup_nsg is succeeded
+      retries: 10
+      delay: 30
+      ignore_errors: true
+
     - name: Delete leaked VCN during cleanup
       ansible.oci.oci_network_vcn:
         state: absent
@@ -47,5 +58,6 @@
         that:
           - oci_cleanup_clusters is not failed
           - oci_cleanup_subnet is not failed
+          - oci_cleanup_nsg is not failed
           - oci_cleanup_vcn is not failed
         fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.

@@ -7,6 +7,7 @@ import pytest
 
 from .conftest import (
     DummyModule,
+    ExitJsonCalled,
     FakeModel,
     FakeResponse,
     FailJsonCalled,
@@ -20,6 +21,7 @@ CLUSTER_MODEL_NAMES = (
     "CreateClusterDetails",
     "UpdateClusterDetails",
     "CreateClusterEndpointConfigDetails",
+    "UpdateClusterEndpointConfigDetails",
     "CreateImagePolicyConfigDetails",
     "UpdateImagePolicyConfigDetails",
     "KeyDetails",
@@ -426,27 +428,33 @@ def test_update_resource_upgrades_kubernetes_version(monkeypatch):
     assert updated.kubernetes_version == "v1.30.1"
 
 
-def test_update_resource_no_change_when_version_matches(monkeypatch):
+def test_lifecycle_skips_update_when_version_matches(monkeypatch):
     install_fake_oci(monkeypatch)
 
     cluster_module = load_collection_module("oci_oke_cluster")
 
     def fail_if_called(*args, **kwargs):
-        raise AssertionError("update_cluster should not run without changes")
+        raise AssertionError("update_resource should not run without changes")
 
     resource = FakeModel(
         id="ocid1.cluster.oc1..c1",
         name="c1",
         kubernetes_version="v1.29.1",
         available_kubernetes_upgrades=["v1.30.1"],
+        lifecycle_state="ACTIVE",
     )
     instance = make_cluster_module(
         cluster_module,
-        {"kubernetes_version": "v1.29.1", "wait": True},
+        {"state": "present", "kubernetes_version": "v1.29.1", "wait": True},
         client=types.SimpleNamespace(update_cluster=fail_if_called),
     )
+    monkeypatch.setattr(instance, "resolve_target_resource", lambda: resource)
+    monkeypatch.setattr(instance, "update_resource", fail_if_called)
 
-    assert instance.update_resource(resource) is resource
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert exc_info.value.payload["changed"] is False
 
 
 def test_needs_update_true_when_image_policy_enable_changes(monkeypatch):
@@ -598,6 +606,258 @@ def test_update_resource_reconciles_image_policy_config(monkeypatch):
     sent_policy = update_calls[0][1].image_policy_config
     assert sent_policy.is_policy_enabled is True
     assert sent_policy.key_details[0].kms_key_id == "ocid1.key.oc1..a"
+
+
+CURRENT_ENDPOINT_CONFIG = {
+    "subnet_id": "ocid1.subnet.oc1..endpoint",
+    "nsg_ids": ["ocid1.nsg.oc1..a", "ocid1.nsg.oc1..b"],
+    "is_public_ip_enabled": True,
+}
+
+
+def endpoint_params(subnet_id=None, nsg_ids=None, is_public_ip_enabled=None):
+    return {
+        "subnet_id": subnet_id,
+        "nsg_ids": nsg_ids,
+        "is_public_ip_enabled": is_public_ip_enabled,
+    }
+
+
+@pytest.mark.parametrize(
+    "endpoint_config",
+    [
+        # Same NSGs in a different order, with the current subnet repeated.
+        endpoint_params(
+            subnet_id="ocid1.subnet.oc1..endpoint",
+            nsg_ids=["ocid1.nsg.oc1..b", "ocid1.nsg.oc1..a"],
+        ),
+        endpoint_params(is_public_ip_enabled=True),
+        # Omitted sub-options are not compared.
+        endpoint_params(),
+    ],
+)
+def test_needs_update_false_when_endpoint_config_matches(monkeypatch, endpoint_config):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    instance = make_cluster_module(
+        cluster_module, {"endpoint_config": endpoint_config}
+    )
+    resource = FakeModel(
+        id="ocid1.cluster.oc1..c1", endpoint_config=dict(CURRENT_ENDPOINT_CONFIG)
+    )
+
+    assert instance.needs_update(resource) is False
+
+
+@pytest.mark.parametrize(
+    "endpoint_config, expected_changes",
+    [
+        (
+            endpoint_params(nsg_ids=["ocid1.nsg.oc1..c"]),
+            {"nsg_ids": ["ocid1.nsg.oc1..c"]},
+        ),
+        (endpoint_params(nsg_ids=[]), {"nsg_ids": []}),
+        (
+            endpoint_params(is_public_ip_enabled=False),
+            {"is_public_ip_enabled": False},
+        ),
+        (
+            # Only the changed field is sent.
+            endpoint_params(
+                nsg_ids=["ocid1.nsg.oc1..a", "ocid1.nsg.oc1..b"],
+                is_public_ip_enabled=False,
+            ),
+            {"is_public_ip_enabled": False},
+        ),
+    ],
+)
+def test_plan_endpoint_config_reports_only_changed_fields(
+    monkeypatch, endpoint_config, expected_changes
+):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    instance = make_cluster_module(
+        cluster_module, {"endpoint_config": endpoint_config}
+    )
+    resource = FakeModel(
+        id="ocid1.cluster.oc1..c1", endpoint_config=dict(CURRENT_ENDPOINT_CONFIG)
+    )
+
+    assert instance.needs_update(resource) is True
+    operations = instance.get_update_plan(resource)["strategy_operations"]
+    assert operations == [
+        {"param_name": "endpoint_config", "operations": [("set", expected_changes)]}
+    ]
+
+
+def test_needs_update_true_when_adding_nsgs_to_endpoint_without_any(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    instance = make_cluster_module(
+        cluster_module,
+        {"endpoint_config": endpoint_params(nsg_ids=["ocid1.nsg.oc1..a"])},
+    )
+    resource = FakeModel(
+        id="ocid1.cluster.oc1..c1",
+        endpoint_config={
+            "subnet_id": "ocid1.subnet.oc1..endpoint",
+            "nsg_ids": None,
+            "is_public_ip_enabled": False,
+        },
+    )
+
+    assert instance.needs_update(resource) is True
+
+
+def test_needs_update_rejects_endpoint_subnet_drift(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    instance = make_cluster_module(
+        cluster_module,
+        {"endpoint_config": endpoint_params(subnet_id="ocid1.subnet.oc1..other")},
+    )
+    resource = FakeModel(
+        id="ocid1.cluster.oc1..c1", endpoint_config=dict(CURRENT_ENDPOINT_CONFIG)
+    )
+
+    with pytest.raises(FailJsonCalled) as exc_info:
+        instance.needs_update(resource)
+
+    assert "endpoint_config.subnet_id" in exc_info.value.payload["msg"]
+
+
+def make_endpoint_update_instance(monkeypatch, cluster_module, params, calls):
+    def update_cluster(cluster_id, update_cluster_details):
+        calls.append(("update_cluster", cluster_id, update_cluster_details))
+        return FakeResponse(data=None, headers={"opc-work-request-id": "wr-cluster"})
+
+    def update_cluster_endpoint_config(
+        cluster_id, update_cluster_endpoint_config_details
+    ):
+        calls.append(
+            (
+                "update_cluster_endpoint_config",
+                cluster_id,
+                update_cluster_endpoint_config_details,
+            )
+        )
+        return FakeResponse(data=None, headers={"opc-work-request-id": "wr-endpoint"})
+
+    instance = make_cluster_module(
+        cluster_module,
+        params,
+        client=types.SimpleNamespace(
+            update_cluster=update_cluster,
+            update_cluster_endpoint_config=update_cluster_endpoint_config,
+        ),
+    )
+    monkeypatch.setattr(instance, "call_with_retry", lambda fn, *a, **k: fn(*a, **k))
+    monkeypatch.setattr(
+        instance,
+        "wait_for_work_request",
+        lambda client, work_request_id: calls.append(("wait", work_request_id)),
+    )
+    monkeypatch.setattr(
+        instance,
+        "get_resource_by_id",
+        lambda cluster_id: FakeModel(id=cluster_id, lifecycle_state="ACTIVE"),
+    )
+    return instance
+
+
+def test_update_resource_reconciles_endpoint_config_only(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    calls = []
+    instance = make_endpoint_update_instance(
+        monkeypatch,
+        cluster_module,
+        {
+            "endpoint_config": endpoint_params(nsg_ids=["ocid1.nsg.oc1..c"]),
+            "wait": True,
+        },
+        calls,
+    )
+    resource = FakeModel(
+        id="ocid1.cluster.oc1..c1", endpoint_config=dict(CURRENT_ENDPOINT_CONFIG)
+    )
+
+    updated = instance.update_resource(resource)
+
+    assert [call[0] for call in calls] == ["update_cluster_endpoint_config", "wait"]
+    assert calls[0][1] == "ocid1.cluster.oc1..c1"
+    assert calls[0][2].nsg_ids == ["ocid1.nsg.oc1..c"]
+    assert not hasattr(calls[0][2], "is_public_ip_enabled")
+    assert calls[1] == ("wait", "wr-endpoint")
+    assert updated.lifecycle_state == "ACTIVE"
+
+
+def test_update_resource_without_wait_still_serializes_both_updates(monkeypatch):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    calls = []
+    instance = make_endpoint_update_instance(
+        monkeypatch,
+        cluster_module,
+        {
+            "name": "new",
+            "endpoint_config": endpoint_params(is_public_ip_enabled=False),
+            "wait": False,
+        },
+        calls,
+    )
+    resource = FakeModel(
+        id="ocid1.cluster.oc1..c1",
+        name="old",
+        endpoint_config=dict(CURRENT_ENDPOINT_CONFIG),
+    )
+
+    instance.update_resource(resource)
+
+    # The cluster update is awaited so the endpoint update is not rejected,
+    # but the final endpoint work request is not awaited with wait=false.
+    assert [call[0] for call in calls] == [
+        "update_cluster",
+        "wait",
+        "update_cluster_endpoint_config",
+    ]
+    assert calls[0][2].name == "new"
+    assert calls[1] == ("wait", "wr-cluster")
+    assert calls[2][2].is_public_ip_enabled is False
+
+
+def test_update_resource_without_wait_skips_wait_for_cluster_only_update(
+    monkeypatch,
+):
+    install_fake_oci(monkeypatch)
+
+    cluster_module = load_collection_module("oci_oke_cluster")
+    calls = []
+    instance = make_endpoint_update_instance(
+        monkeypatch,
+        cluster_module,
+        {
+            "name": "new",
+            "endpoint_config": endpoint_params(is_public_ip_enabled=True),
+            "wait": False,
+        },
+        calls,
+    )
+    resource = FakeModel(
+        id="ocid1.cluster.oc1..c1",
+        name="old",
+        endpoint_config=dict(CURRENT_ENDPOINT_CONFIG),
+    )
+
+    instance.update_resource(resource)
+
+    assert [call[0] for call in calls] == ["update_cluster"]
 
 
 def test_cluster_id_from_work_request(monkeypatch):
