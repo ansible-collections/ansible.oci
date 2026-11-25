@@ -1,0 +1,132 @@
+---
+- name: Give an OCI example user access through a group
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    example_cleanup: true
+  tasks:
+    # Default identity domain
+    # The default domain belongs to the tenancy root compartment.
+    - name: Find the default identity domain
+      ansible.oci.oci_identity_domain_info:
+        compartment_id: "{{ oci_tenancy_id }}"
+        name: Default
+      register: example_domains
+
+    # Name ownership
+    # Stop if any fixed name already belongs to an existing resource.
+    - name: Look up the example user
+      ansible.oci.oci_identity_user_info:
+        domain_id: "{{ example_domains.domains[0].id }}"
+        user_name: oci-example-reader
+      register: example_user_lookup
+
+    - name: Look up the example group
+      ansible.oci.oci_identity_group_info:
+        domain_id: "{{ example_domains.domains[0].id }}"
+        name: oci-example-readers
+      register: example_group_lookup
+
+    - name: Look up the example policy
+      ansible.oci.oci_identity_policy_info:
+        compartment_id: "{{ oci_compartment_id }}"
+        name: oci-example-inspect-policy
+      register: example_policy_lookup
+
+    - name: Check that the example names are available
+      ansible.builtin.assert:
+        that:
+          - example_user_lookup.users | length == 0
+          - example_group_lookup.groups | length == 0
+          - example_policy_lookup.policies | length == 0
+        fail_msg: Delete the resources from the previous example run before running this playbook.
+
+    - name: Create the user, group, membership, and policy
+      block:
+        # User and group
+        # Use a reserved sample email address for the example user.
+        - name: Create the example user
+          ansible.oci.oci_identity_user:
+            domain_id: "{{ example_domains.domains[0].id }}"
+            user_name: oci-example-reader
+            name: OCI Example Reader
+            given_name: OCI
+            family_name: Example
+            email: oci-example-reader@example.invalid
+            active: true
+          register: example_user
+
+        - name: Create the example group
+          ansible.oci.oci_identity_group:
+            domain_id: "{{ example_domains.domains[0].id }}"
+            name: oci-example-readers
+          register: example_group
+
+        # Membership uses the identifiers from the identity domain API.
+        - name: Add the user to the group
+          ansible.oci.oci_identity_user_group_membership:
+            domain_id: "{{ example_domains.domains[0].id }}"
+            user_id: "{{ example_user.resource.id }}"
+            group_id: "{{ example_group.resource.id }}"
+          register: example_membership
+
+        # Compartment access
+        # The policy uses the group's OCI identifier and limits access to this compartment.
+        - name: Grant permission to inspect resources in the compartment
+          ansible.oci.oci_identity_policy:
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-inspect-policy
+            description: Let the example group inspect resources in the example compartment.
+            statements:
+              - >-
+                Allow group id {{ example_group.resource.ocid }} to inspect all-resources
+                in compartment id {{ oci_compartment_id }}
+          register: example_policy
+
+        - name: Show the user access configuration
+          ansible.builtin.debug:
+            msg:
+              user_id: "{{ example_user.resource.id }}"
+              group_ocid: "{{ example_group.resource.ocid }}"
+              membership: "{{ example_membership.resource }}"
+              statements: "{{ example_policy.resource.statements }}"
+      always:
+        # Cleanup
+        # Remove the policy before removing its group.
+        - name: Delete the example policy
+          ansible.oci.oci_identity_policy:
+            state: absent
+            policy_id: "{{ example_policy.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_policy.resource.id is defined
+
+        - name: Remove the example group membership
+          ansible.oci.oci_identity_user_group_membership:
+            state: absent
+            domain_id: "{{ example_domains.domains[0].id }}"
+            user_id: "{{ example_user.resource.id }}"
+            group_id: "{{ example_group.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_user.resource.id is defined
+            - example_group.resource.id is defined
+
+        - name: Delete the example user
+          ansible.oci.oci_identity_user:
+            state: absent
+            domain_id: "{{ example_domains.domains[0].id }}"
+            user_id: "{{ example_user.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_user.resource.id is defined
+
+        - name: Delete the example group
+          ansible.oci.oci_identity_group:
+            state: absent
+            domain_id: "{{ example_domains.domains[0].id }}"
+            group_id: "{{ example_group.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_group.resource.id is defined

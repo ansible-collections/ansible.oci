@@ -1,0 +1,86 @@
+---
+- name: Back up and restore an OCI block volume
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    example_cleanup: true
+  tasks:
+    - name: Create a volume and restore its backup
+      block:
+        # Placement
+        # Use the first availability domain for both volumes.
+        - name: List availability domains
+          ansible.oci.oci_identity_availability_domain_info:
+            compartment_id: "{{ oci_compartment_id }}"
+          register: example_domains
+
+        # Source volume and backup
+        # Create an empty volume so this example can run on its own.
+        - name: Create the source volume
+          ansible.oci.oci_blockstorage_volume:
+            compartment_id: "{{ oci_compartment_id }}"
+            availability_domain: "{{ example_domains.availability_domains[0].name }}"
+            name: oci-example-backup-source
+            allow_duplicate_name: true
+            size_in_gbs: 50
+          register: example_source
+
+        # Wait for OCI to finish the full backup before restoring it.
+        - name: Create a full volume backup
+          ansible.oci.oci_volume_backup:
+            compartment_id: "{{ oci_compartment_id }}"
+            volume_id: "{{ example_source.resource.id }}"
+            name: oci-example-volume-backup
+            allow_duplicate_name: true
+            type: full
+          register: example_backup
+
+        # Restore
+        # Create a second volume from the backup identifier.
+        - name: Restore the backup into a new volume
+          ansible.oci.oci_blockstorage_volume:
+            compartment_id: "{{ oci_compartment_id }}"
+            availability_domain: "{{ example_domains.availability_domains[0].name }}"
+            name: oci-example-backup-restored
+            allow_duplicate_name: true
+            source_details:
+              type: volume_backup
+              id: "{{ example_backup.resource.id }}"
+          register: example_restored
+
+        - name: Show the source, backup, and restored volume
+          ansible.builtin.debug:
+            msg:
+              source_volume_id: "{{ example_source.resource.id }}"
+              source_state: "{{ example_source.resource.lifecycle_state }}"
+              backup_id: "{{ example_backup.resource.id }}"
+              backup_state: "{{ example_backup.resource.lifecycle_state }}"
+              restored_volume_id: "{{ example_restored.resource.id }}"
+              restored_state: "{{ example_restored.resource.lifecycle_state }}"
+      always:
+        # Cleanup
+        # Remove the restored volume before its backup and source volume.
+        - name: Delete the restored volume
+          ansible.oci.oci_blockstorage_volume:
+            state: absent
+            volume_id: "{{ example_restored.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_restored.resource.id is defined
+
+        - name: Delete the volume backup
+          ansible.oci.oci_volume_backup:
+            state: absent
+            volume_backup_id: "{{ example_backup.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_backup.resource.id is defined
+
+        - name: Delete the source volume
+          ansible.oci.oci_blockstorage_volume:
+            state: absent
+            volume_id: "{{ example_source.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_source.resource.id is defined

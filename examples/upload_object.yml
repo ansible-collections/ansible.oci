@@ -47,22 +47,19 @@
           register: example_bucket
 
         # Upload the file as sample.txt in the new bucket.
-        - name: Upload and inspect the sample
-          when: example_bucket is succeeded and example_bucket is changed
-          block:
-            - name: Upload the sample file
-              ansible.oci.oci_object_storage_object:
-                state: present
-                bucket_name: "{{ example_bucket_name }}"
-                object_name: sample.txt
-                src: "{{ example_temp.path }}"
-                content_type: text/plain
-              register: example_upload
+        - name: Upload the sample file
+          ansible.oci.oci_object_storage_object:
+            state: present
+            bucket_name: "{{ example_bucket_name }}"
+            object_name: sample.txt
+            src: "{{ example_temp.path }}"
+            content_type: text/plain
+          register: example_upload
 
-            # Show the metadata that OCI returns for the upload.
-            - name: Show the uploaded object details
-              ansible.builtin.debug:
-                var: example_upload.resource
+        # Show the metadata that OCI returns for the upload.
+        - name: Show the uploaded object details
+          ansible.builtin.debug:
+            var: example_upload.resource
       always:
         # Cleanup
         # Remove the local file even when the user keeps the bucket.
