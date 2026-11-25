@@ -1,0 +1,6 @@
+---
+# Every run names its vault with the per-run oci_integration_rpfx suffix so the target is safe to run alongside
+# itself or the regular oci_vault target. The vault is left PENDING_DELETION at the end so OCI reclaims it.
+oci_vault_lifecycle_vault_name: "ansible-oci-vault-lifecycle"
+oci_vault_lifecycle_renamed_vault_name: "ansible-oci-vault-lifecycle-renamed"
+oci_vault_lifecycle_deletion_days: 7

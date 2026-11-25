@@ -20,6 +20,14 @@ COLLECTION_ROOT ?= $(INSTALLED_COLLECTION_ROOT)
 IN_COLLECTION_TREE :=
 endif
 
+# Targets marked `manual` in their aliases file are excluded from full
+# integration runs; pass INTEGRATION_TARGETS to run them explicitly.
+# Recursive (`=`) on purpose: when running from outside the collection tree this
+# must be evaluated at recipe time, after upgrade-collections has installed the
+# collection to COLLECTION_ROOT. A simple (`:=`) assignment expands at parse
+# time, before the install exists, and silently drops every --exclude.
+MANUAL_INTEGRATION_TARGETS = $(shell grep -l '^manual$$' $(COLLECTION_ROOT)/tests/integration/targets/*/aliases 2>/dev/null | xargs -r -n1 dirname | xargs -r -n1 basename)
+
 .PHONY: generate-integration-runtime
 generate-integration-runtime:
 	chmod +x "$(COLLECTION_ROOT)/tests/integration/generate_integration_runtime.sh"
@@ -38,7 +46,8 @@ integration-ci: upgrade-collections generate-integration-runtime
 	pip install -r requirements.txt; \
 	ansible --version; \
 	ansible-test --version; \
-	ansible-test integration --allow-destructive $(INTEGRATION_TARGETS)
+	ansible-test integration --allow-destructive \
+		$(if $(INTEGRATION_TARGETS),$(INTEGRATION_TARGETS),$(MANUAL_INTEGRATION_TARGETS:%=--exclude %))
 
 .PHONY: units
 units: upgrade-collections

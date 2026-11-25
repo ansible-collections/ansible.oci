@@ -1,0 +1,13 @@
+---
+- name: Delete the test VCN
+  ansible.oci.oci_network_vcn:
+    vcn_id: "{{ move_vcn.resource.id }}"
+    state: absent
+  when: move_vcn.resource.id is defined
+
+- name: Submit deletion of the child compartment
+  ansible.oci.oci_identity_compartment:
+    compartment_id: "{{ move_child.resource.id }}"
+    state: absent
+    wait: false
+  when: move_child.resource.id is defined

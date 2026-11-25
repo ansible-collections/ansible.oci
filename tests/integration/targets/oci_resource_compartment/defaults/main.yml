@@ -1,0 +1,4 @@
+---
+oci_resource_compartment_integration_child_name: "oci-move-child"
+oci_resource_compartment_integration_vcn_name: "oci-move-vcn"
+oci_resource_compartment_integration_vcn_cidr: "10.235.0.0/16"

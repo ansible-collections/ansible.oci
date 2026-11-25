@@ -117,6 +117,8 @@
       {{ oci_instance_console_connection_integration_subnet_name }}-{{ oci_integration_rpfx }}
     oci_instance_console_connection_integration_instance_name: >-
       {{ oci_instance_console_connection_integration_instance_name }}-{{ oci_integration_rpfx }}
+    oci_console_history_name: "console-history-{{ oci_integration_rpfx }}"
+    oci_console_history_updated_name: "console-history-updated-{{ oci_integration_rpfx }}"
 
 - name: Exercise console connection lifecycle against a real instance
   module_defaults:
@@ -323,6 +325,9 @@
           - >-
             oci_console_connection_info_unfiltered_list.instance_console_connections
             | selectattr('id', 'equalto', oci_console_connection_id) | list | length == 1
+
+    - name: Test the instance console history lifecycle
+      ansible.builtin.include_tasks: console_history.yml
 
     - name: Delete the console connection in check mode
       ansible.oci.oci_instance_console_connection:

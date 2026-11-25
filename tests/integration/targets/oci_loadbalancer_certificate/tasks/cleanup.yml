@@ -1,0 +1,49 @@
+---
+- name: Remove the temporary certificate directory
+  ansible.builtin.file:
+    path: '{{ oci_lb_certificate_directory.path }}'
+    state: absent
+  when: oci_lb_certificate_directory.path is defined
+  register: oci_lb_certificate_cleanup_directory
+  retries: 3
+  ignore_errors: true
+
+- name: Delete the test load balancer and its subresources
+  ansible.oci.oci_loadbalancer:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_lb_test_name }}'
+    state: absent
+  when: oci_lb_test_name | default('', true) | length > 0
+  register: oci_lb_certificate_cleanup_load_balancer
+  retries: 3
+  ignore_errors: true
+
+- name: Delete the test subnet
+  ansible.oci.oci_network_subnet:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    vcn_id: '{{ oci_lb_test_vcn_id }}'
+    name: '{{ oci_lb_test_subnet_name }}'
+    state: absent
+  when: oci_lb_test_vcn_id | default('', true) | length > 0
+  register: oci_lb_certificate_cleanup_subnet
+  retries: 3
+  ignore_errors: true
+
+- name: Delete the test VCN
+  ansible.oci.oci_network_vcn:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_lb_test_vcn_name }}'
+    state: absent
+  when: oci_lb_test_vcn_name | default('', true) | length > 0
+  register: oci_lb_certificate_cleanup_vcn
+  retries: 3
+  ignore_errors: true
+
+- name: Verify resource cleanup succeeded
+  ansible.builtin.assert:
+    that:
+      - oci_lb_certificate_cleanup_directory is not failed
+      - oci_lb_certificate_cleanup_load_balancer is not failed
+      - oci_lb_certificate_cleanup_subnet is not failed
+      - oci_lb_certificate_cleanup_vcn is not failed
+    fail_msg: Resource cleanup failed after 3 retries. See the failed cleanup tasks above.

@@ -125,8 +125,8 @@ def test_domain_id_resolution_and_identity_domains_client(monkeypatch):
         )
     )
     monkeypatch.setattr(helper, "create_service_client", lambda module, cls: client)
-    assert helper.resolve_domain_url(DummyModule({"domain_id": "domain1"})) == (
-        "https://identity.example.com"
+    assert helper.resolve_identity_domain(DummyModule({"domain_id": "domain1"})) == (
+        "domain1", "https://identity.example.com"
     )
     instance = make_group(module_obj, {})
     instance.identity_domain_url = "https://identity.example.com"

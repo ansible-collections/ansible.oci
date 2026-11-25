@@ -20,6 +20,13 @@ This collection does not depend on other Ansible collections.
 
 Use a controller or execution environment with a Python version supported by both `ansible-core` and the OCI Python SDK. Red Hat Ansible Automation Platform customers run `ansible-core` in execution environments; do not install `ansible-core` with `pip` in supported AAP environments. OCI authentication material and related configuration must also be available to the automation environment that runs the collection.
 
+## Compartment changes
+
+Use `ansible.oci.oci_resource_compartment` to move an existing resource to another compartment.
+The module supports check mode and skips resources already in the destination compartment.
+Support comes from OCI bulk-move discovery and Resource Search.
+See the [module description](plugins/modules/oci_resource_compartment.py) for exclusions and discovery requirements.
+
 ## Installation
 
 

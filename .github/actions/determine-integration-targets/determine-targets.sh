@@ -53,6 +53,19 @@ if [[ -n "${selected}" ]]; then
   done <<< "${selected}"
 fi
 
+# Targets marked `manual` in their aliases file are excluded from regular CI
+# runs; they only run when explicitly requested via INTEGRATION_TARGETS.
+filtered_targets=()
+for target in "${targets[@]}"; do
+  aliases_file="tests/integration/targets/${target}/aliases"
+  if [[ -f "${aliases_file}" ]] && grep -qx 'manual' "${aliases_file}"; then
+    echo "Excluding manual integration target: ${target}"
+    continue
+  fi
+  filtered_targets+=("${target}")
+done
+targets=("${filtered_targets[@]}")
+
 run_integration=false
 if [[ "${#targets[@]}" -gt 0 ]]; then
   run_integration=true

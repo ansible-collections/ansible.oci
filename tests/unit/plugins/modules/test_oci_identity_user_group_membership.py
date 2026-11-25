@@ -75,8 +75,8 @@ def test_domain_id_resolution_and_identity_domains_client(monkeypatch):
         )
     )
     monkeypatch.setattr(helper, "create_service_client", lambda module, cls: client)
-    assert helper.resolve_domain_url(DummyModule({"domain_id": "domain1"})) == (
-        "https://identity.example.com"
+    assert helper.resolve_identity_domain(DummyModule({"domain_id": "domain1"})) == (
+        "domain1", "https://identity.example.com"
     )
     instance = make_membership(module_obj, {})
     instance.identity_domain_url = "https://identity.example.com"
@@ -88,7 +88,7 @@ def test_missing_oci_sdk_fails_before_domain_lookup(monkeypatch):
     helper = sys.modules[module_obj.OciIdentityDomainResourceBase.__module__]
     monkeypatch.setattr(helper, "HAS_OCI_SDK", False)
     monkeypatch.setattr(
-        helper, "resolve_domain_url", lambda module: pytest.fail("unexpected lookup")
+        helper, "resolve_identity_domain", lambda module: pytest.fail("unexpected lookup")
     )
     with pytest.raises(FailJsonCalled) as failure:
         module_obj.OciIdentityUserGroupMembershipModule(DummyModule({"domain_id": "domain1"}))
