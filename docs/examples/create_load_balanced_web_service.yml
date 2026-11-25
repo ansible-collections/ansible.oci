@@ -1,5 +1,5 @@
 ---
-- name: Serve HTTP through an OCI load balancer
+- name: Serve HTTPS through an OCI load balancer
   hosts: localhost
   connection: local
   gather_facts: false
@@ -83,7 +83,7 @@
           register: example_routes
 
         # Stateful rules allow reply traffic for each permitted connection.
-        - name: Permit public HTTP and connections to the web servers
+        - name: Permit public HTTPS and connections to the web servers
           ansible.oci.oci_network_security_list:
             compartment_id: "{{ oci_compartment_id }}"
             vcn_id: "{{ example_vcn.resource.id }}"
@@ -92,8 +92,8 @@
               - source: 0.0.0.0/0
                 protocol: "6"
                 tcp_options:
-                  destination_port_min: 80
-                  destination_port_max: 80
+                  destination_port_min: 443
+                  destination_port_max: 443
             egress_security_rules:
               - destination: 10.0.2.0/24
                 protocol: "6"
@@ -175,6 +175,45 @@
               maximum_bandwidth_in_mbps: 10
           register: example_lb
 
+        # TLS certificate
+        # Create a short-lived certificate for the public address assigned by OCI.
+        - name: Create a local directory for the certificate and private key
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: oci-example-lb-
+          register: example_tls
+
+        - name: Generate the example certificate and private key
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - req
+              - -x509
+              - -newkey
+              - rsa:3072
+              - -sha256
+              - -nodes
+              - -days
+              - "1"
+              - -subj
+              - /CN=oci-example-lb
+              - -addext
+              - "subjectAltName=IP:{{ example_lb.resource.ip_addresses[0].ip_address }}"
+              - -keyout
+              - "{{ example_tls.path }}/server.key"
+              - -out
+              - "{{ example_tls.path }}/server.crt"
+            creates: "{{ example_tls.path }}/server.crt"
+
+        # Keep private key material out of Ansible output.
+        - name: Upload the certificate bundle to the load balancer
+          ansible.oci.oci_loadbalancer_certificate:
+            load_balancer_id: "{{ example_lb.resource.id }}"
+            name: example-web-certificate
+            public_certificate: "{{ lookup('ansible.builtin.file', example_tls.path ~ '/server.crt') }}"
+            private_key: "{{ lookup('ansible.builtin.file', example_tls.path ~ '/server.key') }}"
+          no_log: true
+
         - name: Create the backend set and HTTP health check
           ansible.oci.oci_loadbalancer_backend_set:
             load_balancer_id: "{{ example_lb.resource.id }}"
@@ -186,19 +225,25 @@
               port: 8080
               url_path: /
 
-        - name: Create the public HTTP listener
+        # OCI enables HTTPS when an HTTP listener has an SSL configuration.
+        - name: Create the public HTTPS listener
           ansible.oci.oci_loadbalancer_listener:
             load_balancer_id: "{{ example_lb.resource.id }}"
-            name: example-http
+            name: example-https
             default_backend_set_name: example-web-backends
             protocol: http
-            port: 80
+            port: 443
+            ssl_configuration:
+              certificate_name: example-web-certificate
 
         # Service access
         # Wait for cloud-init and the load balancer health checks to finish.
         - name: Request the example web page
           ansible.builtin.uri:
-            url: "http://{{ example_lb.resource.ip_addresses[0].ip_address }}/"
+            url: "https://{{ example_lb.resource.ip_addresses[0].ip_address }}/"
+            # Trust the certificate created by this run and verify its IP address.
+            ca_path: "{{ example_tls.path }}/server.crt"
+            validate_certs: true
             return_content: true
             use_proxy: false
           register: example_response
@@ -209,11 +254,28 @@
         - name: Show the web service URL and response
           ansible.builtin.debug:
             msg:
-              url: "http://{{ example_lb.resource.ip_addresses[0].ip_address }}/"
+              url: "https://{{ example_lb.resource.ip_addresses[0].ip_address }}/"
               response: "{{ example_response.content }}"
+              certificate_file: "{{ example_tls.path }}/server.crt"
       always:
         # Cleanup
-        # Deleting the load balancer also removes its listener and backend set.
+        # Remove the private key even when the user keeps the OCI resources.
+        - name: Delete the local private key
+          ansible.builtin.file:
+            path: "{{ example_tls.path }}/server.key"
+            state: absent
+          when: example_tls.path is defined
+
+        # Keep the public certificate for inspection when cleanup is disabled.
+        - name: Delete the local certificate directory
+          ansible.builtin.file:
+            path: "{{ example_tls.path }}"
+            state: absent
+          when:
+            - example_cleanup | bool
+            - example_tls.path is defined
+
+        # Deleting the load balancer also removes its listener, certificate, and backend set.
         - name: Delete the example load balancer
           ansible.oci.oci_loadbalancer:
             state: absent

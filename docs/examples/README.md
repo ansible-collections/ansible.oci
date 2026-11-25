@@ -6,10 +6,10 @@ playbooks in any order. Each creates the infrastructure for its own scenario.
 ## Set up access to OCI
 
 1. Install `ansible.oci` and the OCI Python SDK in the environment where
-   Ansible runs. See the [collection requirements](../README.md#requirements).
+   Ansible runs. See the [collection requirements](../../README.md#requirements).
 2. Set up OCI authentication. The default profile is `DEFAULT` in
    `~/.oci/config`. Select the region in that profile. See
-   [authentication defaults](../README.md#authentication-defaults).
+   [authentication defaults](../../README.md#authentication-defaults).
 3. Set `OCI_EXAMPLE_COMPARTMENT_ID` to the Oracle Cloud Identifier (OCID) of
    your target compartment in the shell where you run the examples.
 4. Give the OCI identity permission to read and manage the resources in the
@@ -32,7 +32,7 @@ List the availability domains and the IDs of running instances. The command
 can run in an empty compartment.
 
 ```sh
-ansible-playbook examples/discover_resources.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/discover_resources.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 ```
 
 ### Create a private network
@@ -41,7 +41,7 @@ Create a virtual cloud network (VCN) and a regional subnet. The subnet prevents
 public IP assignment.
 
 ```sh
-ansible-playbook examples/create_private_network.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/create_private_network.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 ```
 
 ### Launch an instance
@@ -49,7 +49,7 @@ ansible-playbook examples/create_private_network.yml -e "oci_compartment_id=$OCI
 Create a private network, launch a Linux instance, and show its ID and state.
 
 ```sh
-ansible-playbook examples/launch_instance.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/launch_instance.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 ```
 
 ### Attach a block volume
@@ -58,7 +58,7 @@ Create a private Linux instance and attach a new 50 GB block volume. The
 playbook shows the attachment state through the OCI API.
 
 ```sh
-ansible-playbook examples/attach_block_volume.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/attach_block_volume.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 ```
 
 ### Upload an object
@@ -67,7 +67,7 @@ Write a temporary text file, upload it to a private bucket, and show the
 metadata for the uploaded object.
 
 ```sh
-ansible-playbook examples/upload_object.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/upload_object.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 ```
 
 ### Create an Autonomous Database
@@ -78,29 +78,37 @@ endpoint. Supply an administrator password that meets Oracle's requirements.
 ```bash
 read -rs -p 'Autonomous Database administrator password: ' OCI_EXAMPLE_ADB_ADMIN_PASSWORD
 export OCI_EXAMPLE_ADB_ADMIN_PASSWORD
-ansible-playbook examples/create_autonomous_database.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/create_autonomous_database.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 unset OCI_EXAMPLE_ADB_ADMIN_PASSWORD
 ```
 
 [Oracle password requirements](https://docs.oracle.com/en/cloud/paas/autonomous-database/serverless/adbsb/manage-users-create.html)
 
-### Serve HTTP through a load balancer
+### Serve HTTPS through a load balancer
 
-Create two private Oracle Linux 9 instances and a public HTTP load balancer.
+Create two private Oracle Linux 9 instances and a public HTTPS load balancer.
 Cloud-init starts a Python web service on each instance. Each service returns
 its private address. The playbook requests the public URL before cleanup.
 The instances use the standard platform image and require no SSH connection.
+Install OpenSSL on the Ansible controller. Use this source checkout or
+collection version 1.3.0 or later for the load balancer certificate module. The playbook generates a self-signed
+certificate that expires after one day. The request validates this certificate
+and checks the load balancer's public IP address.
 
 ```sh
-ansible-playbook examples/create_load_balanced_web_service.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/create_load_balanced_web_service.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 ```
 
 Give the OCI identity permission to manage Compute instances, networks,
 and load balancers. Include permission to read images and availability domains.
 The example creates an internet gateway, route table, security lists, and two
-subnets. Public HTTP traffic enters on port 80. Backend traffic uses port 8080.
+subnets. Public HTTPS traffic enters on port 443. HTTP traffic between the load
+balancer and private backends uses port 8080.
 The load balancer uses 10 Mbps for both bandwidth limits.
-With `-e example_cleanup=false`, the URL remains available for inspection.
+With `-e example_cleanup=false`, the URL and public certificate remain available
+for inspection. The output shows the certificate path. Use that path with
+`curl --cacert <certificate_file> <url>` to validate the endpoint.
+The playbook always deletes the local private key.
 
 ### Back up and restore a volume
 
@@ -110,7 +118,7 @@ Give the OCI identity permission to manage volumes and volume backups.
 Include permission to read availability domains.
 
 ```sh
-ansible-playbook examples/backup_restore_volume.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
+ansible-playbook docs/examples/backup_restore_volume.yml -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID"
 ```
 
 ### Give a user access through a group
@@ -125,7 +133,7 @@ users and groups in the default domain and policies in the target compartment.
 
 ```sh
 export OCI_EXAMPLE_TENANCY_ID='ocid1.tenancy.oc1..replace_with_your_tenancy_ocid'
-ansible-playbook examples/create_user_with_group_access.yml \
+ansible-playbook docs/examples/create_user_with_group_access.yml \
   -e "oci_compartment_id=$OCI_EXAMPLE_COMPARTMENT_ID" \
   -e "oci_tenancy_id=$OCI_EXAMPLE_TENANCY_ID"
 ```
