@@ -7,6 +7,7 @@ import pytest
 
 from .conftest import (
     DummyModule,
+    ExitJsonCalled,
     FakeModel,
     FakeResponse,
     FailJsonCalled,
@@ -427,27 +428,33 @@ def test_update_resource_upgrades_kubernetes_version(monkeypatch):
     assert updated.kubernetes_version == "v1.30.1"
 
 
-def test_update_resource_no_change_when_version_matches(monkeypatch):
+def test_lifecycle_skips_update_when_version_matches(monkeypatch):
     install_fake_oci(monkeypatch)
 
     cluster_module = load_collection_module("oci_oke_cluster")
 
     def fail_if_called(*args, **kwargs):
-        raise AssertionError("update_cluster should not run without changes")
+        raise AssertionError("update_resource should not run without changes")
 
     resource = FakeModel(
         id="ocid1.cluster.oc1..c1",
         name="c1",
         kubernetes_version="v1.29.1",
         available_kubernetes_upgrades=["v1.30.1"],
+        lifecycle_state="ACTIVE",
     )
     instance = make_cluster_module(
         cluster_module,
-        {"kubernetes_version": "v1.29.1", "wait": True},
+        {"state": "present", "kubernetes_version": "v1.29.1", "wait": True},
         client=types.SimpleNamespace(update_cluster=fail_if_called),
     )
+    monkeypatch.setattr(instance, "resolve_target_resource", lambda: resource)
+    monkeypatch.setattr(instance, "update_resource", fail_if_called)
 
-    assert instance.update_resource(resource) is resource
+    with pytest.raises(ExitJsonCalled) as exc_info:
+        instance.execute_resource_module()
+
+    assert exc_info.value.payload["changed"] is False
 
 
 def test_needs_update_true_when_image_policy_enable_changes(monkeypatch):

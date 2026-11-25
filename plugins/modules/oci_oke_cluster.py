@@ -636,6 +636,19 @@ class OciOkeClusterModule(OciResourceBase):
             )
         return work_request_id
 
+    def _wait_for_response_work_request(self, response, operation):
+        """Wait for the work request carried by an async operation response.
+
+        Args:
+            response: The SDK response from a create/update/delete call.
+            operation: Operation name used in the failure message.
+
+        Returns:
+            The completed work request model.
+        """
+        work_request_id = self._work_request_id(response, operation)
+        return self.wait_for_work_request(self.client, work_request_id)
+
     def _cluster_id_from_work_request(self, work_request):
         """Return the cluster OCID recorded on a work request.
 
@@ -897,9 +910,6 @@ class OciOkeClusterModule(OciResourceBase):
             elif param_name == "endpoint_config":
                 endpoint_changes = operations[0][1]
 
-        if not update_fields and not endpoint_changes:
-            return resource
-
         wait = self.module.params.get("wait", True)
 
         if update_fields:
@@ -909,8 +919,7 @@ class OciOkeClusterModule(OciResourceBase):
                 update_cluster_details=self.build_update_details(update_fields),
             )
             if wait or endpoint_changes:
-                work_request_id = self._work_request_id(response, "update")
-                self.wait_for_work_request(self.client, work_request_id)
+                self._wait_for_response_work_request(response, "update")
 
         if endpoint_changes:
             response = self.call_with_retry(
@@ -923,10 +932,7 @@ class OciOkeClusterModule(OciResourceBase):
                 ),
             )
             if wait:
-                work_request_id = self._work_request_id(
-                    response, "endpoint config update"
-                )
-                self.wait_for_work_request(self.client, work_request_id)
+                self._wait_for_response_work_request(response, "endpoint config update")
 
         return self._get_cluster_or_id(resource.id)
 
@@ -952,8 +958,7 @@ class OciOkeClusterModule(OciResourceBase):
             cluster_id=resource.id,
         )
         if self.module.params.get("wait", True):
-            work_request_id = self._work_request_id(response, "delete")
-            self.wait_for_work_request(self.client, work_request_id)
+            self._wait_for_response_work_request(response, "delete")
         return self._get_cluster_or_id(resource.id)
 
 
