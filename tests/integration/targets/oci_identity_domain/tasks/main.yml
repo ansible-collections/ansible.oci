@@ -1,16 +1,9 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_identity_domain: false
-    oci_group_started_oci_identity_user: false
-    oci_group_started_oci_identity_group: false
-    oci_group_started_oci_identity_dynamic_group: false
-    oci_group_started_oci_identity_api_key: false
-    oci_group_started_oci_identity_user_group_membership: false
+    oci_tests_completed: false
 
-- name: Test oci_identity_domain and dependent modules
+- name: Test oci_identity_domain
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -18,50 +11,15 @@
   block:
 
     - name: Run oci_identity_domain tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_domain/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_identity_user tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_user/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_identity_group tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_group/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_identity_user_group_membership tests
-      ansible.builtin.include_tasks: oci_identity_user_group_membership/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_identity_group remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_group/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_identity_api_key tests
-      ansible.builtin.include_tasks: oci_identity_api_key/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_identity_user remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_user/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_identity_domain.yml
 
     - name: Run oci_identity_dynamic_group tests
-      ansible.builtin.include_tasks: oci_identity_dynamic_group/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_identity_dynamic_group.yml
 
-    - name: Run oci_identity_domain remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_identity_domain/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

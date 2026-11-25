@@ -1,0 +1,30 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_identity_domain_create: {}
+    user_create_result: {}
+    oci_tests_completed: false
+
+- name: Test oci_identity_group
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Run oci_identity_group tests
+      ansible.builtin.include_tasks: oci_identity_group.yml
+
+    - name: Run oci_identity_user_group_membership tests
+      ansible.builtin.include_tasks: oci_identity_user_group_membership.yml
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

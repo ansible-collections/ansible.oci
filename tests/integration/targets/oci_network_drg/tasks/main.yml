@@ -1,14 +1,10 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
     oci_rpc_id: ''
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_network_drg: false
-    oci_group_started_oci_network_drg_attachment: false
-    oci_group_started_oci_network_ipsec_connection: false
+    oci_tests_completed: false
 
-- name: Test oci_network_drg and dependent modules
+- name: Test oci_network_drg
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -16,28 +12,18 @@
   block:
 
     - name: Run oci_network_drg tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_drg/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_network_drg.yml
 
     - name: Run oci_network_drg_attachment tests
-      ansible.builtin.include_tasks: oci_network_drg_attachment/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_network_drg_attachment.yml
 
     - name: Run remote peering connection tests with the shared DRG
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/remote_peering_connection.yml'
+      ansible.builtin.include_tasks: remote_peering_connection.yml
 
-    - name: Run oci_network_ipsec_connection tests
-      ansible.builtin.include_tasks: oci_network_ipsec_connection/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_network_drg remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_drg/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

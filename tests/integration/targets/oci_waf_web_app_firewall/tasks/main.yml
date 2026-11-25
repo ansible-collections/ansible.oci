@@ -1,0 +1,32 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_lb_test_suffix: oci_waf_web_app_firewall
+    oci_lb_test_vcn: {}
+    oci_lb_test_subnet: {}
+    oci_lb_test_create: {}
+    oci_tests_completed: false
+
+- name: Test oci_waf_web_app_firewall
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Test oci_waf_web_app_firewall_policy
+      ansible.builtin.include_tasks: oci_waf_web_app_firewall_policy.yml
+
+    - name: Test oci_waf_web_app_firewall
+      ansible.builtin.include_tasks: oci_waf_web_app_firewall.yml
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

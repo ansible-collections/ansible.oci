@@ -1,25 +1,26 @@
 ---
 - name: Compute unique names for the remote peering connection
   ansible.builtin.set_fact:
-    oci_rpc_integration_rpc_name: "{{ oci_rpc_integration_rpc_name }}-{{ oci_integration_rpfx }}"
-    oci_rpc_integration_updated_rpc_name: "{{ oci_rpc_integration_updated_rpc_name }}-{{ oci_integration_rpfx }}"
-    oci_rpc_id: ""
+    oci_rpc_integration_rpc_name: '{{ oci_rpc_integration_rpc_name }}-{{ oci_integration_rpfx }}'
+    oci_rpc_integration_updated_rpc_name: '{{ oci_rpc_integration_updated_rpc_name }}-{{ oci_integration_rpfx }}'
+    oci_rpc_id: ''
 
 - name: Exercise remote peering connection lifecycle
   module_defaults:
     ansible.oci.oci_network_remote_peering_connection:
       wait_interval: 5
     group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
   block:
+
     - name: Create the first RPC in check mode
-      ansible.oci.oci_network_remote_peering_connection: &oci_rpc_create_options
+      ansible.oci.oci_network_remote_peering_connection:
         state: present
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        drg_id: "{{ oci_drg_id }}"
-        name: "{{ oci_rpc_integration_rpc_name }}"
-        freeform_tags: "{{ oci_rpc_integration_create_tags }}"
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        drg_id: '{{ oci_drg_id }}'
+        name: '{{ oci_rpc_integration_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_create_tags }}'
       check_mode: true
       register: oci_rpc_create_check
 
@@ -29,9 +30,9 @@
 
     - name: Confirm first RPC check mode did not create a resource
       ansible.oci.oci_network_remote_peering_connection_info:
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        drg_id: "{{ oci_drg_id }}"
-        name: "{{ oci_rpc_integration_rpc_name }}"
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        drg_id: '{{ oci_drg_id }}'
+        name: '{{ oci_rpc_integration_rpc_name }}'
       register: oci_rpc_create_check_probe
 
     - name: Assert first RPC remains absent after check mode
@@ -40,16 +41,24 @@
 
     - name: Create the first RPC
       ansible.oci.oci_network_remote_peering_connection:
-        <<: *oci_rpc_create_options
+        state: present
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        drg_id: '{{ oci_drg_id }}'
+        name: '{{ oci_rpc_integration_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_create_tags }}'
       register: oci_rpc_create
 
     - name: Store the first RPC identifier immediately after creation
       ansible.builtin.set_fact:
-        oci_rpc_id: "{{ oci_rpc_create.resource.id }}"
+        oci_rpc_id: '{{ oci_rpc_create.resource.id }}'
 
     - name: Assert first RPC check mode rerun is unchanged
       ansible.oci.oci_network_remote_peering_connection:
-        <<: *oci_rpc_create_options
+        state: present
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        drg_id: '{{ oci_drg_id }}'
+        name: '{{ oci_rpc_integration_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_create_tags }}'
       check_mode: true
       register: oci_rpc_create_rerun_check
 
@@ -63,7 +72,7 @@
 
     - name: Read first RPC by ID
       ansible.oci.oci_network_remote_peering_connection_info:
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
       register: oci_rpc_info_by_id
 
     - name: Assert first RPC info is correct
@@ -75,7 +84,11 @@
 
     - name: Assert first RPC creation is idempotent by name
       ansible.oci.oci_network_remote_peering_connection:
-        <<: *oci_rpc_create_options
+        state: present
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        drg_id: '{{ oci_drg_id }}'
+        name: '{{ oci_rpc_integration_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_create_tags }}'
       register: oci_rpc_create_rerun
 
     - name: Verify first RPC creation rerun is unchanged
@@ -85,11 +98,11 @@
           - oci_rpc_create_rerun.resource.id == oci_rpc_id
 
     - name: Update first RPC in check mode
-      ansible.oci.oci_network_remote_peering_connection: &oci_rpc_update_options
+      ansible.oci.oci_network_remote_peering_connection:
         state: present
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
-        name: "{{ oci_rpc_integration_updated_rpc_name }}"
-        freeform_tags: "{{ oci_rpc_integration_update_tags }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
+        name: '{{ oci_rpc_integration_updated_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_update_tags }}'
       check_mode: true
       register: oci_rpc_update_check
 
@@ -99,7 +112,7 @@
 
     - name: Confirm first RPC update check mode preserved state
       ansible.oci.oci_network_remote_peering_connection_info:
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
       register: oci_rpc_update_check_probe
 
     - name: Assert first RPC remains unchanged after update check mode
@@ -110,7 +123,10 @@
 
     - name: Update first RPC
       ansible.oci.oci_network_remote_peering_connection:
-        <<: *oci_rpc_update_options
+        state: present
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
+        name: '{{ oci_rpc_integration_updated_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_update_tags }}'
       register: oci_rpc_update
 
     - name: Assert first RPC update changed state
@@ -119,7 +135,10 @@
 
     - name: Assert first RPC update is idempotent
       ansible.oci.oci_network_remote_peering_connection:
-        <<: *oci_rpc_update_options
+        state: present
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
+        name: '{{ oci_rpc_integration_updated_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_update_tags }}'
       register: oci_rpc_update_rerun
 
     - name: Verify first RPC update rerun is unchanged
@@ -128,7 +147,10 @@
 
     - name: Verify first RPC update check mode rerun is unchanged
       ansible.oci.oci_network_remote_peering_connection:
-        <<: *oci_rpc_update_options
+        state: present
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
+        name: '{{ oci_rpc_integration_updated_rpc_name }}'
+        freeform_tags: '{{ oci_rpc_integration_update_tags }}'
       check_mode: true
       register: oci_rpc_update_rerun_check
 
@@ -139,7 +161,7 @@
     - name: Delete first RPC in check mode
       ansible.oci.oci_network_remote_peering_connection:
         state: absent
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
       check_mode: true
       register: oci_rpc_delete_check
 
@@ -149,7 +171,7 @@
 
     - name: Confirm first RPC still exists after delete check mode
       ansible.oci.oci_network_remote_peering_connection_info:
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
       register: oci_rpc_delete_check_probe
 
     - name: Assert first RPC remains after delete check mode
@@ -159,7 +181,7 @@
     - name: Delete first RPC
       ansible.oci.oci_network_remote_peering_connection:
         state: absent
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
       register: oci_rpc_delete
 
     - name: Assert first RPC deletion changed state
@@ -169,7 +191,7 @@
     - name: Assert first RPC deletion is idempotent
       ansible.oci.oci_network_remote_peering_connection:
         state: absent
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
       register: oci_rpc_delete_rerun
 
     - name: Verify first RPC deletion rerun is unchanged
@@ -179,14 +201,10 @@
     - name: Verify first RPC delete check mode rerun is unchanged
       ansible.oci.oci_network_remote_peering_connection:
         state: absent
-        remote_peering_connection_id: "{{ oci_rpc_id }}"
+        remote_peering_connection_id: '{{ oci_rpc_id }}'
       check_mode: true
       register: oci_rpc_delete_rerun_check
 
     - name: Assert first RPC delete check mode rerun is unchanged
       ansible.builtin.assert:
         that: not oci_rpc_delete_rerun_check.changed | bool
-
-  always:
-    - name: Run remote peering connection cleanup
-      ansible.builtin.include_tasks: remote_peering_connection_cleanup.yml

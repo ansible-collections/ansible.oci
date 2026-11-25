@@ -1,25 +1,12 @@
 ---
-- name: Initialize instance group resource markers
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
     oci_instance_id: ''
-    oci_instance_capacity_reservation_id: ''
-    oci_console_history_id: ''
-    oci_console_connection_id: ''
-    oci_vnic_attachment_id: ''
-    oci_network_private_ip_id: ''
-    oci_volume_attachment_id: ''
-    oci_volume_attachment_integration_volume_id: ''
-    oci_boot_volume_id: ''
-    oci_boot_volume_backup_id: ''
-    oci_boot_volume_backup_duplicate_id: ''
-    oci_image_id: ''
-    oci_network_vnic_nsgs: {}
     oci_instance_vcn_create: {}
     oci_instance_subnet_create: {}
-    oci_compute_inventory_source: {}
-    oci_compute_inventory_output: {}
+    oci_tests_completed: false
 
-- name: Test the shared instance and dependent modules
+- name: Test oci_instance
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -29,99 +16,10 @@
     - name: Run instance tests
       ansible.builtin.include_tasks: oci_instance.yml
 
-    - name: Run oci_compute_inventory tests
-      ansible.builtin.include_tasks: oci_compute_inventory/main.yml
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_instance_console_connection tests
-      ansible.builtin.include_tasks: oci_instance_console_connection/main.yml
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_vnic_attachment tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_vnic_attachment/main.yml'
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_network_private_ip tests
-      ansible.builtin.include_tasks: oci_network_private_ip/main.yml
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_vnic_attachment remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_vnic_attachment/delete.yml'
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_volume_attachment tests
-      ansible.builtin.include_tasks: oci_volume_attachment/main.yml
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_boot_volume_backup tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_boot_volume_backup/main.yml'
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_boot_volume tests
-      ansible.builtin.include_tasks: oci_boot_volume/main.yml
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_boot_volume_backup remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_boot_volume_backup/delete.yml'
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run oci_image tests
-      ansible.builtin.include_tasks: oci_image/main.yml
-      vars:
-        oci_shared_instance: '{{ oci_instance_create }}'
-        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
-        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
-        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
-        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
-
-    - name: Run instance deletion tests
-      ansible.builtin.include_tasks: oci_instance_delete.yml
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all instance group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

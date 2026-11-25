@@ -1,0 +1,36 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_instance_id: ''
+    oci_instance_capacity_reservation_id: ''
+    oci_instance_vcn_create: {}
+    oci_instance_subnet_create: {}
+    oci_instance_create: {}
+    oci_tests_completed: false
+
+- name: Test oci_instance_capacity_reservation
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Test oci_instance_capacity_reservation creation
+      ansible.builtin.include_tasks: oci_instance_capacity_reservation.yml
+
+    - name: Create the instance with reserved capacity
+      ansible.builtin.include_tasks: oci_instance.yml
+
+    - name: Run test_instance_actions.yml
+      ansible.builtin.include_tasks: oci_instance_actions.yml
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

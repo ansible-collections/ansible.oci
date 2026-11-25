@@ -1,0 +1,151 @@
+---
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Delete leaked first API key
+  ansible.oci.oci_identity_api_key:
+    state: absent
+    domain_id: '{{ oci_identity_api_key_domain_id }}'
+    user_id: '{{ oci_identity_api_key_user_id }}'
+    fingerprint: '{{ oci_identity_api_key_first_fingerprint }}'
+  when:
+    - oci_identity_api_key_domain_id is defined
+    - oci_identity_api_key_user_id is defined
+    - oci_identity_api_key_first_fingerprint is defined
+    - oci_identity_api_key_domain_id | default('') | length > 0
+    - oci_identity_api_key_user_id | default('') | length > 0
+    - oci_identity_api_key_first_fingerprint | default('') | length > 0
+  register: oci_cleanup_delete_leaked_first_api_key
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked second API key
+  ansible.oci.oci_identity_api_key:
+    state: absent
+    domain_id: '{{ oci_identity_api_key_domain_id }}'
+    user_id: '{{ oci_identity_api_key_user_id }}'
+    fingerprint: '{{ oci_identity_api_key_second_fingerprint }}'
+  when:
+    - oci_identity_api_key_domain_id is defined
+    - oci_identity_api_key_user_id is defined
+    - oci_identity_api_key_second_fingerprint is defined
+    - oci_identity_api_key_domain_id | default('') | length > 0
+    - oci_identity_api_key_user_id | default('') | length > 0
+    - oci_identity_api_key_second_fingerprint | default('') | length > 0
+  register: oci_cleanup_delete_leaked_second_api_key
+  retries: 3
+  ignore_errors: true
+
+- name: Verify oci_identity_user deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Exercise identity-domain user lifecycle in a temporary domain
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
+
+        - name: Delete user in check mode
+          ansible.oci.oci_identity_user:
+            domain_id: '{{ oci_integration_domain_id }}'
+            state: absent
+            user_id: '{{ user_create_result.resource.id }}'
+          check_mode: true
+          register: oci_cleanup_delete_user_in_check_mode
+          failed_when: not oci_cleanup_delete_user_in_check_mode.changed
+
+        - name: Delete user
+          ansible.oci.oci_identity_user:
+            domain_id: '{{ oci_integration_domain_id }}'
+            state: absent
+            user_id: '{{ user_create_result.resource.id }}'
+          register: oci_cleanup_delete_user
+          failed_when: not oci_cleanup_delete_user.changed
+
+        - name: Wait until deleted user is absent
+          ansible.oci.oci_identity_user_info:
+            domain_id: '{{ oci_integration_domain_id }}'
+            user_id: '{{ user_create_result.resource.id }}'
+          register: oci_cleanup_wait_until_deleted_user_is_absent
+          until: oci_cleanup_wait_until_deleted_user_is_absent.users | length == 0
+          retries: 12
+          delay: 5
+
+        - name: Verify user deletion is idempotent
+          ansible.oci.oci_identity_user:
+            domain_id: '{{ oci_integration_domain_id }}'
+            state: absent
+            user_id: '{{ user_create_result.resource.id }}'
+          register: oci_cleanup_verify_user_deletion_is_idempotent
+          failed_when: oci_cleanup_verify_user_deletion_is_idempotent.changed
+
+        - name: Clear user cleanup marker
+          ansible.builtin.set_fact:
+            oci_identity_user_cleanup_name: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete leaked user before deleting its domain
+  ansible.oci.oci_identity_user:
+    state: absent
+    domain_id: '{{ oci_integration_domain_id }}'
+    user_name: '{{ oci_identity_user_cleanup_name }}'
+  when:
+    - oci_integration_domain_id is defined
+    - oci_identity_user_cleanup_name is defined
+    - oci_integration_domain_id | length > 0
+    - oci_identity_user_cleanup_name | default('') | length > 0
+    - oci_integration_rpfx | string in oci_identity_user_cleanup_name | string
+  register: oci_cleanup_delete_leaked_user_before_deleting_its_domain
+  retries: 3
+  ignore_errors: true
+
+- name: Delete temporary Default domain user
+  ansible.oci.oci_identity_user:
+    state: absent
+    domain_id: '{{ oci_identity_user_ui_password_domain_id | default('''') }}'
+    user_name: '{{ oci_identity_user_ui_password_cleanup_name | default('''') }}'
+  when:
+    - oci_identity_user_ui_password_domain_id | default('') | length > 0
+    - oci_identity_user_ui_password_cleanup_name | default('') | length > 0
+  register: oci_cleanup_delete_temporary_default_domain_user
+  retries: 3
+  ignore_errors: true
+  no_log: true
+
+- name: Check temporary Default domain user cleanup
+  ansible.builtin.assert:
+    that:
+      - oci_cleanup_delete_temporary_default_domain_user is not failed
+  no_log: true
+  ignore_errors: true
+
+- name: Delete prerequisite oci_identity_domain_create
+  ansible.oci.oci_identity_domain:
+    state: absent
+    domain_id: '{{ oci_identity_domain_create.resource.id }}'
+  when:
+    - oci_identity_domain_create is defined
+    - oci_identity_domain_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_identity_domain_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_identity_domain_create is not failed
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_first_api_key | default({})) is not failed
+      - (oci_cleanup_delete_leaked_second_api_key | default({})) is not failed
+      - (oci_cleanup_delete_leaked_user_before_deleting_its_domain | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_identity_domain_create | default({})) is not failed
+      - (oci_cleanup_delete_temporary_default_domain_user | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

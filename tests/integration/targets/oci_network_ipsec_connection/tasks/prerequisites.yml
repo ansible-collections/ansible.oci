@@ -1,0 +1,50 @@
+---
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_drg_integration_drg_name: '{{ oci_drg_integration_drg_name }}-{{ oci_integration_rpfx }}'
+    oci_drg_integration_updated_drg_name: '{{ oci_drg_integration_updated_drg_name }}-{{ oci_integration_rpfx }}'
+
+- name: Define DRG create and delete parameters
+  ansible.builtin.set_fact:
+    oci_drg_create_params:
+      state: present
+      compartment_id: '{{ oci_integration_compartment_id }}'
+      name: '{{ oci_drg_integration_drg_name }}'
+      freeform_tags: '{{ oci_drg_integration_create_tags }}'
+    oci_drg_delete_params:
+      state: absent
+      drg_id: ''
+
+- name: Create DRG
+  ansible.oci.oci_network_drg:
+    state: '{{ oci_drg_create_params.state }}'
+    compartment_id: '{{ oci_drg_create_params.compartment_id }}'
+    name: '{{ oci_drg_create_params.name }}'
+    freeform_tags: '{{ oci_drg_create_params.freeform_tags }}'
+  register: oci_drg_create
+
+- name: Validate OCI integration input
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+      - oci_integration_config_file_location | default('', true) | length > 0
+    fail_msg: OCI IPSec integration requires the compartment and OCI config values.
+
+- name: Compute unique names
+  ansible.builtin.set_fact:
+    oci_ipsec_cpe_name: '{{ oci_ipsec_integration_cpe_name }}-{{ oci_integration_rpfx }}'
+    oci_ipsec_cpe_updated_name: '{{ oci_ipsec_integration_cpe_updated_name }}-{{ oci_integration_rpfx }}'
+    oci_ipsec_connection_name: '{{ oci_ipsec_integration_connection_name }}-{{ oci_integration_rpfx }}'
+    oci_ipsec_connection_updated_name: '{{ oci_ipsec_integration_connection_updated_name }}-{{ oci_integration_rpfx
+      }}'
+    oci_ipsec_tunnel_name: '{{ oci_ipsec_integration_tunnel_name }}-{{ oci_integration_rpfx }}'
+    oci_ipsec_tunnel_updated_name: '{{ oci_ipsec_integration_tunnel_updated_name }}-{{ oci_integration_rpfx }}'
+    oci_ipsec_drg_name: oci-ipsec-drg-{{ oci_integration_rpfx }}
+
+- name: Use the shared drg
+  ansible.builtin.set_fact:
+    oci_ipsec_drg: '{{ oci_drg_create }}'
+
+- name: Save DRG identifier
+  ansible.builtin.set_fact:
+    oci_ipsec_drg_id: '{{ oci_ipsec_drg.resource.id }}'

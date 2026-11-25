@@ -1,0 +1,47 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_instance_id: ''
+    oci_vnic_attachment_id: ''
+    oci_network_private_ip_id: ''
+    oci_network_vnic_nsgs: {}
+    oci_instance_vcn_create: {}
+    oci_instance_subnet_create: {}
+    oci_instance_create: {}
+    oci_tests_completed: false
+
+- name: Test oci_vnic_attachment
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Run oci_vnic_attachment tests
+      ansible.builtin.include_tasks: oci_vnic_attachment.yml
+      vars:
+        oci_shared_instance: '{{ oci_instance_create }}'
+        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
+        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
+
+    - name: Run oci_network_private_ip tests
+      ansible.builtin.include_tasks: oci_network_private_ip.yml
+      vars:
+        oci_shared_instance: '{{ oci_instance_create }}'
+        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
+        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
+        oci_shared_vnic_attachment: '{{ oci_vnic_attachment_create }}'
+
+    - name: Test oci_network_vnic_update and info
+      ansible.builtin.include_tasks: oci_network_vnic_update.yml
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

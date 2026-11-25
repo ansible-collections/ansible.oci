@@ -1,12 +1,11 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_autonomous_database: false
-    oci_group_started_oci_autonomous_database_clone: false
+    oci_tests_completed: false
+    oci_adb_clone_metadata_id: ''
+    oci_adb_clone_refreshable_id: ''
 
-- name: Test oci_autonomous_database and dependent modules
+- name: Test oci_autonomous_database
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -14,20 +13,15 @@
   block:
 
     - name: Run oci_autonomous_database tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_autonomous_database/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_autonomous_database.yml
 
     - name: Run oci_autonomous_database_clone tests
-      ansible.builtin.include_tasks: oci_autonomous_database_clone/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_autonomous_database_clone.yml
 
-    - name: Run oci_autonomous_database remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_autonomous_database/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

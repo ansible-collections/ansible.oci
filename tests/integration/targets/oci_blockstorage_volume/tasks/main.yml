@@ -1,16 +1,9 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_blockstorage_volume: false
-    oci_group_started_oci_volume_backup: false
-    oci_group_started_oci_volume_group: false
-    oci_group_started_oci_volume_group_backup: false
-    oci_group_started_oci_volume_backup_policy: false
-    oci_group_started_oci_volume_backup_policy_assignment: false
+    oci_tests_completed: false
 
-- name: Test oci_blockstorage_volume and dependent modules
+- name: Test oci_blockstorage_volume
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -18,55 +11,24 @@
   block:
 
     - name: Run oci_blockstorage_volume tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_blockstorage_volume/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_blockstorage_volume.yml
 
     - name: Run oci_volume_backup tests
-      ansible.builtin.include_tasks: oci_volume_backup/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_volume_backup.yml
 
     - name: Run oci_blockstorage_volume intermediate tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_blockstorage_volume/restore.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_blockstorage_volume_restore.yml
 
     - name: Run oci_volume_group tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_group/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_volume_group.yml
 
     - name: Run oci_volume_group_backup tests
-      ansible.builtin.include_tasks: oci_volume_group_backup/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_volume_group_backup.yml
 
-    - name: Run oci_volume_group remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_group/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_volume_backup_policy tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_backup_policy/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_volume_backup_policy_assignment tests
-      ansible.builtin.include_tasks: oci_volume_backup_policy_assignment/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_volume_backup_policy remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_volume_backup_policy/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_blockstorage_volume remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_blockstorage_volume/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

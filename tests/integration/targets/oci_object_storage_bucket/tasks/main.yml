@@ -1,13 +1,9 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_object_storage_bucket: false
-    oci_group_started_oci_object_storage_object: false
-    oci_group_started_oci_object_lifecycle_policy: false
+    oci_tests_completed: false
 
-- name: Test oci_object_storage_bucket and dependent modules
+- name: Test oci_object_storage_bucket
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -15,30 +11,21 @@
   block:
 
     - name: Run oci_object_storage_bucket tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_object_storage_bucket/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_object_storage_bucket.yml
 
     - name: Run oci_object_storage_object tests
-      ansible.builtin.include_tasks: oci_object_storage_object/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_object_storage_object.yml
 
     - name: Run oci_object_storage_bucket intermediate tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_object_storage_bucket/update.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_object_storage_bucket_update.yml
 
     - name: Run oci_object_lifecycle_policy tests
-      ansible.builtin.include_tasks: oci_object_lifecycle_policy/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_object_lifecycle_policy.yml
 
-    - name: Run oci_object_storage_bucket remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_object_storage_bucket/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

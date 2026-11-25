@@ -1,68 +1,7 @@
 ---
-- name: Initialize cleanup failures
+- name: Initialize deletion test status
   ansible.builtin.set_fact:
-    oci_group_cleanup_failures: []
-
-- name: Remove leaked membership during cleanup
-  ansible.oci.oci_identity_user_group_membership:
-    state: absent
-    domain_id: '{{ oci_membership_domain_id }}'
-    user_id: '{{ oci_membership_user_cleanup_id }}'
-    group_id: '{{ oci_membership_group_cleanup_id }}'
-  when:
-    - oci_group_started_oci_identity_user_group_membership | default(false)
-    - oci_membership_domain_id | length > 0
-    - oci_membership_added | default(false)
-    - oci_membership_user_cleanup_id | default('') | length > 0
-    - oci_membership_group_cleanup_id | default('') | length > 0
-  register: oci_group_cleanup_0
-  retries: 3
-  ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove leaked membership during cleanup''] }}'
-  when: oci_group_cleanup_0 is failed
-
-- name: Delete leaked first API key
-  ansible.oci.oci_identity_api_key:
-    state: absent
-    domain_id: '{{ oci_identity_api_key_domain_id }}'
-    user_id: '{{ oci_identity_api_key_user_id }}'
-    fingerprint: '{{ oci_identity_api_key_first_fingerprint }}'
-  when:
-    - oci_group_started_oci_identity_api_key | default(false)
-    - oci_identity_api_key_domain_id | default('') | length > 0
-    - oci_identity_api_key_user_id | default('') | length > 0
-    - oci_identity_api_key_first_fingerprint | default('') | length > 0
-  register: oci_group_cleanup_10
-  retries: 3
-  ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked first API key''] }}'
-  when: oci_group_cleanup_10 is failed
-
-- name: Delete leaked second API key
-  ansible.oci.oci_identity_api_key:
-    state: absent
-    domain_id: '{{ oci_identity_api_key_domain_id }}'
-    user_id: '{{ oci_identity_api_key_user_id }}'
-    fingerprint: '{{ oci_identity_api_key_second_fingerprint }}'
-  when:
-    - oci_group_started_oci_identity_api_key | default(false)
-    - oci_identity_api_key_domain_id | default('') | length > 0
-    - oci_identity_api_key_user_id | default('') | length > 0
-    - oci_identity_api_key_second_fingerprint | default('') | length > 0
-  register: oci_group_cleanup_12
-  retries: 3
-  ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked second API key''] }}'
-  when: oci_group_cleanup_12 is failed
+    oci_cleanup_checks_failed: false
 
 - name: Delete leaked dynamic group by ID
   ansible.oci.oci_identity_dynamic_group:
@@ -70,17 +9,13 @@
     domain_id: '{{ oci_identity_dynamic_group_domain_id }}'
     dynamic_group_id: '{{ oci_identity_dynamic_group_cleanup_id }}'
   when:
-    - oci_group_started_oci_identity_dynamic_group | default(false)
+    - oci_identity_dynamic_group_domain_id is defined
+    - oci_identity_dynamic_group_cleanup_id is defined
     - oci_identity_dynamic_group_domain_id | default('', true) | length > 0
     - oci_identity_dynamic_group_cleanup_id | default('', true) | length > 0
-  register: oci_group_cleanup_18
+  register: oci_cleanup_delete_leaked_dynamic_group_by_id
   retries: 3
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked dynamic group by ID''] }}'
-  when: oci_group_cleanup_18 is failed
 
 - name: Delete leaked dynamic group by name when no ID was captured
   ansible.oci.oci_identity_dynamic_group:
@@ -88,93 +23,95 @@
     domain_id: '{{ oci_identity_dynamic_group_domain_id }}'
     name: '{{ oci_identity_dynamic_group_cleanup_name }}'
   when:
-    - oci_group_started_oci_identity_dynamic_group | default(false)
+    - oci_identity_dynamic_group_domain_id is defined
+    - oci_identity_dynamic_group_cleanup_name is defined
     - oci_identity_dynamic_group_domain_id | default('', true) | length > 0
     - oci_identity_dynamic_group_cleanup_id | default('', true) | length == 0
     - oci_identity_dynamic_group_cleanup_name | default('', true) | length > 0
-  register: oci_group_cleanup_20
+    - oci_integration_rpfx | string in oci_identity_dynamic_group_cleanup_name | string
+  register: oci_cleanup_delete_leaked_dynamic_group_by_name_when_no_id_was_captured
   retries: 3
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked dynamic group by name when no ID was captured'']
-      }}'
-  when: oci_group_cleanup_20 is failed
+- name: Verify oci_identity_domain deletion
+  when: oci_tests_completed | bool
+  block:
 
-- name: Delete leaked group by ID
-  ansible.oci.oci_identity_group:
-    state: absent
-    domain_id: '{{ oci_identity_group_domain_id }}'
-    group_id: '{{ oci_identity_group_cleanup_id }}'
-  when:
-    - oci_group_started_oci_identity_group | default(false)
-    - oci_identity_group_domain_id | length > 0
-    - oci_identity_group_cleanup_id | default('') | length > 0
-  register: oci_group_cleanup_22
-  retries: 3
-  ignore_errors: true
+    - name: Exercise identity domain module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked group by ID''] }}'
-  when: oci_group_cleanup_22 is failed
+        - name: Delete identity domain in check mode
+          ansible.oci.oci_identity_domain:
+            state: absent
+            domain_id: '{{ oci_identity_domain_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_identity_domain_in_check_mode
 
-- name: Delete leaked group by name when no ID was captured
-  ansible.oci.oci_identity_group:
-    state: absent
-    domain_id: '{{ oci_identity_group_domain_id }}'
-    name: '{{ oci_identity_group_cleanup_name }}'
-  when:
-    - oci_group_started_oci_identity_group | default(false)
-    - oci_identity_group_domain_id | length > 0
-    - oci_identity_group_cleanup_id | default('') | length == 0
-    - oci_identity_group_cleanup_name | default('') | length > 0
-  register: oci_group_cleanup_24
-  retries: 3
-  ignore_errors: true
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_identity_domain_in_check_mode.changed | bool
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked group by name when no ID was captured'']
-      }}'
-  when: oci_group_cleanup_24 is failed
+        - name: Read identity domain after delete check mode
+          ansible.oci.oci_identity_domain_info:
+            domain_id: '{{ oci_identity_domain_id }}'
+          register: oci_cleanup_read_identity_domain_after_delete_check_mode
 
-- name: Delete leaked user before deleting its domain
-  ansible.oci.oci_identity_user:
-    state: absent
-    domain_id: '{{ oci_integration_domain_id }}'
-    user_name: '{{ oci_identity_user_cleanup_name }}'
-  when:
-    - oci_group_started_oci_identity_user | default(false)
-    - oci_integration_domain_id | length > 0
-    - oci_identity_user_cleanup_name | default('') | length > 0
-  register: oci_group_cleanup_26
-  retries: 3
-  ignore_errors: true
+        - name: Assert identity domain still exists after delete check mode
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_read_identity_domain_after_delete_check_mode.domains | length == 1
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked user before deleting its domain''] }}'
-  when: oci_group_cleanup_26 is failed
+        - name: Delete identity domain
+          ansible.oci.oci_identity_domain:
+            state: absent
+            domain_id: '{{ oci_identity_domain_id }}'
+          register: oci_cleanup_delete_identity_domain
+
+        - name: Assert delete reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_identity_domain.changed | bool
+
+        - name: Assert delete is idempotent on rerun
+          ansible.oci.oci_identity_domain:
+            state: absent
+            domain_id: '{{ oci_identity_domain_id }}'
+          register: oci_cleanup_assert_delete_is_idempotent_on_rerun
+
+        - name: Verify delete rerun is a no-op
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_assert_delete_is_idempotent_on_rerun.changed | bool
+
+        - name: Clear identity domain ID after delete idempotency check
+          ansible.builtin.set_fact:
+            oci_identity_domain_id: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
 
 - name: Delete leaked identity domain during cleanup
   ansible.oci.oci_identity_domain:
     state: absent
     domain_id: '{{ oci_identity_domain_id }}'
   when:
-    - oci_group_started_oci_identity_domain | default(false)
+    - oci_identity_domain_id is defined
     - oci_identity_domain_id | default('') | length > 0
-  register: oci_group_cleanup_28
+  register: oci_cleanup_delete_leaked_identity_domain_during_cleanup
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked identity domain during cleanup''] }}'
-  when: oci_group_cleanup_28 is failed
-
-- name: Check all cleanup results
+- name: Verify resource cleanup
   ansible.builtin.assert:
     that:
-      - oci_group_cleanup_failures | length == 0
-    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_dynamic_group_by_id | default({})) is not failed
+      - (oci_cleanup_delete_leaked_dynamic_group_by_name_when_no_id_was_captured | default({})) is not failed
+      - (oci_cleanup_delete_leaked_identity_domain_during_cleanup | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

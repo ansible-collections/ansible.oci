@@ -1,7 +1,7 @@
 ---
-- name: Initialize cleanup failures
+- name: Initialize deletion test status
   ansible.builtin.set_fact:
-    oci_group_cleanup_failures: []
+    oci_cleanup_checks_failed: false
 
 - name: Delete the listener before backend cleanup
   ansible.oci.oci_network_loadbalancer_listener:
@@ -9,15 +9,12 @@
     name: '{{ oci_nlb_test_listener }}'
     state: absent
   when:
-    - oci_group_started_oci_network_loadbalancer_listener | default(false)
+    - oci_nlb_test_id is defined
+    - oci_nlb_test_listener is defined
     - oci_nlb_test_id | default('', true) | length > 0
-  register: oci_group_cleanup_0
+    - oci_integration_rpfx | string in oci_nlb_test_listener | string
+  register: oci_cleanup_delete_the_listener_before_backend_cleanup
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the listener before backend cleanup''] }}'
-  when: oci_group_cleanup_0 is failed
 
 - name: Delete the prerequisite backend set
   ansible.oci.oci_network_loadbalancer_backend_set:
@@ -25,47 +22,46 @@
     name: '{{ oci_nlb_test_backend_set }}'
     state: absent
   when:
-    - oci_group_started_oci_network_loadbalancer_listener | default(false)
+    - oci_nlb_test_id is defined
+    - oci_nlb_test_backend_set is defined
     - oci_nlb_test_id | default('', true) | length > 0
-  register: oci_group_cleanup_2
+    - oci_integration_rpfx | string in oci_nlb_test_backend_set | string
+  register: oci_cleanup_delete_the_prerequisite_backend_set
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the prerequisite backend set''] }}'
-  when: oci_group_cleanup_2 is failed
+- name: Verify oci_network_loadbalancer deletion
+  when: oci_tests_completed | bool
+  block:
 
-- name: Delete the prerequisite backend set
-  ansible.oci.oci_network_loadbalancer_backend_set:
-    network_load_balancer_id: '{{ oci_nlb_test_id }}'
-    name: '{{ oci_nlb_test_backend_set }}'
-    state: absent
-  when:
-    - oci_group_started_oci_network_loadbalancer_health_checker | default(false)
-    - oci_nlb_test_id | default('', true) | length > 0
-  ignore_errors: true
-  register: oci_group_cleanup_4
+    - name: Test network load balancer lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the prerequisite backend set''] }}'
-  when: oci_group_cleanup_4 is failed
+        - name: Test private resource deletion by ID
+          ansible.builtin.include_tasks: scenario.yml
+          vars:
+            oci_nlb_case_name: '{{ oci_nlb_integration_private_name }}'
+            oci_nlb_case_operation:
+              state: absent
+              network_load_balancer_id: '{{ oci_nlb_id }}'
+            oci_nlb_case_expected: {}
 
-- name: Remove prerequisite backend set
-  ansible.oci.oci_network_loadbalancer_backend_set:
-    network_load_balancer_id: '{{ oci_nlb_test_id }}'
-    name: '{{ oci_nlb_test_backend_set }}'
-    state: absent
-  when:
-    - oci_group_started_oci_network_loadbalancer_backend | default(false)
-    - oci_nlb_test_id | default('') | length > 0
-  register: oci_group_cleanup_6
-  ignore_errors: true
+        - name: Test optional IPv6 fixture
+          ansible.builtin.include_tasks: ipv6.yml
+          when: oci_nlb_integration_ipv6_subnet_id | length > 0
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove prerequisite backend set''] }}'
-  when: oci_group_cleanup_6 is failed
+        - name: Report missing IPv6 fixture
+          ansible.builtin.debug:
+            msg: IPv6 scenarios skipped; set OCI_LOADBALANCER_IPV6_SUBNET_ID.
+          when: oci_nlb_integration_ipv6_subnet_id | length == 0
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
 
 - name: Delete known test network load balancer names
   ansible.oci.oci_network_loadbalancer:
@@ -77,51 +73,35 @@
     - '{{ oci_nlb_integration_updated_name }}'
     - '{{ oci_nlb_integration_private_name }}'
     - '{{ oci_nlb_integration_ipv6_name }}'
-  register: oci_group_cleanup_8
-  until: oci_group_cleanup_8 is succeeded
+  register: oci_cleanup_delete_known_test_network_load_balancer_names
+  until: oci_cleanup_delete_known_test_network_load_balancer_names is succeeded
   retries: 10
   delay: 30
   when:
-    - oci_group_started_oci_network_loadbalancer | default(false)
+    - oci_integration_compartment_id is defined
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete known test network load balancer names''] }}'
-  when: oci_group_cleanup_8 is failed
 
 - name: Delete test network load balancers
   ansible.oci.oci_network_loadbalancer:
     network_load_balancer_id: '{{ item }}'
     state: absent
   loop: '{{ oci_nlb_cleanup_ids | default([]) | unique }}'
-  register: oci_group_cleanup_10
-  until: oci_group_cleanup_10 is succeeded
+  register: oci_cleanup_delete_test_network_load_balancers
+  until: oci_cleanup_delete_test_network_load_balancers is succeeded
   retries: 10
   delay: 30
-  when:
-    - oci_group_started_oci_network_loadbalancer | default(false)
+  when: []
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete test network load balancers''] }}'
-  when: oci_group_cleanup_10 is failed
 
 - name: Delete the test network security group
   ansible.oci.oci_network_security_group:
     network_security_group_id: '{{ oci_nlb_nsg_id }}'
     state: absent
   when:
-    - oci_group_started_oci_network_loadbalancer | default(false)
+    - oci_nlb_nsg_id is defined
     - oci_nlb_nsg_id | default('', true) | length > 0
-  register: oci_group_cleanup_12
+  register: oci_cleanup_delete_the_test_network_security_group
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the test network security group''] }}'
-  when: oci_group_cleanup_12 is failed
 
 - name: Delete the private test subnet
   ansible.oci.oci_network_subnet:
@@ -129,15 +109,11 @@
     subnet_id: '{{ oci_nlb_private_subnet_id }}'
     state: absent
   when:
-    - oci_group_started_oci_network_loadbalancer | default(false)
+    - oci_integration_compartment_id is defined
+    - oci_nlb_private_subnet_id is defined
     - oci_nlb_private_subnet_id | default('', true) | length > 0
-  register: oci_group_cleanup_14
+  register: oci_cleanup_delete_the_private_test_subnet
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the private test subnet''] }}'
-  when: oci_group_cleanup_14 is failed
 
 - name: Delete the public test subnet
   ansible.oci.oci_network_subnet:
@@ -145,15 +121,11 @@
     subnet_id: '{{ oci_nlb_public_subnet_id }}'
     state: absent
   when:
-    - oci_group_started_oci_network_loadbalancer | default(false)
+    - oci_integration_compartment_id is defined
+    - oci_nlb_public_subnet_id is defined
     - oci_nlb_public_subnet_id | default('', true) | length > 0
-  register: oci_group_cleanup_16
+  register: oci_cleanup_delete_the_public_test_subnet
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the public test subnet''] }}'
-  when: oci_group_cleanup_16 is failed
 
 - name: Delete the test VCN
   ansible.oci.oci_network_vcn:
@@ -161,18 +133,22 @@
     vcn_id: '{{ oci_nlb_vcn_id }}'
     state: absent
   when:
-    - oci_group_started_oci_network_loadbalancer | default(false)
+    - oci_integration_compartment_id is defined
+    - oci_nlb_vcn_id is defined
     - oci_nlb_vcn_id | default('', true) | length > 0
-  register: oci_group_cleanup_18
+  register: oci_cleanup_delete_the_test_vcn
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete the test VCN''] }}'
-  when: oci_group_cleanup_18 is failed
-
-- name: Check all cleanup results
+- name: Verify resource cleanup
   ansible.builtin.assert:
     that:
-      - oci_group_cleanup_failures | length == 0
-    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_the_listener_before_backend_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_the_prerequisite_backend_set | default({})) is not failed
+      - (oci_cleanup_delete_known_test_network_load_balancer_names | default({})) is not failed
+      - (oci_cleanup_delete_test_network_load_balancers | default({})) is not failed
+      - (oci_cleanup_delete_the_test_network_security_group | default({})) is not failed
+      - (oci_cleanup_delete_the_private_test_subnet | default({})) is not failed
+      - (oci_cleanup_delete_the_public_test_subnet | default({})) is not failed
+      - (oci_cleanup_delete_the_test_vcn | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

@@ -1,22 +1,11 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_network_vcn: false
-    oci_group_started_oci_bastion: false
-    oci_group_started_oci_network_subnet: false
-    oci_group_started_oci_network_local_peering_gateway: false
-    oci_group_started_oci_network_service_gateway: false
-    oci_group_started_oci_network_security_group_rule: false
-    oci_group_started_oci_network_security_group: false
-    oci_group_started_oci_network_security_list: false
-    oci_group_started_oci_network_route_table: false
-    oci_group_started_oci_network_nat_gateway: false
-    oci_group_started_oci_network_internet_gateway: false
-    oci_group_started_oci_network_dhcp_options: false
+    oci_vcn_dependency_subnet: {}
+    oci_network_vcn_integration_subnet_id: ''
+    oci_tests_completed: false
 
-- name: Test VCN and dependent modules
+- name: Test oci_network_vcn
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -24,81 +13,44 @@
   block:
 
     - name: Run oci_network_vcn tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_vcn/main.yml'
+      ansible.builtin.include_tasks: oci_network_vcn.yml
 
-    - name: Test oci_network_dhcp_options
-      ansible.builtin.include_tasks: oci_network_dhcp_options/main.yml
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
+    - name: Create the dependent subnet
+      ansible.oci.oci_network_subnet:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        vcn_id: '{{ oci_network_vcn_id }}'
+        cidr_block: '{{ oci_network_vcn_integration_subnet_cidr_block }}'
+        name: vcn-dependency-{{ oci_integration_rpfx }}
+      register: oci_vcn_dependency_subnet
 
-    - name: Run oci_network_internet_gateway tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_internet_gateway/main.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
+    - name: Capture dependent subnet ID
+      ansible.builtin.set_fact:
+        oci_network_vcn_integration_subnet_id: '{{ oci_vcn_dependency_subnet.resource.id }}'
 
-    - name: Run oci_network_route_table tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_route_table/main.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
+    - name: Assert delete fails cleanly while dependent subnet exists
+      ansible.oci.oci_network_vcn:
+        state: '{{ oci_network_vcn_delete_params.state }}'
+        vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
+      register: oci_network_vcn_delete_blocked
+      ignore_errors: true
 
-    - name: Run oci_network_internet_gateway remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_internet_gateway/delete.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
+    - name: Verify blocked delete message
+      ansible.builtin.assert:
+        that:
+          - oci_network_vcn_delete_blocked is failed
+          - '''dependent resources'' in (oci_network_vcn_delete_blocked.msg | default(''''))'
 
-    - name: Test oci_network_nat_gateway
-      ansible.builtin.include_tasks: oci_network_nat_gateway/main.yml
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
+    - name: Delete the dependent subnet
+      ansible.oci.oci_network_subnet:
+        state: absent
+        subnet_id: '{{ oci_vcn_dependency_subnet.resource.id }}'
 
-    - name: Test oci_network_security_list
-      ansible.builtin.include_tasks: oci_network_security_list/main.yml
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Run oci_network_security_group tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_security_group/main.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Run oci_network_security_group_rule tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_security_group_rule/main.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Run oci_network_security_group remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_security_group/delete.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Test oci_network_service_gateway
-      ansible.builtin.include_tasks: oci_network_service_gateway/main.yml
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Test oci_network_local_peering_gateway
-      ansible.builtin.include_tasks: oci_network_local_peering_gateway/main.yml
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Run oci_network_subnet tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_subnet/main.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Run oci_bastion tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_bastion/main.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Run oci_network_subnet remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_subnet/delete.yml'
-      vars:
-        oci_shared_vcn: '{{ oci_network_vcn_create }}'
-
-    - name: Run oci_network_vcn remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_network_vcn/delete.yml'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml
+  vars:
+    oci_shared_vcn: '{{ oci_network_vcn_create }}'

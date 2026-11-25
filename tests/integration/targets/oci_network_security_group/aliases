@@ -1,0 +1,4 @@
+destructive
+oci_network_security_group
+oci_network_security_group_info
+time=120m

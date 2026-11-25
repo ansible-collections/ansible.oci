@@ -1,0 +1,7 @@
+destructive
+oci_network_private_ip
+oci_network_vnic_info
+oci_network_vnic_update
+oci_vnic_attachment
+oci_vnic_attachment_info
+time=120m

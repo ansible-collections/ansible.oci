@@ -1,0 +1,22 @@
+---
+- name: Create instance
+  ansible.oci.oci_instance:
+    state: '{{ oci_instance_create_params.state }}'
+    compartment_id: '{{ oci_instance_create_params.compartment_id }}'
+    availability_domain: '{{ oci_instance_create_params.availability_domain }}'
+    name: '{{ oci_instance_create_params.name }}'
+    shape: '{{ oci_instance_create_params.shape }}'
+    shape_config: '{{ oci_instance_create_params.shape_config }}'
+    image_id: '{{ oci_instance_create_params.image_id }}'
+    subnet_id: '{{ oci_instance_create_params.subnet_id }}'
+    freeform_tags: '{{ oci_instance_create_params.freeform_tags }}'
+    instance_options: '{{ oci_instance_create_params.instance_options }}'
+    availability_config: '{{ oci_instance_create_params.availability_config }}'
+    agent_config: '{{ oci_instance_create_params.agent_config }}'
+    private_ip: '{{ oci_instance_create_params.private_ip }}'
+    capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+  register: oci_instance_create
+
+- name: Set prerequisite values
+  ansible.builtin.set_fact:
+    oci_instance_id: '{{ oci_instance_create.resource.id }}'

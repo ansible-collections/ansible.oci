@@ -1,0 +1,400 @@
+{
+  "targets": {
+    "oci_alarm": {
+      "manual": false,
+      "modules": [
+        "oci_alarm",
+        "oci_alarm_info",
+        "oci_alarm_suppression",
+        "oci_alarm_suppression_info",
+        "oci_notification_subscription",
+        "oci_notification_subscription_info",
+        "oci_notification_topic",
+        "oci_notification_topic_info"
+      ]
+    },
+    "oci_app_catalog_subscription": {
+      "manual": true,
+      "modules": [
+        "oci_app_catalog_info",
+        "oci_app_catalog_resource_version_agreement_info",
+        "oci_app_catalog_resource_version_info",
+        "oci_app_catalog_subscription"
+      ]
+    },
+    "oci_autonomous_database": {
+      "manual": false,
+      "modules": [
+        "oci_autonomous_database",
+        "oci_autonomous_database_clone",
+        "oci_autonomous_database_clone_info",
+        "oci_autonomous_database_info",
+        "oci_autonomous_database_wallet"
+      ]
+    },
+    "oci_bastion": {
+      "manual": false,
+      "modules": [
+        "oci_bastion",
+        "oci_bastion_info"
+      ]
+    },
+    "oci_blockstorage_volume": {
+      "manual": false,
+      "modules": [
+        "oci_blockstorage_volume",
+        "oci_blockstorage_volume_info",
+        "oci_volume_backup",
+        "oci_volume_backup_info",
+        "oci_volume_group",
+        "oci_volume_group_backup",
+        "oci_volume_group_backup_info",
+        "oci_volume_group_info"
+      ]
+    },
+    "oci_instance_console_connection": {
+      "manual": false,
+      "modules": [
+        "oci_instance_console_connection",
+        "oci_instance_console_connection_info",
+        "oci_instance_console_history",
+        "oci_instance_console_history_info"
+      ]
+    },
+    "oci_compute_inventory": {
+      "manual": false,
+      "modules": [],
+      "inventory_plugin": "oci_compute"
+    },
+    "oci_vnic_attachment": {
+      "manual": false,
+      "modules": [
+        "oci_network_private_ip",
+        "oci_network_vnic_info",
+        "oci_network_vnic_update",
+        "oci_vnic_attachment",
+        "oci_vnic_attachment_info"
+      ]
+    },
+    "oci_instance_capacity_reservation": {
+      "manual": false,
+      "modules": [
+        "oci_instance_actions",
+        "oci_instance_capacity_reservation",
+        "oci_instance_capacity_reservation_info"
+      ]
+    },
+    "oci_boot_volume_backup": {
+      "manual": false,
+      "modules": [
+        "oci_boot_volume",
+        "oci_boot_volume_backup",
+        "oci_boot_volume_backup_info",
+        "oci_boot_volume_info",
+        "oci_image",
+        "oci_image_info",
+        "oci_volume_attachment",
+        "oci_volume_attachment_info"
+      ]
+    },
+    "oci_dns_resolver": {
+      "manual": false,
+      "modules": [
+        "oci_dns_resolver",
+        "oci_dns_resolver_endpoint",
+        "oci_dns_resolver_endpoint_info",
+        "oci_dns_resolver_info"
+      ]
+    },
+    "oci_dns_zone_records": {
+      "manual": false,
+      "modules": [
+        "oci_dns_domain_records",
+        "oci_dns_domain_records_info",
+        "oci_dns_record_set",
+        "oci_dns_record_set_info",
+        "oci_dns_zone_records",
+        "oci_dns_zone_records_info"
+      ]
+    },
+    "oci_health_check": {
+      "manual": false,
+      "modules": [
+        "oci_health_check",
+        "oci_health_check_info"
+      ]
+    },
+    "oci_identity_compartment": {
+      "manual": false,
+      "modules": [
+        "oci_identity_compartment",
+        "oci_identity_compartment_info"
+      ]
+    },
+    "oci_identity_domain": {
+      "manual": false,
+      "modules": [
+        "oci_identity_domain",
+        "oci_identity_domain_info",
+        "oci_identity_dynamic_group",
+        "oci_identity_dynamic_group_info"
+      ]
+    },
+    "oci_identity_group": {
+      "manual": false,
+      "modules": [
+        "oci_identity_group",
+        "oci_identity_group_info",
+        "oci_identity_user_group_membership",
+        "oci_identity_user_group_membership_info"
+      ]
+    },
+    "oci_identity_policy": {
+      "manual": false,
+      "modules": [
+        "oci_identity_policy",
+        "oci_identity_policy_info"
+      ]
+    },
+    "oci_identity_tag_namespace": {
+      "manual": false,
+      "modules": [
+        "oci_identity_tag",
+        "oci_identity_tag_info",
+        "oci_identity_tag_namespace",
+        "oci_identity_tag_namespace_info"
+      ]
+    },
+    "oci_identity_user": {
+      "manual": false,
+      "modules": [
+        "oci_identity_api_key",
+        "oci_identity_api_key_info",
+        "oci_identity_ui_password_info",
+        "oci_identity_ui_password_reset",
+        "oci_identity_user",
+        "oci_identity_user_info"
+      ]
+    },
+    "oci_instance": {
+      "manual": false,
+      "modules": [
+        "oci_identity_availability_domain_info",
+        "oci_instance",
+        "oci_instance_info",
+        "oci_shape_info"
+      ]
+    },
+    "oci_instance_configuration": {
+      "manual": false,
+      "modules": [
+        "oci_instance_configuration",
+        "oci_instance_configuration_info"
+      ]
+    },
+    "oci_loadbalancer": {
+      "manual": false,
+      "modules": [
+        "oci_loadbalancer",
+        "oci_loadbalancer_certificate",
+        "oci_loadbalancer_info",
+        "oci_loadbalancer_listener",
+        "oci_loadbalancer_listener_info",
+        "oci_loadbalancer_routing_policy",
+        "oci_loadbalancer_routing_policy_info"
+      ]
+    },
+    "oci_loadbalancer_backend_set": {
+      "manual": false,
+      "modules": [
+        "oci_loadbalancer_backend",
+        "oci_loadbalancer_backend_info",
+        "oci_loadbalancer_backend_set",
+        "oci_loadbalancer_backend_set_info",
+        "oci_loadbalancer_health_checker",
+        "oci_loadbalancer_health_checker_info"
+      ]
+    },
+    "oci_network_dhcp_options": {
+      "manual": false,
+      "modules": [
+        "oci_network_dhcp_options",
+        "oci_network_dhcp_options_info",
+        "oci_network_security_list",
+        "oci_network_security_list_info"
+      ]
+    },
+    "oci_network_drg": {
+      "manual": false,
+      "modules": [
+        "oci_network_drg",
+        "oci_network_drg_attachment",
+        "oci_network_drg_attachment_info",
+        "oci_network_drg_info",
+        "oci_network_remote_peering_connection",
+        "oci_network_remote_peering_connection_info"
+      ]
+    },
+    "oci_network_firewall": {
+      "manual": false,
+      "modules": [
+        "oci_network_firewall",
+        "oci_network_firewall_info",
+        "oci_network_firewall_policy",
+        "oci_network_firewall_policy_info"
+      ]
+    },
+    "oci_network_ipsec_connection": {
+      "manual": false,
+      "modules": [
+        "oci_network_cpe",
+        "oci_network_cpe_info",
+        "oci_network_ipsec_connection",
+        "oci_network_ipsec_connection_info"
+      ]
+    },
+    "oci_network_loadbalancer": {
+      "manual": false,
+      "modules": [
+        "oci_network_loadbalancer",
+        "oci_network_loadbalancer_info",
+        "oci_network_loadbalancer_listener",
+        "oci_network_loadbalancer_listener_info"
+      ]
+    },
+    "oci_network_loadbalancer_backend_set": {
+      "manual": false,
+      "modules": [
+        "oci_network_loadbalancer_backend",
+        "oci_network_loadbalancer_backend_info",
+        "oci_network_loadbalancer_backend_set",
+        "oci_network_loadbalancer_backend_set_info",
+        "oci_network_loadbalancer_health_checker",
+        "oci_network_loadbalancer_health_checker_info"
+      ]
+    },
+    "oci_network_local_peering_gateway": {
+      "manual": false,
+      "modules": [
+        "oci_network_local_peering_gateway",
+        "oci_network_local_peering_gateway_info"
+      ]
+    },
+    "oci_network_public_ip": {
+      "manual": false,
+      "modules": [
+        "oci_network_public_ip"
+      ]
+    },
+    "oci_network_internet_gateway": {
+      "manual": false,
+      "modules": [
+        "oci_network_internet_gateway",
+        "oci_network_internet_gateway_info",
+        "oci_network_nat_gateway",
+        "oci_network_nat_gateway_info",
+        "oci_network_route_table",
+        "oci_network_route_table_info",
+        "oci_network_service_gateway",
+        "oci_network_service_gateway_info"
+      ]
+    },
+    "oci_network_security_group": {
+      "manual": false,
+      "modules": [
+        "oci_network_security_group",
+        "oci_network_security_group_info"
+      ]
+    },
+    "oci_network_security_group_rule": {
+      "manual": false,
+      "modules": [
+        "oci_network_security_group_rule"
+      ]
+    },
+    "oci_network_subnet": {
+      "manual": false,
+      "modules": [
+        "oci_network_subnet",
+        "oci_network_subnet_info"
+      ]
+    },
+    "oci_network_vcn": {
+      "manual": false,
+      "modules": [
+        "oci_network_vcn",
+        "oci_network_vcn_info"
+      ]
+    },
+    "oci_object_storage_bucket": {
+      "manual": false,
+      "modules": [
+        "oci_object_lifecycle_policy",
+        "oci_object_lifecycle_policy_info",
+        "oci_object_storage_bucket",
+        "oci_object_storage_bucket_info",
+        "oci_object_storage_object",
+        "oci_object_storage_object_info"
+      ]
+    },
+    "oci_oke_cluster": {
+      "manual": false,
+      "modules": [
+        "oci_oke_cluster",
+        "oci_oke_cluster_info",
+        "oci_oke_node_pool",
+        "oci_oke_node_pool_info",
+        "oci_oke_node_pool_options_info"
+      ]
+    },
+    "oci_resource_compartment": {
+      "manual": false,
+      "modules": [
+        "oci_resource_compartment"
+      ]
+    },
+    "oci_vault": {
+      "manual": false,
+      "modules": [
+        "oci_vault",
+        "oci_vault_info",
+        "oci_vault_key",
+        "oci_vault_key_info",
+        "oci_vault_secret",
+        "oci_vault_secret_info",
+        "oci_vault_secret_version",
+        "oci_vault_secret_version_info"
+      ]
+    },
+    "oci_vault_lifecycle": {
+      "manual": true,
+      "modules": [
+        "oci_vault"
+      ]
+    },
+    "oci_volume_backup_policy": {
+      "manual": false,
+      "modules": [
+        "oci_volume_backup_policy",
+        "oci_volume_backup_policy_assignment",
+        "oci_volume_backup_policy_assignment_info",
+        "oci_volume_backup_policy_info"
+      ]
+    },
+    "oci_waf_web_app_firewall": {
+      "manual": false,
+      "modules": [
+        "oci_waf_web_app_firewall",
+        "oci_waf_web_app_firewall_info",
+        "oci_waf_web_app_firewall_policy",
+        "oci_waf_web_app_firewall_policy_info"
+      ]
+    }
+  },
+  "coverage_gaps": [
+    "oci_network_remote_peering_connection_connect"
+  ],
+  "legacy_duplicate_mappings": [
+    "oci_vault"
+  ]
+}

@@ -179,7 +179,8 @@
   ansible.builtin.set_fact:
     oci_instance_integration_vcn_name: '{{ oci_instance_integration_vcn_name }}-{{ oci_integration_rpfx }}'
     oci_instance_integration_subnet_name: '{{ oci_instance_integration_subnet_name }}-{{ oci_integration_rpfx }}'
-    oci_instance_integration_instance_name: '{{ oci_instance_integration_instance_name }}-{{ oci_integration_rpfx }}'
+    oci_instance_integration_instance_name: '{{ oci_instance_integration_instance_name }}-{{ oci_integration_rpfx
+      }}'
     oci_instance_integration_updated_instance_name: '{{ oci_instance_integration_updated_instance_name }}-{{ oci_integration_rpfx
       }}'
 
@@ -203,9 +204,6 @@
     dns_label: sub{{ oci_integration_rpfx }}
   register: oci_instance_subnet_create
 
-- name: Create and update capacity reservation
-  ansible.builtin.include_tasks: '{{ role_path }}/tasks/capacity_reservation_create.yml'
-
 - name: Define instance create and delete parameters
   ansible.builtin.set_fact:
     oci_instance_create_params:
@@ -215,7 +213,6 @@
       name: '{{ oci_instance_integration_instance_name }}'
       shape: '{{ oci_instance_discovered_shape }}'
       shape_config: '{{ oci_instance_integration_shape_config }}'
-      capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
       image_id: '{{ oci_instance_discovered_image_id }}'
       subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
       freeform_tags: '{{ oci_instance_integration_create_tags }}'
@@ -235,7 +232,6 @@
     name: '{{ oci_instance_create_params.name }}'
     shape: '{{ oci_instance_create_params.shape }}'
     shape_config: '{{ oci_instance_create_params.shape_config }}'
-    capacity_reservation_id: '{{ oci_instance_create_params.capacity_reservation_id }}'
     image_id: '{{ oci_instance_create_params.image_id }}'
     subnet_id: '{{ oci_instance_create_params.subnet_id }}'
     freeform_tags: '{{ oci_instance_create_params.freeform_tags }}'
@@ -270,7 +266,6 @@
     name: '{{ oci_instance_create_params.name }}'
     shape: '{{ oci_instance_create_params.shape }}'
     shape_config: '{{ oci_instance_create_params.shape_config }}'
-    capacity_reservation_id: '{{ oci_instance_create_params.capacity_reservation_id }}'
     image_id: '{{ oci_instance_create_params.image_id }}'
     subnet_id: '{{ oci_instance_create_params.subnet_id }}'
     freeform_tags: '{{ oci_instance_create_params.freeform_tags }}'
@@ -298,9 +293,6 @@
       - oci_instance_create.resource.instance_options.are_legacy_imds_endpoints_disabled | bool
       - oci_instance_create.resource.availability_config.recovery_action == "RESTORE_INSTANCE"
       - not oci_instance_create.resource.agent_config.are_all_plugins_disabled | bool
-
-- name: Exercise instance actions
-  ansible.builtin.include_tasks: '{{ role_path }}/tasks/test_instance_actions.yml'
 
 - name: Read the instance by id
   ansible.oci.oci_instance_info:
@@ -349,7 +341,6 @@
     name: '{{ oci_instance_create_params.name }}'
     shape: '{{ oci_instance_create_params.shape }}'
     shape_config: '{{ oci_instance_create_params.shape_config }}'
-    capacity_reservation_id: '{{ oci_instance_create_params.capacity_reservation_id }}'
     image_id: '{{ oci_instance_create_params.image_id }}'
     subnet_id: '{{ oci_instance_create_params.subnet_id }}'
     freeform_tags: '{{ oci_instance_create_params.freeform_tags }}'
@@ -364,9 +355,6 @@
   ansible.builtin.assert:
     that:
       - not oci_instance_create_rerun.changed | bool
-
-- name: Release reserved capacity before resizing the instance
-  ansible.builtin.include_tasks: '{{ role_path }}/tasks/capacity_reservation_release.yml'
 
 - name: Stop the instance
   ansible.oci.oci_instance:
@@ -439,7 +427,7 @@
 - name: Update availability_config independently of the shape change
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    availability_config: &id001
+    availability_config:
       recovery_action: stop_instance
   register: oci_instance_update_availability_config
 
@@ -452,7 +440,8 @@
 - name: Assert availability_config update is idempotent on rerun
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    availability_config: *id001
+    availability_config:
+      recovery_action: stop_instance
   register: oci_instance_update_availability_config_rerun
 
 - name: Verify availability_config update rerun is a no-op
@@ -479,8 +468,8 @@
   register: oci_instance_info_before_agent_config
 
 - name: Build plugins_config from plugins OCI already reports
-  when: >-
-    oci_instance_info_before_agent_config.instances[0].agent_config.plugins_config | default([], true) | length > 0
+  when: oci_instance_info_before_agent_config.instances[0].agent_config.plugins_config | default([], true) | length
+    > 0
   ansible.builtin.set_fact:
     oci_instance_integration_enable_plugins_config: |-
       {{
@@ -526,7 +515,8 @@
       - not oci_instance_update_agent_config_enabled.resource.agent_config.are_all_plugins_disabled | bool
       - not oci_instance_update_agent_config_enabled.resource.agent_config.is_management_disabled | bool
       - not oci_instance_update_agent_config_enabled.resource.agent_config.is_monitoring_disabled | bool
-      - oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config | default([], true) | length > 0
+      - oci_instance_update_agent_config_enabled.resource.agent_config.plugins_config | default([], true) | length
+        > 0
 
 - name: Assert each requested plugin is ENABLED on the resource
   ansible.builtin.assert:
@@ -552,7 +542,7 @@
 - name: Enable every plugin OCI reported on the instance
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: &id002
+    agent_config:
       all_plugins_disabled: false
       management_disabled: false
       monitoring_disabled: false
@@ -562,9 +552,12 @@
 - name: Assert every reported plugin is ENABLED
   ansible.builtin.assert:
     that:
-      - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.are_all_plugins_disabled | bool
-      - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_management_disabled | bool
-      - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_monitoring_disabled | bool
+      - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.are_all_plugins_disabled
+        | bool
+      - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_management_disabled |
+        bool
+      - not oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.is_monitoring_disabled |
+        bool
       - |-
         oci_instance_update_agent_config_all_plugins_enabled.resource.agent_config.plugins_config |
         default([], true) | selectattr('desired_state', 'ne', 'ENABLED') | list | length == 0
@@ -582,7 +575,11 @@
 - name: Assert enabling every plugin is idempotent on rerun
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: *id002
+    agent_config:
+      all_plugins_disabled: false
+      management_disabled: false
+      monitoring_disabled: false
+      plugins_config: '{{ oci_instance_integration_full_plugins_config }}'
   register: oci_instance_update_agent_config_enabled_rerun
 
 - name: Verify enabling every plugin rerun is a no-op
@@ -593,7 +590,7 @@
 - name: Disable every plugin using the master switch
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: &id003
+    agent_config:
       all_plugins_disabled: true
   register: oci_instance_update_agent_config_all_disabled
 
@@ -606,7 +603,8 @@
 - name: Assert the master switch is idempotent on rerun
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: *id003
+    agent_config:
+      all_plugins_disabled: true
   register: oci_instance_update_agent_config_all_disabled_rerun
 
 - name: Verify the master switch rerun is a no-op
@@ -617,7 +615,7 @@
 - name: Turn the master switch back off
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: &id004
+    agent_config:
       all_plugins_disabled: false
   register: oci_instance_update_agent_config_all_enabled_again
 
@@ -625,12 +623,14 @@
   ansible.builtin.assert:
     that:
       - oci_instance_update_agent_config_all_enabled_again.changed | bool
-      - not oci_instance_update_agent_config_all_enabled_again.resource.agent_config.are_all_plugins_disabled | bool
+      - not oci_instance_update_agent_config_all_enabled_again.resource.agent_config.are_all_plugins_disabled |
+        bool
 
 - name: Assert turning the master switch back off is idempotent on rerun
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: *id004
+    agent_config:
+      all_plugins_disabled: false
   register: oci_instance_update_agent_config_all_enabled_again_rerun
 
 - name: Verify turning the master switch back off rerun is a no-op
@@ -641,7 +641,7 @@
 - name: Disable the monitoring plugins
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: &id005
+    agent_config:
       monitoring_disabled: true
   register: oci_instance_update_agent_config_monitoring_disabled
 
@@ -654,7 +654,8 @@
 - name: Assert disabling monitoring is idempotent on rerun
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: *id005
+    agent_config:
+      monitoring_disabled: true
   register: oci_instance_update_agent_config_monitoring_disabled_rerun
 
 - name: Verify disabling monitoring rerun is a no-op
@@ -665,7 +666,7 @@
 - name: Disable the management plugins
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: &id006
+    agent_config:
       management_disabled: true
   register: oci_instance_update_agent_config_management_disabled
 
@@ -678,7 +679,8 @@
 - name: Assert disabling management is idempotent on rerun
   ansible.oci.oci_instance:
     instance_id: '{{ oci_instance_id }}'
-    agent_config: *id006
+    agent_config:
+      management_disabled: true
   register: oci_instance_update_agent_config_management_disabled_rerun
 
 - name: Verify disabling management rerun is a no-op

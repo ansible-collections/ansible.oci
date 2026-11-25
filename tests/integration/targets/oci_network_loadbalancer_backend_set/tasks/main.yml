@@ -1,0 +1,35 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_nlb_test_suffix: oci_network_loadbalancer_backends
+    oci_nlb_test_vcn: {}
+    oci_nlb_test_subnet: {}
+    oci_nlb_test_create: {}
+    oci_tests_completed: false
+
+- name: Test oci_network_loadbalancer_backend_set
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Run oci_network_loadbalancer_backend_set tests
+      ansible.builtin.include_tasks: oci_network_loadbalancer_backend_set.yml
+
+    - name: Run oci_network_loadbalancer_backend tests
+      ansible.builtin.include_tasks: oci_network_loadbalancer_backend.yml
+
+    - name: Run oci_network_loadbalancer_health_checker tests
+      ansible.builtin.include_tasks: oci_network_loadbalancer_health_checker.yml
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

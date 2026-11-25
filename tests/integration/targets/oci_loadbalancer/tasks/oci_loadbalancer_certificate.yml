@@ -1,0 +1,229 @@
+---
+- name: Set prerequisite values
+  ansible.builtin.set_fact:
+    oci_lb_test_id: '{{ oci_lb_id }}'
+    oci_lb_test_backend_set: certificate-backends-{{ oci_integration_rpfx }}
+    oci_lb_test_listener: certificate-listener-{{ oci_integration_rpfx }}
+
+- name: Exercise load balancer certificate lifecycle
+  block:
+
+    - name: Create a temporary certificate directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: oci-lb-certificate-
+      register: oci_lb_certificate_directory
+
+    - name: Generate a private key and self-signed certificate
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - req
+          - -x509
+          - -newkey
+          - rsa:2048
+          - -noenc
+          - -days
+          - '1'
+          - -subj
+          - /CN=oci-lb-certificate.example.com
+          - -keyout
+          - '{{ oci_lb_certificate_directory.path }}/private.key'
+          - -out
+          - '{{ oci_lb_certificate_directory.path }}/public.crt'
+        creates: '{{ oci_lb_certificate_directory.path }}/public.crt'
+      no_log: true
+
+    - name: Read the generated certificate and key
+      ansible.builtin.slurp:
+        src: '{{ item }}'
+      loop:
+        - '{{ oci_lb_certificate_directory.path }}/public.crt'
+        - '{{ oci_lb_certificate_directory.path }}/private.key'
+      no_log: true
+      register: oci_lb_certificate_material
+
+    - name: Set certificate test values
+      ansible.builtin.set_fact:
+        oci_lb_certificate_name: certificate_{{ oci_integration_rpfx }}
+        oci_lb_public_certificate: '{{ oci_lb_certificate_material.results[0].content | b64decode }}'
+        oci_lb_private_key: '{{ oci_lb_certificate_material.results[1].content | b64decode }}'
+      no_log: true
+
+    - name: Read state before certificate creation
+      ansible.oci.oci_loadbalancer_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_before
+
+    - name: Predict certificate creation
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        public_certificate: '{{ oci_lb_public_certificate }}'
+        private_key: '{{ oci_lb_private_key }}'
+      check_mode: true
+      register: oci_lb_prediction
+      no_log: true
+
+    - name: Read state after certificate check mode
+      ansible.oci.oci_loadbalancer_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_after_check
+
+    - name: Assert certificate check mode preserved OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_prediction.changed | bool
+          - oci_lb_before.load_balancers[0].certificates == oci_lb_after_check.load_balancers[0].certificates
+
+    - name: Create the certificate bundle
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        public_certificate: '{{ oci_lb_public_certificate }}'
+        private_key: '{{ oci_lb_private_key }}'
+      register: oci_lb_applied
+      no_log: true
+
+    - name: Assert certificate creation changed OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_applied.changed | bool
+          - oci_lb_applied.resource.name == oci_lb_certificate_name
+          - oci_lb_applied.resource.public_certificate | trim == oci_lb_public_certificate | trim
+
+    - name: Read the created certificate
+      ansible.oci.oci_loadbalancer_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_after
+
+    - name: Assert certificate bundle exists
+      ansible.builtin.assert:
+        that:
+          - oci_lb_certificate_name in oci_lb_after.load_balancers[0].certificates
+
+    - name: Create a backend set for the HTTPS listener
+      ansible.oci.oci_loadbalancer_backend_set:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_backend_set }}'
+        policy: round_robin
+        health_checker:
+          protocol: tcp
+          port: 8080
+
+    - name: Attach the certificate to an HTTPS listener
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        default_backend_set_name: '{{ oci_lb_test_backend_set }}'
+        port: 443
+        protocol: http
+        ssl_configuration:
+          certificate_name: '{{ oci_lb_certificate_name }}'
+
+    - name: Read the HTTPS listener
+      ansible.oci.oci_loadbalancer_listener_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+      register: oci_lb_listener
+
+    - name: Assert the listener uses the certificate
+      ansible.builtin.assert:
+        that:
+          - oci_lb_listener.listeners | length == 1
+          - oci_lb_listener.listeners[0].ssl_configuration.certificate_name == oci_lb_certificate_name
+
+    - name: Test certificate creation idempotency
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        public_certificate: '{{ oci_lb_public_certificate }}'
+        private_key: '{{ oci_lb_private_key }}'
+      register: oci_lb_repeat
+      no_log: true
+
+    - name: Test certificate creation idempotency in check mode
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        public_certificate: '{{ oci_lb_public_certificate }}'
+        private_key: '{{ oci_lb_private_key }}'
+      check_mode: true
+      register: oci_lb_repeat_check
+      no_log: true
+
+    - name: Assert certificate creation idempotency
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_repeat.changed | bool
+          - not oci_lb_repeat_check.changed | bool
+
+    - name: Detach the certificate from the HTTPS listener
+      ansible.oci.oci_loadbalancer_listener:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_test_listener }}'
+        state: absent
+
+    - name: Predict certificate deletion
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        state: absent
+      check_mode: true
+      register: oci_lb_delete_prediction
+
+    - name: Read state after certificate deletion check mode
+      ansible.oci.oci_loadbalancer_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_before_delete
+
+    - name: Assert deletion check mode preserved the certificate
+      ansible.builtin.assert:
+        that:
+          - oci_lb_delete_prediction.changed | bool
+          - oci_lb_before_delete.load_balancers[0].certificates == oci_lb_after.load_balancers[0].certificates
+
+    - name: Delete the certificate bundle
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        state: absent
+      register: oci_lb_deleted
+
+    - name: Assert certificate deletion changed OCI state
+      ansible.builtin.assert:
+        that:
+          - oci_lb_deleted.changed | bool
+
+    - name: Test certificate deletion idempotency
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        state: absent
+      register: oci_lb_delete_repeat
+
+    - name: Test certificate deletion idempotency in check mode
+      ansible.oci.oci_loadbalancer_certificate:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+        name: '{{ oci_lb_certificate_name }}'
+        state: absent
+      check_mode: true
+      register: oci_lb_delete_repeat_check
+
+    - name: Read final certificate state
+      ansible.oci.oci_loadbalancer_info:
+        load_balancer_id: '{{ oci_lb_test_id }}'
+      register: oci_lb_final
+
+    - name: Assert certificate deletion idempotency
+      ansible.builtin.assert:
+        that:
+          - not oci_lb_delete_repeat.changed | bool
+          - not oci_lb_delete_repeat_check.changed | bool
+          - oci_lb_certificate_name not in oci_lb_final.load_balancers[0].certificates
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  vars:
+    oci_lb_test_suffix: certificate

@@ -1,0 +1,252 @@
+---
+- name: Create instance console history in check mode
+  ansible.oci.oci_instance_console_history:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
+    name: '{{ oci_console_history_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_create_tags }}'
+  check_mode: true
+  register: oci_console_history_create_check
+
+- name: Assert history create check mode reports a change
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_create_check.changed | bool
+
+- name: Probe instance console history after create check mode
+  ansible.oci.oci_instance_console_history_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
+    name: '{{ oci_console_history_name }}'
+  register: oci_console_history_create_check_probe
+
+- name: Verify the capture is absent after create check mode
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_create_check_probe.instance_console_histories | length == 0
+
+- name: Create instance console history
+  ansible.oci.oci_instance_console_history:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
+    name: '{{ oci_console_history_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_create_tags }}'
+  register: oci_console_history_create
+
+- name: Save the capture OCID
+  ansible.builtin.set_fact:
+    oci_console_history_id: '{{ oci_console_history_create.resource.id }}'
+
+- name: Assert instance console history was created
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_create.changed | bool
+      - oci_console_history_create.resource.id | length > 0
+      - oci_console_history_create.resource.instance_id == oci_console_connection_instance_create.resource.id
+      - oci_console_history_create.resource.compartment_id == oci_integration_compartment_id
+      - oci_console_history_create.resource.name == oci_console_history_name
+      - oci_console_history_create.resource.lifecycle_state == "SUCCEEDED"
+      - oci_console_history_create.resource.freeform_tags.phase == "create"
+
+- name: Repeat instance console history create
+  ansible.oci.oci_instance_console_history:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
+    name: '{{ oci_console_history_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_create_tags }}'
+  register: oci_console_history_create_rerun
+
+- name: Verify the create rerun reports no change
+  ansible.builtin.assert:
+    that:
+      - not oci_console_history_create_rerun.changed | bool
+      - oci_console_history_create_rerun.resource.id == oci_console_history_id
+
+- name: Repeat instance console history create in check mode
+  ansible.oci.oci_instance_console_history:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
+    name: '{{ oci_console_history_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_create_tags }}'
+  check_mode: true
+  register: oci_console_history_create_check_rerun
+
+- name: Verify the create check-mode rerun reports no change
+  ansible.builtin.assert:
+    that:
+      - not oci_console_history_create_check_rerun.changed | bool
+      - oci_console_history_create_check_rerun.resource.id == oci_console_history_id
+
+- name: List instance console history by name and lifecycle state
+  ansible.oci.oci_instance_console_history_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
+    name: '{{ oci_console_history_name }}'
+    lifecycle_state: succeeded
+  register: oci_console_history_list
+
+- name: Assert history list returns the created resource
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_list.instance_console_histories | length == 1
+      - oci_console_history_list.instance_console_histories[0].id == oci_console_history_id
+      - oci_console_history_list.instance_console_histories[0].lifecycle_state == "SUCCEEDED"
+
+- name: Get instance console history by OCID
+  ansible.oci.oci_instance_console_history_info:
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  register: oci_console_history_get
+
+- name: Assert history get returns the created resource
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_get.instance_console_histories | length == 1
+      - oci_console_history_get.instance_console_histories[0].id == oci_console_history_id
+      - oci_console_history_get.instance_console_histories[0].name == oci_console_history_name
+
+- name: Read instance console history content
+  ansible.oci.oci_instance_console_history_info:
+    instance_console_history_id: '{{ oci_console_history_id }}'
+    include_content: true
+  no_log: true
+  register: oci_console_history_content
+
+- name: Assert history content response has a base64 field
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_content.instance_console_histories | length == 1
+      - oci_console_history_content.instance_console_histories[0].content_base64 is string
+  no_log: true
+
+- name: Update instance console history in check mode
+  ansible.oci.oci_instance_console_history:
+    state: present
+    instance_console_history_id: '{{ oci_console_history_id }}'
+    name: '{{ oci_console_history_updated_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_update_tags }}'
+  check_mode: true
+  register: oci_console_history_update_check
+
+- name: Assert history update check mode reports a change
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_update_check.changed | bool
+
+- name: Probe history after update check mode
+  ansible.oci.oci_instance_console_history_info:
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  register: oci_console_history_update_check_probe
+
+- name: Assert history update check mode preserves state
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_update_check_probe.instance_console_histories[0].name == oci_console_history_name
+      - oci_console_history_update_check_probe.instance_console_histories[0].freeform_tags.phase == "create"
+
+- name: Update instance console history
+  ansible.oci.oci_instance_console_history:
+    state: present
+    instance_console_history_id: '{{ oci_console_history_id }}'
+    name: '{{ oci_console_history_updated_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_update_tags }}'
+  register: oci_console_history_update
+
+- name: Assert history update reports a change
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_update.changed | bool
+      - oci_console_history_update.resource.name == oci_console_history_updated_name
+      - oci_console_history_update.resource.freeform_tags.phase == "update"
+
+- name: Repeat instance console history update
+  ansible.oci.oci_instance_console_history:
+    state: present
+    instance_console_history_id: '{{ oci_console_history_id }}'
+    name: '{{ oci_console_history_updated_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_update_tags }}'
+  register: oci_console_history_update_rerun
+
+- name: Repeat instance console history update in check mode
+  ansible.oci.oci_instance_console_history:
+    state: present
+    instance_console_history_id: '{{ oci_console_history_id }}'
+    name: '{{ oci_console_history_updated_name }}'
+    freeform_tags: '{{ oci_instance_console_connection_integration_update_tags }}'
+  check_mode: true
+  register: oci_console_history_update_check_rerun
+
+- name: Verify both update reruns preserve the capture
+  ansible.builtin.assert:
+    that:
+      - not oci_console_history_update_rerun.changed
+      - not oci_console_history_update_check_rerun.changed
+      - oci_console_history_update_rerun.resource == oci_console_history_update_check_rerun.resource
+      - oci_console_history_update_rerun.resource.id == oci_console_history_id
+      - oci_console_history_update_rerun.resource.name == oci_console_history_updated_name
+      - oci_console_history_update_rerun.resource.freeform_tags.phase == "update"
+
+- name: Delete instance console history in check mode
+  ansible.oci.oci_instance_console_history:
+    state: absent
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  check_mode: true
+  register: oci_console_history_delete_check
+
+- name: Assert history delete check mode reports a change
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_delete_check.changed | bool
+
+- name: Probe history after delete check mode
+  ansible.oci.oci_instance_console_history_info:
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  register: oci_console_history_delete_check_probe
+
+- name: Assert history remains after delete check mode
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_delete_check_probe.instance_console_histories | length == 1
+
+- name: Delete instance console history
+  ansible.oci.oci_instance_console_history:
+    state: absent
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  register: oci_console_history_delete
+
+- name: Assert history delete reports a change
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_delete.changed | bool
+
+- name: Repeat instance console history delete
+  ansible.oci.oci_instance_console_history:
+    state: absent
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  register: oci_console_history_delete_rerun
+
+- name: Repeat instance console history delete in check mode
+  ansible.oci.oci_instance_console_history:
+    state: absent
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  check_mode: true
+  register: oci_console_history_delete_check_rerun
+
+- name: Verify both delete reruns report no change
+  ansible.builtin.assert:
+    that:
+      - not oci_console_history_delete_rerun.changed
+      - not oci_console_history_delete_check_rerun.changed
+
+- name: Verify deleted instance console history is absent
+  ansible.oci.oci_instance_console_history_info:
+    instance_console_history_id: '{{ oci_console_history_id }}'
+  register: oci_console_history_after_delete
+
+- name: Verify the deleted capture is absent
+  ansible.builtin.assert:
+    that:
+      - oci_console_history_after_delete.instance_console_histories | length == 0

@@ -1,12 +1,9 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_oke_cluster: false
-    oci_group_started_oci_oke_node_pool: false
+    oci_tests_completed: false
 
-- name: Test oci_oke_cluster and dependent modules
+- name: Test oci_oke_cluster
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -14,20 +11,15 @@
   block:
 
     - name: Run oci_oke_cluster tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_oke_cluster/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_oke_cluster.yml
 
     - name: Run oci_oke_node_pool tests
-      ansible.builtin.include_tasks: oci_oke_node_pool/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_oke_node_pool.yml
 
-    - name: Run oci_oke_cluster remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_oke_cluster/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

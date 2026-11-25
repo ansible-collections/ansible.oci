@@ -1,0 +1,53 @@
+---
+- name: Validate OCI integration compartment
+  ansible.builtin.assert:
+    that:
+      - oci_integration_compartment_id | default('', true) | length > 0
+
+- name: Initialize network load balancer test values
+  ansible.builtin.set_fact:
+    oci_nlb_test_name: oci-{{ oci_nlb_test_suffix }}-{{ oci_integration_rpfx }}
+    oci_nlb_test_vcn_name: oci-{{ oci_nlb_test_suffix }}-vcn-{{ oci_integration_rpfx }}
+    oci_nlb_test_subnet_name: oci-{{ oci_nlb_test_suffix }}-subnet-{{ oci_integration_rpfx }}
+    oci_nlb_test_vcn_id: ''
+    oci_nlb_test_subnet_id: ''
+    oci_nlb_test_id: ''
+    oci_nlb_test_backend_set: backends-{{ oci_integration_rpfx }}
+    oci_nlb_test_listener: listener-{{ oci_integration_rpfx }}
+
+- name: Create test VCN
+  ansible.oci.oci_network_vcn:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_nlb_test_vcn_name }}'
+    cidr_blocks:
+      - 10.252.0.0/16
+  register: oci_nlb_test_vcn
+
+- name: Save VCN identifier
+  ansible.builtin.set_fact:
+    oci_nlb_test_vcn_id: '{{ oci_nlb_test_vcn.resource.id }}'
+
+- name: Create private test subnet
+  ansible.oci.oci_network_subnet:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    vcn_id: '{{ oci_nlb_test_vcn_id }}'
+    name: '{{ oci_nlb_test_subnet_name }}'
+    cidr_block: 10.252.1.0/24
+    prohibit_public_ip_on_vnic: true
+  register: oci_nlb_test_subnet
+
+- name: Save subnet identifier
+  ansible.builtin.set_fact:
+    oci_nlb_test_subnet_id: '{{ oci_nlb_test_subnet.resource.id }}'
+
+- name: Create test network load balancer
+  ansible.oci.oci_network_loadbalancer:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_nlb_test_name }}'
+    subnet_id: '{{ oci_nlb_test_subnet_id }}'
+    is_private: true
+  register: oci_nlb_test_create
+
+- name: Save network load balancer identifier
+  ansible.builtin.set_fact:
+    oci_nlb_test_id: '{{ oci_nlb_test_create.resource.id }}'

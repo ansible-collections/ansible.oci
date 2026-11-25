@@ -1,0 +1,191 @@
+---
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Delete the console history capture
+  ansible.oci.oci_instance_console_history:
+    state: absent
+    instance_console_history_id: '{{ oci_console_history_id | default(omit, true) }}'
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    instance_id: '{{ oci_instance_id }}'
+    name: '{{ oci_console_history_name }}'
+  when:
+    - oci_console_history_create is defined
+    - oci_console_history_id is defined
+    - oci_integration_compartment_id is defined
+    - oci_instance_id is defined
+    - oci_console_history_name is defined
+    - oci_instance_id | default('') | length > 0
+    - oci_integration_rpfx | string in oci_console_history_name | string
+  register: oci_cleanup_delete_the_console_history_capture
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_the_console_history_capture is not failed
+  ignore_errors: true
+
+- name: Verify oci_instance_console_connection deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Delete the console connection in check mode
+      ansible.oci.oci_instance_console_connection:
+        state: absent
+        instance_console_connection_id: '{{ oci_console_connection_id }}'
+      check_mode: true
+      register: oci_cleanup_delete_the_console_connection_in_check_mode
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_delete_the_console_connection_in_check_mode.changed | bool
+
+    - name: Read the console connection via the info module after delete check mode
+      ansible.oci.oci_instance_console_connection_info:
+        instance_console_connection_id: '{{ oci_console_connection_id }}'
+      register: oci_cleanup_read_the_console_connection_via_the_info_module_after_delete_check_mode
+
+    - name: Assert the console connection still exists and is active after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_read_the_console_connection_via_the_info_module_after_delete_check_mode.instance_console_connections
+            | length == 1
+          - oci_cleanup_read_the_console_connection_via_the_info_module_after_delete_check_mode.instance_console_connections[0].lifecycle_state
+            == "ACTIVE"
+
+    - name: Delete the console connection
+      ansible.oci.oci_instance_console_connection:
+        state: absent
+        instance_console_connection_id: '{{ oci_console_connection_id }}'
+      register: oci_cleanup_delete_the_console_connection
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_delete_the_console_connection.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_instance_console_connection:
+        state: absent
+        instance_console_connection_id: '{{ oci_console_connection_id }}'
+      register: oci_cleanup_assert_delete_is_idempotent_on_rerun
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_cleanup_assert_delete_is_idempotent_on_rerun.changed | bool
+
+    - name: List open console connections for the instance after delete
+      ansible.oci.oci_instance_console_connection_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
+        lifecycle_state: ACTIVE
+      register: oci_cleanup_list_open_console_connections_for_the_instance_after_delete
+
+    - name: Assert no active/open console connections remain for the instance
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_list_open_console_connections_for_the_instance_after_delete.instance_console_connections
+            | length == 0
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete leaked console connection during cleanup
+  ansible.oci.oci_instance_console_connection:
+    state: absent
+    instance_console_connection_id: '{{ oci_console_connection_id }}'
+  when:
+    - oci_console_connection_id is defined
+    - oci_console_connection_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_console_connection_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked instance during cleanup
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_id }}'
+  when:
+    - oci_instance_id is defined
+    - oci_instance_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_instance_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked subnet during cleanup
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+  when:
+    - oci_instance_subnet_create is defined
+    - oci_instance_subnet_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_subnet_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+  when:
+    - oci_instance_vcn_create is defined
+    - oci_instance_vcn_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_vcn_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_create
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_create.resource.id }}'
+  when:
+    - oci_instance_create is defined
+    - oci_instance_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_create is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_subnet_create
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+  when:
+    - oci_instance_subnet_create is defined
+    - oci_instance_subnet_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_subnet_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_subnet_create is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_vcn_create
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+  when:
+    - oci_instance_vcn_create is defined
+    - oci_instance_vcn_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_vcn_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_vcn_create is not failed
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_the_console_history_capture | default({})) is not failed
+      - (oci_cleanup_delete_leaked_console_connection_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_instance_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_subnet_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_vcn_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_subnet_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_vcn_create | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

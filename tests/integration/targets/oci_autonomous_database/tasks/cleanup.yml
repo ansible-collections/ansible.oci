@@ -1,7 +1,19 @@
 ---
-- name: Initialize cleanup failures
+- name: Initialize deletion test status
   ansible.builtin.set_fact:
-    oci_group_cleanup_failures: []
+    oci_cleanup_checks_failed: false
+
+- name: Delete clones left by failed tests
+  ansible.oci.oci_autonomous_database_clone:
+    state: absent
+    autonomous_database_id: '{{ item }}'
+    wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+  loop:
+    - '{{ oci_adb_clone_metadata_id | default('''') }}'
+    - '{{ oci_adb_clone_refreshable_id | default('''') }}'
+  when: item | length > 0
+  register: oci_cleanup_failed_clones
+  ignore_errors: true
 
 - name: Find leaked databases by unique name
   ansible.oci.oci_autonomous_database_info:
@@ -12,48 +24,109 @@
     - '{{ oci_adb_clone_integration_metadata_renamed }}'
     - '{{ oci_adb_clone_integration_refreshable_name }}'
     - '{{ oci_adb_clone_integration_source_name }}'
-  register: oci_group_cleanup_0
+  register: oci_cleanup_find_leaked_databases_by_unique_name
   ignore_errors: true
   when:
-    - oci_group_started_oci_autonomous_database_clone | default(false)
+    - oci_integration_compartment_id is defined
+    - oci_integration_rpfx | string in item | string
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Find leaked databases by unique name''] }}'
-  when: oci_group_cleanup_0 is failed
+- name: Delete clones found by unique name
+  ansible.oci.oci_autonomous_database_clone:
+    state: absent
+    autonomous_database_id: '{{ item.id }}'
+    wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+  loop: '{{ oci_cleanup_find_leaked_databases_by_unique_name.results | default([]) | selectattr(''autonomous_databases'',
+    ''defined'') | map(attribute=''autonomous_databases'') | flatten }}'
+  when: item.id | default('') | length > 0
+  register: oci_cleanup_clones_by_name
+  ignore_errors: true
+
+- name: Verify oci_autonomous_database deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Exercise autonomous database module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
+
+        - name: Delete autonomous database in check mode
+          ansible.oci.oci_autonomous_database:
+            state: '{{ oci_adb_delete_params.state }}'
+            autonomous_database_id: '{{ oci_adb_delete_params.autonomous_database_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_autonomous_database_in_check_mode
+
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_autonomous_database_in_check_mode.changed | bool
+
+        - name: Read autonomous database after delete check mode
+          ansible.oci.oci_autonomous_database_info:
+            autonomous_database_id: '{{ oci_adb_id }}'
+          register: oci_cleanup_read_autonomous_database_after_delete_check_mode
+
+        - name: Assert autonomous database still exists after delete check mode
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_read_autonomous_database_after_delete_check_mode.autonomous_databases | length == 1
+
+        - name: Delete autonomous database
+          ansible.oci.oci_autonomous_database:
+            state: '{{ oci_adb_delete_params.state }}'
+            autonomous_database_id: '{{ oci_adb_delete_params.autonomous_database_id }}'
+          register: oci_cleanup_delete_autonomous_database
+
+        - name: Assert delete reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_autonomous_database.changed | bool
+
+        - name: Assert delete is idempotent on rerun
+          ansible.oci.oci_autonomous_database:
+            state: '{{ oci_adb_delete_params.state }}'
+            autonomous_database_id: '{{ oci_adb_delete_params.autonomous_database_id }}'
+          register: oci_cleanup_assert_delete_is_idempotent_on_rerun
+
+        - name: Verify delete rerun is a no-op
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_assert_delete_is_idempotent_on_rerun.changed | bool
+
+        - name: Clear autonomous database id after successful delete
+          ansible.builtin.set_fact:
+            oci_adb_id: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
 
 - name: Delete leaked autonomous database by id during cleanup
   ansible.oci.oci_autonomous_database:
     state: absent
     autonomous_database_id: '{{ oci_adb_id }}'
   when:
-    - oci_group_started_oci_autonomous_database | default(false)
+    - oci_adb_id is defined
     - oci_adb_id | default('') | length > 0
-  register: oci_group_cleanup_2
+  register: oci_cleanup_delete_leaked_autonomous_database_by_id_during_cleanup
   retries: 3
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked autonomous database by id during cleanup'']
-      }}'
-  when: oci_group_cleanup_2 is failed
 
 - name: Find leaked autonomous database by unique name when id is unavailable
   ansible.oci.oci_autonomous_database_info:
     compartment_id: '{{ oci_integration_compartment_id }}'
     name: '{{ oci_adb_integration_display_name }}'
   when:
-    - oci_group_started_oci_autonomous_database | default(false)
+    - oci_integration_compartment_id is defined
+    - oci_adb_integration_display_name is defined
     - oci_adb_id | default('') | length == 0
-  register: oci_group_cleanup_4
+    - oci_integration_rpfx | string in oci_adb_integration_display_name | string
+  register: oci_cleanup_find_leaked_autonomous_database_by_unique_name_when_id_is_unavailable
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Find leaked autonomous database by unique name when id
-      is unavailable''] }}'
-  when: oci_group_cleanup_4 is failed
 
 - name: Delete leaked autonomous database found by name during cleanup
   ansible.oci.oci_autonomous_database:
@@ -61,36 +134,31 @@
     autonomous_database_id: '{{ item.id }}'
   loop: '{{ oci_cleanup_adb_lookup.autonomous_databases | default([]) }}'
   when:
-    - oci_group_started_oci_autonomous_database | default(false)
     - oci_adb_id | default('') | length == 0
-  register: oci_group_cleanup_6
+  register: oci_cleanup_delete_leaked_autonomous_database_found_by_name_during_cleanup
   retries: 3
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked autonomous database found by name during
-      cleanup''] }}'
-  when: oci_group_cleanup_6 is failed
 
 - name: Remove temporary autonomous database wallet directory
   ansible.builtin.file:
     path: '{{ oci_adb_wallet_dir.path }}'
     state: absent
   when:
-    - oci_group_started_oci_autonomous_database | default(false)
     - oci_adb_wallet_dir.path is defined
-  register: oci_group_cleanup_8
+    - oci_adb_wallet_dir is defined
+  register: oci_cleanup_remove_temporary_autonomous_database_wallet_directory
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove temporary autonomous database wallet directory'']
-      }}'
-  when: oci_group_cleanup_8 is failed
-
-- name: Check all cleanup results
+- name: Verify resource cleanup
   ansible.builtin.assert:
     that:
-      - oci_group_cleanup_failures | length == 0
-    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_find_leaked_databases_by_unique_name | default({})) is not failed
+      - (oci_cleanup_delete_leaked_autonomous_database_by_id_during_cleanup | default({})) is not failed
+      - (oci_cleanup_find_leaked_autonomous_database_by_unique_name_when_id_is_unavailable | default({})) is not
+        failed
+      - (oci_cleanup_delete_leaked_autonomous_database_found_by_name_during_cleanup | default({})) is not failed
+      - (oci_cleanup_remove_temporary_autonomous_database_wallet_directory | default({})) is not failed
+      - (oci_cleanup_failed_clones | default({})) is not failed
+      - (oci_cleanup_clones_by_name | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

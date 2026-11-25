@@ -1,0 +1,34 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_network_vcn_integration_endpoint_cleanup_needed: false
+    oci_network_vcn_integration_resolver_id: ''
+    oci_network_vcn_create: {}
+    oci_subnet_create: {}
+    oci_tests_completed: false
+
+- name: Test oci_dns_resolver
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Test oci_dns_resolver_endpoint
+      ansible.builtin.include_tasks: oci_dns_resolver_endpoint.yml
+
+    - name: Test oci_dns_resolver
+      ansible.builtin.include_tasks: oci_dns_resolver.yml
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml
+  vars:
+    oci_shared_vcn: '{{ oci_network_vcn_create }}'

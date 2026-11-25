@@ -1,17 +1,9 @@
 ---
-- name: Initialize shared resources and ownership
+- name: Initialize resource identifiers
   ansible.builtin.set_fact:
-    oci_group_resources: {}
-    oci_group_cleanup_failures: []
-    oci_group_started_oci_loadbalancer: false
-    oci_group_started_oci_loadbalancer_backend_set: false
-    oci_group_started_oci_loadbalancer_backend: false
-    oci_group_started_oci_loadbalancer_health_checker: false
-    oci_group_started_oci_loadbalancer_listener: false
-    oci_group_started_oci_loadbalancer_routing_policy: false
-    oci_group_started_oci_waf_web_app_firewall: false
+    oci_tests_completed: false
 
-- name: Test oci_loadbalancer and dependent modules
+- name: Test oci_loadbalancer
   module_defaults:
     group/ansible.oci.oci:
       config_file_location: '{{ oci_integration_config_file_location }}'
@@ -19,45 +11,21 @@
   block:
 
     - name: Run oci_loadbalancer tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_loadbalancer/main.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_loadbalancer_backend_set tests
-      ansible.builtin.include_tasks: oci_loadbalancer_backend_set/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_loadbalancer_backend tests
-      ansible.builtin.include_tasks: oci_loadbalancer_backend/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
-
-    - name: Run oci_loadbalancer_health_checker tests
-      ansible.builtin.include_tasks: oci_loadbalancer_health_checker/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_loadbalancer.yml
 
     - name: Run oci_loadbalancer_listener tests
-      ansible.builtin.include_tasks: oci_loadbalancer_listener/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_loadbalancer_listener.yml
 
     - name: Run oci_loadbalancer_routing_policy tests
-      ansible.builtin.include_tasks: oci_loadbalancer_routing_policy/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+      ansible.builtin.include_tasks: oci_loadbalancer_routing_policy.yml
 
-    - name: Run oci_waf_web_app_firewall tests
-      ansible.builtin.include_tasks: oci_waf_web_app_firewall/main.yml
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Test oci_loadbalancer_certificate
+      ansible.builtin.include_tasks: oci_loadbalancer_certificate.yml
 
-    - name: Run oci_loadbalancer remaining tests
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/oci_loadbalancer/delete.yml'
-      vars:
-        oci_prerequisites: '{{ oci_group_resources }}'
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
   always:
 
-    - name: Clean up all group resources
-      ansible.builtin.include_tasks: '{{ role_path }}/tasks/cleanup.yml'
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

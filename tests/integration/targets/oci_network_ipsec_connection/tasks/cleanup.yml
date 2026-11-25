@@ -1,0 +1,213 @@
+---
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Delete leaked remote peering connection
+  ansible.oci.oci_network_remote_peering_connection:
+    state: absent
+    remote_peering_connection_id: '{{ oci_rpc_id }}'
+    wait_interval: 5
+  when:
+    - oci_rpc_id is defined
+    - oci_rpc_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_remote_peering_connection
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_leaked_remote_peering_connection is not failed
+  ignore_errors: true
+
+- name: Find leaked IPSec connection by name
+  ansible.oci.oci_network_ipsec_connection_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_connection_name }}'
+  register: oci_cleanup_find_leaked_ipsec_connection_by_name
+  when:
+    - oci_integration_compartment_id is defined
+    - oci_ipsec_connection_name is defined
+    - oci_ipsec_connection_id | default('') | length == 0
+    - oci_integration_rpfx | string in oci_ipsec_connection_name | string
+  ignore_errors: true
+
+- name: Clean up IPSec connection
+  ansible.oci.oci_network_ipsec_connection:
+    state: absent
+    ipsc_id: '{{ oci_ipsec_connection_id | default('''') }}'
+  when:
+    - oci_ipsec_connection_id is defined
+    - oci_ipsec_connection_id | default('') | length > 0
+  register: oci_cleanup_clean_up_ipsec_connection
+  retries: 3
+  delay: 10
+  until: oci_cleanup_clean_up_ipsec_connection is not failed
+  ignore_errors: true
+
+- name: Find leaked CPE by name
+  ansible.oci.oci_network_cpe_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_cpe_name }}'
+  register: oci_cleanup_find_leaked_cpe_by_name
+  when:
+    - oci_integration_compartment_id is defined
+    - oci_ipsec_cpe_name is defined
+    - oci_ipsec_cpe_id | default('') | length == 0
+    - oci_integration_rpfx | string in oci_ipsec_cpe_name | string
+  ignore_errors: true
+
+- name: Verify oci_network_cpe deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Check CPE deletion
+      ansible.oci.oci_network_cpe:
+        state: absent
+        cpe_id: '{{ oci_ipsec_cpe_id }}'
+      check_mode: true
+      register: oci_cleanup_check_cpe_deletion
+
+    - name: Assert CPE delete check mode predicts a change
+      ansible.builtin.assert:
+        that: oci_cleanup_check_cpe_deletion.changed | bool
+
+    - name: Verify CPE remains after delete check mode
+      ansible.oci.oci_network_cpe_info:
+        cpe_id: '{{ oci_ipsec_cpe_id }}'
+      register: oci_cleanup_verify_cpe_remains_after_delete_check_mode
+
+    - name: Assert CPE remains after delete check mode
+      ansible.builtin.assert:
+        that: oci_cleanup_verify_cpe_remains_after_delete_check_mode.cpes | length == 1
+
+    - name: Delete CPE
+      ansible.oci.oci_network_cpe:
+        state: absent
+        cpe_id: '{{ oci_ipsec_cpe_id }}'
+      register: oci_cleanup_delete_cpe
+
+    - name: Assert CPE deletion changed the resource
+      ansible.builtin.assert:
+        that: oci_cleanup_delete_cpe.changed | bool
+
+    - name: Wait until deleted CPE is absent
+      ansible.oci.oci_network_cpe_info:
+        cpe_id: '{{ oci_ipsec_cpe_id }}'
+      register: oci_cleanup_wait_until_deleted_cpe_is_absent
+      until: oci_cleanup_wait_until_deleted_cpe_is_absent.cpes | length == 0
+      retries: 20
+      delay: 15
+
+    - name: Verify CPE deletion is idempotent
+      ansible.oci.oci_network_cpe:
+        state: absent
+        cpe_id: '{{ oci_ipsec_cpe_id }}'
+      register: oci_cleanup_verify_cpe_deletion_is_idempotent
+
+    - name: Assert CPE delete rerun is unchanged
+      ansible.builtin.assert:
+        that: not oci_cleanup_verify_cpe_deletion_is_idempotent.changed | bool
+
+    - name: Check repeated CPE deletion
+      ansible.oci.oci_network_cpe:
+        state: absent
+        cpe_id: '{{ oci_ipsec_cpe_id }}'
+      check_mode: true
+      register: oci_cleanup_check_repeated_cpe_deletion
+
+    - name: Assert repeated CPE deletion is unchanged in check mode
+      ansible.builtin.assert:
+        that: not oci_cleanup_check_repeated_cpe_deletion.changed | bool
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Clean up CPE
+  ansible.oci.oci_network_cpe:
+    state: absent
+    cpe_id: '{{ oci_ipsec_cpe_id | default('''') }}'
+  when:
+    - oci_ipsec_cpe_id is defined
+    - oci_ipsec_cpe_id | default('') | length > 0
+  register: oci_cleanup_clean_up_cpe
+  retries: 3
+  delay: 10
+  until: oci_cleanup_clean_up_cpe is not failed
+  ignore_errors: true
+
+- name: Find leaked DRG by name
+  ansible.oci.oci_network_drg_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_ipsec_drg_name }}'
+  register: oci_cleanup_find_leaked_drg_by_name
+  when:
+    - oci_integration_compartment_id is defined
+    - oci_ipsec_drg_name is defined
+    - oci_ipsec_drg_id | default('') | length == 0
+    - oci_integration_rpfx | string in oci_ipsec_drg_name | string
+  ignore_errors: true
+
+- name: Verify connection cleanup by ID
+  ansible.oci.oci_network_ipsec_connection_info:
+    ipsc_id: '{{ oci_ipsec_connection_id }}'
+  register: oci_cleanup_verify_connection_cleanup_by_id
+  when:
+    - oci_ipsec_connection_id is defined
+    - oci_ipsec_connection_id | default('') | length > 0
+  until: oci_cleanup_verify_connection_cleanup_by_id.ipsec_connections | length == 0
+  retries: 20
+  delay: 15
+  ignore_errors: true
+
+- name: Verify CPE cleanup by ID
+  ansible.oci.oci_network_cpe_info:
+    cpe_id: '{{ oci_ipsec_cpe_id }}'
+  register: oci_cleanup_verify_cpe_cleanup_by_id
+  when:
+    - oci_ipsec_cpe_id is defined
+    - oci_ipsec_cpe_id | default('') | length > 0
+  until: oci_cleanup_verify_cpe_cleanup_by_id.cpes | length == 0
+  retries: 20
+  delay: 15
+  ignore_errors: true
+
+- name: Delete prerequisite oci_drg_create
+  ansible.oci.oci_network_drg:
+    state: absent
+    drg_id: '{{ oci_drg_create.resource.id }}'
+  when:
+    - oci_drg_create is defined
+    - oci_drg_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_drg_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_drg_create is not failed
+  ignore_errors: true
+
+- name: Verify DRG cleanup by ID
+  ansible.oci.oci_network_drg_info:
+    drg_id: '{{ oci_ipsec_drg_id }}'
+  register: oci_cleanup_verify_drg_cleanup_by_id
+  when:
+    - oci_ipsec_drg_id is defined
+    - oci_ipsec_drg_id | default('') | length > 0
+  until: oci_cleanup_verify_drg_cleanup_by_id.drgs | length == 0
+  retries: 20
+  delay: 15
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_remote_peering_connection | default({})) is not failed
+      - (oci_cleanup_find_leaked_ipsec_connection_by_name | default({})) is not failed
+      - (oci_cleanup_clean_up_ipsec_connection | default({})) is not failed
+      - (oci_cleanup_find_leaked_cpe_by_name | default({})) is not failed
+      - (oci_cleanup_clean_up_cpe | default({})) is not failed
+      - (oci_cleanup_find_leaked_drg_by_name | default({})) is not failed
+      - (oci_cleanup_verify_connection_cleanup_by_id | default({})) is not failed
+      - (oci_cleanup_verify_cpe_cleanup_by_id | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_drg_create | default({})) is not failed
+      - (oci_cleanup_verify_drg_cleanup_by_id | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

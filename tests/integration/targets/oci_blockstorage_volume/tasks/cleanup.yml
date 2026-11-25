@@ -1,161 +1,312 @@
 ---
-- name: Initialize cleanup failures
+- name: Initialize deletion test status
   ansible.builtin.set_fact:
-    oci_group_cleanup_failures: []
-
-- name: Remove policy assignment during cleanup
-  ansible.oci.oci_volume_backup_policy_assignment:
-    state: absent
-    asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
-  when:
-    - oci_group_started_oci_volume_backup_policy_assignment | default(false)
-    - oci_volume_backup_policy_assignment_volume_id | default('') | length > 0
-  register: oci_group_cleanup_0
-  retries: 3
-  ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove policy assignment during cleanup''] }}'
-  when: oci_group_cleanup_0 is failed
-
-- name: Remove second backup policy during cleanup
-  ansible.oci.oci_volume_backup_policy:
-    state: absent
-    volume_backup_policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
-  when:
-    - oci_group_started_oci_volume_backup_policy_assignment | default(false)
-    - oci_volume_backup_policy_assignment_second_policy_id | default('') | length > 0
-  register: oci_group_cleanup_2
-  retries: 3
-  ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Remove second backup policy during cleanup''] }}'
-  when: oci_group_cleanup_2 is failed
-
-- name: Delete leaked volume backup policy during cleanup
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: '{{ oci_integration_config_file_location }}'
-      config_profile_name: '{{ oci_integration_config_profile_name }}'
-  ansible.oci.oci_volume_backup_policy:
-    state: absent
-    volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
-  when:
-    - oci_group_started_oci_volume_backup_policy | default(false)
-    - oci_volume_backup_policy_id | default('') | length > 0
-  register: oci_group_cleanup_4
-  ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked volume backup policy during cleanup''] }}'
-  when: oci_group_cleanup_4 is failed
+    oci_cleanup_checks_failed: false
 
 - name: Delete leaked volume group backup during cleanup
   ansible.oci.oci_volume_group_backup:
     state: absent
     volume_group_backup_id: '{{ oci_volume_group_backup_id }}'
   when:
-    - oci_group_started_oci_volume_group_backup | default(false)
+    - oci_volume_group_backup_id is defined
     - oci_volume_group_backup_id | default('') | length > 0
-  register: oci_group_cleanup_6
+  register: oci_cleanup_delete_leaked_volume_group_backup_during_cleanup
   retries: 3
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked volume group backup during cleanup''] }}'
-  when: oci_group_cleanup_6 is failed
+- name: Verify oci_volume_group deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Exercise volume group module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
+
+        - name: Delete volume group in check mode
+          ansible.oci.oci_volume_group:
+            state: absent
+            volume_group_id: '{{ oci_volume_group_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_volume_group_in_check_mode
+
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_volume_group_in_check_mode.changed | bool
+
+        - name: Read volume group after delete check mode
+          ansible.oci.oci_volume_group_info:
+            volume_group_id: '{{ oci_volume_group_id }}'
+          register: oci_cleanup_read_volume_group_after_delete_check_mode
+
+        - name: Assert volume group still exists after delete check mode
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_read_volume_group_after_delete_check_mode.volume_groups | length == 1
+
+        - name: Delete volume group
+          ansible.oci.oci_volume_group:
+            state: absent
+            volume_group_id: '{{ oci_volume_group_id }}'
+          register: oci_cleanup_delete_volume_group
+
+        - name: Assert delete reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_volume_group.changed | bool
+
+        - name: Assert delete is a no-op in check mode
+          ansible.oci.oci_volume_group:
+            state: absent
+            volume_group_id: '{{ oci_volume_group_id }}'
+          check_mode: true
+          register: oci_cleanup_assert_delete_is_a_no_op_in_check_mode
+
+        - name: Verify delete check-mode rerun is a no-op
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_assert_delete_is_a_no_op_in_check_mode.changed | bool
+
+        - name: Assert delete is idempotent on rerun
+          ansible.oci.oci_volume_group:
+            state: absent
+            volume_group_id: '{{ oci_volume_group_id }}'
+          register: oci_cleanup_assert_delete_is_idempotent_on_rerun
+
+        - name: Verify delete rerun is a no-op
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_assert_delete_is_idempotent_on_rerun.changed | bool
+
+        - name: Clear volume group id after successful delete
+          ansible.builtin.set_fact:
+            oci_volume_group_id: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
 
 - name: Delete leaked volume group during cleanup
   ansible.oci.oci_volume_group:
     state: absent
     volume_group_id: '{{ oci_volume_group_id }}'
   when:
-    - oci_group_started_oci_volume_group | default(false)
+    - oci_volume_group_id is defined
     - oci_volume_group_id | default('') | length > 0
-  register: oci_group_cleanup_8
+  register: oci_cleanup_delete_leaked_volume_group_during_cleanup
   retries: 3
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked volume group during cleanup''] }}'
-  when: oci_group_cleanup_8 is failed
+- name: Verify oci_blockstorage_volume deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Exercise block volume module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
+
+        - name: Delete block volume in check mode
+          ansible.oci.oci_blockstorage_volume:
+            state: '{{ oci_blockstorage_volume_delete_params.state }}'
+            volume_id: '{{ oci_blockstorage_volume_delete_params.volume_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_block_volume_in_check_mode
+
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_block_volume_in_check_mode.changed | bool
+
+        - name: Read block volume after delete check mode
+          ansible.oci.oci_blockstorage_volume_info:
+            volume_id: '{{ oci_blockstorage_volume_id }}'
+          register: oci_cleanup_read_block_volume_after_delete_check_mode
+
+        - name: Assert block volume still exists after delete check mode
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_read_block_volume_after_delete_check_mode.volumes | length == 1
+
+        - name: Delete block volume
+          ansible.oci.oci_blockstorage_volume:
+            state: '{{ oci_blockstorage_volume_delete_params.state }}'
+            volume_id: '{{ oci_blockstorage_volume_delete_params.volume_id }}'
+          register: oci_cleanup_delete_block_volume
+
+        - name: Assert delete reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_block_volume.changed | bool
+
+        - name: Assert delete is idempotent on rerun
+          ansible.oci.oci_blockstorage_volume:
+            state: '{{ oci_blockstorage_volume_delete_params.state }}'
+            volume_id: '{{ oci_blockstorage_volume_delete_params.volume_id }}'
+          register: oci_cleanup_assert_delete_is_idempotent_on_rerun_again_again
+
+        - name: Verify delete rerun is a no-op
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_assert_delete_is_idempotent_on_rerun_again_again.changed | bool
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
 
 - name: Delete leaked member volumes during cleanup
   ansible.oci.oci_blockstorage_volume:
     state: absent
     volume_id: '{{ item }}'
-  loop: >-
-    {{ [oci_volume_group_second_volume_create.resource.id] if oci_volume_group_second_volume_create.resource.id | default('')
-    | length > 0 else [] }}
+  loop: '{{ [oci_volume_group_second_volume_create.resource.id] if oci_volume_group_second_volume_create.resource.id
+    | default('''') | length > 0 else [] }}'
   when:
-    - oci_group_started_oci_volume_group | default(false)
     - item | default('') | length > 0
-  register: oci_group_cleanup_10
+  register: oci_cleanup_delete_leaked_member_volumes_during_cleanup
   retries: 3
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked member volumes during cleanup''] }}'
-  when: oci_group_cleanup_10 is failed
+- name: Verify oci_volume_backup deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Delete volume backup in check mode
+      ansible.oci.oci_volume_backup:
+        state: absent
+        volume_backup_id: '{{ oci_volume_backup_id }}'
+      check_mode: true
+      register: oci_cleanup_delete_volume_backup_in_check_mode
+
+    - name: Assert delete check mode reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_delete_volume_backup_in_check_mode.changed | bool
+
+    - name: Read volume backup after delete check mode
+      ansible.oci.oci_volume_backup_info:
+        volume_backup_id: '{{ oci_volume_backup_id }}'
+      register: oci_cleanup_read_volume_backup_after_delete_check_mode
+
+    - name: Assert volume backup still exists after delete check mode
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_read_volume_backup_after_delete_check_mode.volume_backups | length == 1
+
+    - name: Delete volume backup
+      ansible.oci.oci_volume_backup:
+        state: absent
+        volume_backup_id: '{{ oci_volume_backup_id }}'
+      register: oci_cleanup_delete_volume_backup
+
+    - name: Assert delete reported a change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_delete_volume_backup.changed | bool
+
+    - name: Read volume backup after delete
+      ansible.oci.oci_volume_backup_info:
+        volume_backup_id: '{{ oci_volume_backup_id }}'
+      register: oci_cleanup_read_volume_backup_after_delete
+
+    - name: Assert volume backup is terminated after delete
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_read_volume_backup_after_delete.volume_backups | length == 1
+          - oci_cleanup_read_volume_backup_after_delete.volume_backups[0].id == oci_volume_backup_id
+          - oci_cleanup_read_volume_backup_after_delete.volume_backups[0].lifecycle_state == "TERMINATED"
+
+    - name: List available volume backups by name after delete
+      ansible.oci.oci_volume_backup_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        name: '{{ oci_volume_backup_integration_updated_backup_name }}'
+        lifecycle_state: AVAILABLE
+      register: oci_cleanup_list_available_volume_backups_by_name_after_delete
+
+    - name: Assert no available volume backup remains after delete
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_list_available_volume_backups_by_name_after_delete.volume_backups | length == 0
+
+    - name: Assert delete is a no-op in check mode
+      ansible.oci.oci_volume_backup:
+        state: absent
+        volume_backup_id: '{{ oci_volume_backup_id }}'
+      check_mode: true
+      register: oci_cleanup_assert_delete_is_a_no_op_in_check_mode_again
+
+    - name: Verify delete check-mode rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_cleanup_assert_delete_is_a_no_op_in_check_mode_again.changed | bool
+
+    - name: Assert delete is idempotent on rerun
+      ansible.oci.oci_volume_backup:
+        state: absent
+        volume_backup_id: '{{ oci_volume_backup_id }}'
+      register: oci_cleanup_assert_delete_is_idempotent_on_rerun_again
+
+    - name: Verify delete rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not oci_cleanup_assert_delete_is_idempotent_on_rerun_again.changed | bool
+
+    - name: Clear volume backup id after successful delete
+      ansible.builtin.set_fact:
+        oci_volume_backup_id: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
 
 - name: Delete leaked volume backup during cleanup
   ansible.oci.oci_volume_backup:
     state: absent
     volume_backup_id: '{{ oci_volume_backup_id }}'
   when:
-    - oci_group_started_oci_volume_backup | default(false)
+    - oci_volume_backup_id is defined
     - oci_volume_backup_id | default('') | length > 0
-  register: oci_group_cleanup_12
+  register: oci_cleanup_delete_leaked_volume_backup_during_cleanup
   retries: 3
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked volume backup during cleanup''] }}'
-  when: oci_group_cleanup_12 is failed
 
 - name: Delete leaked restored block volume during cleanup
   ansible.oci.oci_blockstorage_volume:
     state: absent
     volume_id: '{{ oci_blockstorage_volume_restore_id }}'
   when:
-    - oci_group_started_oci_blockstorage_volume | default(false)
+    - oci_blockstorage_volume_restore_id is defined
     - oci_blockstorage_volume_restore_id | default('') | length > 0
-  register: oci_group_cleanup_14
+  register: oci_cleanup_delete_leaked_restored_block_volume_during_cleanup
   retries: 3
   ignore_errors: true
-
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked restored block volume during cleanup'']
-      }}'
-  when: oci_group_cleanup_14 is failed
 
 - name: Delete leaked block volume during cleanup
   ansible.oci.oci_blockstorage_volume:
     state: absent
     volume_id: '{{ oci_blockstorage_volume_id }}'
   when:
-    - oci_group_started_oci_blockstorage_volume | default(false)
+    - oci_blockstorage_volume_id is defined
     - oci_blockstorage_volume_id | default('') | length > 0
-  register: oci_group_cleanup_16
+  register: oci_cleanup_delete_leaked_block_volume_during_cleanup
   retries: 3
   ignore_errors: true
 
-- name: Record cleanup failure
-  ansible.builtin.set_fact:
-    oci_group_cleanup_failures: '{{ oci_group_cleanup_failures + [''Delete leaked block volume during cleanup''] }}'
-  when: oci_group_cleanup_16 is failed
-
-- name: Check all cleanup results
+- name: Verify resource cleanup
   ansible.builtin.assert:
     that:
-      - oci_group_cleanup_failures | length == 0
-    fail_msg: 'Cleanup failed for: {{ oci_group_cleanup_failures | join(", ") }}'
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_volume_group_backup_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_volume_group_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_member_volumes_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_volume_backup_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_restored_block_volume_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_block_volume_during_cleanup | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

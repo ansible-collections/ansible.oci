@@ -1,0 +1,8 @@
+destructive
+oci_loadbalancer_backend
+oci_loadbalancer_backend_info
+oci_loadbalancer_backend_set
+oci_loadbalancer_backend_set_info
+oci_loadbalancer_health_checker
+oci_loadbalancer_health_checker_info
+time=120m

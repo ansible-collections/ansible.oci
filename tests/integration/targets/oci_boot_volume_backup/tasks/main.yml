@@ -1,0 +1,61 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_instance_id: ''
+    oci_volume_attachment_id: ''
+    oci_boot_volume_id: ''
+    oci_boot_volume_backup_id: ''
+    oci_boot_volume_backup_duplicate_id: ''
+    oci_image_id: ''
+    oci_instance_vcn_create: {}
+    oci_instance_subnet_create: {}
+    oci_instance_create: {}
+    oci_volume_attachment_volume_id: ''
+    oci_tests_completed: false
+
+- name: Test oci_boot_volume_backup
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Run oci_volume_attachment tests
+      ansible.builtin.include_tasks: oci_volume_attachment.yml
+      vars:
+        oci_shared_instance: '{{ oci_instance_create }}'
+        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
+        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
+
+    - name: Run oci_boot_volume_backup tests
+      ansible.builtin.include_tasks: oci_boot_volume_backup.yml
+      vars:
+        oci_shared_instance: '{{ oci_instance_create }}'
+        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
+        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
+
+    - name: Run oci_boot_volume tests
+      ansible.builtin.include_tasks: oci_boot_volume.yml
+      vars:
+        oci_shared_instance: '{{ oci_instance_create }}'
+        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
+        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
+        oci_shared_boot_volume_backup: '{{ oci_boot_volume_backup_create }}'
+
+    - name: Run oci_image tests
+      ansible.builtin.include_tasks: oci_image.yml
+      vars:
+        oci_shared_instance: '{{ oci_instance_create }}'
+        oci_shared_vcn: '{{ oci_instance_vcn_create }}'
+        oci_shared_subnet: '{{ oci_instance_subnet_create }}'
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml

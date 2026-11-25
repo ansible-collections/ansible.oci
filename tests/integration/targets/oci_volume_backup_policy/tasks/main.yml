@@ -1,0 +1,29 @@
+---
+- name: Initialize resource identifiers
+  ansible.builtin.set_fact:
+    oci_blockstorage_volume_create: {}
+    oci_tests_completed: false
+
+- name: Test oci_volume_backup_policy
+  module_defaults:
+    group/ansible.oci.oci:
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
+  block:
+
+    - name: Create prerequisites
+      ansible.builtin.include_tasks: prerequisites.yml
+
+    - name: Run oci_volume_backup_policy tests
+      ansible.builtin.include_tasks: oci_volume_backup_policy.yml
+
+    - name: Run oci_volume_backup_policy_assignment tests
+      ansible.builtin.include_tasks: oci_volume_backup_policy_assignment.yml
+
+    - name: Mark tests as complete
+      ansible.builtin.set_fact:
+        oci_tests_completed: true
+  always:
+
+    - name: Clean up all test resources
+      ansible.builtin.include_tasks: cleanup.yml
