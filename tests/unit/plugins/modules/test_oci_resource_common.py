@@ -10,11 +10,29 @@ from .conftest import (
     FailJsonCalled,
     FakeModel,
     FakeResponse,
-    install_fake_oci,
+    install_fake_oci as shared_install_fake_oci,
     load_collection_module,
     make_module_instance,
     raising,
 )
+
+
+def install_fake_oci(monkeypatch):
+    """Provide SDK models used during instance request validation."""
+    return shared_install_fake_oci(
+        monkeypatch,
+        model_names=(
+            "LaunchInstanceDetails",
+            "LaunchInstanceShapeConfigDetails",
+            "InstanceSourceViaImageDetails",
+            "CreateVnicDetails",
+            "LaunchOptions",
+            "InstanceOptions",
+            "LaunchInstanceAvailabilityConfigDetails",
+            "LaunchInstanceAgentConfigDetails",
+            "UpdateInstanceDetails",
+        ),
+    )
 
 
 RESOURCE_CASES = (
