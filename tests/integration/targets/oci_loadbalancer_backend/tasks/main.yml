@@ -23,15 +23,15 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_before
 
     - name: Predict backend registration
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 1
         backup: false
@@ -49,7 +49,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_after_check
 
     - name: Assert check mode preserved OCI state
@@ -61,8 +61,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 1
         backup: false
@@ -79,14 +79,14 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_after
 
     - name: Assert resource configuration
       ansible.builtin.assert:
         that:
           - oci_lb_after.backends | length == 1
-          - oci_lb_after.backends[0].ip_address == '10.253.1.10'
+          - oci_lb_after.backends[0].ip_address == oci_lb_test_backend_ip
           - oci_lb_after.backends[0].port == 8080
           - oci_lb_after.backends[0].weight == 1
 
@@ -94,8 +94,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 1
         backup: false
@@ -107,8 +107,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 1
         backup: false
@@ -127,7 +127,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_final
 
     - name: Assert idempotency tests preserved remote state
@@ -144,21 +144,21 @@
     - name: Assert backend registration is listed
       ansible.builtin.assert:
         that:
-          - '''10.253.1.10:8080'' in (oci_lb_backends.backends | map(attribute=''name'') | list)'
+          - (oci_lb_test_backend_ip ~ ':8080') in (oci_lb_backends.backends | map(attribute='name') | list)
 
     - name: Read state before backend update
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_before
 
     - name: Predict backend update
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 2
         drain: true
@@ -174,7 +174,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_after_check
 
     - name: Assert check mode preserved OCI state
@@ -186,8 +186,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 2
         drain: true
@@ -202,7 +202,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_after
 
     - name: Assert resource configuration
@@ -218,8 +218,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 2
         drain: true
@@ -229,8 +229,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         weight: 2
         drain: true
@@ -247,7 +247,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_final
 
     - name: Assert idempotency tests preserved remote state
@@ -259,15 +259,15 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_before
 
     - name: Predict backend deregistration
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         state: absent
       check_mode: true
@@ -282,7 +282,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_after_check
 
     - name: Assert check mode preserved OCI state
@@ -294,8 +294,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         state: absent
       register: oci_lb_applied
@@ -309,7 +309,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_after
 
     - name: Assert resource was deleted
@@ -321,8 +321,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         state: absent
       register: oci_lb_repeat
@@ -331,8 +331,8 @@
       ansible.oci.oci_loadbalancer_backend:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
-        ip_address: 10.253.1.10
+        name: '{{ oci_lb_test_backend_ip }}:8080'
+        ip_address: '{{ oci_lb_test_backend_ip }}'
         port: 8080
         state: absent
       check_mode: true
@@ -348,7 +348,7 @@
       ansible.oci.oci_loadbalancer_backend_info:
         load_balancer_id: '{{ oci_lb_test_id }}'
         backend_set_name: '{{ oci_lb_test_backend_set }}'
-        name: 10.253.1.10:8080
+        name: '{{ oci_lb_test_backend_ip }}:8080'
       register: oci_lb_final
 
     - name: Assert idempotency tests preserved remote state
@@ -361,6 +361,8 @@
       config_profile_name: '{{ oci_integration_config_profile_name }}'
   vars:
     oci_lb_test_suffix: backend
+    # The load balancer uses 10.253.1.0/24. Keep the backend outside that subnet.
+    oci_lb_test_backend_ip: 10.253.2.10
 
   always:
     - name: Clean up test-owned resources
