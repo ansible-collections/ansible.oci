@@ -149,18 +149,36 @@ def test_main_wires_argument_spec_and_normalizes_inputs(monkeypatch):
     assert params["time_suppress_until"] == TIME_UNTIL
 
 
+@pytest.mark.parametrize("param_name", ["time_suppress_from", "time_suppress_until"])
 @pytest.mark.parametrize(
     "value",
-    ["2026-11-03T01:00:00", "2026-11-03", "tomorrow"],
+    ["2026-11-03T01:00:00", "2026-11-03T01:00:00.123", "2026-11-03", "tomorrow"],
 )
-def test_normalize_time_parameters_rejects_invalid_values(monkeypatch, value):
+def test_normalize_time_parameters_rejects_invalid_values(monkeypatch, param_name, value):
     module_obj = load_suppression_module(monkeypatch)
-    module = DummyModule({"time_suppress_from": value, "time_suppress_until": None})
+    module = DummyModule({param_name: value})
 
     with pytest.raises(FailJsonCalled) as exc_info:
         module_obj.normalize_time_parameters(module)
 
-    assert "time_suppress_from" in exc_info.value.payload["msg"]
+    assert param_name in exc_info.value.payload["msg"]
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("2026-11-03T01:00:00Z", TIME_FROM),
+        ("2026-11-03T03:00:00+02:00", TIME_FROM),
+        ("2026-11-02T20:00:00-05:00", TIME_FROM),
+        ("2026-11-03T01:00:00.123Z", TIME_FROM.replace(microsecond=123000)),
+        ("2026-11-03T03:00:00.123+02:00", TIME_FROM.replace(microsecond=123000)),
+        ("2026-11-02T20:00:00.123-05:00", TIME_FROM.replace(microsecond=123000)),
+    ],
+)
+def test_parse_rfc3339_accepts_time_zones(monkeypatch, value, expected):
+    module_obj = load_suppression_module(monkeypatch)
+
+    assert module_obj.parse_rfc3339(value) == expected
 
 
 def test_class_metadata(monkeypatch):

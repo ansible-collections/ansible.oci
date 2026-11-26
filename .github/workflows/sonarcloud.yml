@@ -1,89 +1,20 @@
-## SonarCloud analysis
-#
-# FLOW: Units completes → workflow_run triggers this workflow on the default
-# branch (so SONAR_TOKEN is available) → run unit tests with coverage → scan.
-#
-# Coverage XML is produced in this job so it does not need an artifact handoff.
-
 ---
 name: SonarCloud
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows:
       - Units
     types:
       - completed
 
 permissions:
-  contents: read
-  pull-requests: read
-  actions: read
+  contents: read # check out the analysed commit
+  actions: read # download artifacts from the triggering run
+  pull-requests: read # look up the pull request to decorate
 
 jobs:
   sonarcloud:
-    name: SonarCloud
-    runs-on: ubuntu-latest
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event != 'schedule'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
-          show-progress: false
-          allow-unsafe-pr-checkout: true
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-
-      - name: Install test and coverage dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install ansible-core pytest pytest-cov pytest-ansible-units
-          python3 -m pip install -r requirements.txt
-
-      - name: Get PR number and info
-        if: github.event.workflow_run.event == 'pull_request'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          PR_NUMBER=$(gh pr list --head "$HEAD_BRANCH" --repo "$REPO" --json number -q '.[0].number')
-          echo "PR_NUMBER=${PR_NUMBER}" >> "$GITHUB_ENV"
-          if [[ -n "${PR_NUMBER}" ]]; then
-            PR_DATA=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}")
-            echo "PR_BASE=$(echo "$PR_DATA" | jq -r '.base.ref')" >> "$GITHUB_ENV"
-            echo "PR_HEAD=$(echo "$PR_DATA" | jq -r '.head.ref')" >> "$GITHUB_ENV"
-          fi
-
-      - name: Prepare SonarCloud args
-        env:
-          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
-          EVENT_TYPE: ${{ github.event.workflow_run.event }}
-        run: |
-          SONAR_ARGS="-Dsonar.scm.revision=\"${COMMIT_SHA}\""
-          SONAR_ARGS="${SONAR_ARGS} -Dsonar.python.coverage.reportPaths=coverage.xml"
-          if [[ "${EVENT_TYPE}" == "pull_request" && -n "${PR_NUMBER:-}" ]]; then
-            SONAR_ARGS="${SONAR_ARGS} -Dsonar.pullrequest.key=${PR_NUMBER}"
-            SONAR_ARGS="${SONAR_ARGS} -Dsonar.pullrequest.branch=${PR_HEAD}"
-            SONAR_ARGS="${SONAR_ARGS} -Dsonar.pullrequest.base=${PR_BASE}"
-          fi
-          echo "SONAR_ARGS=${SONAR_ARGS}" >> "$GITHUB_ENV"
-
-      - name: Run unit tests with coverage
-        run: pytest tests/unit -v --cov-report xml --cov=./
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4
-        env:
-          SONAR_TOKEN: ${{ secrets.ANSIBLE_COLLECTIONS_ORG_SONAR_TOKEN_CICD_BOT }}
-        with:
-          args: ${{ env.SONAR_ARGS }}
+    uses: eco-ansible-content/collections-standards/.github/workflows/sonarcloud.yml@262daf453f9213ba9761dfa54624be8b9ed41555 # 0.0.2
+    secrets:
+      SONAR_TOKEN: ${{ secrets.ANSIBLE_COLLECTIONS_ORG_SONAR_TOKEN_CICD_BOT }}

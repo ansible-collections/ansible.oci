@@ -342,9 +342,11 @@ def parse_rfc3339(value):
     """
     for time_format in RFC3339_FORMATS:
         try:
-            return datetime.strptime(value, time_format)
+            parsed = datetime.strptime(value, time_format)
         except ValueError:
             continue
+        if parsed.utcoffset() is not None:
+            return parsed
     raise ValueError(f"{value} is not an RFC3339 timestamp with a time zone")
 
 

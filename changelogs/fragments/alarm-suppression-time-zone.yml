@@ -1,0 +1,2 @@
+bugfixes:
+  - oci_alarm_suppression - Reject suppression timestamps without a time zone on Python 3.15.

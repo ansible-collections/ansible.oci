@@ -1,0 +1,20 @@
+---
+name: Units
+
+on:
+  push:
+    branches:
+      - main
+      - stable-*
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  units:
+    uses: eco-ansible-content/collections-standards/.github/workflows/units.yml@262daf453f9213ba9761dfa54624be8b9ed41555 # 0.0.2

@@ -1,0 +1,25 @@
+---
+name: Changelog
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - labeled
+      - unlabeled
+      - synchronize
+    branches:
+      - main
+      - stable-*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    uses: eco-ansible-content/collections-standards/.github/workflows/changelog.yml@262daf453f9213ba9761dfa54624be8b9ed41555 # 0.0.2

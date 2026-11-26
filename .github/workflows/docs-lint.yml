@@ -1,0 +1,22 @@
+---
+name: Docs lint
+
+on:
+  push:
+    branches:
+      - main
+      - stable-*
+  pull_request:
+  schedule:
+    - cron: "0 6 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs-lint:
+    uses: eco-ansible-content/collections-standards/.github/workflows/docs-lint.yml@262daf453f9213ba9761dfa54624be8b9ed41555 # 0.0.2
