@@ -3,17 +3,6 @@
   ansible.builtin.set_fact:
     oci_cleanup_checks_failed: false
 
-- name: Delete leaked instance during cleanup
-  ansible.oci.oci_instance:
-    state: absent
-    instance_id: '{{ oci_instance_id }}'
-  when:
-    - oci_instance_id is defined
-    - oci_instance_id | default('') | length > 0
-  register: oci_cleanup_delete_leaked_instance_during_cleanup
-  retries: 3
-  ignore_errors: true
-
 - name: Verify oci_instance_capacity_reservation deletion
   when: oci_tests_completed | bool
   block:
@@ -232,6 +221,17 @@
     - name: Record a deletion test failure
       ansible.builtin.set_fact:
         oci_cleanup_checks_failed: true
+
+- name: Delete leaked instance during cleanup
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_id }}'
+  when:
+    - oci_instance_id is defined
+    - oci_instance_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_instance_during_cleanup
+  retries: 3
+  ignore_errors: true
 
 - name: Delete leaked capacity reservation during cleanup
   ansible.oci.oci_instance_capacity_reservation:
