@@ -59,7 +59,7 @@
   block:
 
     - name: Check CPE deletion
-      ansible.oci.oci_network_cpe:
+      ansible.oci.oci_network_cpe: &oci_ipsec_cpe_delete
         state: absent
         cpe_id: '{{ oci_ipsec_cpe_id }}'
       check_mode: true
@@ -80,8 +80,7 @@
 
     - name: Delete CPE
       ansible.oci.oci_network_cpe:
-        state: absent
-        cpe_id: '{{ oci_ipsec_cpe_id }}'
+        <<: *oci_ipsec_cpe_delete
       register: oci_cleanup_delete_cpe
 
     - name: Assert CPE deletion changed the resource
@@ -98,8 +97,7 @@
 
     - name: Verify CPE deletion is idempotent
       ansible.oci.oci_network_cpe:
-        state: absent
-        cpe_id: '{{ oci_ipsec_cpe_id }}'
+        <<: *oci_ipsec_cpe_delete
       register: oci_cleanup_verify_cpe_deletion_is_idempotent
 
     - name: Assert CPE delete rerun is unchanged
@@ -108,8 +106,7 @@
 
     - name: Check repeated CPE deletion
       ansible.oci.oci_network_cpe:
-        state: absent
-        cpe_id: '{{ oci_ipsec_cpe_id }}'
+        <<: *oci_ipsec_cpe_delete
       check_mode: true
       register: oci_cleanup_check_repeated_cpe_deletion
 

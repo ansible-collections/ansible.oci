@@ -59,7 +59,7 @@
           - '''is not a clone'' in oci_adb_clone_not_a_clone.msg'
 
     - name: Create metadata clone in check mode
-      ansible.oci.oci_autonomous_database_clone:
+      ansible.oci.oci_autonomous_database_clone: &oci_adb_clone_metadata_create_options
         state: present
         compartment_id: '{{ oci_integration_compartment_id }}'
         source_id: '{{ oci_adb_clone_source_id }}'
@@ -94,18 +94,7 @@
 
     - name: Create metadata clone
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_metadata_name }}'
-        db_name: '{{ oci_adb_clone_integration_metadata_db_name }}'
-        admin_password: '{{ oci_adb_clone_integration_admin_password }}'
-        clone_type: metadata
-        compute_model: '{{ oci_adb_clone_integration_compute_model }}'
-        compute_count: '{{ oci_adb_clone_integration_compute_count }}'
-        data_storage_size_in_tbs: '{{ oci_adb_clone_integration_data_storage_size_in_tbs }}'
-        freeform_tags: '{{ oci_adb_clone_integration_create_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_metadata_create_options
       register: oci_adb_clone_metadata_create
 
     - name: Capture metadata clone id
@@ -124,34 +113,12 @@
 
     - name: Rerun metadata clone create
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_metadata_name }}'
-        db_name: '{{ oci_adb_clone_integration_metadata_db_name }}'
-        admin_password: '{{ oci_adb_clone_integration_admin_password }}'
-        clone_type: metadata
-        compute_model: '{{ oci_adb_clone_integration_compute_model }}'
-        compute_count: '{{ oci_adb_clone_integration_compute_count }}'
-        data_storage_size_in_tbs: '{{ oci_adb_clone_integration_data_storage_size_in_tbs }}'
-        freeform_tags: '{{ oci_adb_clone_integration_create_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_metadata_create_options
       register: oci_adb_clone_metadata_create_rerun
 
     - name: Rerun metadata clone create in check mode
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_metadata_name }}'
-        db_name: '{{ oci_adb_clone_integration_metadata_db_name }}'
-        admin_password: '{{ oci_adb_clone_integration_admin_password }}'
-        clone_type: metadata
-        compute_model: '{{ oci_adb_clone_integration_compute_model }}'
-        compute_count: '{{ oci_adb_clone_integration_compute_count }}'
-        data_storage_size_in_tbs: '{{ oci_adb_clone_integration_data_storage_size_in_tbs }}'
-        freeform_tags: '{{ oci_adb_clone_integration_create_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_metadata_create_options
       check_mode: true
       register: oci_adb_clone_metadata_create_rerun_check
 
@@ -177,7 +144,7 @@
           - oci_adb_clone_info_metadata.autonomous_databases[0].source_id == oci_adb_clone_source_id
 
     - name: Rename and retag metadata clone in check mode
-      ansible.oci.oci_autonomous_database_clone:
+      ansible.oci.oci_autonomous_database_clone: &oci_adb_clone_metadata_update_options
         state: present
         autonomous_database_id: '{{ oci_adb_clone_metadata_id }}'
         source_id: '{{ oci_adb_clone_source_id }}'
@@ -207,12 +174,7 @@
 
     - name: Rename and retag metadata clone
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        autonomous_database_id: '{{ oci_adb_clone_metadata_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_metadata_renamed }}'
-        freeform_tags: '{{ oci_adb_clone_integration_update_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_metadata_update_options
       register: oci_adb_clone_metadata_update
 
     - name: Assert metadata clone update reported a change
@@ -224,22 +186,12 @@
 
     - name: Rerun metadata clone update
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        autonomous_database_id: '{{ oci_adb_clone_metadata_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_metadata_renamed }}'
-        freeform_tags: '{{ oci_adb_clone_integration_update_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_metadata_update_options
       register: oci_adb_clone_metadata_update_rerun
 
     - name: Rerun metadata clone update in check mode
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        autonomous_database_id: '{{ oci_adb_clone_metadata_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_metadata_renamed }}'
-        freeform_tags: '{{ oci_adb_clone_integration_update_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_metadata_update_options
       check_mode: true
       register: oci_adb_clone_metadata_update_rerun_check
 
@@ -251,7 +203,7 @@
           - not oci_adb_clone_metadata_update_rerun_check.changed | bool
 
     - name: Create refreshable clone in check mode
-      ansible.oci.oci_autonomous_database_clone:
+      ansible.oci.oci_autonomous_database_clone: &oci_adb_clone_refreshable_create_options
         state: present
         compartment_id: '{{ oci_integration_compartment_id }}'
         source_id: '{{ oci_adb_clone_source_id }}'
@@ -287,19 +239,7 @@
 
     - name: Create refreshable clone
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_refreshable_name }}'
-        db_name: '{{ oci_adb_clone_integration_refreshable_db_name }}'
-        refreshable: true
-        refreshable_mode: manual
-        open_mode: read_only
-        compute_model: '{{ oci_adb_clone_integration_compute_model }}'
-        compute_count: '{{ oci_adb_clone_integration_compute_count }}'
-        data_storage_size_in_tbs: '{{ oci_adb_clone_integration_data_storage_size_in_tbs }}'
-        freeform_tags: '{{ oci_adb_clone_integration_create_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_refreshable_create_options
       register: oci_adb_clone_refreshable_create
 
     - name: Capture refreshable clone id
@@ -318,36 +258,12 @@
 
     - name: Rerun refreshable clone create
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_refreshable_name }}'
-        db_name: '{{ oci_adb_clone_integration_refreshable_db_name }}'
-        refreshable: true
-        refreshable_mode: manual
-        open_mode: read_only
-        compute_model: '{{ oci_adb_clone_integration_compute_model }}'
-        compute_count: '{{ oci_adb_clone_integration_compute_count }}'
-        data_storage_size_in_tbs: '{{ oci_adb_clone_integration_data_storage_size_in_tbs }}'
-        freeform_tags: '{{ oci_adb_clone_integration_create_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_refreshable_create_options
       register: oci_adb_clone_refreshable_create_rerun
 
     - name: Rerun refreshable clone create in check mode
       ansible.oci.oci_autonomous_database_clone:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        source_id: '{{ oci_adb_clone_source_id }}'
-        name: '{{ oci_adb_clone_integration_refreshable_name }}'
-        db_name: '{{ oci_adb_clone_integration_refreshable_db_name }}'
-        refreshable: true
-        refreshable_mode: manual
-        open_mode: read_only
-        compute_model: '{{ oci_adb_clone_integration_compute_model }}'
-        compute_count: '{{ oci_adb_clone_integration_compute_count }}'
-        data_storage_size_in_tbs: '{{ oci_adb_clone_integration_data_storage_size_in_tbs }}'
-        freeform_tags: '{{ oci_adb_clone_integration_create_tags }}'
-        wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
+        <<: *oci_adb_clone_refreshable_create_options
       check_mode: true
       register: oci_adb_clone_refreshable_create_rerun_check
 

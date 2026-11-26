@@ -38,7 +38,7 @@
           - oci_identity_group_domain_url | length > 0
 
     - name: Create group in check mode
-      ansible.oci.oci_identity_group:
+      ansible.oci.oci_identity_group: &group_create
         domain_id: '{{ oci_identity_group_domain_id }}'
         name: '{{ oci_identity_group_integration_name }}'
         freeform_tags:
@@ -55,10 +55,7 @@
 
     - name: Create group
       ansible.oci.oci_identity_group:
-        domain_id: '{{ oci_identity_group_domain_id }}'
-        name: '{{ oci_identity_group_integration_name }}'
-        freeform_tags:
-          phase: create
+        <<: *group_create
       register: group_create_result
 
     - name: Track group for cleanup
@@ -85,10 +82,7 @@
 
     - name: Verify create is idempotent by name
       ansible.oci.oci_identity_group:
-        domain_id: '{{ oci_identity_group_domain_id }}'
-        name: '{{ oci_identity_group_integration_name }}'
-        freeform_tags:
-          phase: create
+        <<: *group_create
       register: group_create_rerun
       failed_when: group_create_rerun.changed
 
@@ -107,7 +101,7 @@
           - group_by_id.groups[0].name == oci_identity_group_integration_name
 
     - name: Update group in check mode
-      ansible.oci.oci_identity_group:
+      ansible.oci.oci_identity_group: &group_updated
         domain_id: '{{ oci_identity_group_domain_id }}'
         group_id: '{{ group_create_result.resource.id }}'
         name: '{{ oci_identity_group_integration_name }}-updated'
@@ -128,11 +122,7 @@
 
     - name: Update group
       ansible.oci.oci_identity_group:
-        domain_id: '{{ oci_identity_group_domain_id }}'
-        group_id: '{{ group_create_result.resource.id }}'
-        name: '{{ oci_identity_group_integration_name }}-updated'
-        freeform_tags:
-          phase: update
+        <<: *group_updated
       register: group_update
 
     - name: Verify update
@@ -156,11 +146,7 @@
 
     - name: Rerun updated group configuration
       ansible.oci.oci_identity_group:
-        domain_id: '{{ oci_identity_group_domain_id }}'
-        group_id: '{{ group_create_result.resource.id }}'
-        name: '{{ oci_identity_group_integration_name }}-updated'
-        freeform_tags:
-          phase: update
+        <<: *group_updated
       register: group_update_rerun
 
     - name: Assert update is idempotent on rerun

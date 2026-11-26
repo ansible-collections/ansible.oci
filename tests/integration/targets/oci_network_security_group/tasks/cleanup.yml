@@ -26,7 +26,7 @@
       block:
 
         - name: Delete Network Security Group in check mode
-          ansible.oci.oci_network_security_group:
+          ansible.oci.oci_network_security_group: &oci_network_security_group_delete_options
             state: absent
             network_security_group_id: '{{ oci_network_security_group_id }}'
           check_mode: true
@@ -50,8 +50,7 @@
 
         - name: Delete Network Security Group
           ansible.oci.oci_network_security_group:
-            state: absent
-            network_security_group_id: '{{ oci_network_security_group_id }}'
+            <<: *oci_network_security_group_delete_options
           register: oci_cleanup_delete_network_security_group
 
         - name: Assert delete reported a change
@@ -61,8 +60,7 @@
 
         - name: Delete Network Security Group again
           ansible.oci.oci_network_security_group:
-            state: absent
-            network_security_group_id: '{{ oci_network_security_group_id }}'
+            <<: *oci_network_security_group_delete_options
           register: oci_cleanup_delete_network_security_group_again
 
         - name: Assert repeated delete is idempotent

@@ -28,7 +28,7 @@
       - oci_dns_resolver_rule_remove.changed | bool
 
 - name: Update VCN resolver display name and tags in check mode
-  ansible.oci.oci_dns_resolver:
+  ansible.oci.oci_dns_resolver: &oci_dns_resolver_update
     resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
     name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
     freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
@@ -54,10 +54,7 @@
 
 - name: Update VCN resolver display name and tags
   ansible.oci.oci_dns_resolver:
-    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
-    name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
-    freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
-    forward_rules: []
+    <<: *oci_dns_resolver_update
   register: oci_dns_resolver_update
 
 - name: Assert resolver update changed cloud state
@@ -78,10 +75,7 @@
 
 - name: Repeat resolver update
   ansible.oci.oci_dns_resolver:
-    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
-    name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
-    freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
-    forward_rules: []
+    <<: *oci_dns_resolver_update
   register: oci_dns_resolver_update_repeat
 
 - name: Assert repeated resolver update is unchanged
@@ -91,10 +85,7 @@
 
 - name: Check repeated resolver update
   ansible.oci.oci_dns_resolver:
-    resolver_id: '{{ oci_network_vcn_integration_resolver_id }}'
-    name: '{{ oci_network_vcn_integration_vcn_name }}-resolver-updated'
-    freeform_tags: '{{ oci_network_vcn_integration_update_tags }}'
-    forward_rules: []
+    <<: *oci_dns_resolver_update
   check_mode: true
   register: oci_dns_resolver_update_check_repeat
 

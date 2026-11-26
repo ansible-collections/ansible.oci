@@ -67,7 +67,7 @@
           freeform_tags: '{{ oci_volume_group_backup_integration_create_tags }}'
 
     - name: Create volume group backup in check mode
-      ansible.oci.oci_volume_group_backup:
+      ansible.oci.oci_volume_group_backup: &oci_volume_group_backup_create_module_options
         state: '{{ oci_volume_group_backup_create_params.state }}'
         compartment_id: '{{ oci_volume_group_backup_create_params.compartment_id }}'
         name: '{{ oci_volume_group_backup_create_params.name }}'
@@ -97,12 +97,7 @@
 
     - name: Create volume group backup
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_create_params.state }}'
-        compartment_id: '{{ oci_volume_group_backup_create_params.compartment_id }}'
-        name: '{{ oci_volume_group_backup_create_params.name }}'
-        volume_group_id: '{{ oci_volume_group_backup_create_params.volume_group_id }}'
-        type: '{{ oci_volume_group_backup_create_params.type }}'
-        freeform_tags: '{{ oci_volume_group_backup_create_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_create_module_options
       register: oci_volume_group_backup_create
 
     - name: Capture volume group backup id and define update parameters
@@ -150,12 +145,7 @@
 
     - name: Assert created backup is a no-op in check mode with unique name
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_create_params.state }}'
-        compartment_id: '{{ oci_volume_group_backup_create_params.compartment_id }}'
-        name: '{{ oci_volume_group_backup_create_params.name }}'
-        volume_group_id: '{{ oci_volume_group_backup_create_params.volume_group_id }}'
-        type: '{{ oci_volume_group_backup_create_params.type }}'
-        freeform_tags: '{{ oci_volume_group_backup_create_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_create_module_options
       check_mode: true
       register: oci_volume_group_backup_create_check_rerun_by_name
 
@@ -166,12 +156,7 @@
 
     - name: Assert created backup is a no-op on rerun with unique name
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_create_params.state }}'
-        compartment_id: '{{ oci_volume_group_backup_create_params.compartment_id }}'
-        name: '{{ oci_volume_group_backup_create_params.name }}'
-        volume_group_id: '{{ oci_volume_group_backup_create_params.volume_group_id }}'
-        type: '{{ oci_volume_group_backup_create_params.type }}'
-        freeform_tags: '{{ oci_volume_group_backup_create_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_create_module_options
       register: oci_volume_group_backup_create_rerun_by_name
 
     - name: Verify backup rerun with unique name is a no-op
@@ -182,12 +167,7 @@
 
     - name: Assert created backup is a no-op in check mode with returned id
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_create_params.state }}'
-        compartment_id: '{{ oci_volume_group_backup_create_params.compartment_id }}'
-        name: '{{ oci_volume_group_backup_create_params.name }}'
-        volume_group_id: '{{ oci_volume_group_backup_create_params.volume_group_id }}'
-        type: '{{ oci_volume_group_backup_create_params.type }}'
-        freeform_tags: '{{ oci_volume_group_backup_create_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_create_module_options
         volume_group_backup_id: '{{ oci_volume_group_backup_id }}'
       check_mode: true
       register: oci_volume_group_backup_create_check_rerun
@@ -199,12 +179,7 @@
 
     - name: Assert created backup is a no-op on rerun with returned id
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_create_params.state }}'
-        compartment_id: '{{ oci_volume_group_backup_create_params.compartment_id }}'
-        name: '{{ oci_volume_group_backup_create_params.name }}'
-        volume_group_id: '{{ oci_volume_group_backup_create_params.volume_group_id }}'
-        type: '{{ oci_volume_group_backup_create_params.type }}'
-        freeform_tags: '{{ oci_volume_group_backup_create_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_create_module_options
         volume_group_backup_id: '{{ oci_volume_group_backup_id }}'
       register: oci_volume_group_backup_create_rerun
 
@@ -214,7 +189,7 @@
           - not oci_volume_group_backup_create_rerun.changed | bool
 
     - name: Update volume group backup in check mode
-      ansible.oci.oci_volume_group_backup:
+      ansible.oci.oci_volume_group_backup: &oci_volume_group_backup_update_module_options
         state: '{{ oci_volume_group_backup_update_params.state }}'
         volume_group_backup_id: '{{ oci_volume_group_backup_update_params.volume_group_backup_id }}'
         name: '{{ oci_volume_group_backup_update_params.name }}'
@@ -242,10 +217,7 @@
 
     - name: Update volume group backup
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_update_params.state }}'
-        volume_group_backup_id: '{{ oci_volume_group_backup_update_params.volume_group_backup_id }}'
-        name: '{{ oci_volume_group_backup_update_params.name }}'
-        freeform_tags: '{{ oci_volume_group_backup_update_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_update_module_options
       register: oci_volume_group_backup_update
 
     - name: Assert update reported a change
@@ -269,10 +241,7 @@
 
     - name: Assert update is a no-op in check mode
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_update_params.state }}'
-        volume_group_backup_id: '{{ oci_volume_group_backup_update_params.volume_group_backup_id }}'
-        name: '{{ oci_volume_group_backup_update_params.name }}'
-        freeform_tags: '{{ oci_volume_group_backup_update_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_update_module_options
       check_mode: true
       register: oci_volume_group_backup_update_check_rerun
 
@@ -283,10 +252,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_volume_group_backup:
-        state: '{{ oci_volume_group_backup_update_params.state }}'
-        volume_group_backup_id: '{{ oci_volume_group_backup_update_params.volume_group_backup_id }}'
-        name: '{{ oci_volume_group_backup_update_params.name }}'
-        freeform_tags: '{{ oci_volume_group_backup_update_params.freeform_tags }}'
+        <<: *oci_volume_group_backup_update_module_options
       register: oci_volume_group_backup_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -295,7 +261,7 @@
           - not oci_volume_group_backup_update_rerun.changed | bool
 
     - name: Delete volume group backup in check mode
-      ansible.oci.oci_volume_group_backup:
+      ansible.oci.oci_volume_group_backup: &oci_volume_group_backup_delete_module_options
         state: absent
         volume_group_backup_id: '{{ oci_volume_group_backup_id }}'
       check_mode: true
@@ -318,8 +284,7 @@
 
     - name: Delete volume group backup
       ansible.oci.oci_volume_group_backup:
-        state: absent
-        volume_group_backup_id: '{{ oci_volume_group_backup_id }}'
+        <<: *oci_volume_group_backup_delete_module_options
       register: oci_volume_group_backup_delete
 
     - name: Assert delete reported a change
@@ -353,8 +318,7 @@
 
     - name: Assert delete is a no-op in check mode
       ansible.oci.oci_volume_group_backup:
-        state: absent
-        volume_group_backup_id: '{{ oci_volume_group_backup_id }}'
+        <<: *oci_volume_group_backup_delete_module_options
       check_mode: true
       register: oci_volume_group_backup_delete_check_rerun
 
@@ -365,8 +329,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_volume_group_backup:
-        state: absent
-        volume_group_backup_id: '{{ oci_volume_group_backup_id }}'
+        <<: *oci_volume_group_backup_delete_module_options
       register: oci_volume_group_backup_delete_rerun
 
     - name: Verify delete rerun is a no-op

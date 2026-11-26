@@ -30,7 +30,7 @@
           freeform_tags: '{{ oci_network_public_ip_integration_create_tags }}'
 
     - name: Create reserved public IP in check mode
-      ansible.oci.oci_network_public_ip:
+      ansible.oci.oci_network_public_ip: &public_ip_create_options
         state: '{{ oci_network_public_ip_create_params.state }}'
         compartment_id: '{{ oci_network_public_ip_create_params.compartment_id }}'
         name: '{{ oci_network_public_ip_create_params.name }}'
@@ -46,11 +46,7 @@
 
     - name: Create reserved public IP
       ansible.oci.oci_network_public_ip:
-        state: '{{ oci_network_public_ip_create_params.state }}'
-        compartment_id: '{{ oci_network_public_ip_create_params.compartment_id }}'
-        name: '{{ oci_network_public_ip_create_params.name }}'
-        lifetime: '{{ oci_network_public_ip_create_params.lifetime }}'
-        freeform_tags: '{{ oci_network_public_ip_create_params.freeform_tags }}'
+        <<: *public_ip_create_options
       register: oci_network_public_ip_create
 
     - name: Capture public IP ID and update parameters
@@ -75,11 +71,7 @@
 
     - name: Reconcile reserved public IP by name
       ansible.oci.oci_network_public_ip:
-        state: '{{ oci_network_public_ip_create_params.state }}'
-        compartment_id: '{{ oci_network_public_ip_create_params.compartment_id }}'
-        name: '{{ oci_network_public_ip_create_params.name }}'
-        lifetime: '{{ oci_network_public_ip_create_params.lifetime }}'
-        freeform_tags: '{{ oci_network_public_ip_create_params.freeform_tags }}'
+        <<: *public_ip_create_options
       register: oci_network_public_ip_create_rerun_by_name
 
     - name: Assert name-based create reconciliation is idempotent
@@ -90,11 +82,7 @@
 
     - name: Reconcile reserved public IP by ID
       ansible.oci.oci_network_public_ip:
-        state: '{{ oci_network_public_ip_create_params.state }}'
-        compartment_id: '{{ oci_network_public_ip_create_params.compartment_id }}'
-        name: '{{ oci_network_public_ip_create_params.name }}'
-        lifetime: '{{ oci_network_public_ip_create_params.lifetime }}'
-        freeform_tags: '{{ oci_network_public_ip_create_params.freeform_tags }}'
+        <<: *public_ip_create_options
         public_ip_id: '{{ oci_network_public_ip_id }}'
       register: oci_network_public_ip_create_rerun_by_id
 
@@ -104,7 +92,7 @@
           - not oci_network_public_ip_create_rerun_by_id.changed | bool
 
     - name: Update reserved public IP in check mode
-      ansible.oci.oci_network_public_ip:
+      ansible.oci.oci_network_public_ip: &public_ip_update_options
         state: '{{ oci_network_public_ip_update_params.state }}'
         public_ip_id: '{{ oci_network_public_ip_update_params.public_ip_id }}'
         name: '{{ oci_network_public_ip_update_params.name }}'
@@ -119,11 +107,7 @@
 
     - name: Verify update check mode did not mutate the public IP
       ansible.oci.oci_network_public_ip:
-        state: '{{ oci_network_public_ip_create_params.state }}'
-        compartment_id: '{{ oci_network_public_ip_create_params.compartment_id }}'
-        name: '{{ oci_network_public_ip_create_params.name }}'
-        lifetime: '{{ oci_network_public_ip_create_params.lifetime }}'
-        freeform_tags: '{{ oci_network_public_ip_create_params.freeform_tags }}'
+        <<: *public_ip_create_options
         public_ip_id: '{{ oci_network_public_ip_id }}'
       register: oci_network_public_ip_update_check_probe
 
@@ -134,10 +118,7 @@
 
     - name: Update reserved public IP
       ansible.oci.oci_network_public_ip:
-        state: '{{ oci_network_public_ip_update_params.state }}'
-        public_ip_id: '{{ oci_network_public_ip_update_params.public_ip_id }}'
-        name: '{{ oci_network_public_ip_update_params.name }}'
-        freeform_tags: '{{ oci_network_public_ip_update_params.freeform_tags }}'
+        <<: *public_ip_update_options
       register: oci_network_public_ip_update
 
     - name: Assert update returned the expected public IP
@@ -151,10 +132,7 @@
 
     - name: Reapply public IP update
       ansible.oci.oci_network_public_ip:
-        state: '{{ oci_network_public_ip_update_params.state }}'
-        public_ip_id: '{{ oci_network_public_ip_update_params.public_ip_id }}'
-        name: '{{ oci_network_public_ip_update_params.name }}'
-        freeform_tags: '{{ oci_network_public_ip_update_params.freeform_tags }}'
+        <<: *public_ip_update_options
       register: oci_network_public_ip_update_rerun
 
     - name: Assert update is idempotent
@@ -163,7 +141,7 @@
           - not oci_network_public_ip_update_rerun.changed | bool
 
     - name: Delete public IP in check mode
-      ansible.oci.oci_network_public_ip:
+      ansible.oci.oci_network_public_ip: &public_ip_delete_options
         state: absent
         public_ip_id: '{{ oci_network_public_ip_id }}'
       check_mode: true
@@ -176,10 +154,7 @@
 
     - name: Verify delete check mode did not remove the public IP
       ansible.oci.oci_network_public_ip:
-        state: '{{ oci_network_public_ip_update_params.state }}'
-        public_ip_id: '{{ oci_network_public_ip_update_params.public_ip_id }}'
-        name: '{{ oci_network_public_ip_update_params.name }}'
-        freeform_tags: '{{ oci_network_public_ip_update_params.freeform_tags }}'
+        <<: *public_ip_update_options
       register: oci_network_public_ip_delete_check_probe
 
     - name: Assert public IP remains after delete check mode
@@ -189,8 +164,7 @@
 
     - name: Delete public IP
       ansible.oci.oci_network_public_ip:
-        state: absent
-        public_ip_id: '{{ oci_network_public_ip_id }}'
+        <<: *public_ip_delete_options
       register: oci_network_public_ip_delete
 
     - name: Assert delete reported a change
@@ -200,8 +174,7 @@
 
     - name: Delete public IP again
       ansible.oci.oci_network_public_ip:
-        state: absent
-        public_ip_id: '{{ oci_network_public_ip_id }}'
+        <<: *public_ip_delete_options
       register: oci_network_public_ip_delete_rerun
 
     - name: Assert repeated delete is idempotent

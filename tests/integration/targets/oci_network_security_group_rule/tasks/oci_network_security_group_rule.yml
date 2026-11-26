@@ -54,7 +54,7 @@
           }}'
 
     - name: Add ingress rule from peer Network Security Group
-      ansible.oci.oci_network_security_group_rule:
+      ansible.oci.oci_network_security_group_rule: &peer_nsg_rule_create
         state: present
         network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
         direction: ingress
@@ -81,13 +81,7 @@
 
     - name: Reapply peer Network Security Group rule without its identifier
       ansible.oci.oci_network_security_group_rule:
-        state: present
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        direction: ingress
-        protocol: all
-        source: '{{ oci_network_security_group_rule_peer_nsg_id }}'
-        source_type: network_security_group
-        description: Allow traffic from peer Network Security Group
+        <<: *peer_nsg_rule_create
       register: oci_network_security_group_rule_peer_nsg_rule_rerun
 
     - name: Assert peer Network Security Group rule is idempotent
@@ -99,7 +93,7 @@
             oci_network_security_group_rule_peer_nsg_rule_id
 
     - name: Add ingress rule in check mode
-      ansible.oci.oci_network_security_group_rule:
+      ansible.oci.oci_network_security_group_rule: &ingress_rule_create
         state: present
         network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
         direction: ingress
@@ -119,15 +113,7 @@
 
     - name: Add ingress rule
       ansible.oci.oci_network_security_group_rule:
-        state: present
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        direction: ingress
-        protocol: '6'
-        source: 10.0.0.0/24
-        description: Allow SSH
-        tcp_options:
-          destination_port_min: 22
-          destination_port_max: 22
+        <<: *ingress_rule_create
       register: oci_network_security_group_rule_ingress_create
 
     - name: Capture ingress rule identifier
@@ -146,15 +132,7 @@
 
     - name: Reapply ingress rule without its identifier
       ansible.oci.oci_network_security_group_rule:
-        state: present
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        direction: ingress
-        protocol: '6'
-        source: 10.0.0.0/24
-        description: Allow SSH
-        tcp_options:
-          destination_port_min: 22
-          destination_port_max: 22
+        <<: *ingress_rule_create
       register: oci_network_security_group_rule_ingress_rerun
 
     - name: Assert content-based create is idempotent
@@ -164,7 +142,7 @@
           - oci_network_security_group_rule_ingress_rerun.resource.id == oci_network_security_group_rule_ingress_id
 
     - name: Update ingress rule in check mode
-      ansible.oci.oci_network_security_group_rule:
+      ansible.oci.oci_network_security_group_rule: &ingress_rule_update
         state: present
         network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
         security_rule_id: '{{ oci_network_security_group_rule_ingress_id }}'
@@ -182,13 +160,7 @@
 
     - name: Update ingress rule
       ansible.oci.oci_network_security_group_rule:
-        state: present
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        security_rule_id: '{{ oci_network_security_group_rule_ingress_id }}'
-        description: Allow HTTPS
-        tcp_options:
-          destination_port_min: 443
-          destination_port_max: 443
+        <<: *ingress_rule_update
       register: oci_network_security_group_rule_update
 
     - name: Assert partial update retained and changed expected fields
@@ -202,13 +174,7 @@
 
     - name: Reapply ingress rule update
       ansible.oci.oci_network_security_group_rule:
-        state: present
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        security_rule_id: '{{ oci_network_security_group_rule_ingress_id }}'
-        description: Allow HTTPS
-        tcp_options:
-          destination_port_min: 443
-          destination_port_max: 443
+        <<: *ingress_rule_update
       register: oci_network_security_group_rule_update_rerun
 
     - name: Assert ingress rule update is idempotent
@@ -217,7 +183,7 @@
           - not oci_network_security_group_rule_update_rerun.changed | bool
 
     - name: Add egress UDP rule
-      ansible.oci.oci_network_security_group_rule:
+      ansible.oci.oci_network_security_group_rule: &egress_rule_create
         state: present
         network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
         direction: egress
@@ -245,15 +211,7 @@
 
     - name: Reapply egress rule without its identifier
       ansible.oci.oci_network_security_group_rule:
-        state: present
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        direction: egress
-        protocol: '17'
-        destination: 0.0.0.0/0
-        description: Allow DNS
-        udp_options:
-          destination_port_min: 53
-          destination_port_max: 53
+        <<: *egress_rule_create
       register: oci_network_security_group_rule_egress_rerun
 
     - name: Assert egress create is idempotent
@@ -287,7 +245,7 @@
           - oci_network_security_group_rule_peer_nsg_rule_delete.changed | bool
 
     - name: Delete ingress rule in check mode
-      ansible.oci.oci_network_security_group_rule:
+      ansible.oci.oci_network_security_group_rule: &ingress_rule_delete
         state: absent
         network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
         security_rule_id: '{{ oci_network_security_group_rule_ingress_id }}'
@@ -301,9 +259,7 @@
 
     - name: Delete ingress rule
       ansible.oci.oci_network_security_group_rule:
-        state: absent
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        security_rule_id: '{{ oci_network_security_group_rule_ingress_id }}'
+        <<: *ingress_rule_delete
       register: oci_network_security_group_rule_delete
 
     - name: Assert ingress deletion reported a change
@@ -313,9 +269,7 @@
 
     - name: Delete ingress rule again
       ansible.oci.oci_network_security_group_rule:
-        state: absent
-        network_security_group_id: '{{ oci_network_security_group_rule_nsg_id }}'
-        security_rule_id: '{{ oci_network_security_group_rule_ingress_id }}'
+        <<: *ingress_rule_delete
       register: oci_network_security_group_rule_delete_rerun
 
     - name: Assert repeated delete is idempotent

@@ -1,6 +1,6 @@
 ---
 - name: Read the node pool before the test
-  ansible.oci.oci_oke_node_pool_info:
+  ansible.oci.oci_oke_node_pool_info: &oci_oke_probe_options
     compartment_id: '{{ oci_integration_compartment_id }}'
     cluster_id: '{{ oci_oke_np_cluster_id }}'
     name: '{{ oci_oke_lookup_name }}'
@@ -8,7 +8,7 @@
   register: oci_oke_before
 
 - name: Run the scenario in check mode
-  ansible.oci.oci_oke_node_pool:
+  ansible.oci.oci_oke_node_pool: &oci_oke_operation_options
     state: '{{ oci_oke_operation.state | default(''present'') }}'
     node_pool_id: '{{ oci_oke_operation.node_pool_id | default(omit) }}'
     compartment_id: '{{ oci_oke_operation.compartment_id | default(omit) }}'
@@ -25,10 +25,7 @@
 
 - name: Read the node pool after check mode
   ansible.oci.oci_oke_node_pool_info:
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    cluster_id: '{{ oci_oke_np_cluster_id }}'
-    name: '{{ oci_oke_lookup_name }}'
-    node_pool_id: '{{ oci_oke_operation.node_pool_id | default(omit) }}'
+    <<: *oci_oke_probe_options
   register: oci_oke_after_prediction
 
 - name: Check that check mode predicts a change without changing the node pool
@@ -39,17 +36,7 @@
 
 - name: Run the scenario
   ansible.oci.oci_oke_node_pool:
-    state: '{{ oci_oke_operation.state | default(''present'') }}'
-    node_pool_id: '{{ oci_oke_operation.node_pool_id | default(omit) }}'
-    compartment_id: '{{ oci_oke_operation.compartment_id | default(omit) }}'
-    cluster_id: '{{ oci_oke_operation.cluster_id | default(omit) }}'
-    name: '{{ oci_oke_operation.name | default(omit) }}'
-    node_shape: '{{ oci_oke_operation.node_shape | default(omit) }}'
-    node_shape_config: '{{ oci_oke_operation.node_shape_config | default(omit) }}'
-    node_source_details: '{{ oci_oke_operation.node_source_details | default(omit) }}'
-    node_config_details: '{{ oci_oke_operation.node_config_details | default(omit) }}'
-    freeform_tags: '{{ oci_oke_operation.freeform_tags | default(omit) }}'
-    wait: true
+    <<: *oci_oke_operation_options
   register: oci_oke_applied
 
 - name: Save the node pool ID
@@ -84,32 +71,12 @@
 
 - name: Run the scenario again
   ansible.oci.oci_oke_node_pool:
-    state: '{{ oci_oke_operation.state | default(''present'') }}'
-    node_pool_id: '{{ oci_oke_operation.node_pool_id | default(omit) }}'
-    compartment_id: '{{ oci_oke_operation.compartment_id | default(omit) }}'
-    cluster_id: '{{ oci_oke_operation.cluster_id | default(omit) }}'
-    name: '{{ oci_oke_operation.name | default(omit) }}'
-    node_shape: '{{ oci_oke_operation.node_shape | default(omit) }}'
-    node_shape_config: '{{ oci_oke_operation.node_shape_config | default(omit) }}'
-    node_source_details: '{{ oci_oke_operation.node_source_details | default(omit) }}'
-    node_config_details: '{{ oci_oke_operation.node_config_details | default(omit) }}'
-    freeform_tags: '{{ oci_oke_operation.freeform_tags | default(omit) }}'
-    wait: true
+    <<: *oci_oke_operation_options
   register: oci_oke_rerun
 
 - name: Run the scenario again in check mode
   ansible.oci.oci_oke_node_pool:
-    state: '{{ oci_oke_operation.state | default(''present'') }}'
-    node_pool_id: '{{ oci_oke_operation.node_pool_id | default(omit) }}'
-    compartment_id: '{{ oci_oke_operation.compartment_id | default(omit) }}'
-    cluster_id: '{{ oci_oke_operation.cluster_id | default(omit) }}'
-    name: '{{ oci_oke_operation.name | default(omit) }}'
-    node_shape: '{{ oci_oke_operation.node_shape | default(omit) }}'
-    node_shape_config: '{{ oci_oke_operation.node_shape_config | default(omit) }}'
-    node_source_details: '{{ oci_oke_operation.node_source_details | default(omit) }}'
-    node_config_details: '{{ oci_oke_operation.node_config_details | default(omit) }}'
-    freeform_tags: '{{ oci_oke_operation.freeform_tags | default(omit) }}'
-    wait: true
+    <<: *oci_oke_operation_options
   check_mode: true
   register: oci_oke_check_rerun
 

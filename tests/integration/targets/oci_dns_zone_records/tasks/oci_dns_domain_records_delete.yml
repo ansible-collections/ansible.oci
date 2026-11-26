@@ -1,6 +1,6 @@
 ---
 - name: Predict domain deletion
-  ansible.oci.oci_dns_domain_records:
+  ansible.oci.oci_dns_domain_records: &domain_absent
     state: absent
     zone_name_or_id: '{{ oci_dns_records_case.zone }}'
     scope: '{{ oci_dns_records_case.scope }}'
@@ -29,11 +29,7 @@
 
 - name: Delete domain records
   ansible.oci.oci_dns_domain_records:
-    state: absent
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
+    <<: *domain_absent
   register: oci_dns_domain_delete
 
 - name: Verify domain records are absent
@@ -52,20 +48,12 @@
 
 - name: Repeat domain deletion
   ansible.oci.oci_dns_domain_records:
-    state: absent
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
+    <<: *domain_absent
   register: oci_dns_domain_delete_repeat
 
 - name: Recheck domain deletion
   ansible.oci.oci_dns_domain_records:
-    state: absent
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
+    <<: *domain_absent
   check_mode: true
   register: oci_dns_domain_delete_check_repeat
 

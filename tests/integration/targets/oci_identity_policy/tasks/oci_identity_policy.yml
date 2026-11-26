@@ -18,13 +18,13 @@
   block:
 
     - name: Check policy creation
-      ansible.oci.oci_identity_policy:
+      ansible.oci.oci_identity_policy: &policy_create
         compartment_id: '{{ oci_integration_compartment_id }}'
         name: '{{ oci_identity_policy_integration_name }}'
         description: '{{ oci_identity_policy_integration_description }}'
         statements: '{{ oci_identity_policy_initial_statements }}'
         version_date: ''
-        freeform_tags: &id001
+        freeform_tags:
           phase: create
       check_mode: true
       register: policy_create_check
@@ -38,12 +38,7 @@
 
     - name: Create policy
       ansible.oci.oci_identity_policy:
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_identity_policy_integration_name }}'
-        description: '{{ oci_identity_policy_integration_description }}'
-        statements: '{{ oci_identity_policy_initial_statements }}'
-        version_date: ''
-        freeform_tags: *id001
+        <<: *policy_create
       register: policy_create
 
     - name: Capture policy id for cleanup
@@ -73,23 +68,13 @@
 
     - name: Verify policy creation is idempotent
       ansible.oci.oci_identity_policy:
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_identity_policy_integration_name }}'
-        description: '{{ oci_identity_policy_integration_description }}'
-        statements: '{{ oci_identity_policy_initial_statements }}'
-        version_date: ''
-        freeform_tags: *id001
+        <<: *policy_create
       register: policy_create_rerun
       failed_when: policy_create_rerun.changed or policy_create_rerun.resource.id != policy_create.resource.id
 
     - name: Verify policy creation is idempotent in check mode
       ansible.oci.oci_identity_policy:
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_identity_policy_integration_name }}'
-        description: '{{ oci_identity_policy_integration_description }}'
-        statements: '{{ oci_identity_policy_initial_statements }}'
-        version_date: ''
-        freeform_tags: *id001
+        <<: *policy_create
       check_mode: true
       register: policy_create_check_rerun
       failed_when: policy_create_check_rerun.changed or policy_create_check_rerun.resource.id != policy_create.resource.id
@@ -126,12 +111,12 @@
           - policies_active.policies | selectattr('id', 'equalto', policy_create.resource.id) | list | length == 1
 
     - name: Check policy update
-      ansible.oci.oci_identity_policy:
+      ansible.oci.oci_identity_policy: &policy_update
         policy_id: '{{ policy_create.resource.id }}'
         description: '{{ oci_identity_policy_integration_description }} updated'
         statements: '{{ oci_identity_policy_updated_statements }}'
         version_date: '2021-01-17'
-        freeform_tags: &id002
+        freeform_tags:
           phase: update
       check_mode: true
       register: policy_update_check
@@ -150,11 +135,7 @@
 
     - name: Update policy
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        description: '{{ oci_identity_policy_integration_description }} updated'
-        statements: '{{ oci_identity_policy_updated_statements }}'
-        version_date: '2021-01-17'
-        freeform_tags: *id002
+        <<: *policy_update
       register: policy_update
 
     - name: Verify updated policy values
@@ -179,27 +160,19 @@
 
     - name: Verify update is idempotent in normal mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        description: '{{ oci_identity_policy_integration_description }} updated'
-        statements: '{{ oci_identity_policy_updated_statements }}'
-        version_date: '2021-01-17'
-        freeform_tags: *id002
+        <<: *policy_update
       register: policy_update_rerun
       failed_when: policy_update_rerun.changed
 
     - name: Verify update is idempotent in check mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        description: '{{ oci_identity_policy_integration_description }} updated'
-        statements: '{{ oci_identity_policy_updated_statements }}'
-        version_date: '2021-01-17'
-        freeform_tags: *id002
+        <<: *policy_update
       check_mode: true
       register: policy_update_check_rerun
       failed_when: policy_update_check_rerun.changed
 
     - name: Check policy date-only update
-      ansible.oci.oci_identity_policy:
+      ansible.oci.oci_identity_policy: &policy_date_update
         policy_id: '{{ policy_create.resource.id }}'
         version_date: '2022-01-17'
       check_mode: true
@@ -219,8 +192,7 @@
 
     - name: Update policy date without changing statements
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        version_date: '2022-01-17'
+        <<: *policy_date_update
       register: policy_date_update
 
     - name: Verify date-only policy update
@@ -245,15 +217,13 @@
 
     - name: Verify date-only update is idempotent in normal mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        version_date: '2022-01-17'
+        <<: *policy_date_update
       register: policy_date_update_rerun
       failed_when: policy_date_update_rerun.changed or policy_date_update_rerun.resource.version_date[:10] != '2022-01-17'
 
     - name: Verify date-only update is idempotent in check mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        version_date: '2022-01-17'
+        <<: *policy_date_update
       check_mode: true
       register: policy_date_update_check_rerun
       failed_when: |-
@@ -261,7 +231,7 @@
         != '2022-01-17'
 
     - name: Check policy statement-only update
-      ansible.oci.oci_identity_policy:
+      ansible.oci.oci_identity_policy: &policy_statements_update
         policy_id: '{{ policy_create.resource.id }}'
         statements: '{{ oci_identity_policy_initial_statements }}'
       check_mode: true
@@ -280,8 +250,7 @@
 
     - name: Update policy statements and keep the pinned date
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        statements: '{{ oci_identity_policy_initial_statements }}'
+        <<: *policy_statements_update
       register: policy_statements_update
 
     - name: Verify statement-only policy update
@@ -306,8 +275,7 @@
 
     - name: Verify statement-only update is idempotent in normal mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        statements: '{{ oci_identity_policy_initial_statements }}'
+        <<: *policy_statements_update
       register: policy_statements_update_rerun
       failed_when: |-
         policy_statements_update_rerun.changed or policy_statements_update_rerun.resource.version_date[:10]
@@ -315,8 +283,7 @@
 
     - name: Verify statement-only update is idempotent in check mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        statements: '{{ oci_identity_policy_initial_statements }}'
+        <<: *policy_statements_update
       check_mode: true
       register: policy_statements_update_check_rerun
       failed_when: |-
@@ -324,7 +291,7 @@
         policy_statements_update_check_rerun.resource.version_date[:10] != '2022-01-17'
 
     - name: Check policy date clear
-      ansible.oci.oci_identity_policy:
+      ansible.oci.oci_identity_policy: &policy_clear_version
         policy_id: '{{ policy_create.resource.id }}'
         version_date: ''
       check_mode: true
@@ -344,8 +311,7 @@
 
     - name: Clear policy date
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        version_date: ''
+        <<: *policy_clear_version
       register: policy_clear_version
 
     - name: Verify cleared policy date and preserved statements
@@ -369,15 +335,13 @@
 
     - name: Verify date clear is idempotent in normal mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        version_date: ''
+        <<: *policy_clear_version
       register: policy_clear_version_rerun
       failed_when: policy_clear_version_rerun.changed or policy_clear_version_rerun.resource.id != policy_create.resource.id
 
     - name: Verify date clear is idempotent in check mode
       ansible.oci.oci_identity_policy:
-        policy_id: '{{ policy_create.resource.id }}'
-        version_date: ''
+        <<: *policy_clear_version
       check_mode: true
       register: policy_clear_version_check_rerun
       failed_when: |-

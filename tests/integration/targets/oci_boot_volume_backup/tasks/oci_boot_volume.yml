@@ -115,7 +115,7 @@
           - oci_boot_volume_backup_create.resource.lifecycle_state == "AVAILABLE"
 
     - name: Restore boot volume from backup in check mode
-      ansible.oci.oci_boot_volume:
+      ansible.oci.oci_boot_volume: &oci_boot_volume_create_module_options
         state: '{{ oci_boot_volume_create_params.state }}'
         compartment_id: '{{ oci_boot_volume_create_params.compartment_id }}'
         availability_domain: '{{ oci_boot_volume_create_params.availability_domain }}'
@@ -144,12 +144,7 @@
 
     - name: Restore boot volume from backup
       ansible.oci.oci_boot_volume:
-        state: '{{ oci_boot_volume_create_params.state }}'
-        compartment_id: '{{ oci_boot_volume_create_params.compartment_id }}'
-        availability_domain: '{{ oci_boot_volume_create_params.availability_domain }}'
-        name: '{{ oci_boot_volume_create_params.name }}'
-        source_details: '{{ oci_boot_volume_create_params.source_details }}'
-        freeform_tags: '{{ oci_boot_volume_create_params.freeform_tags }}'
+        <<: *oci_boot_volume_create_module_options
       register: oci_boot_volume_create
 
     - name: Capture restored boot volume id and define update parameters
@@ -204,12 +199,7 @@
 
     - name: Assert restored boot volume is a no-op on rerun with unique name
       ansible.oci.oci_boot_volume:
-        state: '{{ oci_boot_volume_create_params.state }}'
-        compartment_id: '{{ oci_boot_volume_create_params.compartment_id }}'
-        availability_domain: '{{ oci_boot_volume_create_params.availability_domain }}'
-        name: '{{ oci_boot_volume_create_params.name }}'
-        source_details: '{{ oci_boot_volume_create_params.source_details }}'
-        freeform_tags: '{{ oci_boot_volume_create_params.freeform_tags }}'
+        <<: *oci_boot_volume_create_module_options
       register: oci_boot_volume_create_rerun_by_name
 
     - name: Verify restore rerun with unique name is a no-op
@@ -219,7 +209,7 @@
           - oci_boot_volume_create_rerun_by_name.resource.id == oci_boot_volume_id
 
     - name: Update restored boot volume in check mode
-      ansible.oci.oci_boot_volume:
+      ansible.oci.oci_boot_volume: &oci_boot_volume_update_module_options
         state: '{{ oci_boot_volume_update_params.state }}'
         boot_volume_id: '{{ oci_boot_volume_update_params.boot_volume_id }}'
         name: '{{ oci_boot_volume_update_params.name }}'
@@ -245,10 +235,7 @@
 
     - name: Update restored boot volume
       ansible.oci.oci_boot_volume:
-        state: '{{ oci_boot_volume_update_params.state }}'
-        boot_volume_id: '{{ oci_boot_volume_update_params.boot_volume_id }}'
-        name: '{{ oci_boot_volume_update_params.name }}'
-        freeform_tags: '{{ oci_boot_volume_update_params.freeform_tags }}'
+        <<: *oci_boot_volume_update_module_options
       register: oci_boot_volume_update
 
     - name: Assert update reported a change
@@ -273,10 +260,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_boot_volume:
-        state: '{{ oci_boot_volume_update_params.state }}'
-        boot_volume_id: '{{ oci_boot_volume_update_params.boot_volume_id }}'
-        name: '{{ oci_boot_volume_update_params.name }}'
-        freeform_tags: '{{ oci_boot_volume_update_params.freeform_tags }}'
+        <<: *oci_boot_volume_update_module_options
       register: oci_boot_volume_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -285,7 +269,7 @@
           - not oci_boot_volume_update_rerun.changed | bool
 
     - name: Delete restored boot volume in check mode
-      ansible.oci.oci_boot_volume:
+      ansible.oci.oci_boot_volume: &oci_boot_volume_delete_module_options
         state: '{{ oci_boot_volume_delete_params.state }}'
         boot_volume_id: '{{ oci_boot_volume_delete_params.boot_volume_id }}'
       check_mode: true
@@ -308,8 +292,7 @@
 
     - name: Delete restored boot volume
       ansible.oci.oci_boot_volume:
-        state: '{{ oci_boot_volume_delete_params.state }}'
-        boot_volume_id: '{{ oci_boot_volume_delete_params.boot_volume_id }}'
+        <<: *oci_boot_volume_delete_module_options
       register: oci_boot_volume_delete
 
     - name: Assert delete reported a change
@@ -319,8 +302,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_boot_volume:
-        state: '{{ oci_boot_volume_delete_params.state }}'
-        boot_volume_id: '{{ oci_boot_volume_delete_params.boot_volume_id }}'
+        <<: *oci_boot_volume_delete_module_options
       register: oci_boot_volume_delete_rerun
 
     - name: Verify delete rerun is a no-op

@@ -15,7 +15,7 @@
       block:
 
         - name: Detach VNIC in check mode
-          ansible.oci.oci_vnic_attachment:
+          ansible.oci.oci_vnic_attachment: &oci_vnic_attachment_delete_options
             state: absent
             vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
           check_mode: true
@@ -38,8 +38,7 @@
 
         - name: Detach VNIC
           ansible.oci.oci_vnic_attachment:
-            state: absent
-            vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+            <<: *oci_vnic_attachment_delete_options
           register: oci_cleanup_detach_vnic
 
         - name: Assert detach reported a change
@@ -49,8 +48,7 @@
 
         - name: Detach VNIC again
           ansible.oci.oci_vnic_attachment:
-            state: absent
-            vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+            <<: *oci_vnic_attachment_delete_options
           register: oci_cleanup_detach_vnic_again
 
         - name: Assert detach rerun is idempotent

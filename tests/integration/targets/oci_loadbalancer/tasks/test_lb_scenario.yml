@@ -1,13 +1,13 @@
 ---
 - name: Read the load balancer before the test
-  ansible.oci.oci_loadbalancer_info:
+  ansible.oci.oci_loadbalancer_info: &oci_lb_probe_options
     compartment_id: '{{ oci_integration_compartment_id }}'
     name: '{{ oci_lb_lookup_name }}'
     load_balancer_id: '{{ oci_lb_operation.load_balancer_id | default(omit) }}'
   register: oci_lb_before
 
 - name: Run the scenario in check mode
-  ansible.oci.oci_loadbalancer:
+  ansible.oci.oci_loadbalancer: &oci_lb_operation_options
     state: '{{ oci_lb_operation.state | default(''present'') }}'
     load_balancer_id: '{{ oci_lb_operation.load_balancer_id | default(omit) }}'
     compartment_id: '{{ oci_lb_operation.compartment_id | default(omit) }}'
@@ -24,9 +24,7 @@
 
 - name: Read load balancer after check mode
   ansible.oci.oci_loadbalancer_info:
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_lb_lookup_name }}'
-    load_balancer_id: '{{ oci_lb_operation.load_balancer_id | default(omit) }}'
+    <<: *oci_lb_probe_options
   register: oci_lb_after_prediction
 
 - name: Check that check mode predicts a change without changing the load balancer
@@ -37,17 +35,7 @@
 
 - name: Run the scenario
   ansible.oci.oci_loadbalancer:
-    state: '{{ oci_lb_operation.state | default(''present'') }}'
-    load_balancer_id: '{{ oci_lb_operation.load_balancer_id | default(omit) }}'
-    compartment_id: '{{ oci_lb_operation.compartment_id | default(omit) }}'
-    name: '{{ oci_lb_operation.name | default(omit) }}'
-    subnet_ids: '{{ oci_lb_operation.subnet_ids | default(omit) }}'
-    is_private: '{{ oci_lb_operation.is_private | default(omit) }}'
-    shape_details: '{{ oci_lb_operation.shape_details | default(omit) }}'
-    reserved_ips: '{{ oci_lb_operation.reserved_ips | default(omit) }}'
-    ip_mode: '{{ oci_lb_operation.ip_mode | default(omit) }}'
-    freeform_tags: '{{ oci_lb_operation.freeform_tags | default(omit) }}'
-    wait: true
+    <<: *oci_lb_operation_options
   register: oci_lb_applied
 
 - name: Save the load balancer ID
@@ -103,32 +91,12 @@
 
 - name: Test scenario idempotency
   ansible.oci.oci_loadbalancer:
-    state: '{{ oci_lb_operation.state | default(''present'') }}'
-    load_balancer_id: '{{ oci_lb_operation.load_balancer_id | default(omit) }}'
-    compartment_id: '{{ oci_lb_operation.compartment_id | default(omit) }}'
-    name: '{{ oci_lb_operation.name | default(omit) }}'
-    subnet_ids: '{{ oci_lb_operation.subnet_ids | default(omit) }}'
-    is_private: '{{ oci_lb_operation.is_private | default(omit) }}'
-    shape_details: '{{ oci_lb_operation.shape_details | default(omit) }}'
-    reserved_ips: '{{ oci_lb_operation.reserved_ips | default(omit) }}'
-    ip_mode: '{{ oci_lb_operation.ip_mode | default(omit) }}'
-    freeform_tags: '{{ oci_lb_operation.freeform_tags | default(omit) }}'
-    wait: true
+    <<: *oci_lb_operation_options
   register: oci_lb_rerun
 
 - name: Test scenario idempotency in check mode
   ansible.oci.oci_loadbalancer:
-    state: '{{ oci_lb_operation.state | default(''present'') }}'
-    load_balancer_id: '{{ oci_lb_operation.load_balancer_id | default(omit) }}'
-    compartment_id: '{{ oci_lb_operation.compartment_id | default(omit) }}'
-    name: '{{ oci_lb_operation.name | default(omit) }}'
-    subnet_ids: '{{ oci_lb_operation.subnet_ids | default(omit) }}'
-    is_private: '{{ oci_lb_operation.is_private | default(omit) }}'
-    shape_details: '{{ oci_lb_operation.shape_details | default(omit) }}'
-    reserved_ips: '{{ oci_lb_operation.reserved_ips | default(omit) }}'
-    ip_mode: '{{ oci_lb_operation.ip_mode | default(omit) }}'
-    freeform_tags: '{{ oci_lb_operation.freeform_tags | default(omit) }}'
-    wait: true
+    <<: *oci_lb_operation_options
   check_mode: true
   register: oci_lb_check_rerun
 

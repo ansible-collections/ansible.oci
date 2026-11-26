@@ -225,7 +225,7 @@
       private_ip: '{{ oci_network_private_ip_integration_primary_vnic_ip_address }}'
 
 - name: Create instance in check mode
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_create_module_options
     state: '{{ oci_instance_create_params.state }}'
     compartment_id: '{{ oci_instance_create_params.compartment_id }}'
     availability_domain: '{{ oci_instance_create_params.availability_domain }}'
@@ -260,19 +260,7 @@
 
 - name: Create instance
   ansible.oci.oci_instance:
-    state: '{{ oci_instance_create_params.state }}'
-    compartment_id: '{{ oci_instance_create_params.compartment_id }}'
-    availability_domain: '{{ oci_instance_create_params.availability_domain }}'
-    name: '{{ oci_instance_create_params.name }}'
-    shape: '{{ oci_instance_create_params.shape }}'
-    shape_config: '{{ oci_instance_create_params.shape_config }}'
-    image_id: '{{ oci_instance_create_params.image_id }}'
-    subnet_id: '{{ oci_instance_create_params.subnet_id }}'
-    freeform_tags: '{{ oci_instance_create_params.freeform_tags }}'
-    instance_options: '{{ oci_instance_create_params.instance_options }}'
-    availability_config: '{{ oci_instance_create_params.availability_config }}'
-    agent_config: '{{ oci_instance_create_params.agent_config }}'
-    private_ip: '{{ oci_instance_create_params.private_ip }}'
+    <<: *oci_instance_create_module_options
   register: oci_instance_create
 
 - name: Capture instance id and define update/delete parameters
@@ -335,20 +323,8 @@
 
 - name: Assert created instance is a no-op on rerun with returned id
   ansible.oci.oci_instance:
-    state: '{{ oci_instance_create_params.state }}'
-    compartment_id: '{{ oci_instance_create_params.compartment_id }}'
-    availability_domain: '{{ oci_instance_create_params.availability_domain }}'
-    name: '{{ oci_instance_create_params.name }}'
-    shape: '{{ oci_instance_create_params.shape }}'
-    shape_config: '{{ oci_instance_create_params.shape_config }}'
-    image_id: '{{ oci_instance_create_params.image_id }}'
-    subnet_id: '{{ oci_instance_create_params.subnet_id }}'
-    freeform_tags: '{{ oci_instance_create_params.freeform_tags }}'
-    instance_options: '{{ oci_instance_create_params.instance_options }}'
-    availability_config: '{{ oci_instance_create_params.availability_config }}'
-    agent_config: '{{ oci_instance_create_params.agent_config }}'
+    <<: *oci_instance_create_module_options
     instance_id: '{{ oci_instance_id }}'
-    private_ip: '{{ oci_instance_create_params.private_ip }}'
   register: oci_instance_create_rerun
 
 - name: Verify rerun with returned id is a no-op
@@ -380,7 +356,7 @@
       - not oci_instance_stop_rerun.changed | bool
 
 - name: Update instance name, shape_config, and tags while stopped
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_update_module_options
     instance_id: '{{ oci_instance_id }}'
     name: '{{ oci_instance_integration_updated_instance_name }}'
     shape_config: '{{ oci_instance_integration_updated_shape_config }}'
@@ -425,7 +401,7 @@
       - oci_instance_info_after_update.instances[0].freeform_tags.phase == "update"
 
 - name: Update availability_config independently of the shape change
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_availability_config_module_options
     instance_id: '{{ oci_instance_id }}'
     availability_config:
       recovery_action: stop_instance
@@ -439,9 +415,7 @@
 
 - name: Assert availability_config update is idempotent on rerun
   ansible.oci.oci_instance:
-    instance_id: '{{ oci_instance_id }}'
-    availability_config:
-      recovery_action: stop_instance
+    <<: *oci_instance_availability_config_module_options
   register: oci_instance_update_availability_config_rerun
 
 - name: Verify availability_config update rerun is a no-op
@@ -451,10 +425,7 @@
 
 - name: Assert update is idempotent on rerun now that the resize is applied
   ansible.oci.oci_instance:
-    instance_id: '{{ oci_instance_id }}'
-    name: '{{ oci_instance_integration_updated_instance_name }}'
-    shape_config: '{{ oci_instance_integration_updated_shape_config }}'
-    freeform_tags: '{{ oci_instance_integration_update_tags }}'
+    <<: *oci_instance_update_module_options
   register: oci_instance_update_rerun
 
 - name: Verify update rerun is a no-op
@@ -540,7 +511,7 @@
       }}
 
 - name: Enable every plugin OCI reported on the instance
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_agent_config_enabled_module_options
     instance_id: '{{ oci_instance_id }}'
     agent_config:
       all_plugins_disabled: false
@@ -574,12 +545,7 @@
 
 - name: Assert enabling every plugin is idempotent on rerun
   ansible.oci.oci_instance:
-    instance_id: '{{ oci_instance_id }}'
-    agent_config:
-      all_plugins_disabled: false
-      management_disabled: false
-      monitoring_disabled: false
-      plugins_config: '{{ oci_instance_integration_full_plugins_config }}'
+    <<: *oci_instance_agent_config_enabled_module_options
   register: oci_instance_update_agent_config_enabled_rerun
 
 - name: Verify enabling every plugin rerun is a no-op
@@ -588,7 +554,7 @@
       - not oci_instance_update_agent_config_enabled_rerun.changed | bool
 
 - name: Disable every plugin using the master switch
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_agent_config_all_disabled_module_options
     instance_id: '{{ oci_instance_id }}'
     agent_config:
       all_plugins_disabled: true
@@ -602,9 +568,7 @@
 
 - name: Assert the master switch is idempotent on rerun
   ansible.oci.oci_instance:
-    instance_id: '{{ oci_instance_id }}'
-    agent_config:
-      all_plugins_disabled: true
+    <<: *oci_instance_agent_config_all_disabled_module_options
   register: oci_instance_update_agent_config_all_disabled_rerun
 
 - name: Verify the master switch rerun is a no-op
@@ -613,7 +577,7 @@
       - not oci_instance_update_agent_config_all_disabled_rerun.changed | bool
 
 - name: Turn the master switch back off
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_agent_config_all_enabled_again_module_options
     instance_id: '{{ oci_instance_id }}'
     agent_config:
       all_plugins_disabled: false
@@ -628,9 +592,7 @@
 
 - name: Assert turning the master switch back off is idempotent on rerun
   ansible.oci.oci_instance:
-    instance_id: '{{ oci_instance_id }}'
-    agent_config:
-      all_plugins_disabled: false
+    <<: *oci_instance_agent_config_all_enabled_again_module_options
   register: oci_instance_update_agent_config_all_enabled_again_rerun
 
 - name: Verify turning the master switch back off rerun is a no-op
@@ -639,7 +601,7 @@
       - not oci_instance_update_agent_config_all_enabled_again_rerun.changed | bool
 
 - name: Disable the monitoring plugins
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_agent_config_monitoring_disabled_module_options
     instance_id: '{{ oci_instance_id }}'
     agent_config:
       monitoring_disabled: true
@@ -653,9 +615,7 @@
 
 - name: Assert disabling monitoring is idempotent on rerun
   ansible.oci.oci_instance:
-    instance_id: '{{ oci_instance_id }}'
-    agent_config:
-      monitoring_disabled: true
+    <<: *oci_instance_agent_config_monitoring_disabled_module_options
   register: oci_instance_update_agent_config_monitoring_disabled_rerun
 
 - name: Verify disabling monitoring rerun is a no-op
@@ -664,7 +624,7 @@
       - not oci_instance_update_agent_config_monitoring_disabled_rerun.changed | bool
 
 - name: Disable the management plugins
-  ansible.oci.oci_instance:
+  ansible.oci.oci_instance: &oci_instance_agent_config_management_disabled_module_options
     instance_id: '{{ oci_instance_id }}'
     agent_config:
       management_disabled: true
@@ -678,9 +638,7 @@
 
 - name: Assert disabling management is idempotent on rerun
   ansible.oci.oci_instance:
-    instance_id: '{{ oci_instance_id }}'
-    agent_config:
-      management_disabled: true
+    <<: *oci_instance_agent_config_management_disabled_module_options
   register: oci_instance_update_agent_config_management_disabled_rerun
 
 - name: Verify disabling management rerun is a no-op

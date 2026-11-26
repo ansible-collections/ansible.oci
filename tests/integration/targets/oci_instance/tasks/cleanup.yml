@@ -8,7 +8,7 @@
   block:
 
     - name: Terminate instance in check mode
-      ansible.oci.oci_instance:
+      ansible.oci.oci_instance: &oci_instance_delete_module_options
         state: '{{ oci_instance_delete_params.state }}'
         instance_id: '{{ oci_instance_delete_params.instance_id }}'
       check_mode: true
@@ -31,8 +31,7 @@
 
     - name: Terminate instance
       ansible.oci.oci_instance:
-        state: '{{ oci_instance_delete_params.state }}'
-        instance_id: '{{ oci_instance_delete_params.instance_id }}'
+        <<: *oci_instance_delete_module_options
       register: oci_cleanup_terminate_instance
 
     - name: Assert delete reported a change
@@ -42,8 +41,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_instance:
-        state: '{{ oci_instance_delete_params.state }}'
-        instance_id: '{{ oci_instance_delete_params.instance_id }}'
+        <<: *oci_instance_delete_module_options
       register: oci_cleanup_assert_delete_is_idempotent_on_rerun
 
     - name: Verify delete rerun is a no-op

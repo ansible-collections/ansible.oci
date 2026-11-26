@@ -37,7 +37,7 @@
       block:
 
         - name: Delete VCN in check mode
-          ansible.oci.oci_network_vcn:
+          ansible.oci.oci_network_vcn: &oci_network_vcn_delete_module_options
             state: '{{ oci_network_vcn_delete_params.state }}'
             vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
           check_mode: true
@@ -60,8 +60,7 @@
 
         - name: Delete VCN
           ansible.oci.oci_network_vcn:
-            state: '{{ oci_network_vcn_delete_params.state }}'
-            vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
+            <<: *oci_network_vcn_delete_module_options
           register: oci_cleanup_delete_vcn
 
         - name: Assert delete reported a change
@@ -71,8 +70,7 @@
 
         - name: Assert delete is idempotent on rerun
           ansible.oci.oci_network_vcn:
-            state: '{{ oci_network_vcn_delete_params.state }}'
-            vcn_id: '{{ oci_network_vcn_delete_params.vcn_id }}'
+            <<: *oci_network_vcn_delete_module_options
           register: oci_cleanup_assert_delete_is_idempotent_on_rerun
 
         - name: Verify delete rerun is a no-op

@@ -48,7 +48,7 @@
           nat_gateway_id: ''
 
     - name: Create NAT gateway in check mode
-      ansible.oci.oci_network_nat_gateway:
+      ansible.oci.oci_network_nat_gateway: &oci_nat_gateway_create_module_options
         state: '{{ oci_nat_gateway_create_params.state }}'
         compartment_id: '{{ oci_nat_gateway_create_params.compartment_id }}'
         vcn_id: '{{ oci_nat_gateway_create_params.vcn_id }}'
@@ -78,13 +78,7 @@
 
     - name: Create NAT gateway
       ansible.oci.oci_network_nat_gateway:
-        state: '{{ oci_nat_gateway_create_params.state }}'
-        compartment_id: '{{ oci_nat_gateway_create_params.compartment_id }}'
-        vcn_id: '{{ oci_nat_gateway_create_params.vcn_id }}'
-        name: '{{ oci_nat_gateway_create_params.name }}'
-        block_traffic: '{{ oci_nat_gateway_create_params.block_traffic }}'
-        route_table_id: '{{ oci_nat_gateway_create_params.route_table_id }}'
-        freeform_tags: '{{ oci_nat_gateway_create_params.freeform_tags }}'
+        <<: *oci_nat_gateway_create_module_options
       register: oci_nat_gateway_create
 
     - name: Capture NAT gateway id and define update parameters
@@ -139,13 +133,7 @@
 
     - name: Assert created NAT gateway is a no-op on rerun with unique name
       ansible.oci.oci_network_nat_gateway:
-        state: '{{ oci_nat_gateway_create_params.state }}'
-        compartment_id: '{{ oci_nat_gateway_create_params.compartment_id }}'
-        vcn_id: '{{ oci_nat_gateway_create_params.vcn_id }}'
-        name: '{{ oci_nat_gateway_create_params.name }}'
-        block_traffic: '{{ oci_nat_gateway_create_params.block_traffic }}'
-        route_table_id: '{{ oci_nat_gateway_create_params.route_table_id }}'
-        freeform_tags: '{{ oci_nat_gateway_create_params.freeform_tags }}'
+        <<: *oci_nat_gateway_create_module_options
       register: oci_nat_gateway_create_rerun_by_name
 
     - name: Verify NAT gateway rerun with unique name is a no-op
@@ -156,13 +144,7 @@
 
     - name: Assert created NAT gateway is a no-op on rerun with returned id
       ansible.oci.oci_network_nat_gateway:
-        state: '{{ oci_nat_gateway_create_params.state }}'
-        compartment_id: '{{ oci_nat_gateway_create_params.compartment_id }}'
-        vcn_id: '{{ oci_nat_gateway_create_params.vcn_id }}'
-        name: '{{ oci_nat_gateway_create_params.name }}'
-        block_traffic: '{{ oci_nat_gateway_create_params.block_traffic }}'
-        route_table_id: '{{ oci_nat_gateway_create_params.route_table_id }}'
-        freeform_tags: '{{ oci_nat_gateway_create_params.freeform_tags }}'
+        <<: *oci_nat_gateway_create_module_options
         nat_gateway_id: '{{ oci_nat_gateway_id }}'
       register: oci_nat_gateway_create_rerun
 
@@ -172,7 +154,7 @@
           - not oci_nat_gateway_create_rerun.changed | bool
 
     - name: Update NAT gateway in check mode
-      ansible.oci.oci_network_nat_gateway:
+      ansible.oci.oci_network_nat_gateway: &oci_nat_gateway_update_module_options
         state: '{{ oci_nat_gateway_update_params.state }}'
         nat_gateway_id: '{{ oci_nat_gateway_update_params.nat_gateway_id }}'
         name: '{{ oci_nat_gateway_update_params.name }}'
@@ -202,12 +184,7 @@
 
     - name: Update NAT gateway
       ansible.oci.oci_network_nat_gateway:
-        state: '{{ oci_nat_gateway_update_params.state }}'
-        nat_gateway_id: '{{ oci_nat_gateway_update_params.nat_gateway_id }}'
-        name: '{{ oci_nat_gateway_update_params.name }}'
-        block_traffic: '{{ oci_nat_gateway_update_params.block_traffic }}'
-        route_table_id: '{{ oci_nat_gateway_update_params.route_table_id }}'
-        freeform_tags: '{{ oci_nat_gateway_update_params.freeform_tags }}'
+        <<: *oci_nat_gateway_update_module_options
       register: oci_nat_gateway_update
 
     - name: Assert update reported a change
@@ -235,12 +212,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_network_nat_gateway:
-        state: '{{ oci_nat_gateway_update_params.state }}'
-        nat_gateway_id: '{{ oci_nat_gateway_update_params.nat_gateway_id }}'
-        name: '{{ oci_nat_gateway_update_params.name }}'
-        block_traffic: '{{ oci_nat_gateway_update_params.block_traffic }}'
-        route_table_id: '{{ oci_nat_gateway_update_params.route_table_id }}'
-        freeform_tags: '{{ oci_nat_gateway_update_params.freeform_tags }}'
+        <<: *oci_nat_gateway_update_module_options
       register: oci_nat_gateway_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -249,7 +221,7 @@
           - not oci_nat_gateway_update_rerun.changed | bool
 
     - name: Delete NAT gateway in check mode
-      ansible.oci.oci_network_nat_gateway:
+      ansible.oci.oci_network_nat_gateway: &oci_nat_gateway_delete_module_options
         state: '{{ oci_nat_gateway_delete_params.state }}'
         nat_gateway_id: '{{ oci_nat_gateway_delete_params.nat_gateway_id }}'
       check_mode: true
@@ -272,8 +244,7 @@
 
     - name: Delete NAT gateway
       ansible.oci.oci_network_nat_gateway:
-        state: '{{ oci_nat_gateway_delete_params.state }}'
-        nat_gateway_id: '{{ oci_nat_gateway_delete_params.nat_gateway_id }}'
+        <<: *oci_nat_gateway_delete_module_options
       register: oci_nat_gateway_delete
 
     - name: Assert delete reported a change
@@ -283,8 +254,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_network_nat_gateway:
-        state: '{{ oci_nat_gateway_delete_params.state }}'
-        nat_gateway_id: '{{ oci_nat_gateway_delete_params.nat_gateway_id }}'
+        <<: *oci_nat_gateway_delete_module_options
       register: oci_nat_gateway_delete_rerun
 
     - name: Verify delete rerun is a no-op

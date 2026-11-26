@@ -7,7 +7,7 @@
   block:
 
     - name: Check bucket update without changing OCI
-      ansible.oci.oci_object_storage_bucket:
+      ansible.oci.oci_object_storage_bucket: &bucket_update
         state: present
         name: '{{ oci_object_storage_bucket_name }}'
         compartment_id: '{{ oci_integration_compartment_id }}'
@@ -38,16 +38,7 @@
 
     - name: Update bucket
       ansible.oci.oci_object_storage_bucket:
-        state: present
-        name: '{{ oci_object_storage_bucket_name }}'
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        versioning: Enabled
-        metadata:
-          phase: update
-        object_events_enabled: true
-        auto_tiering: InfrequentAccess
-        freeform_tags:
-          phase: update
+        <<: *bucket_update
       register: bucket_update
 
     - name: Verify updated bucket
@@ -62,31 +53,13 @@
 
     - name: Reconcile updated bucket in check mode
       ansible.oci.oci_object_storage_bucket:
-        state: present
-        name: '{{ oci_object_storage_bucket_name }}'
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        versioning: Enabled
-        metadata:
-          phase: update
-        object_events_enabled: true
-        auto_tiering: InfrequentAccess
-        freeform_tags:
-          phase: update
+        <<: *bucket_update
       check_mode: true
       register: bucket_update_check_rerun
 
     - name: Reconcile updated bucket again
       ansible.oci.oci_object_storage_bucket:
-        state: present
-        name: '{{ oci_object_storage_bucket_name }}'
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        versioning: Enabled
-        metadata:
-          phase: update
-        object_events_enabled: true
-        auto_tiering: InfrequentAccess
-        freeform_tags:
-          phase: update
+        <<: *bucket_update
       register: bucket_update_rerun
 
     - name: Verify bucket update is idempotent

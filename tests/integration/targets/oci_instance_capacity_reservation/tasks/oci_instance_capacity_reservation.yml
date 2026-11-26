@@ -1,6 +1,6 @@
 ---
 - name: Create capacity reservation in check mode
-  ansible.oci.oci_instance_capacity_reservation:
+  ansible.oci.oci_instance_capacity_reservation: &reservation_create
     state: present
     compartment_id: '{{ oci_integration_compartment_id }}'
     name: '{{ oci_instance_integration_instance_name }}-reservation'
@@ -21,7 +21,7 @@
       - oci_cleanup_reduce_reserved_capacity_in_check_mode.changed
 
 - name: Read reservation after check mode
-  ansible.oci.oci_instance_capacity_reservation_info:
+  ansible.oci.oci_instance_capacity_reservation_info: &reservation_lookup
     compartment_id: '{{ oci_integration_compartment_id }}'
     name: '{{ oci_instance_integration_instance_name }}-reservation'
     availability_domain: '{{ oci_instance_integration_availability_domain }}'
@@ -35,17 +35,7 @@
 
 - name: Create capacity reservation
   ansible.oci.oci_instance_capacity_reservation:
-    state: present
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_instance_integration_instance_name }}-reservation'
-    availability_domain: '{{ oci_instance_integration_availability_domain }}'
-    is_default_reservation: false
-    instance_reservation_configs:
-      - instance_shape: '{{ oci_instance_discovered_shape }}'
-        instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-        reserved_count: 1
-    freeform_tags:
-      phase: create
+    <<: *reservation_create
   register: oci_cleanup_reduce_reserved_capacity
 
 - name: Capture reservation ID
@@ -70,32 +60,12 @@
 
 - name: Repeat desired reservation state
   ansible.oci.oci_instance_capacity_reservation:
-    state: present
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_instance_integration_instance_name }}-reservation'
-    availability_domain: '{{ oci_instance_integration_availability_domain }}'
-    is_default_reservation: false
-    instance_reservation_configs:
-      - instance_shape: '{{ oci_instance_discovered_shape }}'
-        instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-        reserved_count: 1
-    freeform_tags:
-      phase: create
+    <<: *reservation_create
   register: oci_cleanup_repeat_desired_reservation_state
 
 - name: Repeat desired reservation state in check mode
   ansible.oci.oci_instance_capacity_reservation:
-    state: present
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_instance_integration_instance_name }}-reservation'
-    availability_domain: '{{ oci_instance_integration_availability_domain }}'
-    is_default_reservation: false
-    instance_reservation_configs:
-      - instance_shape: '{{ oci_instance_discovered_shape }}'
-        instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-        reserved_count: 1
-    freeform_tags:
-      phase: create
+    <<: *reservation_create
   check_mode: true
   register: oci_cleanup_repeat_desired_reservation_state_in_check_mode
 
@@ -106,7 +76,7 @@
       - not oci_cleanup_repeat_desired_reservation_state_in_check_mode.changed
 
 - name: Update capacity reservation in check mode
-  ansible.oci.oci_instance_capacity_reservation:
+  ansible.oci.oci_instance_capacity_reservation: &reservation_update
     state: present
     capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
     name: '{{ oci_instance_integration_instance_name }}-reservation-updated'
@@ -136,15 +106,7 @@
 
 - name: Update capacity reservation
   ansible.oci.oci_instance_capacity_reservation:
-    state: present
-    capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-    name: '{{ oci_instance_integration_instance_name }}-reservation-updated'
-    instance_reservation_configs:
-      - instance_shape: '{{ oci_instance_discovered_shape }}'
-        instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-        reserved_count: 2
-    freeform_tags:
-      phase: update
+    <<: *reservation_update
   register: oci_cleanup_reduce_reserved_capacity
 
 - name: Verify reservation change
@@ -166,28 +128,12 @@
 
 - name: Repeat desired reservation state
   ansible.oci.oci_instance_capacity_reservation:
-    state: present
-    capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-    name: '{{ oci_instance_integration_instance_name }}-reservation-updated'
-    instance_reservation_configs:
-      - instance_shape: '{{ oci_instance_discovered_shape }}'
-        instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-        reserved_count: 2
-    freeform_tags:
-      phase: update
+    <<: *reservation_update
   register: oci_cleanup_repeat_desired_reservation_state
 
 - name: Repeat desired reservation state in check mode
   ansible.oci.oci_instance_capacity_reservation:
-    state: present
-    capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-    name: '{{ oci_instance_integration_instance_name }}-reservation-updated'
-    instance_reservation_configs:
-      - instance_shape: '{{ oci_instance_discovered_shape }}'
-        instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-        reserved_count: 2
-    freeform_tags:
-      phase: update
+    <<: *reservation_update
   check_mode: true
   register: oci_cleanup_repeat_desired_reservation_state_in_check_mode
 

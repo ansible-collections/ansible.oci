@@ -1,6 +1,6 @@
 ---
 - name: Predict zone record creation
-  ansible.oci.oci_dns_zone_records:
+  ansible.oci.oci_dns_zone_records: &zone_present
     state: present
     zone_name_or_id: '{{ oci_dns_records_case.zone }}'
     scope: '{{ oci_dns_records_case.scope }}'
@@ -28,11 +28,7 @@
 
 - name: Create zone records
   ansible.oci.oci_dns_zone_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    update_items: '{{ oci_dns_records_initial }}'
+    <<: *zone_present
   register: oci_dns_zone_create
 
 - name: Verify zone record create result
@@ -43,20 +39,12 @@
 
 - name: Verify zone record create idempotence
   ansible.oci.oci_dns_zone_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    update_items: '{{ oci_dns_records_initial }}'
+    <<: *zone_present
   register: oci_dns_zone_create_repeat
 
 - name: Verify zone record create check idempotence
   ansible.oci.oci_dns_zone_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    update_items: '{{ oci_dns_records_initial }}'
+    <<: *zone_present
   check_mode: true
   register: oci_dns_zone_create_check_repeat
 

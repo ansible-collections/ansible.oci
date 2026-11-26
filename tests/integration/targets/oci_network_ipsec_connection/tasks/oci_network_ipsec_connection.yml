@@ -7,7 +7,7 @@
   block:
 
     - name: Create IPSec connection in check mode
-      ansible.oci.oci_network_ipsec_connection:
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_connection_create
         state: present
         compartment_id: '{{ oci_integration_compartment_id }}'
         name: '{{ oci_ipsec_connection_name }}'
@@ -42,21 +42,7 @@
 
     - name: Create IPSec connection
       ansible.oci.oci_network_ipsec_connection:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_ipsec_connection_name }}'
-        cpe_id: '{{ oci_ipsec_cpe_id }}'
-        drg_id: '{{ oci_ipsec_drg_id }}'
-        static_routes:
-          - 10.0.0.0/16
-        tunnel_configuration:
-
-          - name: '{{ oci_ipsec_tunnel_name }}'
-            routing: static
-            ike_version: v2
-            dpd_config:
-              dpd_mode: initiate_and_respond
-              dpd_timeout_in_sec: 20
+        <<: *oci_ipsec_connection_create
       register: oci_ipsec_connection
 
     - name: Save connection identifier
@@ -123,7 +109,7 @@
         that: not oci_ipsec_connection_create_check_rerun.changed | bool
 
     - name: Check tunnel and connection update
-      ansible.oci.oci_network_ipsec_connection:
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_connection_update
         state: present
         ipsc_id: '{{ oci_ipsec_connection_id }}'
         name: '{{ oci_ipsec_connection_updated_name }}'
@@ -173,31 +159,7 @@
 
     - name: Apply tunnel and connection update
       ansible.oci.oci_network_ipsec_connection:
-        state: present
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
-        name: '{{ oci_ipsec_connection_updated_name }}'
-        freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
-        tunnels:
-          - tunnel_id: '{{ oci_ipsec_tunnel_id }}'
-            name: '{{ oci_ipsec_tunnel_updated_name }}'
-            routing: static
-            phase_one_config:
-              is_custom_phase_one_config: true
-              authentication_algorithm: sha2_256
-              encryption_algorithm: aes_256_cbc
-              diffie_helman_group: group14
-              lifetime_in_seconds: 28800
-            phase_two_config:
-              is_custom_phase_two_config: true
-              authentication_algorithm: hmac_sha2_256_128
-              encryption_algorithm: aes_256_gcm
-              is_pfs_enabled: true
-              pfs_dh_group: group14
-              lifetime_in_seconds: 3600
-            dpd_config:
-              dpd_mode: respond_only
-              dpd_timeout_in_sec: 30
-            shared_secret: ociIntegrationSecret123
+        <<: *oci_ipsec_connection_update
       register: oci_ipsec_connection_updated
       no_log: true
 
@@ -230,31 +192,7 @@
 
     - name: Verify tunnel and connection update is idempotent
       ansible.oci.oci_network_ipsec_connection:
-        state: present
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
-        name: '{{ oci_ipsec_connection_updated_name }}'
-        freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
-        tunnels:
-          - tunnel_id: '{{ oci_ipsec_tunnel_id }}'
-            name: '{{ oci_ipsec_tunnel_updated_name }}'
-            routing: static
-            phase_one_config:
-              is_custom_phase_one_config: true
-              authentication_algorithm: sha2_256
-              encryption_algorithm: aes_256_cbc
-              diffie_helman_group: group14
-              lifetime_in_seconds: 28800
-            phase_two_config:
-              is_custom_phase_two_config: true
-              authentication_algorithm: hmac_sha2_256_128
-              encryption_algorithm: aes_256_gcm
-              is_pfs_enabled: true
-              pfs_dh_group: group14
-              lifetime_in_seconds: 3600
-            dpd_config:
-              dpd_mode: respond_only
-              dpd_timeout_in_sec: 30
-            shared_secret: ociIntegrationSecret123
+        <<: *oci_ipsec_connection_update
       register: oci_ipsec_connection_update_rerun
       no_log: true
 
@@ -264,31 +202,7 @@
 
     - name: Check combined tunnel settings and secret rerun
       ansible.oci.oci_network_ipsec_connection:
-        state: present
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
-        name: '{{ oci_ipsec_connection_updated_name }}'
-        freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
-        tunnels:
-          - tunnel_id: '{{ oci_ipsec_tunnel_id }}'
-            name: '{{ oci_ipsec_tunnel_updated_name }}'
-            routing: static
-            phase_one_config:
-              is_custom_phase_one_config: true
-              authentication_algorithm: sha2_256
-              encryption_algorithm: aes_256_cbc
-              diffie_helman_group: group14
-              lifetime_in_seconds: 28800
-            phase_two_config:
-              is_custom_phase_two_config: true
-              authentication_algorithm: hmac_sha2_256_128
-              encryption_algorithm: aes_256_gcm
-              is_pfs_enabled: true
-              pfs_dh_group: group14
-              lifetime_in_seconds: 3600
-            dpd_config:
-              dpd_mode: respond_only
-              dpd_timeout_in_sec: 30
-            shared_secret: ociIntegrationSecret123
+        <<: *oci_ipsec_connection_update
       check_mode: true
       register: oci_ipsec_connection_update_check_rerun
       no_log: true
@@ -326,7 +240,7 @@
         that: not oci_ipsec_connection_post_child_rerun.changed | bool
 
     - name: Check secret-only tunnel update
-      ansible.oci.oci_network_ipsec_connection:
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_secret_only_update
         state: present
         ipsc_id: '{{ oci_ipsec_connection_id }}'
         tunnels:
@@ -358,11 +272,7 @@
 
     - name: Apply secret-only tunnel update
       ansible.oci.oci_network_ipsec_connection:
-        state: present
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
-        tunnels:
-          - tunnel_id: '{{ oci_ipsec_tunnel_id }}'
-            shared_secret: ociIntegrationSecret456
+        <<: *oci_ipsec_secret_only_update
       register: oci_ipsec_secret_only_result
       no_log: true
 
@@ -373,11 +283,7 @@
 
     - name: Verify secret-only update is idempotent
       ansible.oci.oci_network_ipsec_connection:
-        state: present
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
-        tunnels:
-          - tunnel_id: '{{ oci_ipsec_tunnel_id }}'
-            shared_secret: ociIntegrationSecret456
+        <<: *oci_ipsec_secret_only_update
       register: oci_ipsec_secret_only_rerun
       no_log: true
 
@@ -388,11 +294,7 @@
 
     - name: Check secret-only update rerun
       ansible.oci.oci_network_ipsec_connection:
-        state: present
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
-        tunnels:
-          - tunnel_id: '{{ oci_ipsec_tunnel_id }}'
-            shared_secret: ociIntegrationSecret456
+        <<: *oci_ipsec_secret_only_update
       check_mode: true
       register: oci_ipsec_secret_only_check_rerun
       no_log: true
@@ -403,7 +305,7 @@
       no_log: true
 
     - name: Check connection deletion
-      ansible.oci.oci_network_ipsec_connection:
+      ansible.oci.oci_network_ipsec_connection: &oci_ipsec_connection_delete
         state: absent
         ipsc_id: '{{ oci_ipsec_connection_id }}'
       check_mode: true
@@ -424,8 +326,7 @@
 
     - name: Delete IPSec connection
       ansible.oci.oci_network_ipsec_connection:
-        state: absent
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
+        <<: *oci_ipsec_connection_delete
       register: oci_ipsec_connection_deleted
 
     - name: Assert connection deletion changed the resource
@@ -442,8 +343,7 @@
 
     - name: Verify connection delete is idempotent
       ansible.oci.oci_network_ipsec_connection:
-        state: absent
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
+        <<: *oci_ipsec_connection_delete
       register: oci_ipsec_connection_delete_rerun
 
     - name: Assert connection delete rerun is unchanged
@@ -452,8 +352,7 @@
 
     - name: Check repeated connection deletion
       ansible.oci.oci_network_ipsec_connection:
-        state: absent
-        ipsc_id: '{{ oci_ipsec_connection_id }}'
+        <<: *oci_ipsec_connection_delete
       check_mode: true
       register: oci_ipsec_connection_delete_check_rerun
 

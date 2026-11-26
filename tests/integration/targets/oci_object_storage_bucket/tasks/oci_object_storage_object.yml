@@ -34,7 +34,7 @@
         mode: '0600'
 
     - name: Check upload
-      ansible.oci.oci_object_storage_object:
+      ansible.oci.oci_object_storage_object: &upload
         bucket_name: '{{ oci_object_storage_object_bucket_name }}'
         object_name: '{{ oci_object_storage_object_name }}'
         src: '{{ oci_object_storage_object_source }}'
@@ -55,30 +55,22 @@
 
     - name: Upload object
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        src: '{{ oci_object_storage_object_source }}'
+        <<: *upload
 
     - name: Reconcile upload normally
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        src: '{{ oci_object_storage_object_source }}'
+        <<: *upload
       register: upload_rerun
 
     - name: Reconcile upload in check mode
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        src: '{{ oci_object_storage_object_source }}'
+        <<: *upload
       check_mode: true
       register: upload_check_rerun
 
     - name: Reconcile matching upload with force
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        src: '{{ oci_object_storage_object_source }}'
+        <<: *upload
         force: true
       register: upload_force_rerun
 
@@ -107,7 +99,7 @@
           - exact_info.objects[0].headers['content-length'] | int == exact_info.objects[0].size
 
     - name: Check download
-      ansible.oci.oci_object_storage_object:
+      ansible.oci.oci_object_storage_object: &download
         bucket_name: '{{ oci_object_storage_object_bucket_name }}'
         object_name: '{{ oci_object_storage_object_name }}'
         dest: '{{ oci_object_storage_object_destination }}'
@@ -127,30 +119,22 @@
 
     - name: Download object
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        dest: '{{ oci_object_storage_object_destination }}'
+        <<: *download
 
     - name: Reconcile download normally
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        dest: '{{ oci_object_storage_object_destination }}'
+        <<: *download
       register: download_rerun
 
     - name: Reconcile download in check mode
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        dest: '{{ oci_object_storage_object_destination }}'
+        <<: *download
       check_mode: true
       register: download_check_rerun
 
     - name: Reconcile matching download with force
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        dest: '{{ oci_object_storage_object_destination }}'
+        <<: *download
         force: true
       register: download_force_rerun
 
@@ -168,7 +152,7 @@
           - not download_force_rerun.changed
 
     - name: Check delete
-      ansible.oci.oci_object_storage_object:
+      ansible.oci.oci_object_storage_object: &delete
         bucket_name: '{{ oci_object_storage_object_bucket_name }}'
         object_name: '{{ oci_object_storage_object_name }}'
         state: absent
@@ -189,9 +173,7 @@
 
     - name: Delete object
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        state: absent
+        <<: *delete
 
     - name: Probe object after delete
       ansible.oci.oci_object_storage_object_info:
@@ -201,17 +183,13 @@
 
     - name: Repeat delete in check mode
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        state: absent
+        <<: *delete
       check_mode: true
       register: delete_check_rerun
 
     - name: Repeat delete normally
       ansible.oci.oci_object_storage_object:
-        bucket_name: '{{ oci_object_storage_object_bucket_name }}'
-        object_name: '{{ oci_object_storage_object_name }}'
-        state: absent
+        <<: *delete
       register: delete_rerun
 
     - name: Assert delete behavior

@@ -52,7 +52,7 @@
           subnet_id: ''
 
     - name: Create subnet in check mode
-      ansible.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet: &oci_subnet_create_module_options
         state: '{{ oci_subnet_create_params.state }}'
         compartment_id: '{{ oci_subnet_create_params.compartment_id }}'
         vcn_id: '{{ oci_subnet_create_params.vcn_id }}'
@@ -84,15 +84,7 @@
 
     - name: Create subnet
       ansible.oci.oci_network_subnet:
-        state: '{{ oci_subnet_create_params.state }}'
-        compartment_id: '{{ oci_subnet_create_params.compartment_id }}'
-        vcn_id: '{{ oci_subnet_create_params.vcn_id }}'
-        cidr_block: '{{ oci_subnet_create_params.cidr_block }}'
-        name: '{{ oci_subnet_create_params.name }}'
-        dns_label: '{{ oci_subnet_create_params.dns_label }}'
-        route_table_id: '{{ oci_subnet_create_params.route_table_id }}'
-        security_list_ids: '{{ oci_subnet_create_params.security_list_ids }}'
-        freeform_tags: '{{ oci_subnet_create_params.freeform_tags }}'
+        <<: *oci_subnet_create_module_options
       register: oci_subnet_create
 
     - name: Capture subnet id and define update parameters
@@ -149,15 +141,7 @@
 
     - name: Assert created subnet is a no-op on rerun with unique name
       ansible.oci.oci_network_subnet:
-        state: '{{ oci_subnet_create_params.state }}'
-        compartment_id: '{{ oci_subnet_create_params.compartment_id }}'
-        vcn_id: '{{ oci_subnet_create_params.vcn_id }}'
-        cidr_block: '{{ oci_subnet_create_params.cidr_block }}'
-        name: '{{ oci_subnet_create_params.name }}'
-        dns_label: '{{ oci_subnet_create_params.dns_label }}'
-        route_table_id: '{{ oci_subnet_create_params.route_table_id }}'
-        security_list_ids: '{{ oci_subnet_create_params.security_list_ids }}'
-        freeform_tags: '{{ oci_subnet_create_params.freeform_tags }}'
+        <<: *oci_subnet_create_module_options
       register: oci_subnet_create_rerun_by_name
 
     - name: Verify subnet rerun with unique name is a no-op
@@ -201,15 +185,7 @@
 
     - name: Assert created subnet is a no-op on rerun with returned id
       ansible.oci.oci_network_subnet:
-        state: '{{ oci_subnet_create_params.state }}'
-        compartment_id: '{{ oci_subnet_create_params.compartment_id }}'
-        vcn_id: '{{ oci_subnet_create_params.vcn_id }}'
-        cidr_block: '{{ oci_subnet_create_params.cidr_block }}'
-        name: '{{ oci_subnet_create_params.name }}'
-        dns_label: '{{ oci_subnet_create_params.dns_label }}'
-        route_table_id: '{{ oci_subnet_create_params.route_table_id }}'
-        security_list_ids: '{{ oci_subnet_create_params.security_list_ids }}'
-        freeform_tags: '{{ oci_subnet_create_params.freeform_tags }}'
+        <<: *oci_subnet_create_module_options
         subnet_id: '{{ oci_subnet_id }}'
       register: oci_subnet_create_rerun
 
@@ -219,7 +195,7 @@
           - not oci_subnet_create_rerun.changed | bool
 
     - name: Update subnet in check mode
-      ansible.oci.oci_network_subnet:
+      ansible.oci.oci_network_subnet: &oci_subnet_update_module_options
         state: '{{ oci_subnet_update_params.state }}'
         subnet_id: '{{ oci_subnet_update_params.subnet_id }}'
         name: '{{ oci_subnet_update_params.name }}'
@@ -256,13 +232,7 @@
 
     - name: Update subnet
       ansible.oci.oci_network_subnet:
-        state: '{{ oci_subnet_update_params.state }}'
-        subnet_id: '{{ oci_subnet_update_params.subnet_id }}'
-        name: '{{ oci_subnet_update_params.name }}'
-        cidr_block: '{{ oci_subnet_update_params.cidr_block }}'
-        route_table_id: '{{ oci_subnet_update_params.route_table_id }}'
-        security_list_ids: '{{ oci_subnet_update_params.security_list_ids }}'
-        freeform_tags: '{{ oci_subnet_update_params.freeform_tags }}'
+        <<: *oci_subnet_update_module_options
       register: oci_subnet_update
 
     - name: Assert update reported a change
@@ -297,13 +267,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_network_subnet:
-        state: '{{ oci_subnet_update_params.state }}'
-        subnet_id: '{{ oci_subnet_update_params.subnet_id }}'
-        name: '{{ oci_subnet_update_params.name }}'
-        cidr_block: '{{ oci_subnet_update_params.cidr_block }}'
-        route_table_id: '{{ oci_subnet_update_params.route_table_id }}'
-        security_list_ids: '{{ oci_subnet_update_params.security_list_ids }}'
-        freeform_tags: '{{ oci_subnet_update_params.freeform_tags }}'
+        <<: *oci_subnet_update_module_options
       register: oci_subnet_update_rerun
 
     - name: Verify update rerun is a no-op

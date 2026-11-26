@@ -1,12 +1,12 @@
 ---
 - name: Read the routing policy before the operation
-  ansible.oci.oci_loadbalancer_routing_policy_info:
+  ansible.oci.oci_loadbalancer_routing_policy_info: &oci_lb_policy_probe_options
     load_balancer_id: '{{ oci_lb_test_id }}'
     name: '{{ oci_lb_policy_name }}'
   register: oci_lb_policy_before
 
 - name: Predict routing policy {{ oci_lb_policy_operation_name }}
-  ansible.oci.oci_loadbalancer_routing_policy:
+  ansible.oci.oci_loadbalancer_routing_policy: &oci_lb_policy_operation_options
     load_balancer_id: '{{ oci_lb_test_id }}'
     name: '{{ oci_lb_policy_name }}'
     state: '{{ oci_lb_policy_operation.state | default(''present'') }}'
@@ -16,8 +16,7 @@
 
 - name: Read the routing policy after check mode
   ansible.oci.oci_loadbalancer_routing_policy_info:
-    load_balancer_id: '{{ oci_lb_test_id }}'
-    name: '{{ oci_lb_policy_name }}'
+    <<: *oci_lb_policy_probe_options
   register: oci_lb_policy_after_check
 
 - name: Assert check mode predicted a change and preserved the routing policy
@@ -28,16 +27,12 @@
 
 - name: Apply routing policy {{ oci_lb_policy_operation_name }}
   ansible.oci.oci_loadbalancer_routing_policy:
-    load_balancer_id: '{{ oci_lb_test_id }}'
-    name: '{{ oci_lb_policy_name }}'
-    state: '{{ oci_lb_policy_operation.state | default(''present'') }}'
-    rules: '{{ oci_lb_policy_operation.rules | default(omit) }}'
+    <<: *oci_lb_policy_operation_options
   register: oci_lb_policy_applied
 
 - name: Read the routing policy after the operation
   ansible.oci.oci_loadbalancer_routing_policy_info:
-    load_balancer_id: '{{ oci_lb_test_id }}'
-    name: '{{ oci_lb_policy_name }}'
+    <<: *oci_lb_policy_probe_options
   register: oci_lb_policy_after
 
 - name: Assert the routing policy has the expected state
@@ -94,8 +89,7 @@
 
 - name: Read the routing policy after idempotency tests
   ansible.oci.oci_loadbalancer_routing_policy_info:
-    load_balancer_id: '{{ oci_lb_test_id }}'
-    name: '{{ oci_lb_policy_name }}'
+    <<: *oci_lb_policy_probe_options
   register: oci_lb_policy_final
 
 - name: Assert idempotency tests preserved the routing policy

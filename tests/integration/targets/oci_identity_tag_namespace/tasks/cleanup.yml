@@ -35,7 +35,7 @@
           register: oci_cleanup_read_the_namespace_before_namespace_retirement
 
         - name: Retire the namespace in check mode
-          ansible.oci.oci_identity_tag_namespace:
+          ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_retire_options
             compartment_id: '{{ oci_integration_compartment_id }}'
             name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
             is_retired: true
@@ -58,9 +58,7 @@
 
         - name: Retire the namespace
           ansible.oci.oci_identity_tag_namespace:
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
-            is_retired: true
+            <<: *oci_identity_tag_namespace_retire_options
           register: oci_cleanup_retire_the_namespace
 
         - name: Read the namespace after namespace retirement
@@ -86,16 +84,12 @@
 
         - name: Repeat namespace retirement
           ansible.oci.oci_identity_tag_namespace:
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
-            is_retired: true
+            <<: *oci_identity_tag_namespace_retire_options
           register: oci_cleanup_repeat_namespace_retirement
 
         - name: Repeat namespace retirement in check mode
           ansible.oci.oci_identity_tag_namespace:
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
-            is_retired: true
+            <<: *oci_identity_tag_namespace_retire_options
           check_mode: true
           register: oci_cleanup_repeat_namespace_retirement_in_check_mode
 
@@ -112,7 +106,7 @@
           register: oci_cleanup_read_the_namespace_before_retired_namespace_description_update
 
         - name: Update the retired namespace description in check mode
-          ansible.oci.oci_identity_tag_namespace:
+          ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_retired_update_options
             tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
             description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
           check_mode: true
@@ -134,8 +128,7 @@
 
         - name: Update the retired namespace description
           ansible.oci.oci_identity_tag_namespace:
-            tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-            description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
+            <<: *oci_identity_tag_namespace_retired_update_options
           register: oci_cleanup_update_the_retired_namespace_description
 
         - name: Read the namespace after retired namespace description update
@@ -164,14 +157,12 @@
 
         - name: Repeat retired namespace description update
           ansible.oci.oci_identity_tag_namespace:
-            tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-            description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
+            <<: *oci_identity_tag_namespace_retired_update_options
           register: oci_cleanup_repeat_retired_namespace_description_update
 
         - name: Repeat retired namespace description update in check mode
           ansible.oci.oci_identity_tag_namespace:
-            tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-            description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
+            <<: *oci_identity_tag_namespace_retired_update_options
           check_mode: true
           register: oci_cleanup_repeat_retired_namespace_description_update_in_check_mode
 
@@ -188,7 +179,7 @@
           register: oci_cleanup_read_the_namespace_before_namespace_activation
 
         - name: Activate the namespace in check mode
-          ansible.oci.oci_identity_tag_namespace:
+          ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_activate_options
             tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
             is_retired: false
           check_mode: true
@@ -210,8 +201,7 @@
 
         - name: Activate the namespace
           ansible.oci.oci_identity_tag_namespace:
-            tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-            is_retired: false
+            <<: *oci_identity_tag_namespace_activate_options
           register: oci_cleanup_activate_the_namespace
 
         - name: Read the namespace after namespace activation
@@ -237,14 +227,12 @@
 
         - name: Repeat namespace activation
           ansible.oci.oci_identity_tag_namespace:
-            tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-            is_retired: false
+            <<: *oci_identity_tag_namespace_activate_options
           register: oci_cleanup_repeat_namespace_activation
 
         - name: Repeat namespace activation in check mode
           ansible.oci.oci_identity_tag_namespace:
-            tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-            is_retired: false
+            <<: *oci_identity_tag_namespace_activate_options
           check_mode: true
           register: oci_cleanup_repeat_namespace_activation_in_check_mode
 
@@ -261,7 +249,7 @@
           register: oci_cleanup_read_the_namespace_before_retired_namespace_creation
 
         - name: Create a retired namespace in check mode
-          ansible.oci.oci_identity_tag_namespace:
+          ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_create_retired_options
             compartment_id: '{{ oci_integration_compartment_id }}'
             name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
             description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
@@ -285,10 +273,7 @@
 
         - name: Create a retired namespace
           ansible.oci.oci_identity_tag_namespace:
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
-            description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
-            is_retired: true
+            <<: *oci_identity_tag_namespace_create_retired_options
           register: oci_cleanup_create_a_retired_namespace
 
         - name: Save the retired namespace ID
@@ -320,18 +305,12 @@
 
         - name: Repeat retired namespace creation
           ansible.oci.oci_identity_tag_namespace:
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
-            description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
-            is_retired: true
+            <<: *oci_identity_tag_namespace_create_retired_options
           register: oci_cleanup_repeat_retired_namespace_creation
 
         - name: Repeat retired namespace creation in check mode
           ansible.oci.oci_identity_tag_namespace:
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_retired_name }}'
-            description: '{{ oci_identity_tag_namespace_integration_retired_description }}'
-            is_retired: true
+            <<: *oci_identity_tag_namespace_create_retired_options
           check_mode: true
           register: oci_cleanup_repeat_retired_namespace_creation_in_check_mode
 
@@ -377,7 +356,7 @@
           register: oci_cleanup_read_the_namespace_before_active_namespace_deletion
 
         - name: Delete the active empty namespace in check mode
-          ansible.oci.oci_identity_tag_namespace:
+          ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_delete_options
             state: absent
             compartment_id: '{{ oci_integration_compartment_id }}'
             name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
@@ -400,9 +379,7 @@
 
         - name: Delete the active empty namespace
           ansible.oci.oci_identity_tag_namespace:
-            state: absent
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
+            <<: *oci_identity_tag_namespace_delete_options
           register: oci_cleanup_delete_the_active_empty_namespace
 
         - name: Read the namespace after active namespace deletion
@@ -421,16 +398,12 @@
 
         - name: Repeat active namespace deletion
           ansible.oci.oci_identity_tag_namespace:
-            state: absent
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
+            <<: *oci_identity_tag_namespace_delete_options
           register: oci_cleanup_repeat_active_namespace_deletion
 
         - name: Repeat active namespace deletion in check mode
           ansible.oci.oci_identity_tag_namespace:
-            state: absent
-            compartment_id: '{{ oci_integration_compartment_id }}'
-            name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
+            <<: *oci_identity_tag_namespace_delete_options
           check_mode: true
           register: oci_cleanup_repeat_active_namespace_deletion_in_check_mode
 
@@ -452,7 +425,7 @@
           register: oci_cleanup_read_the_namespace_before_retired_namespace_deletion
 
         - name: Delete the retired empty namespace in check mode
-          ansible.oci.oci_identity_tag_namespace:
+          ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_delete_retired_options
             state: absent
             tag_namespace_id: '{{ oci_identity_tag_namespace_retired_id }}'
           check_mode: true
@@ -474,8 +447,7 @@
 
         - name: Delete the retired empty namespace
           ansible.oci.oci_identity_tag_namespace:
-            state: absent
-            tag_namespace_id: '{{ oci_identity_tag_namespace_retired_id }}'
+            <<: *oci_identity_tag_namespace_delete_retired_options
           register: oci_cleanup_delete_the_retired_empty_namespace
 
         - name: Read the namespace after retired namespace deletion
@@ -494,14 +466,12 @@
 
         - name: Repeat retired namespace deletion
           ansible.oci.oci_identity_tag_namespace:
-            state: absent
-            tag_namespace_id: '{{ oci_identity_tag_namespace_retired_id }}'
+            <<: *oci_identity_tag_namespace_delete_retired_options
           register: oci_cleanup_repeat_retired_namespace_deletion
 
         - name: Repeat retired namespace deletion in check mode
           ansible.oci.oci_identity_tag_namespace:
-            state: absent
-            tag_namespace_id: '{{ oci_identity_tag_namespace_retired_id }}'
+            <<: *oci_identity_tag_namespace_delete_retired_options
           check_mode: true
           register: oci_cleanup_repeat_retired_namespace_deletion_in_check_mode
 

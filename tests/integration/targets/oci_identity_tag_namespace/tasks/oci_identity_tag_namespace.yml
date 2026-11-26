@@ -32,7 +32,7 @@
       register: oci_identity_tag_namespace_create_before
 
     - name: Create an active namespace in check mode
-      ansible.oci.oci_identity_tag_namespace:
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_create_options
         compartment_id: '{{ oci_integration_compartment_id }}'
         name: '{{ oci_identity_tag_namespace_integration_name }}'
         description: '{{ oci_identity_tag_namespace_integration_description }}'
@@ -56,10 +56,7 @@
 
     - name: Create an active namespace
       ansible.oci.oci_identity_tag_namespace:
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_identity_tag_namespace_integration_name }}'
-        description: '{{ oci_identity_tag_namespace_integration_description }}'
-        freeform_tags: '{{ oci_identity_tag_namespace_integration_create_tags }}'
+        <<: *oci_identity_tag_namespace_create_options
       register: oci_identity_tag_namespace_create_result
 
     - name: Save the active namespace ID
@@ -93,18 +90,12 @@
 
     - name: Repeat active namespace creation
       ansible.oci.oci_identity_tag_namespace:
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_identity_tag_namespace_integration_name }}'
-        description: '{{ oci_identity_tag_namespace_integration_description }}'
-        freeform_tags: '{{ oci_identity_tag_namespace_integration_create_tags }}'
+        <<: *oci_identity_tag_namespace_create_options
       register: oci_identity_tag_namespace_create_repeat
 
     - name: Repeat active namespace creation in check mode
       ansible.oci.oci_identity_tag_namespace:
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_identity_tag_namespace_integration_name }}'
-        description: '{{ oci_identity_tag_namespace_integration_description }}'
-        freeform_tags: '{{ oci_identity_tag_namespace_integration_create_tags }}'
+        <<: *oci_identity_tag_namespace_create_options
       check_mode: true
       register: oci_identity_tag_namespace_create_repeat_check
 
@@ -121,7 +112,7 @@
       register: oci_identity_tag_namespace_update_before
 
     - name: Update the namespace description and tags in check mode
-      ansible.oci.oci_identity_tag_namespace:
+      ansible.oci.oci_identity_tag_namespace: &oci_identity_tag_namespace_update_options
         tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
         name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
         description: '{{ oci_identity_tag_namespace_integration_update_description }}'
@@ -145,10 +136,7 @@
 
     - name: Update the namespace description and tags
       ansible.oci.oci_identity_tag_namespace:
-        tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-        name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
-        description: '{{ oci_identity_tag_namespace_integration_update_description }}'
-        freeform_tags: '{{ oci_identity_tag_namespace_integration_update_tags }}'
+        <<: *oci_identity_tag_namespace_update_options
       register: oci_identity_tag_namespace_update_result
 
     - name: Read the namespace after namespace description and tag update
@@ -178,18 +166,12 @@
 
     - name: Repeat namespace description and tag update
       ansible.oci.oci_identity_tag_namespace:
-        tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-        name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
-        description: '{{ oci_identity_tag_namespace_integration_update_description }}'
-        freeform_tags: '{{ oci_identity_tag_namespace_integration_update_tags }}'
+        <<: *oci_identity_tag_namespace_update_options
       register: oci_identity_tag_namespace_update_repeat
 
     - name: Repeat namespace description and tag update in check mode
       ansible.oci.oci_identity_tag_namespace:
-        tag_namespace_id: '{{ oci_identity_tag_namespace_active_id }}'
-        name: '{{ oci_identity_tag_namespace_integration_name | upper }}'
-        description: '{{ oci_identity_tag_namespace_integration_update_description }}'
-        freeform_tags: '{{ oci_identity_tag_namespace_integration_update_tags }}'
+        <<: *oci_identity_tag_namespace_update_options
       check_mode: true
       register: oci_identity_tag_namespace_update_repeat_check
 

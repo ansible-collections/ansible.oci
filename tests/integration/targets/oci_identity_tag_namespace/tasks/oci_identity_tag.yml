@@ -32,7 +32,7 @@
       block:
 
         - name: Check create enum tag
-          ansible.oci.oci_identity_tag:
+          ansible.oci.oci_identity_tag: &enum_create
             tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
             name: '{{ oci_identity_tag_integration_enum_name }}'
             description: Initial enum tag
@@ -56,32 +56,12 @@
 
         - name: Create enum tag
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            description: Initial enum tag
-            validator:
-              validator_type: enum
-              values:
-                - development
-                - production
-            is_cost_tracking: false
-            freeform_tags:
-              phase: create
+            <<: *enum_create
           register: oci_tag_create
 
         - name: Verify enum tag create is idempotent
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            description: Initial enum tag
-            validator:
-              validator_type: enum
-              values:
-                - development
-                - production
-            is_cost_tracking: false
-            freeform_tags:
-              phase: create
+            <<: *enum_create
           register: oci_tag_create_again
           failed_when: oci_tag_create_again.changed
 
@@ -113,7 +93,7 @@
           failed_when: oci_tag_list_active.tags | length != 1
 
         - name: Check enum tag update
-          ansible.oci.oci_identity_tag:
+          ansible.oci.oci_identity_tag: &enum_update
             tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
             name: '{{ oci_identity_tag_integration_enum_name }}'
             description: Updated enum tag
@@ -142,18 +122,7 @@
 
         - name: Update enum tag fields
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            description: Updated enum tag
-            validator:
-              validator_type: enum
-              values:
-                - development
-                - production
-                - staging
-            is_cost_tracking: true
-            freeform_tags:
-              phase: update
+            <<: *enum_update
           register: oci_tag_update
 
         - name: Verify enum tag update result
@@ -167,23 +136,12 @@
 
         - name: Verify enum tag update is idempotent
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            description: Updated enum tag
-            validator:
-              validator_type: enum
-              values:
-                - development
-                - production
-                - staging
-            is_cost_tracking: true
-            freeform_tags:
-              phase: update
+            <<: *enum_update
           register: oci_tag_update_again
           failed_when: oci_tag_update_again.changed
 
         - name: Check clearing enum validator with default validator
-          ansible.oci.oci_identity_tag:
+          ansible.oci.oci_identity_tag: &enum_default
             tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
             name: '{{ oci_identity_tag_integration_enum_name }}'
             validator:
@@ -204,18 +162,12 @@
 
         - name: Clear enum validator with default validator
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            validator:
-              validator_type: default
+            <<: *enum_default
           register: oci_tag_default
 
         - name: Verify default validator update is idempotent
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            validator:
-              validator_type: default
+            <<: *enum_default
           register: oci_tag_default_again
           failed_when: oci_tag_default_again.changed
 
@@ -230,7 +182,7 @@
             oci_tag_default_info.tags[0].validator.validator_type not in [none, 'DEFAULT']
 
         - name: Check enum tag retirement
-          ansible.oci.oci_identity_tag:
+          ansible.oci.oci_identity_tag: &enum_retired
             tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
             name: '{{ oci_identity_tag_integration_enum_name }}'
             is_retired: true
@@ -248,9 +200,7 @@
 
         - name: Retire enum tag
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            is_retired: true
+            <<: *enum_retired
           register: oci_tag_retire
 
         - name: Verify enum tag retirement result
@@ -261,9 +211,7 @@
 
         - name: Verify enum tag retirement is idempotent
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            is_retired: true
+            <<: *enum_retired
           register: oci_tag_retire_again
           failed_when: oci_tag_retire_again.changed
 
@@ -275,7 +223,7 @@
           failed_when: oci_tag_list_inactive.tags | length != 1
 
         - name: Check enum tag reactivation
-          ansible.oci.oci_identity_tag:
+          ansible.oci.oci_identity_tag: &enum_active
             tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
             name: '{{ oci_identity_tag_integration_enum_name }}'
             is_retired: false
@@ -293,9 +241,7 @@
 
         - name: Reactivate enum tag
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            is_retired: false
+            <<: *enum_active
           register: oci_tag_reactivate
 
         - name: Verify enum tag reactivation result
@@ -306,9 +252,7 @@
 
         - name: Verify enum tag reactivation is idempotent
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            is_retired: false
+            <<: *enum_active
           register: oci_tag_reactivate_again
           failed_when: oci_tag_reactivate_again.changed
 
@@ -326,7 +270,7 @@
           failed_when: oci_tag_list.tags | length != 1 or 'validator' in oci_tag_list.tags[0]
 
         - name: Check tag delete with automatic retirement
-          ansible.oci.oci_identity_tag:
+          ansible.oci.oci_identity_tag: &tag_delete
             tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
             name: '{{ oci_identity_tag_integration_enum_name }}'
             state: absent
@@ -345,9 +289,7 @@
 
         - name: Delete tag and retire it automatically
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            state: absent
+            <<: *tag_delete
           register: oci_tag_delete
 
         - name: Verify tag deletion result
@@ -367,17 +309,13 @@
 
         - name: Verify tag delete is idempotent
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            state: absent
+            <<: *tag_delete
           register: oci_tag_delete_again
           failed_when: oci_tag_delete_again.changed
 
         - name: Check tag delete idempotency
           ansible.oci.oci_identity_tag:
-            tag_namespace_id: '{{ oci_identity_tag_integration_namespace_id }}'
-            name: '{{ oci_identity_tag_integration_enum_name }}'
-            state: absent
+            <<: *tag_delete
           check_mode: true
           register: oci_tag_delete_check_again
           failed_when: oci_tag_delete_check_again.changed

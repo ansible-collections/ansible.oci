@@ -64,7 +64,7 @@
           }}'
 
     - name: Create first API key in check mode
-      ansible.oci.oci_identity_api_key:
+      ansible.oci.oci_identity_api_key: &api_key_one
         domain_id: '{{ oci_identity_api_key_domain_id }}'
         user_id: '{{ oci_identity_api_key_user_id }}'
         key: '{{ oci_identity_api_key_first_pem }}'
@@ -81,9 +81,7 @@
 
     - name: Create first API key
       ansible.oci.oci_identity_api_key:
-        domain_id: '{{ oci_identity_api_key_domain_id }}'
-        user_id: '{{ oci_identity_api_key_user_id }}'
-        key: '{{ oci_identity_api_key_first_pem }}'
+        <<: *api_key_one
       register: oci_identity_api_key_first_create
 
     - name: Verify first API key upload changed state
@@ -97,9 +95,7 @@
 
     - name: Verify first API key normal rerun is unchanged
       ansible.oci.oci_identity_api_key:
-        domain_id: '{{ oci_identity_api_key_domain_id }}'
-        user_id: '{{ oci_identity_api_key_user_id }}'
-        key: '{{ oci_identity_api_key_first_pem }}'
+        <<: *api_key_one
       register: oci_identity_api_key_first_rerun
       failed_when: |-
         oci_identity_api_key_first_rerun.changed or oci_identity_api_key_first_rerun.resource.fingerprint !=
@@ -107,9 +103,7 @@
 
     - name: Verify first API key check rerun is unchanged
       ansible.oci.oci_identity_api_key:
-        domain_id: '{{ oci_identity_api_key_domain_id }}'
-        user_id: '{{ oci_identity_api_key_user_id }}'
-        key: '{{ oci_identity_api_key_first_pem }}'
+        <<: *api_key_one
       check_mode: true
       register: oci_identity_api_key_first_check_rerun
       failed_when: oci_identity_api_key_first_check_rerun.changed
@@ -141,7 +135,7 @@
       failed_when: oci_identity_api_key_info_by_fingerprint.api_keys | length != 1
 
     - name: Create second API key in check mode
-      ansible.oci.oci_identity_api_key:
+      ansible.oci.oci_identity_api_key: &api_key_two
         domain_id: '{{ oci_identity_api_key_domain_id }}'
         user_id: '{{ oci_identity_api_key_user_id }}'
         key: '{{ oci_identity_api_key_second_pem }}'
@@ -158,9 +152,7 @@
 
     - name: Create second API key
       ansible.oci.oci_identity_api_key:
-        domain_id: '{{ oci_identity_api_key_domain_id }}'
-        user_id: '{{ oci_identity_api_key_user_id }}'
-        key: '{{ oci_identity_api_key_second_pem }}'
+        <<: *api_key_two
       register: oci_identity_api_key_second_create
 
     - name: Verify second API key upload changed state
@@ -174,9 +166,7 @@
 
     - name: Verify second API key normal rerun is unchanged
       ansible.oci.oci_identity_api_key:
-        domain_id: '{{ oci_identity_api_key_domain_id }}'
-        user_id: '{{ oci_identity_api_key_user_id }}'
-        key: '{{ oci_identity_api_key_second_pem }}'
+        <<: *api_key_two
       register: oci_identity_api_key_second_rerun
       failed_when: |-
         oci_identity_api_key_second_rerun.changed or oci_identity_api_key_second_rerun.resource.fingerprint
@@ -184,9 +174,7 @@
 
     - name: Verify second API key check rerun is unchanged
       ansible.oci.oci_identity_api_key:
-        domain_id: '{{ oci_identity_api_key_domain_id }}'
-        user_id: '{{ oci_identity_api_key_user_id }}'
-        key: '{{ oci_identity_api_key_second_pem }}'
+        <<: *api_key_two
       check_mode: true
       register: oci_identity_api_key_second_check
       failed_when: oci_identity_api_key_second_check.changed

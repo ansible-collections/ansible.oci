@@ -49,7 +49,7 @@
       block:
 
         - name: Check bucket deletion without changing OCI
-          ansible.oci.oci_object_storage_bucket:
+          ansible.oci.oci_object_storage_bucket: &bucket_delete
             state: absent
             name: '{{ oci_object_storage_bucket_name }}'
           check_mode: true
@@ -64,8 +64,7 @@
 
         - name: Delete bucket
           ansible.oci.oci_object_storage_bucket:
-            state: absent
-            name: '{{ oci_object_storage_bucket_name }}'
+            <<: *bucket_delete
           register: oci_cleanup_delete_bucket
 
         - name: Read bucket after deletion
@@ -81,15 +80,13 @@
 
         - name: Check repeated bucket deletion
           ansible.oci.oci_object_storage_bucket:
-            state: absent
-            name: '{{ oci_object_storage_bucket_name }}'
+            <<: *bucket_delete
           check_mode: true
           register: oci_cleanup_check_repeated_bucket_deletion
 
         - name: Repeat bucket deletion
           ansible.oci.oci_object_storage_bucket:
-            state: absent
-            name: '{{ oci_object_storage_bucket_name }}'
+            <<: *bucket_delete
           register: oci_cleanup_repeat_bucket_deletion
 
         - name: Verify bucket deletion is idempotent

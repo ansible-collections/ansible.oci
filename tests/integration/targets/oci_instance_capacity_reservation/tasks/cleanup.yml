@@ -19,7 +19,7 @@
   block:
 
     - name: Read capacity use
-      ansible.oci.oci_instance_capacity_reservation_info:
+      ansible.oci.oci_instance_capacity_reservation_info: &reservation_lookup
         capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
       register: oci_cleanup_read_capacity_use
 
@@ -46,7 +46,7 @@
           - not oci_cleanup_read_instance_after_reservation_removal.instances[0].capacity_reservation_id
 
     - name: Reduce reserved capacity in check mode
-      ansible.oci.oci_instance_capacity_reservation:
+      ansible.oci.oci_instance_capacity_reservation: &reservation_reduce
         state: present
         capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
         instance_reservation_configs:
@@ -62,7 +62,7 @@
           - oci_cleanup_reduce_reserved_capacity_in_check_mode.changed
 
     - name: Read reservation after check mode
-      ansible.oci.oci_instance_capacity_reservation_info:
+      ansible.oci.oci_instance_capacity_reservation_info: &oci_instance_capacity_reservation_info_reservation_lookup
         capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
       register: oci_cleanup_read_reservation_after_check_mode
 
@@ -74,12 +74,7 @@
 
     - name: Reduce reserved capacity
       ansible.oci.oci_instance_capacity_reservation:
-        state: present
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-        instance_reservation_configs:
-          - instance_shape: '{{ oci_instance_discovered_shape }}'
-            instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-            reserved_count: 1
+        <<: *reservation_reduce
       register: oci_cleanup_reduce_reserved_capacity
 
     - name: Verify reservation change
@@ -89,7 +84,7 @@
 
     - name: Read reservation after change
       ansible.oci.oci_instance_capacity_reservation_info:
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *oci_instance_capacity_reservation_info_reservation_lookup
       register: oci_cleanup_read_reservation_after_check_mode
 
     - name: Verify reservation state
@@ -100,22 +95,12 @@
 
     - name: Repeat desired reservation state
       ansible.oci.oci_instance_capacity_reservation:
-        state: present
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-        instance_reservation_configs:
-          - instance_shape: '{{ oci_instance_discovered_shape }}'
-            instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-            reserved_count: 1
+        <<: *reservation_reduce
       register: oci_cleanup_repeat_desired_reservation_state
 
     - name: Repeat desired reservation state in check mode
       ansible.oci.oci_instance_capacity_reservation:
-        state: present
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-        instance_reservation_configs:
-          - instance_shape: '{{ oci_instance_discovered_shape }}'
-            instance_shape_config: '{{ oci_instance_integration_shape_config }}'
-            reserved_count: 1
+        <<: *reservation_reduce
       check_mode: true
       register: oci_cleanup_repeat_desired_reservation_state_in_check_mode
 
@@ -126,7 +111,7 @@
           - not oci_cleanup_repeat_desired_reservation_state_in_check_mode.changed
 
     - name: Clear reservation configurations in check mode
-      ansible.oci.oci_instance_capacity_reservation:
+      ansible.oci.oci_instance_capacity_reservation: &reservation_clear
         state: present
         capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
         instance_reservation_configs: []
@@ -135,7 +120,7 @@
 
     - name: Read reservation after clear in check mode
       ansible.oci.oci_instance_capacity_reservation_info:
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *reservation_lookup
       register: oci_cleanup_read_reservation_after_check_mode
 
     - name: Verify check mode preserves configurations
@@ -147,14 +132,12 @@
 
     - name: Clear reservation configurations
       ansible.oci.oci_instance_capacity_reservation:
-        state: present
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-        instance_reservation_configs: []
+        <<: *reservation_clear
       register: oci_cleanup_clear_reservation_configurations
 
     - name: Read reservation after clearing configurations
       ansible.oci.oci_instance_capacity_reservation_info:
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *reservation_lookup
       register: oci_cleanup_read_reservation_after_check_mode
 
     - name: Verify configurations are empty and the reservation exists
@@ -169,16 +152,12 @@
 
     - name: Repeat configuration clear
       ansible.oci.oci_instance_capacity_reservation:
-        state: present
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-        instance_reservation_configs: []
+        <<: *reservation_clear
       register: oci_cleanup_repeat_configuration_clear
 
     - name: Repeat configuration clear in check mode
       ansible.oci.oci_instance_capacity_reservation:
-        state: present
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
-        instance_reservation_configs: []
+        <<: *reservation_clear
       check_mode: true
       register: oci_cleanup_repeat_configuration_clear_in_check_mode
 
@@ -189,7 +168,7 @@
           - not oci_cleanup_repeat_configuration_clear_in_check_mode.changed
 
     - name: Delete capacity reservation in check mode
-      ansible.oci.oci_instance_capacity_reservation:
+      ansible.oci.oci_instance_capacity_reservation: &reservation_delete
         state: absent
         capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
       check_mode: true
@@ -202,7 +181,7 @@
 
     - name: Read reservation after check mode
       ansible.oci.oci_instance_capacity_reservation_info:
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *oci_instance_capacity_reservation_info_reservation_lookup
       register: oci_cleanup_read_reservation_after_check_mode
 
     - name: Verify check mode preserves reservation state
@@ -213,8 +192,7 @@
 
     - name: Delete capacity reservation
       ansible.oci.oci_instance_capacity_reservation:
-        state: absent
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *reservation_delete
       register: oci_cleanup_reduce_reserved_capacity
 
     - name: Verify reservation change
@@ -224,7 +202,7 @@
 
     - name: Read reservation after change
       ansible.oci.oci_instance_capacity_reservation_info:
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *oci_instance_capacity_reservation_info_reservation_lookup
       register: oci_cleanup_read_reservation_after_check_mode
 
     - name: Verify reservation state
@@ -235,14 +213,12 @@
 
     - name: Repeat desired reservation state
       ansible.oci.oci_instance_capacity_reservation:
-        state: absent
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *reservation_delete
       register: oci_cleanup_repeat_desired_reservation_state
 
     - name: Repeat desired reservation state in check mode
       ansible.oci.oci_instance_capacity_reservation:
-        state: absent
-        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        <<: *reservation_delete
       check_mode: true
       register: oci_cleanup_repeat_desired_reservation_state_in_check_mode
 

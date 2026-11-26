@@ -97,7 +97,7 @@
           volume_attachment_id: ''
 
     - name: Create volume attachment in check mode
-      ansible.oci.oci_volume_attachment:
+      ansible.oci.oci_volume_attachment: &oci_volume_attachment_create_module_options
         state: '{{ oci_volume_attachment_create_params.state }}'
         compartment_id: '{{ oci_volume_attachment_create_params.compartment_id }}'
         instance_id: '{{ oci_volume_attachment_create_params.instance_id }}'
@@ -127,12 +127,7 @@
 
     - name: Create volume attachment
       ansible.oci.oci_volume_attachment:
-        state: '{{ oci_volume_attachment_create_params.state }}'
-        compartment_id: '{{ oci_volume_attachment_create_params.compartment_id }}'
-        instance_id: '{{ oci_volume_attachment_create_params.instance_id }}'
-        volume_id: '{{ oci_volume_attachment_create_params.volume_id }}'
-        name: '{{ oci_volume_attachment_create_params.name }}'
-        type: '{{ oci_volume_attachment_create_params.type }}'
+        <<: *oci_volume_attachment_create_module_options
       register: oci_volume_attachment_create
 
     - name: Capture volume attachment id and define delete parameters
@@ -180,12 +175,7 @@
 
     - name: Assert created volume attachment is a no-op on rerun with returned id
       ansible.oci.oci_volume_attachment:
-        state: '{{ oci_volume_attachment_create_params.state }}'
-        compartment_id: '{{ oci_volume_attachment_create_params.compartment_id }}'
-        instance_id: '{{ oci_volume_attachment_create_params.instance_id }}'
-        volume_id: '{{ oci_volume_attachment_create_params.volume_id }}'
-        name: '{{ oci_volume_attachment_create_params.name }}'
-        type: '{{ oci_volume_attachment_create_params.type }}'
+        <<: *oci_volume_attachment_create_module_options
         volume_attachment_id: '{{ oci_volume_attachment_id }}'
       register: oci_volume_attachment_create_rerun
 
@@ -196,12 +186,7 @@
 
     - name: Assert created volume attachment is a no-op on rerun with scoped name
       ansible.oci.oci_volume_attachment:
-        state: '{{ oci_volume_attachment_create_params.state }}'
-        compartment_id: '{{ oci_volume_attachment_create_params.compartment_id }}'
-        instance_id: '{{ oci_volume_attachment_create_params.instance_id }}'
-        volume_id: '{{ oci_volume_attachment_create_params.volume_id }}'
-        name: '{{ oci_volume_attachment_create_params.name }}'
-        type: '{{ oci_volume_attachment_create_params.type }}'
+        <<: *oci_volume_attachment_create_module_options
       register: oci_volume_attachment_create_rerun_by_name
 
     - name: Verify rerun with scoped name is a no-op
@@ -210,7 +195,7 @@
           - not oci_volume_attachment_create_rerun_by_name.changed | bool
 
     - name: Detach volume attachment in check mode
-      ansible.oci.oci_volume_attachment:
+      ansible.oci.oci_volume_attachment: &oci_volume_attachment_delete_module_options
         state: '{{ oci_volume_attachment_delete_params.state }}'
         volume_attachment_id: '{{ oci_volume_attachment_delete_params.volume_attachment_id }}'
       check_mode: true
@@ -234,8 +219,7 @@
 
     - name: Detach volume attachment
       ansible.oci.oci_volume_attachment:
-        state: '{{ oci_volume_attachment_delete_params.state }}'
-        volume_attachment_id: '{{ oci_volume_attachment_delete_params.volume_attachment_id }}'
+        <<: *oci_volume_attachment_delete_module_options
       register: oci_volume_attachment_delete
 
     - name: Assert detach reported a change
@@ -245,8 +229,7 @@
 
     - name: Assert detach is idempotent on rerun
       ansible.oci.oci_volume_attachment:
-        state: '{{ oci_volume_attachment_delete_params.state }}'
-        volume_attachment_id: '{{ oci_volume_attachment_delete_params.volume_attachment_id }}'
+        <<: *oci_volume_attachment_delete_module_options
       register: oci_volume_attachment_delete_rerun
 
     - name: Verify detach rerun is a no-op

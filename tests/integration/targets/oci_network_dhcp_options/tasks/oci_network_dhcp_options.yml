@@ -52,7 +52,7 @@
           dhcp_options_id: ''
 
     - name: Create DHCP options in check mode
-      ansible.oci.oci_network_dhcp_options:
+      ansible.oci.oci_network_dhcp_options: &oci_dhcp_options_create_module_options
         state: '{{ oci_dhcp_options_create_params.state }}'
         compartment_id: '{{ oci_dhcp_options_create_params.compartment_id }}'
         vcn_id: '{{ oci_dhcp_options_create_params.vcn_id }}'
@@ -81,12 +81,7 @@
 
     - name: Create DHCP options
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_create_params.state }}'
-        compartment_id: '{{ oci_dhcp_options_create_params.compartment_id }}'
-        vcn_id: '{{ oci_dhcp_options_create_params.vcn_id }}'
-        name: '{{ oci_dhcp_options_create_params.name }}'
-        options: '{{ oci_dhcp_options_create_params.options }}'
-        freeform_tags: '{{ oci_dhcp_options_create_params.freeform_tags }}'
+        <<: *oci_dhcp_options_create_module_options
       register: oci_dhcp_options_create
 
     - name: Capture DHCP options id and define update parameters
@@ -146,12 +141,7 @@
 
     - name: Assert created DHCP options is a no-op on rerun with unique name
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_create_params.state }}'
-        compartment_id: '{{ oci_dhcp_options_create_params.compartment_id }}'
-        vcn_id: '{{ oci_dhcp_options_create_params.vcn_id }}'
-        name: '{{ oci_dhcp_options_create_params.name }}'
-        options: '{{ oci_dhcp_options_create_params.options }}'
-        freeform_tags: '{{ oci_dhcp_options_create_params.freeform_tags }}'
+        <<: *oci_dhcp_options_create_module_options
       register: oci_dhcp_options_create_rerun_by_name
 
     - name: Verify DHCP options rerun with unique name is a no-op
@@ -162,12 +152,7 @@
 
     - name: Intentionally create a second DHCP options set with the same display name
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_create_params.state }}'
-        compartment_id: '{{ oci_dhcp_options_create_params.compartment_id }}'
-        vcn_id: '{{ oci_dhcp_options_create_params.vcn_id }}'
-        name: '{{ oci_dhcp_options_create_params.name }}'
-        options: '{{ oci_dhcp_options_create_params.options }}'
-        freeform_tags: '{{ oci_dhcp_options_create_params.freeform_tags }}'
+        <<: *oci_dhcp_options_create_module_options
         allow_duplicate_name: true
       register: oci_dhcp_options_duplicate_create
 
@@ -192,12 +177,7 @@
 
     - name: Assert created DHCP options is a no-op on rerun with returned id
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_create_params.state }}'
-        compartment_id: '{{ oci_dhcp_options_create_params.compartment_id }}'
-        vcn_id: '{{ oci_dhcp_options_create_params.vcn_id }}'
-        name: '{{ oci_dhcp_options_create_params.name }}'
-        options: '{{ oci_dhcp_options_create_params.options }}'
-        freeform_tags: '{{ oci_dhcp_options_create_params.freeform_tags }}'
+        <<: *oci_dhcp_options_create_module_options
         dhcp_options_id: '{{ oci_dhcp_options_id }}'
       register: oci_dhcp_options_create_rerun
 
@@ -207,7 +187,7 @@
           - not oci_dhcp_options_create_rerun.changed | bool
 
     - name: Update DHCP options in check mode
-      ansible.oci.oci_network_dhcp_options:
+      ansible.oci.oci_network_dhcp_options: &oci_dhcp_options_update_module_options
         state: '{{ oci_dhcp_options_update_params.state }}'
         dhcp_options_id: '{{ oci_dhcp_options_update_params.dhcp_options_id }}'
         name: '{{ oci_dhcp_options_update_params.name }}'
@@ -235,11 +215,7 @@
 
     - name: Update DHCP options
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_update_params.state }}'
-        dhcp_options_id: '{{ oci_dhcp_options_update_params.dhcp_options_id }}'
-        name: '{{ oci_dhcp_options_update_params.name }}'
-        options: '{{ oci_dhcp_options_update_params.options }}'
-        freeform_tags: '{{ oci_dhcp_options_update_params.freeform_tags }}'
+        <<: *oci_dhcp_options_update_module_options
       register: oci_dhcp_options_update
 
     - name: Assert update reported a change
@@ -268,11 +244,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_update_params.state }}'
-        dhcp_options_id: '{{ oci_dhcp_options_update_params.dhcp_options_id }}'
-        name: '{{ oci_dhcp_options_update_params.name }}'
-        options: '{{ oci_dhcp_options_update_params.options }}'
-        freeform_tags: '{{ oci_dhcp_options_update_params.freeform_tags }}'
+        <<: *oci_dhcp_options_update_module_options
       register: oci_dhcp_options_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -281,7 +253,7 @@
           - not oci_dhcp_options_update_rerun.changed | bool
 
     - name: Delete DHCP options in check mode
-      ansible.oci.oci_network_dhcp_options:
+      ansible.oci.oci_network_dhcp_options: &oci_dhcp_options_delete_module_options
         state: '{{ oci_dhcp_options_delete_params.state }}'
         dhcp_options_id: '{{ oci_dhcp_options_delete_params.dhcp_options_id }}'
       check_mode: true
@@ -304,8 +276,7 @@
 
     - name: Delete DHCP options
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_delete_params.state }}'
-        dhcp_options_id: '{{ oci_dhcp_options_delete_params.dhcp_options_id }}'
+        <<: *oci_dhcp_options_delete_module_options
       register: oci_dhcp_options_delete
 
     - name: Assert delete reported a change
@@ -315,8 +286,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_network_dhcp_options:
-        state: '{{ oci_dhcp_options_delete_params.state }}'
-        dhcp_options_id: '{{ oci_dhcp_options_delete_params.dhcp_options_id }}'
+        <<: *oci_dhcp_options_delete_module_options
       register: oci_dhcp_options_delete_rerun
 
     - name: Verify delete rerun is a no-op

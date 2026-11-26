@@ -50,7 +50,7 @@
           security_list_id: ''
 
     - name: Create security list in check mode
-      ansible.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list: &oci_security_list_create_module_options
         state: '{{ oci_security_list_create_params.state }}'
         compartment_id: '{{ oci_security_list_create_params.compartment_id }}'
         vcn_id: '{{ oci_security_list_create_params.vcn_id }}'
@@ -80,13 +80,7 @@
 
     - name: Create security list
       ansible.oci.oci_network_security_list:
-        state: '{{ oci_security_list_create_params.state }}'
-        compartment_id: '{{ oci_security_list_create_params.compartment_id }}'
-        vcn_id: '{{ oci_security_list_create_params.vcn_id }}'
-        name: '{{ oci_security_list_create_params.name }}'
-        ingress_security_rules: '{{ oci_security_list_create_params.ingress_security_rules }}'
-        egress_security_rules: '{{ oci_security_list_create_params.egress_security_rules }}'
-        freeform_tags: '{{ oci_security_list_create_params.freeform_tags }}'
+        <<: *oci_security_list_create_module_options
       register: oci_security_list_create
 
     - name: Capture security list id and define update parameters
@@ -132,13 +126,7 @@
 
     - name: Assert created security list is a no-op on rerun with unique name
       ansible.oci.oci_network_security_list:
-        state: '{{ oci_security_list_create_params.state }}'
-        compartment_id: '{{ oci_security_list_create_params.compartment_id }}'
-        vcn_id: '{{ oci_security_list_create_params.vcn_id }}'
-        name: '{{ oci_security_list_create_params.name }}'
-        ingress_security_rules: '{{ oci_security_list_create_params.ingress_security_rules }}'
-        egress_security_rules: '{{ oci_security_list_create_params.egress_security_rules }}'
-        freeform_tags: '{{ oci_security_list_create_params.freeform_tags }}'
+        <<: *oci_security_list_create_module_options
       register: oci_security_list_create_rerun_by_name
 
     - name: Verify security list rerun with unique name is a no-op
@@ -149,13 +137,7 @@
 
     - name: Intentionally create a second security list with the same display name
       ansible.oci.oci_network_security_list:
-        state: '{{ oci_security_list_create_params.state }}'
-        compartment_id: '{{ oci_security_list_create_params.compartment_id }}'
-        vcn_id: '{{ oci_security_list_create_params.vcn_id }}'
-        name: '{{ oci_security_list_create_params.name }}'
-        ingress_security_rules: '{{ oci_security_list_create_params.ingress_security_rules }}'
-        egress_security_rules: '{{ oci_security_list_create_params.egress_security_rules }}'
-        freeform_tags: '{{ oci_security_list_create_params.freeform_tags }}'
+        <<: *oci_security_list_create_module_options
         allow_duplicate_name: true
       register: oci_security_list_duplicate_create
 
@@ -179,7 +161,7 @@
         oci_security_list_duplicate_id: ''
 
     - name: Update security list in check mode
-      ansible.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list: &oci_security_list_update_module_options
         state: '{{ oci_security_list_update_params.state }}'
         security_list_id: '{{ oci_security_list_update_params.security_list_id }}'
         name: '{{ oci_security_list_update_params.name }}'
@@ -209,12 +191,7 @@
 
     - name: Update security list
       ansible.oci.oci_network_security_list:
-        state: '{{ oci_security_list_update_params.state }}'
-        security_list_id: '{{ oci_security_list_update_params.security_list_id }}'
-        name: '{{ oci_security_list_update_params.name }}'
-        ingress_security_rules: '{{ oci_security_list_update_params.ingress_security_rules }}'
-        egress_security_rules: '{{ oci_security_list_update_params.egress_security_rules }}'
-        freeform_tags: '{{ oci_security_list_update_params.freeform_tags }}'
+        <<: *oci_security_list_update_module_options
       register: oci_security_list_update
 
     - name: Assert update reported a change
@@ -238,12 +215,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_network_security_list:
-        state: '{{ oci_security_list_update_params.state }}'
-        security_list_id: '{{ oci_security_list_update_params.security_list_id }}'
-        name: '{{ oci_security_list_update_params.name }}'
-        ingress_security_rules: '{{ oci_security_list_update_params.ingress_security_rules }}'
-        egress_security_rules: '{{ oci_security_list_update_params.egress_security_rules }}'
-        freeform_tags: '{{ oci_security_list_update_params.freeform_tags }}'
+        <<: *oci_security_list_update_module_options
       register: oci_security_list_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -252,7 +224,7 @@
           - not oci_security_list_update_rerun.changed | bool
 
     - name: Delete security list in check mode
-      ansible.oci.oci_network_security_list:
+      ansible.oci.oci_network_security_list: &oci_security_list_delete_module_options
         state: '{{ oci_security_list_delete_params.state }}'
         security_list_id: '{{ oci_security_list_delete_params.security_list_id }}'
       check_mode: true
@@ -275,8 +247,7 @@
 
     - name: Delete security list
       ansible.oci.oci_network_security_list:
-        state: '{{ oci_security_list_delete_params.state }}'
-        security_list_id: '{{ oci_security_list_delete_params.security_list_id }}'
+        <<: *oci_security_list_delete_module_options
       register: oci_security_list_delete
 
     - name: Assert delete reported a change
@@ -286,8 +257,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_network_security_list:
-        state: '{{ oci_security_list_delete_params.state }}'
-        security_list_id: '{{ oci_security_list_delete_params.security_list_id }}'
+        <<: *oci_security_list_delete_module_options
       register: oci_security_list_delete_rerun
 
     - name: Verify delete rerun is a no-op

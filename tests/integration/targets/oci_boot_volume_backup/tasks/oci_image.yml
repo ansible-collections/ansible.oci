@@ -71,7 +71,7 @@
           freeform_tags: '{{ oci_image_integration_create_tags }}'
 
     - name: Create custom image in check mode
-      ansible.oci.oci_image:
+      ansible.oci.oci_image: &oci_image_create_module_options
         state: '{{ oci_image_create_params.state }}'
         compartment_id: '{{ oci_image_create_params.compartment_id }}'
         name: '{{ oci_image_create_params.name }}'
@@ -98,11 +98,7 @@
 
     - name: Create custom image
       ansible.oci.oci_image:
-        state: '{{ oci_image_create_params.state }}'
-        compartment_id: '{{ oci_image_create_params.compartment_id }}'
-        name: '{{ oci_image_create_params.name }}'
-        instance_id: '{{ oci_image_create_params.instance_id }}'
-        freeform_tags: '{{ oci_image_create_params.freeform_tags }}'
+        <<: *oci_image_create_module_options
       register: oci_image_create
 
     - name: Capture custom image id
@@ -146,11 +142,7 @@
 
     - name: Assert created image is a no-op on rerun with unique name
       ansible.oci.oci_image:
-        state: '{{ oci_image_create_params.state }}'
-        compartment_id: '{{ oci_image_create_params.compartment_id }}'
-        name: '{{ oci_image_create_params.name }}'
-        instance_id: '{{ oci_image_create_params.instance_id }}'
-        freeform_tags: '{{ oci_image_create_params.freeform_tags }}'
+        <<: *oci_image_create_module_options
       register: oci_image_create_rerun_by_name
 
     - name: Verify image rerun with unique name is a no-op
@@ -173,11 +165,7 @@
 
     - name: Assert created image is a no-op on rerun with returned id
       ansible.oci.oci_image:
-        state: '{{ oci_image_create_params.state }}'
-        compartment_id: '{{ oci_image_create_params.compartment_id }}'
-        name: '{{ oci_image_create_params.name }}'
-        instance_id: '{{ oci_image_create_params.instance_id }}'
-        freeform_tags: '{{ oci_image_create_params.freeform_tags }}'
+        <<: *oci_image_create_module_options
         image_id: '{{ oci_image_id }}'
       register: oci_image_create_rerun
 
@@ -189,11 +177,7 @@
 
     - name: Assert existing image is a no-op in check mode
       ansible.oci.oci_image:
-        state: '{{ oci_image_create_params.state }}'
-        compartment_id: '{{ oci_image_create_params.compartment_id }}'
-        name: '{{ oci_image_create_params.name }}'
-        instance_id: '{{ oci_image_create_params.instance_id }}'
-        freeform_tags: '{{ oci_image_create_params.freeform_tags }}'
+        <<: *oci_image_create_module_options
       check_mode: true
       register: oci_image_create_exists_check
 
@@ -204,7 +188,7 @@
           - oci_image_create_exists_check.resource.id == oci_image_id
 
     - name: Update custom image in check mode
-      ansible.oci.oci_image:
+      ansible.oci.oci_image: &oci_image_update_module_options
         state: '{{ oci_image_update_params.state }}'
         image_id: '{{ oci_image_update_params.image_id }}'
         name: '{{ oci_image_update_params.name }}'
@@ -231,10 +215,7 @@
 
     - name: Update custom image
       ansible.oci.oci_image:
-        state: '{{ oci_image_update_params.state }}'
-        image_id: '{{ oci_image_update_params.image_id }}'
-        name: '{{ oci_image_update_params.name }}'
-        freeform_tags: '{{ oci_image_update_params.freeform_tags }}'
+        <<: *oci_image_update_module_options
       register: oci_image_update
 
     - name: Assert update reported a change
@@ -294,10 +275,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_image:
-        state: '{{ oci_image_update_params.state }}'
-        image_id: '{{ oci_image_update_params.image_id }}'
-        name: '{{ oci_image_update_params.name }}'
-        freeform_tags: '{{ oci_image_update_params.freeform_tags }}'
+        <<: *oci_image_update_module_options
       register: oci_image_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -307,7 +285,7 @@
           - oci_image_update_rerun.resource.id == oci_image_id
 
     - name: Delete custom image in check mode
-      ansible.oci.oci_image:
+      ansible.oci.oci_image: &oci_image_delete_module_options
         state: absent
         image_id: '{{ oci_image_id }}'
       check_mode: true
@@ -330,8 +308,7 @@
 
     - name: Delete custom image
       ansible.oci.oci_image:
-        state: absent
-        image_id: '{{ oci_image_id }}'
+        <<: *oci_image_delete_module_options
       register: oci_image_delete
 
     - name: Assert delete reported a change
@@ -352,8 +329,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_image:
-        state: absent
-        image_id: '{{ oci_image_id }}'
+        <<: *oci_image_delete_module_options
       register: oci_image_delete_rerun
 
     - name: Verify delete rerun is a no-op

@@ -71,7 +71,7 @@
       delay: 5
 
     - name: Add membership in check mode
-      ansible.oci.oci_identity_user_group_membership:
+      ansible.oci.oci_identity_user_group_membership: &membership
         domain_id: '{{ oci_membership_domain_id }}'
         user_id: '{{ membership_user.resource.id }}'
         group_id: '{{ membership_group.resource.id }}'
@@ -88,9 +88,7 @@
 
     - name: Add membership by composite identity
       ansible.oci.oci_identity_user_group_membership:
-        domain_id: '{{ oci_membership_domain_id }}'
-        user_id: '{{ membership_user.resource.id }}'
-        group_id: '{{ membership_group.resource.id }}'
+        <<: *membership
       register: membership_create
 
     - name: Track membership for cleanup
@@ -116,9 +114,7 @@
 
     - name: Assert create and present reconciliation idempotency
       ansible.oci.oci_identity_user_group_membership:
-        domain_id: '{{ oci_membership_domain_id }}'
-        user_id: '{{ membership_user.resource.id }}'
-        group_id: '{{ membership_group.resource.id }}'
+        <<: *membership
       register: membership_rerun
       failed_when: |-
         membership_rerun.changed or membership_rerun.resource.group_id != membership_group.resource.id or
@@ -150,9 +146,7 @@
 
     - name: Remove membership in check mode
       ansible.oci.oci_identity_user_group_membership:
-        domain_id: '{{ oci_membership_domain_id }}'
-        user_id: '{{ membership_user.resource.id }}'
-        group_id: '{{ membership_group.resource.id }}'
+        <<: *membership
         state: absent
       check_mode: true
       register: membership_delete_check
@@ -168,9 +162,7 @@
 
     - name: Remove membership
       ansible.oci.oci_identity_user_group_membership:
-        domain_id: '{{ oci_membership_domain_id }}'
-        user_id: '{{ membership_user.resource.id }}'
-        group_id: '{{ membership_group.resource.id }}'
+        <<: *membership
         state: absent
       register: membership_delete
       failed_when: not membership_delete.changed
@@ -187,9 +179,7 @@
 
     - name: Assert delete idempotency
       ansible.oci.oci_identity_user_group_membership:
-        domain_id: '{{ oci_membership_domain_id }}'
-        user_id: '{{ membership_user.resource.id }}'
-        group_id: '{{ membership_group.resource.id }}'
+        <<: *membership
         state: absent
       register: membership_delete_rerun
       failed_when: membership_delete_rerun.changed

@@ -48,7 +48,7 @@
       block:
 
         - name: Delete boot volume backup in check mode
-          ansible.oci.oci_boot_volume_backup:
+          ansible.oci.oci_boot_volume_backup: &oci_boot_volume_backup_delete_module_options
             state: absent
             boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
           check_mode: true
@@ -71,8 +71,7 @@
 
         - name: Delete boot volume backup
           ansible.oci.oci_boot_volume_backup:
-            state: absent
-            boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+            <<: *oci_boot_volume_backup_delete_module_options
           register: oci_cleanup_delete_boot_volume_backup
 
         - name: Assert delete reported a change
@@ -107,8 +106,7 @@
 
         - name: Assert delete is a no-op in check mode
           ansible.oci.oci_boot_volume_backup:
-            state: absent
-            boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+            <<: *oci_boot_volume_backup_delete_module_options
           check_mode: true
           register: oci_cleanup_assert_delete_is_a_no_op_in_check_mode
 
@@ -119,8 +117,7 @@
 
         - name: Assert delete is idempotent on rerun
           ansible.oci.oci_boot_volume_backup:
-            state: absent
-            boot_volume_backup_id: '{{ oci_boot_volume_backup_id }}'
+            <<: *oci_boot_volume_backup_delete_module_options
           register: oci_cleanup_assert_delete_is_idempotent_on_rerun
 
         - name: Verify delete rerun is a no-op

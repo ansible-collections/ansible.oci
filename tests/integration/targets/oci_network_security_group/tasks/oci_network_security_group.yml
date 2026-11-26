@@ -38,7 +38,7 @@
           freeform_tags: '{{ oci_network_security_group_integration_create_tags }}'
 
     - name: Create Network Security Group in check mode
-      ansible.oci.oci_network_security_group:
+      ansible.oci.oci_network_security_group: &oci_network_security_group_create_options
         state: '{{ oci_network_security_group_create_params.state }}'
         compartment_id: '{{ oci_network_security_group_create_params.compartment_id }}'
         vcn_id: '{{ oci_network_security_group_create_params.vcn_id }}'
@@ -66,11 +66,7 @@
 
     - name: Create Network Security Group
       ansible.oci.oci_network_security_group:
-        state: '{{ oci_network_security_group_create_params.state }}'
-        compartment_id: '{{ oci_network_security_group_create_params.compartment_id }}'
-        vcn_id: '{{ oci_network_security_group_create_params.vcn_id }}'
-        name: '{{ oci_network_security_group_create_params.name }}'
-        freeform_tags: '{{ oci_network_security_group_create_params.freeform_tags }}'
+        <<: *oci_network_security_group_create_options
       register: oci_network_security_group_create
 
     - name: Capture Network Security Group identifiers and update parameters
@@ -106,11 +102,7 @@
 
     - name: Reconcile the created Network Security Group by unique name
       ansible.oci.oci_network_security_group:
-        state: '{{ oci_network_security_group_create_params.state }}'
-        compartment_id: '{{ oci_network_security_group_create_params.compartment_id }}'
-        vcn_id: '{{ oci_network_security_group_create_params.vcn_id }}'
-        name: '{{ oci_network_security_group_create_params.name }}'
-        freeform_tags: '{{ oci_network_security_group_create_params.freeform_tags }}'
+        <<: *oci_network_security_group_create_options
       register: oci_network_security_group_create_rerun
 
     - name: Assert name-based reconciliation is idempotent
@@ -121,11 +113,7 @@
 
     - name: Create a duplicate Network Security Group intentionally
       ansible.oci.oci_network_security_group:
-        state: '{{ oci_network_security_group_create_params.state }}'
-        compartment_id: '{{ oci_network_security_group_create_params.compartment_id }}'
-        vcn_id: '{{ oci_network_security_group_create_params.vcn_id }}'
-        name: '{{ oci_network_security_group_create_params.name }}'
-        freeform_tags: '{{ oci_network_security_group_create_params.freeform_tags }}'
+        <<: *oci_network_security_group_create_options
         allow_duplicate_name: true
       register: oci_network_security_group_duplicate_create
 
@@ -149,7 +137,7 @@
         oci_network_security_group_duplicate_id: ''
 
     - name: Update Network Security Group in check mode
-      ansible.oci.oci_network_security_group:
+      ansible.oci.oci_network_security_group: &oci_network_security_group_update_options
         state: '{{ oci_network_security_group_update_params.state }}'
         network_security_group_id: '{{ oci_network_security_group_update_params.network_security_group_id }}'
         name: '{{ oci_network_security_group_update_params.name }}'
@@ -177,10 +165,7 @@
 
     - name: Update Network Security Group
       ansible.oci.oci_network_security_group:
-        state: '{{ oci_network_security_group_update_params.state }}'
-        network_security_group_id: '{{ oci_network_security_group_update_params.network_security_group_id }}'
-        name: '{{ oci_network_security_group_update_params.name }}'
-        freeform_tags: '{{ oci_network_security_group_update_params.freeform_tags }}'
+        <<: *oci_network_security_group_update_options
       register: oci_network_security_group_update
 
     - name: Assert update reported a change
@@ -203,10 +188,7 @@
 
     - name: Reapply Network Security Group update
       ansible.oci.oci_network_security_group:
-        state: '{{ oci_network_security_group_update_params.state }}'
-        network_security_group_id: '{{ oci_network_security_group_update_params.network_security_group_id }}'
-        name: '{{ oci_network_security_group_update_params.name }}'
-        freeform_tags: '{{ oci_network_security_group_update_params.freeform_tags }}'
+        <<: *oci_network_security_group_update_options
       register: oci_network_security_group_update_rerun
 
     - name: Assert update is idempotent

@@ -158,7 +158,7 @@
           - oci_console_connection_instance_create.resource.lifecycle_state == "RUNNING"
 
     - name: Create a console connection for the real instance in check mode
-      ansible.oci.oci_instance_console_connection:
+      ansible.oci.oci_instance_console_connection: &oci_console_connection_create_module_options
         state: present
         compartment_id: '{{ oci_integration_compartment_id }}'
         instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
@@ -186,11 +186,7 @@
 
     - name: Create a console connection for the real instance
       ansible.oci.oci_instance_console_connection:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
-        public_key: '{{ oci_instance_console_connection_integration_public_key }}'
-        freeform_tags: '{{ oci_instance_console_connection_integration_create_tags }}'
+        <<: *oci_console_connection_create_module_options
       register: oci_console_connection_create
 
     - name: Capture the created console connection id
@@ -208,11 +204,7 @@
 
     - name: Assert creating the same console connection again is a no-op
       ansible.oci.oci_instance_console_connection:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        instance_id: '{{ oci_console_connection_instance_create.resource.id }}'
-        public_key: '{{ oci_instance_console_connection_integration_public_key }}'
-        freeform_tags: '{{ oci_instance_console_connection_integration_create_tags }}'
+        <<: *oci_console_connection_create_module_options
       register: oci_console_connection_create_rerun
 
     - name: Verify rerun is a no-op
@@ -221,7 +213,7 @@
           - not oci_console_connection_create_rerun.changed | bool
 
     - name: Update console connection tags in check mode
-      ansible.oci.oci_instance_console_connection:
+      ansible.oci.oci_instance_console_connection: &oci_console_connection_update_module_options
         state: present
         instance_console_connection_id: '{{ oci_console_connection_id }}'
         freeform_tags: '{{ oci_instance_console_connection_integration_update_tags }}'
@@ -246,9 +238,7 @@
 
     - name: Update console connection tags
       ansible.oci.oci_instance_console_connection:
-        state: present
-        instance_console_connection_id: '{{ oci_console_connection_id }}'
-        freeform_tags: '{{ oci_instance_console_connection_integration_update_tags }}'
+        <<: *oci_console_connection_update_module_options
       register: oci_console_connection_update
 
     - name: Assert update reported a change
@@ -259,9 +249,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_instance_console_connection:
-        state: present
-        instance_console_connection_id: '{{ oci_console_connection_id }}'
-        freeform_tags: '{{ oci_instance_console_connection_integration_update_tags }}'
+        <<: *oci_console_connection_update_module_options
       register: oci_console_connection_update_rerun
 
     - name: Verify update rerun is a no-op

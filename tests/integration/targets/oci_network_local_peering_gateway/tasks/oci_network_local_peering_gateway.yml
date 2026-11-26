@@ -48,7 +48,7 @@
           freeform_tags: '{{ oci_lpg_integration_create_tags }}'
 
     - name: Create local peering gateway in check mode
-      ansible.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway: &oci_lpg_create_module_options
         state: '{{ oci_lpg_create_params.state }}'
         compartment_id: '{{ oci_lpg_create_params.compartment_id }}'
         vcn_id: '{{ oci_lpg_create_params.vcn_id }}'
@@ -76,11 +76,7 @@
 
     - name: Create local peering gateway
       ansible.oci.oci_network_local_peering_gateway:
-        state: '{{ oci_lpg_create_params.state }}'
-        compartment_id: '{{ oci_lpg_create_params.compartment_id }}'
-        vcn_id: '{{ oci_lpg_create_params.vcn_id }}'
-        name: '{{ oci_lpg_create_params.name }}'
-        freeform_tags: '{{ oci_lpg_create_params.freeform_tags }}'
+        <<: *oci_lpg_create_module_options
       register: oci_lpg_create
 
     - name: Create the peer local peering gateway on the second VCN
@@ -123,11 +119,7 @@
 
     - name: Assert created local peering gateway is a no-op on rerun with unique name
       ansible.oci.oci_network_local_peering_gateway:
-        state: '{{ oci_lpg_create_params.state }}'
-        compartment_id: '{{ oci_lpg_create_params.compartment_id }}'
-        vcn_id: '{{ oci_lpg_create_params.vcn_id }}'
-        name: '{{ oci_lpg_create_params.name }}'
-        freeform_tags: '{{ oci_lpg_create_params.freeform_tags }}'
+        <<: *oci_lpg_create_module_options
       register: oci_lpg_create_rerun_by_name
 
     - name: Verify local peering gateway rerun with unique name is a no-op
@@ -138,11 +130,7 @@
 
     - name: Intentionally create a second local peering gateway with the same display name
       ansible.oci.oci_network_local_peering_gateway:
-        state: '{{ oci_lpg_create_params.state }}'
-        compartment_id: '{{ oci_lpg_create_params.compartment_id }}'
-        vcn_id: '{{ oci_lpg_create_params.vcn_id }}'
-        name: '{{ oci_lpg_create_params.name }}'
-        freeform_tags: '{{ oci_lpg_create_params.freeform_tags }}'
+        <<: *oci_lpg_create_module_options
         allow_duplicate_name: true
       register: oci_lpg_duplicate_create
 
@@ -200,7 +188,7 @@
           - not oci_lpg_peer_connect_rerun.changed | bool
 
     - name: Update local peering gateway name and tags in check mode
-      ansible.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway: &oci_lpg_update_module_options
         state: '{{ oci_lpg_update_params.state }}'
         local_peering_gateway_id: '{{ oci_lpg_update_params.local_peering_gateway_id }}'
         name: '{{ oci_lpg_update_params.name }}'
@@ -215,10 +203,7 @@
 
     - name: Update local peering gateway name and tags
       ansible.oci.oci_network_local_peering_gateway:
-        state: '{{ oci_lpg_update_params.state }}'
-        local_peering_gateway_id: '{{ oci_lpg_update_params.local_peering_gateway_id }}'
-        name: '{{ oci_lpg_update_params.name }}'
-        freeform_tags: '{{ oci_lpg_update_params.freeform_tags }}'
+        <<: *oci_lpg_update_module_options
       register: oci_lpg_update
 
     - name: Assert update reported a change
@@ -240,10 +225,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_network_local_peering_gateway:
-        state: '{{ oci_lpg_update_params.state }}'
-        local_peering_gateway_id: '{{ oci_lpg_update_params.local_peering_gateway_id }}'
-        name: '{{ oci_lpg_update_params.name }}'
-        freeform_tags: '{{ oci_lpg_update_params.freeform_tags }}'
+        <<: *oci_lpg_update_module_options
       register: oci_lpg_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -252,7 +234,7 @@
           - not oci_lpg_update_rerun.changed | bool
 
     - name: Delete local peering gateway in check mode
-      ansible.oci.oci_network_local_peering_gateway:
+      ansible.oci.oci_network_local_peering_gateway: &oci_lpg_delete_module_options
         state: '{{ oci_lpg_delete_params.state }}'
         local_peering_gateway_id: '{{ oci_lpg_delete_params.local_peering_gateway_id }}'
       check_mode: true
@@ -265,8 +247,7 @@
 
     - name: Delete local peering gateway
       ansible.oci.oci_network_local_peering_gateway:
-        state: '{{ oci_lpg_delete_params.state }}'
-        local_peering_gateway_id: '{{ oci_lpg_delete_params.local_peering_gateway_id }}'
+        <<: *oci_lpg_delete_module_options
       register: oci_lpg_delete
 
     - name: Assert delete reported a change
@@ -276,8 +257,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_network_local_peering_gateway:
-        state: '{{ oci_lpg_delete_params.state }}'
-        local_peering_gateway_id: '{{ oci_lpg_delete_params.local_peering_gateway_id }}'
+        <<: *oci_lpg_delete_module_options
       register: oci_lpg_delete_rerun
 
     - name: Verify delete rerun is a no-op

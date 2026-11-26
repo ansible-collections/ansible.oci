@@ -15,7 +15,7 @@
   block:
 
     - name: Create the first RPC in check mode
-      ansible.oci.oci_network_remote_peering_connection:
+      ansible.oci.oci_network_remote_peering_connection: &oci_rpc_create_options
         state: present
         compartment_id: '{{ oci_integration_compartment_id }}'
         drg_id: '{{ oci_drg_id }}'
@@ -41,11 +41,7 @@
 
     - name: Create the first RPC
       ansible.oci.oci_network_remote_peering_connection:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        drg_id: '{{ oci_drg_id }}'
-        name: '{{ oci_rpc_integration_rpc_name }}'
-        freeform_tags: '{{ oci_rpc_integration_create_tags }}'
+        <<: *oci_rpc_create_options
       register: oci_rpc_create
 
     - name: Store the first RPC identifier immediately after creation
@@ -54,11 +50,7 @@
 
     - name: Assert first RPC check mode rerun is unchanged
       ansible.oci.oci_network_remote_peering_connection:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        drg_id: '{{ oci_drg_id }}'
-        name: '{{ oci_rpc_integration_rpc_name }}'
-        freeform_tags: '{{ oci_rpc_integration_create_tags }}'
+        <<: *oci_rpc_create_options
       check_mode: true
       register: oci_rpc_create_rerun_check
 
@@ -84,11 +76,7 @@
 
     - name: Assert first RPC creation is idempotent by name
       ansible.oci.oci_network_remote_peering_connection:
-        state: present
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        drg_id: '{{ oci_drg_id }}'
-        name: '{{ oci_rpc_integration_rpc_name }}'
-        freeform_tags: '{{ oci_rpc_integration_create_tags }}'
+        <<: *oci_rpc_create_options
       register: oci_rpc_create_rerun
 
     - name: Verify first RPC creation rerun is unchanged
@@ -98,7 +86,7 @@
           - oci_rpc_create_rerun.resource.id == oci_rpc_id
 
     - name: Update first RPC in check mode
-      ansible.oci.oci_network_remote_peering_connection:
+      ansible.oci.oci_network_remote_peering_connection: &oci_rpc_update_options
         state: present
         remote_peering_connection_id: '{{ oci_rpc_id }}'
         name: '{{ oci_rpc_integration_updated_rpc_name }}'
@@ -123,10 +111,7 @@
 
     - name: Update first RPC
       ansible.oci.oci_network_remote_peering_connection:
-        state: present
-        remote_peering_connection_id: '{{ oci_rpc_id }}'
-        name: '{{ oci_rpc_integration_updated_rpc_name }}'
-        freeform_tags: '{{ oci_rpc_integration_update_tags }}'
+        <<: *oci_rpc_update_options
       register: oci_rpc_update
 
     - name: Assert first RPC update changed state
@@ -135,10 +120,7 @@
 
     - name: Assert first RPC update is idempotent
       ansible.oci.oci_network_remote_peering_connection:
-        state: present
-        remote_peering_connection_id: '{{ oci_rpc_id }}'
-        name: '{{ oci_rpc_integration_updated_rpc_name }}'
-        freeform_tags: '{{ oci_rpc_integration_update_tags }}'
+        <<: *oci_rpc_update_options
       register: oci_rpc_update_rerun
 
     - name: Verify first RPC update rerun is unchanged
@@ -147,10 +129,7 @@
 
     - name: Verify first RPC update check mode rerun is unchanged
       ansible.oci.oci_network_remote_peering_connection:
-        state: present
-        remote_peering_connection_id: '{{ oci_rpc_id }}'
-        name: '{{ oci_rpc_integration_updated_rpc_name }}'
-        freeform_tags: '{{ oci_rpc_integration_update_tags }}'
+        <<: *oci_rpc_update_options
       check_mode: true
       register: oci_rpc_update_rerun_check
 

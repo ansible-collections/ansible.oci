@@ -29,7 +29,7 @@
           freeform_tags: '{{ oci_identity_compartment_integration_create_tags }}'
 
     - name: Create nested compartment in check mode
-      ansible.oci.oci_identity_compartment:
+      ansible.oci.oci_identity_compartment: &oci_identity_compartment_create_options
         state: '{{ oci_identity_compartment_create_params.state }}'
         parent_compartment_id: '{{ oci_identity_compartment_create_params.parent_compartment_id }}'
         name: '{{ oci_identity_compartment_create_params.name }}'
@@ -56,11 +56,7 @@
 
     - name: Create nested compartment
       ansible.oci.oci_identity_compartment:
-        state: '{{ oci_identity_compartment_create_params.state }}'
-        parent_compartment_id: '{{ oci_identity_compartment_create_params.parent_compartment_id }}'
-        name: '{{ oci_identity_compartment_create_params.name }}'
-        description: '{{ oci_identity_compartment_create_params.description }}'
-        freeform_tags: '{{ oci_identity_compartment_create_params.freeform_tags }}'
+        <<: *oci_identity_compartment_create_options
       register: oci_identity_compartment_create
 
     - name: Assert create reported a change
@@ -91,11 +87,7 @@
 
     - name: Reconcile nested compartment by parent and name
       ansible.oci.oci_identity_compartment:
-        state: '{{ oci_identity_compartment_create_params.state }}'
-        parent_compartment_id: '{{ oci_identity_compartment_create_params.parent_compartment_id }}'
-        name: '{{ oci_identity_compartment_create_params.name }}'
-        description: '{{ oci_identity_compartment_create_params.description }}'
-        freeform_tags: '{{ oci_identity_compartment_create_params.freeform_tags }}'
+        <<: *oci_identity_compartment_create_options
       register: oci_identity_compartment_create_rerun
 
     - name: Assert parent and name reconciliation is idempotent
@@ -105,7 +97,7 @@
           - oci_identity_compartment_create_rerun.resource.name == oci_identity_compartment_integration_name
 
     - name: Delete nested compartment in check mode
-      ansible.oci.oci_identity_compartment:
+      ansible.oci.oci_identity_compartment: &oci_identity_compartment_delete_options
         state: absent
         parent_compartment_id: '{{ oci_integration_compartment_id }}'
         name: '{{ oci_identity_compartment_integration_name }}'
@@ -132,10 +124,7 @@
 
     - name: Delete nested compartment
       ansible.oci.oci_identity_compartment:
-        state: absent
-        parent_compartment_id: '{{ oci_integration_compartment_id }}'
-        name: '{{ oci_identity_compartment_integration_name }}'
-        wait: false
+        <<: *oci_identity_compartment_delete_options
       register: oci_identity_compartment_delete
 
     - name: Assert delete reported a change

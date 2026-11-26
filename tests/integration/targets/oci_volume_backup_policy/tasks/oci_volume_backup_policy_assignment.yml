@@ -69,7 +69,7 @@
           - oci_volume_backup_policy_assignment_initial_info.volume_backup_policy_assignments | length == 0
 
     - name: Check assignment creation without changing OCI
-      ansible.oci.oci_volume_backup_policy_assignment:
+      ansible.oci.oci_volume_backup_policy_assignment: &first_assignment
         state: present
         asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
         policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
@@ -93,9 +93,7 @@
 
     - name: Create backup policy assignment
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: present
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
-        policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
+        <<: *first_assignment
       register: oci_volume_backup_policy_assignment_create
 
     - name: Assert assignment creation result
@@ -137,17 +135,13 @@
 
     - name: Reconcile first assignment in check mode
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: present
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
-        policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
+        <<: *first_assignment
       check_mode: true
       register: oci_volume_backup_policy_assignment_create_check_rerun
 
     - name: Reconcile first assignment again
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: present
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
-        policy_id: '{{ oci_volume_backup_policy_assignment_first_policy_id }}'
+        <<: *first_assignment
       register: oci_volume_backup_policy_assignment_create_rerun
 
     - name: Assert assignment creation is idempotent
@@ -160,7 +154,7 @@
             oci_volume_backup_policy_assignment_create.resource.id
 
     - name: Check policy replacement without changing OCI
-      ansible.oci.oci_volume_backup_policy_assignment:
+      ansible.oci.oci_volume_backup_policy_assignment: &second_assignment
         state: present
         asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
         policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
@@ -186,9 +180,7 @@
 
     - name: Replace assigned backup policy
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: present
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
-        policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+        <<: *second_assignment
       register: oci_volume_backup_policy_assignment_update
 
     - name: Assert policy replacement result
@@ -202,17 +194,13 @@
 
     - name: Reconcile replacement in check mode
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: present
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
-        policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+        <<: *second_assignment
       check_mode: true
       register: oci_volume_backup_policy_assignment_update_check_rerun
 
     - name: Reconcile replacement again
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: present
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
-        policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+        <<: *second_assignment
       register: oci_volume_backup_policy_assignment_update_rerun
 
     - name: Assert replacement is idempotent
@@ -225,7 +213,7 @@
             oci_volume_backup_policy_assignment_update.resource.id
 
     - name: Check assignment deletion without changing OCI
-      ansible.oci.oci_volume_backup_policy_assignment:
+      ansible.oci.oci_volume_backup_policy_assignment: &absent_assignment
         state: absent
         asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
       check_mode: true
@@ -250,8 +238,7 @@
 
     - name: Delete backup policy assignment
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: absent
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        <<: *absent_assignment
       register: oci_volume_backup_policy_assignment_delete
 
     - name: Assert assignment deletion reports change
@@ -271,15 +258,13 @@
 
     - name: Check repeated assignment deletion
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: absent
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        <<: *absent_assignment
       check_mode: true
       register: oci_volume_backup_policy_assignment_delete_check_rerun
 
     - name: Repeat assignment deletion
       ansible.oci.oci_volume_backup_policy_assignment:
-        state: absent
-        asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+        <<: *absent_assignment
       register: oci_volume_backup_policy_assignment_delete_rerun
 
     - name: Assert assignment deletion is idempotent

@@ -1,12 +1,12 @@
 ---
 - name: Read listener before the scenario
-  ansible.oci.oci_network_loadbalancer_listener_info:
+  ansible.oci.oci_network_loadbalancer_listener_info: &oci_nlb_listener_probe
     network_load_balancer_id: '{{ oci_nlb_test_id }}'
     name: '{{ oci_nlb_test_listener }}'
   register: oci_nlb_listener_before
 
 - name: Predict listener change
-  ansible.oci.oci_network_loadbalancer_listener:
+  ansible.oci.oci_network_loadbalancer_listener: &oci_nlb_listener_operation
     network_load_balancer_id: '{{ oci_nlb_test_id }}'
     state: '{{ oci_nlb_listener_state }}'
     name: '{{ oci_nlb_listener_options.name }}'
@@ -18,8 +18,7 @@
 
 - name: Read listener after check mode
   ansible.oci.oci_network_loadbalancer_listener_info:
-    network_load_balancer_id: '{{ oci_nlb_test_id }}'
-    name: '{{ oci_nlb_test_listener }}'
+    <<: *oci_nlb_listener_probe
   register: oci_nlb_listener_after_prediction
 
 - name: Check the predicted listener change
@@ -30,18 +29,12 @@
 
 - name: Apply listener change
   ansible.oci.oci_network_loadbalancer_listener:
-    network_load_balancer_id: '{{ oci_nlb_test_id }}'
-    state: '{{ oci_nlb_listener_state }}'
-    name: '{{ oci_nlb_listener_options.name }}'
-    default_backend_set_name: '{{ oci_nlb_listener_options.default_backend_set_name | default(omit) }}'
-    port: '{{ oci_nlb_listener_options.port | default(omit) }}'
-    protocol: '{{ oci_nlb_listener_options.protocol | default(omit) }}'
+    <<: *oci_nlb_listener_operation
   register: oci_nlb_listener_applied
 
 - name: Read listener after apply
   ansible.oci.oci_network_loadbalancer_listener_info:
-    network_load_balancer_id: '{{ oci_nlb_test_id }}'
-    name: '{{ oci_nlb_test_listener }}'
+    <<: *oci_nlb_listener_probe
   register: oci_nlb_listener_after
 
 - name: Check listener state
@@ -61,22 +54,12 @@
 
 - name: Repeat listener change in normal mode
   ansible.oci.oci_network_loadbalancer_listener:
-    network_load_balancer_id: '{{ oci_nlb_test_id }}'
-    state: '{{ oci_nlb_listener_state }}'
-    name: '{{ oci_nlb_listener_options.name }}'
-    default_backend_set_name: '{{ oci_nlb_listener_options.default_backend_set_name | default(omit) }}'
-    port: '{{ oci_nlb_listener_options.port | default(omit) }}'
-    protocol: '{{ oci_nlb_listener_options.protocol | default(omit) }}'
+    <<: *oci_nlb_listener_operation
   register: oci_nlb_listener_repeat
 
 - name: Repeat listener change in check mode
   ansible.oci.oci_network_loadbalancer_listener:
-    network_load_balancer_id: '{{ oci_nlb_test_id }}'
-    state: '{{ oci_nlb_listener_state }}'
-    name: '{{ oci_nlb_listener_options.name }}'
-    default_backend_set_name: '{{ oci_nlb_listener_options.default_backend_set_name | default(omit) }}'
-    port: '{{ oci_nlb_listener_options.port | default(omit) }}'
-    protocol: '{{ oci_nlb_listener_options.protocol | default(omit) }}'
+    <<: *oci_nlb_listener_operation
   check_mode: true
   register: oci_nlb_listener_repeat_check
 

@@ -21,7 +21,7 @@
   block:
 
     - name: Check bucket creation without changing OCI
-      ansible.oci.oci_object_storage_bucket:
+      ansible.oci.oci_object_storage_bucket: &bucket_create
         state: present
         name: '{{ oci_object_storage_bucket_name }}'
         compartment_id: '{{ oci_integration_compartment_id }}'
@@ -45,18 +45,7 @@
 
     - name: Create bucket
       ansible.oci.oci_object_storage_bucket:
-        state: present
-        name: '{{ oci_object_storage_bucket_name }}'
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        storage_tier: Standard
-        public_access_type: NoPublicAccess
-        versioning: Disabled
-        metadata:
-          phase: create
-        object_events_enabled: false
-        auto_tiering: Disabled
-        freeform_tags:
-          phase: create
+        <<: *bucket_create
       register: bucket_create
 
     - name: Remember bucket for cleanup
@@ -98,35 +87,13 @@
 
     - name: Reconcile created bucket in check mode
       ansible.oci.oci_object_storage_bucket:
-        state: present
-        name: '{{ oci_object_storage_bucket_name }}'
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        storage_tier: Standard
-        public_access_type: NoPublicAccess
-        versioning: Disabled
-        metadata:
-          phase: create
-        object_events_enabled: false
-        auto_tiering: Disabled
-        freeform_tags:
-          phase: create
+        <<: *bucket_create
       check_mode: true
       register: bucket_create_check_rerun
 
     - name: Reconcile created bucket again
       ansible.oci.oci_object_storage_bucket:
-        state: present
-        name: '{{ oci_object_storage_bucket_name }}'
-        compartment_id: '{{ oci_integration_compartment_id }}'
-        storage_tier: Standard
-        public_access_type: NoPublicAccess
-        versioning: Disabled
-        metadata:
-          phase: create
-        object_events_enabled: false
-        auto_tiering: Disabled
-        freeform_tags:
-          phase: create
+        <<: *bucket_create
       register: bucket_create_rerun
 
     - name: Verify bucket creation is idempotent

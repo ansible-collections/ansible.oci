@@ -51,7 +51,7 @@
           bastion_id: ''
 
     - name: Create bastion in check mode
-      ansible.oci.oci_bastion:
+      ansible.oci.oci_bastion: &oci_bastion_create_module_options
         state: '{{ oci_bastion_create_params.state }}'
         compartment_id: '{{ oci_bastion_create_params.compartment_id }}'
         name: '{{ oci_bastion_create_params.name }}'
@@ -80,13 +80,7 @@
 
     - name: Create bastion
       ansible.oci.oci_bastion:
-        state: '{{ oci_bastion_create_params.state }}'
-        compartment_id: '{{ oci_bastion_create_params.compartment_id }}'
-        name: '{{ oci_bastion_create_params.name }}'
-        target_subnet_id: '{{ oci_bastion_create_params.target_subnet_id }}'
-        client_cidr_block_allow_list: '{{ oci_bastion_create_params.client_cidr_block_allow_list }}'
-        max_session_ttl_in_seconds: '{{ oci_bastion_create_params.max_session_ttl_in_seconds }}'
-        freeform_tags: '{{ oci_bastion_create_params.freeform_tags }}'
+        <<: *oci_bastion_create_module_options
       register: oci_bastion_create
 
     - name: Capture bastion id and define update parameters
@@ -139,13 +133,7 @@
 
     - name: Assert created bastion is a no-op on rerun with unique name
       ansible.oci.oci_bastion:
-        state: '{{ oci_bastion_create_params.state }}'
-        compartment_id: '{{ oci_bastion_create_params.compartment_id }}'
-        name: '{{ oci_bastion_create_params.name }}'
-        target_subnet_id: '{{ oci_bastion_create_params.target_subnet_id }}'
-        client_cidr_block_allow_list: '{{ oci_bastion_create_params.client_cidr_block_allow_list }}'
-        max_session_ttl_in_seconds: '{{ oci_bastion_create_params.max_session_ttl_in_seconds }}'
-        freeform_tags: '{{ oci_bastion_create_params.freeform_tags }}'
+        <<: *oci_bastion_create_module_options
       register: oci_bastion_create_rerun_by_name
 
     - name: Verify bastion rerun with unique name is a no-op
@@ -156,13 +144,7 @@
 
     - name: Assert created bastion is a no-op on rerun with returned id
       ansible.oci.oci_bastion:
-        state: '{{ oci_bastion_create_params.state }}'
-        compartment_id: '{{ oci_bastion_create_params.compartment_id }}'
-        name: '{{ oci_bastion_create_params.name }}'
-        target_subnet_id: '{{ oci_bastion_create_params.target_subnet_id }}'
-        client_cidr_block_allow_list: '{{ oci_bastion_create_params.client_cidr_block_allow_list }}'
-        max_session_ttl_in_seconds: '{{ oci_bastion_create_params.max_session_ttl_in_seconds }}'
-        freeform_tags: '{{ oci_bastion_create_params.freeform_tags }}'
+        <<: *oci_bastion_create_module_options
         bastion_id: '{{ oci_bastion_id }}'
       register: oci_bastion_create_rerun
 
@@ -172,7 +154,7 @@
           - not oci_bastion_create_rerun.changed | bool
 
     - name: Update bastion in check mode
-      ansible.oci.oci_bastion:
+      ansible.oci.oci_bastion: &oci_bastion_update_module_options
         state: '{{ oci_bastion_update_params.state }}'
         bastion_id: '{{ oci_bastion_update_params.bastion_id }}'
         max_session_ttl_in_seconds: '{{ oci_bastion_update_params.max_session_ttl_in_seconds }}'
@@ -201,10 +183,7 @@
 
     - name: Update bastion
       ansible.oci.oci_bastion:
-        state: '{{ oci_bastion_update_params.state }}'
-        bastion_id: '{{ oci_bastion_update_params.bastion_id }}'
-        max_session_ttl_in_seconds: '{{ oci_bastion_update_params.max_session_ttl_in_seconds }}'
-        freeform_tags: '{{ oci_bastion_update_params.freeform_tags }}'
+        <<: *oci_bastion_update_module_options
       register: oci_bastion_update
 
     - name: Assert update reported a change
@@ -228,10 +207,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_bastion:
-        state: '{{ oci_bastion_update_params.state }}'
-        bastion_id: '{{ oci_bastion_update_params.bastion_id }}'
-        max_session_ttl_in_seconds: '{{ oci_bastion_update_params.max_session_ttl_in_seconds }}'
-        freeform_tags: '{{ oci_bastion_update_params.freeform_tags }}'
+        <<: *oci_bastion_update_module_options
       register: oci_bastion_update_rerun
 
     - name: Verify update rerun is a no-op
@@ -240,7 +216,7 @@
           - not oci_bastion_update_rerun.changed | bool
 
     - name: Delete bastion in check mode
-      ansible.oci.oci_bastion:
+      ansible.oci.oci_bastion: &oci_bastion_delete_module_options
         state: '{{ oci_bastion_delete_params.state }}'
         bastion_id: '{{ oci_bastion_delete_params.bastion_id }}'
       check_mode: true
@@ -263,8 +239,7 @@
 
     - name: Delete bastion
       ansible.oci.oci_bastion:
-        state: '{{ oci_bastion_delete_params.state }}'
-        bastion_id: '{{ oci_bastion_delete_params.bastion_id }}'
+        <<: *oci_bastion_delete_module_options
       register: oci_bastion_delete
 
     - name: Assert delete reported a change
@@ -274,8 +249,7 @@
 
     - name: Assert delete is idempotent on rerun
       ansible.oci.oci_bastion:
-        state: '{{ oci_bastion_delete_params.state }}'
-        bastion_id: '{{ oci_bastion_delete_params.bastion_id }}'
+        <<: *oci_bastion_delete_module_options
       register: oci_bastion_delete_rerun
 
     - name: Verify delete rerun is a no-op

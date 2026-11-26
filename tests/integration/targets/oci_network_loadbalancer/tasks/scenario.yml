@@ -1,13 +1,13 @@
 ---
 - name: Read the network load balancer before the scenario
-  ansible.oci.oci_network_loadbalancer_info:
+  ansible.oci.oci_network_loadbalancer_info: &oci_nlb_probe
     compartment_id: '{{ oci_integration_compartment_id }}'
     name: '{{ oci_nlb_case_name }}'
     network_load_balancer_id: '{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}'
   register: oci_nlb_before
 
 - name: Run the scenario in check mode
-  ansible.oci.oci_network_loadbalancer:
+  ansible.oci.oci_network_loadbalancer: &oci_nlb_operation
     state: '{{ oci_nlb_case_operation.state | default(''present'') }}'
     network_load_balancer_id: '{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}'
     compartment_id: '{{ oci_nlb_case_operation.compartment_id | default(omit) }}'
@@ -31,9 +31,7 @@
 
 - name: Read the resource after check mode
   ansible.oci.oci_network_loadbalancer_info:
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_nlb_case_name }}'
-    network_load_balancer_id: '{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}'
+    <<: *oci_nlb_probe
   register: oci_nlb_after_prediction
 
 - name: Check that check mode predicts change without changing OCI
@@ -44,24 +42,7 @@
 
 - name: Apply the scenario
   ansible.oci.oci_network_loadbalancer:
-    state: '{{ oci_nlb_case_operation.state | default(''present'') }}'
-    network_load_balancer_id: '{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}'
-    compartment_id: '{{ oci_nlb_case_operation.compartment_id | default(omit) }}'
-    name: '{{ oci_nlb_case_operation.name | default(omit) }}'
-    subnet_id: '{{ oci_nlb_case_operation.subnet_id | default(omit) }}'
-    is_private: '{{ oci_nlb_case_operation.is_private | default(omit) }}'
-    ip_mode: '{{ oci_nlb_case_operation.ip_mode | default(omit) }}'
-    assigned_private_ipv4: '{{ oci_nlb_case_operation.assigned_private_ipv4 | default(omit) }}'
-    assigned_ipv6: '{{ oci_nlb_case_operation.assigned_ipv6 | default(omit) }}'
-    subnet_ipv6_cidr: '{{ oci_nlb_case_operation.subnet_ipv6_cidr | default(omit) }}'
-    reserved_ips: '{{ oci_nlb_case_operation.reserved_ips | default(omit) }}'
-    network_security_group_ids: '{{ oci_nlb_case_operation.network_security_group_ids | default(omit) }}'
-    is_preserve_source_destination: '{{ oci_nlb_case_operation.is_preserve_source_destination | default(omit) }}'
-    is_symmetric_hash_enabled: '{{ oci_nlb_case_operation.is_symmetric_hash_enabled | default(omit) }}'
-    freeform_tags: '{{ oci_nlb_case_operation.freeform_tags | default(omit) }}'
-    defined_tags: '{{ oci_nlb_case_operation.defined_tags | default(omit) }}'
-    security_attributes: '{{ oci_nlb_case_operation.security_attributes | default(omit) }}'
-    wait: true
+    <<: *oci_nlb_operation
   register: oci_nlb_applied
 
 - name: Save network load balancer identifier
@@ -96,46 +77,12 @@
 
 - name: Repeat the scenario in normal mode
   ansible.oci.oci_network_loadbalancer:
-    state: '{{ oci_nlb_case_operation.state | default(''present'') }}'
-    network_load_balancer_id: '{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}'
-    compartment_id: '{{ oci_nlb_case_operation.compartment_id | default(omit) }}'
-    name: '{{ oci_nlb_case_operation.name | default(omit) }}'
-    subnet_id: '{{ oci_nlb_case_operation.subnet_id | default(omit) }}'
-    is_private: '{{ oci_nlb_case_operation.is_private | default(omit) }}'
-    ip_mode: '{{ oci_nlb_case_operation.ip_mode | default(omit) }}'
-    assigned_private_ipv4: '{{ oci_nlb_case_operation.assigned_private_ipv4 | default(omit) }}'
-    assigned_ipv6: '{{ oci_nlb_case_operation.assigned_ipv6 | default(omit) }}'
-    subnet_ipv6_cidr: '{{ oci_nlb_case_operation.subnet_ipv6_cidr | default(omit) }}'
-    reserved_ips: '{{ oci_nlb_case_operation.reserved_ips | default(omit) }}'
-    network_security_group_ids: '{{ oci_nlb_case_operation.network_security_group_ids | default(omit) }}'
-    is_preserve_source_destination: '{{ oci_nlb_case_operation.is_preserve_source_destination | default(omit) }}'
-    is_symmetric_hash_enabled: '{{ oci_nlb_case_operation.is_symmetric_hash_enabled | default(omit) }}'
-    freeform_tags: '{{ oci_nlb_case_operation.freeform_tags | default(omit) }}'
-    defined_tags: '{{ oci_nlb_case_operation.defined_tags | default(omit) }}'
-    security_attributes: '{{ oci_nlb_case_operation.security_attributes | default(omit) }}'
-    wait: true
+    <<: *oci_nlb_operation
   register: oci_nlb_rerun
 
 - name: Repeat the scenario in check mode
   ansible.oci.oci_network_loadbalancer:
-    state: '{{ oci_nlb_case_operation.state | default(''present'') }}'
-    network_load_balancer_id: '{{ oci_nlb_case_operation.network_load_balancer_id | default(omit) }}'
-    compartment_id: '{{ oci_nlb_case_operation.compartment_id | default(omit) }}'
-    name: '{{ oci_nlb_case_operation.name | default(omit) }}'
-    subnet_id: '{{ oci_nlb_case_operation.subnet_id | default(omit) }}'
-    is_private: '{{ oci_nlb_case_operation.is_private | default(omit) }}'
-    ip_mode: '{{ oci_nlb_case_operation.ip_mode | default(omit) }}'
-    assigned_private_ipv4: '{{ oci_nlb_case_operation.assigned_private_ipv4 | default(omit) }}'
-    assigned_ipv6: '{{ oci_nlb_case_operation.assigned_ipv6 | default(omit) }}'
-    subnet_ipv6_cidr: '{{ oci_nlb_case_operation.subnet_ipv6_cidr | default(omit) }}'
-    reserved_ips: '{{ oci_nlb_case_operation.reserved_ips | default(omit) }}'
-    network_security_group_ids: '{{ oci_nlb_case_operation.network_security_group_ids | default(omit) }}'
-    is_preserve_source_destination: '{{ oci_nlb_case_operation.is_preserve_source_destination | default(omit) }}'
-    is_symmetric_hash_enabled: '{{ oci_nlb_case_operation.is_symmetric_hash_enabled | default(omit) }}'
-    freeform_tags: '{{ oci_nlb_case_operation.freeform_tags | default(omit) }}'
-    defined_tags: '{{ oci_nlb_case_operation.defined_tags | default(omit) }}'
-    security_attributes: '{{ oci_nlb_case_operation.security_attributes | default(omit) }}'
-    wait: true
+    <<: *oci_nlb_operation
   check_mode: true
   register: oci_nlb_check_rerun
 

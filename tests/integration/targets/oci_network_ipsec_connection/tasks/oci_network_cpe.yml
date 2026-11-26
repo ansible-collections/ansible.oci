@@ -1,6 +1,6 @@
 ---
 - name: Check CPE creation
-  ansible.oci.oci_network_cpe:
+  ansible.oci.oci_network_cpe: &oci_ipsec_cpe_create
     state: present
     compartment_id: '{{ oci_integration_compartment_id }}'
     name: '{{ oci_ipsec_cpe_name }}'
@@ -25,11 +25,7 @@
 
 - name: Create CPE
   ansible.oci.oci_network_cpe:
-    state: present
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_ipsec_cpe_name }}'
-    ip_address: '{{ oci_ipsec_integration_cpe_ip_address }}'
-    freeform_tags: '{{ oci_ipsec_integration_create_tags }}'
+    <<: *oci_ipsec_cpe_create
   register: oci_ipsec_cpe
 
 - name: Save CPE identifier
@@ -44,11 +40,7 @@
 
 - name: Verify CPE creation is idempotent
   ansible.oci.oci_network_cpe:
-    state: present
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_ipsec_cpe_name }}'
-    ip_address: '{{ oci_ipsec_integration_cpe_ip_address }}'
-    freeform_tags: '{{ oci_ipsec_integration_create_tags }}'
+    <<: *oci_ipsec_cpe_create
   register: oci_ipsec_cpe_rerun
 
 - name: Assert CPE rerun is unchanged
@@ -57,11 +49,7 @@
 
 - name: Check CPE creation rerun
   ansible.oci.oci_network_cpe:
-    state: present
-    compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_ipsec_cpe_name }}'
-    ip_address: '{{ oci_ipsec_integration_cpe_ip_address }}'
-    freeform_tags: '{{ oci_ipsec_integration_create_tags }}'
+    <<: *oci_ipsec_cpe_create
   check_mode: true
   register: oci_ipsec_cpe_create_check_rerun
 
@@ -70,7 +58,7 @@
     that: not oci_ipsec_cpe_create_check_rerun.changed | bool
 
 - name: Check CPE update
-  ansible.oci.oci_network_cpe:
+  ansible.oci.oci_network_cpe: &oci_ipsec_cpe_update
     state: present
     cpe_id: '{{ oci_ipsec_cpe_id }}'
     name: '{{ oci_ipsec_cpe_updated_name }}'
@@ -95,10 +83,7 @@
 
 - name: Update CPE
   ansible.oci.oci_network_cpe:
-    state: present
-    cpe_id: '{{ oci_ipsec_cpe_id }}'
-    name: '{{ oci_ipsec_cpe_updated_name }}'
-    freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
+    <<: *oci_ipsec_cpe_update
   register: oci_ipsec_cpe_updated
 
 - name: Assert CPE update changed the resource
@@ -107,10 +92,7 @@
 
 - name: Verify CPE update is idempotent
   ansible.oci.oci_network_cpe:
-    state: present
-    cpe_id: '{{ oci_ipsec_cpe_id }}'
-    name: '{{ oci_ipsec_cpe_updated_name }}'
-    freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
+    <<: *oci_ipsec_cpe_update
   register: oci_ipsec_cpe_update_rerun
 
 - name: Assert CPE update rerun is unchanged
@@ -119,10 +101,7 @@
 
 - name: Check CPE update rerun
   ansible.oci.oci_network_cpe:
-    state: present
-    cpe_id: '{{ oci_ipsec_cpe_id }}'
-    name: '{{ oci_ipsec_cpe_updated_name }}'
-    freeform_tags: '{{ oci_ipsec_integration_update_tags }}'
+    <<: *oci_ipsec_cpe_update
   check_mode: true
   register: oci_ipsec_cpe_update_check_rerun
 

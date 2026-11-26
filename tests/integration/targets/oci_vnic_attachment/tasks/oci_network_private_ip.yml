@@ -106,7 +106,7 @@
           }}
 
     - name: Create secondary private IP in check mode
-      ansible.oci.oci_network_private_ip:
+      ansible.oci.oci_network_private_ip: &private_ip_create_options
         state: present
         name: '{{ oci_network_private_ip_integration_name }}'
         vnic_id: '{{ oci_network_private_ip_primary_vnic_id }}'
@@ -124,13 +124,7 @@
 
     - name: Create secondary private IP
       ansible.oci.oci_network_private_ip:
-        state: present
-        name: '{{ oci_network_private_ip_integration_name }}'
-        vnic_id: '{{ oci_network_private_ip_primary_vnic_id }}'
-        ip_address: '{{ oci_network_private_ip_integration_ip_address }}'
-        hostname_label: '{{ oci_network_private_ip_integration_hostname }}'
-        lifetime: ephemeral
-        freeform_tags: '{{ oci_network_private_ip_integration_create_tags }}'
+        <<: *private_ip_create_options
       register: oci_network_private_ip_create
 
     - name: Capture private IP ID
@@ -148,13 +142,7 @@
 
     - name: Reconcile private IP by scoped name
       ansible.oci.oci_network_private_ip:
-        state: present
-        name: '{{ oci_network_private_ip_integration_name }}'
-        vnic_id: '{{ oci_network_private_ip_primary_vnic_id }}'
-        ip_address: '{{ oci_network_private_ip_integration_ip_address }}'
-        hostname_label: '{{ oci_network_private_ip_integration_hostname }}'
-        lifetime: ephemeral
-        freeform_tags: '{{ oci_network_private_ip_integration_create_tags }}'
+        <<: *private_ip_create_options
       register: oci_network_private_ip_create_rerun
 
     - name: Assert create reconciliation is idempotent
@@ -164,7 +152,7 @@
           - oci_network_private_ip_create_rerun.resource.id == oci_network_private_ip_id
 
     - name: Update private IP in check mode
-      ansible.oci.oci_network_private_ip:
+      ansible.oci.oci_network_private_ip: &private_ip_update_options
         state: present
         private_ip_id: '{{ oci_network_private_ip_id }}'
         name: '{{ oci_network_private_ip_integration_updated_name }}'
@@ -199,14 +187,7 @@
 
     - name: Update and reassign private IP
       ansible.oci.oci_network_private_ip:
-        state: present
-        private_ip_id: '{{ oci_network_private_ip_id }}'
-        name: '{{ oci_network_private_ip_integration_updated_name }}'
-        hostname_label: '{{ oci_network_private_ip_integration_updated_hostname }}'
-        vnic_id: '{{ oci_network_private_ip_secondary_vnic_id }}'
-        lifetime: reserved
-        route_table_id: '{{ oci_network_private_ip_vcn_create.resource.default_route_table_id }}'
-        freeform_tags: '{{ oci_network_private_ip_integration_update_tags }}'
+        <<: *private_ip_update_options
       register: oci_network_private_ip_update
 
     - name: Assert update returned the expected private IP
@@ -224,14 +205,7 @@
 
     - name: Reapply private IP update
       ansible.oci.oci_network_private_ip:
-        state: present
-        private_ip_id: '{{ oci_network_private_ip_id }}'
-        name: '{{ oci_network_private_ip_integration_updated_name }}'
-        hostname_label: '{{ oci_network_private_ip_integration_updated_hostname }}'
-        vnic_id: '{{ oci_network_private_ip_secondary_vnic_id }}'
-        lifetime: reserved
-        route_table_id: '{{ oci_network_private_ip_vcn_create.resource.default_route_table_id }}'
-        freeform_tags: '{{ oci_network_private_ip_integration_update_tags }}'
+        <<: *private_ip_update_options
       register: oci_network_private_ip_update_rerun
 
     - name: Assert update is idempotent
@@ -240,7 +214,7 @@
           - not oci_network_private_ip_update_rerun.changed | bool
 
     - name: Delete private IP in check mode
-      ansible.oci.oci_network_private_ip:
+      ansible.oci.oci_network_private_ip: &private_ip_delete_options
         state: absent
         private_ip_id: '{{ oci_network_private_ip_id }}'
       check_mode: true
@@ -253,14 +227,7 @@
 
     - name: Verify delete check mode did not remove the private IP
       ansible.oci.oci_network_private_ip:
-        state: present
-        private_ip_id: '{{ oci_network_private_ip_id }}'
-        name: '{{ oci_network_private_ip_integration_updated_name }}'
-        hostname_label: '{{ oci_network_private_ip_integration_updated_hostname }}'
-        vnic_id: '{{ oci_network_private_ip_secondary_vnic_id }}'
-        lifetime: reserved
-        route_table_id: '{{ oci_network_private_ip_vcn_create.resource.default_route_table_id }}'
-        freeform_tags: '{{ oci_network_private_ip_integration_update_tags }}'
+        <<: *private_ip_update_options
       register: oci_network_private_ip_delete_check_probe
 
     - name: Assert private IP remains after delete check mode
@@ -270,8 +237,7 @@
 
     - name: Delete private IP
       ansible.oci.oci_network_private_ip:
-        state: absent
-        private_ip_id: '{{ oci_network_private_ip_id }}'
+        <<: *private_ip_delete_options
       register: oci_network_private_ip_delete
 
     - name: Assert delete reported a change
@@ -281,8 +247,7 @@
 
     - name: Delete private IP again
       ansible.oci.oci_network_private_ip:
-        state: absent
-        private_ip_id: '{{ oci_network_private_ip_id }}'
+        <<: *private_ip_delete_options
       register: oci_network_private_ip_delete_rerun
 
     - name: Assert repeated delete is idempotent

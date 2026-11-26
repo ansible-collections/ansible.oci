@@ -53,7 +53,7 @@
       block:
 
         - name: Delete autonomous database in check mode
-          ansible.oci.oci_autonomous_database:
+          ansible.oci.oci_autonomous_database: &oci_adb_delete_module_options
             state: '{{ oci_adb_delete_params.state }}'
             autonomous_database_id: '{{ oci_adb_delete_params.autonomous_database_id }}'
           check_mode: true
@@ -76,8 +76,7 @@
 
         - name: Delete autonomous database
           ansible.oci.oci_autonomous_database:
-            state: '{{ oci_adb_delete_params.state }}'
-            autonomous_database_id: '{{ oci_adb_delete_params.autonomous_database_id }}'
+            <<: *oci_adb_delete_module_options
           register: oci_cleanup_delete_autonomous_database
 
         - name: Assert delete reported a change
@@ -87,8 +86,7 @@
 
         - name: Assert delete is idempotent on rerun
           ansible.oci.oci_autonomous_database:
-            state: '{{ oci_adb_delete_params.state }}'
-            autonomous_database_id: '{{ oci_adb_delete_params.autonomous_database_id }}'
+            <<: *oci_adb_delete_module_options
           register: oci_cleanup_assert_delete_is_idempotent_on_rerun
 
         - name: Verify delete rerun is a no-op

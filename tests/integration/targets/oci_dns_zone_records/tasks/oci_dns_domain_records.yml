@@ -1,6 +1,6 @@
 ---
 - name: Predict domain record deletion for create coverage
-  ansible.oci.oci_dns_domain_records:
+  ansible.oci.oci_dns_domain_records: &domain_create_absent
     state: absent
     zone_name_or_id: '{{ oci_dns_records_case.zone }}'
     scope: '{{ oci_dns_records_case.scope }}'
@@ -25,15 +25,11 @@
 
 - name: Delete domain records before create test
   ansible.oci.oci_dns_domain_records:
-    state: absent
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
+    <<: *domain_create_absent
   register: oci_dns_domain_create_delete
 
 - name: Predict domain record creation
-  ansible.oci.oci_dns_domain_records:
+  ansible.oci.oci_dns_domain_records: &domain_create_present
     state: present
     zone_name_or_id: '{{ oci_dns_records_case.zone }}'
     scope: '{{ oci_dns_records_case.scope }}'
@@ -59,32 +55,17 @@
 
 - name: Create domain records
   ansible.oci.oci_dns_domain_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
-    update_items: '{{ oci_dns_records_initial[:3] }}'
+    <<: *domain_create_present
   register: oci_dns_domain_create
 
 - name: Reapply domain create
   ansible.oci.oci_dns_domain_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
-    update_items: '{{ oci_dns_records_initial[:3] }}'
+    <<: *domain_create_present
   register: oci_dns_domain_create_repeat
 
 - name: Recheck domain create
   ansible.oci.oci_dns_domain_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
-    update_items: '{{ oci_dns_records_initial[:3] }}'
+    <<: *domain_create_present
   check_mode: true
   register: oci_dns_domain_create_check_repeat
 
@@ -96,7 +77,7 @@
       - not oci_dns_domain_create_check_repeat.changed | bool
 
 - name: Predict domain record replacement
-  ansible.oci.oci_dns_domain_records:
+  ansible.oci.oci_dns_domain_records: &domain_present
     state: present
     zone_name_or_id: '{{ oci_dns_records_case.zone }}'
     scope: '{{ oci_dns_records_case.scope }}'
@@ -127,12 +108,7 @@
 
 - name: Replace domain records
   ansible.oci.oci_dns_domain_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
-    update_items: '{{ oci_dns_records_updated }}'
+    <<: *domain_present
   register: oci_dns_domain_update
 
 - name: Verify domain update result
@@ -143,22 +119,12 @@
 
 - name: Verify domain update reruns are unchanged
   ansible.oci.oci_dns_domain_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
-    update_items: '{{ oci_dns_records_updated }}'
+    <<: *domain_present
   register: oci_dns_domain_update_repeat
 
 - name: Verify domain update check reruns are unchanged
   ansible.oci.oci_dns_domain_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    domain: '{{ oci_dns_records_domain }}'
-    update_items: '{{ oci_dns_records_updated }}'
+    <<: *domain_present
   check_mode: true
   register: oci_dns_domain_update_check_repeat
 

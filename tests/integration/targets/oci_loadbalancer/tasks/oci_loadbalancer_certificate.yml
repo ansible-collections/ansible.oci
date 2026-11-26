@@ -56,7 +56,7 @@
       register: oci_lb_before
 
     - name: Predict certificate creation
-      ansible.oci.oci_loadbalancer_certificate:
+      ansible.oci.oci_loadbalancer_certificate: &oci_lb_certificate_present
         load_balancer_id: '{{ oci_lb_test_id }}'
         name: '{{ oci_lb_certificate_name }}'
         public_certificate: '{{ oci_lb_public_certificate }}'
@@ -78,10 +78,7 @@
 
     - name: Create the certificate bundle
       ansible.oci.oci_loadbalancer_certificate:
-        load_balancer_id: '{{ oci_lb_test_id }}'
-        name: '{{ oci_lb_certificate_name }}'
-        public_certificate: '{{ oci_lb_public_certificate }}'
-        private_key: '{{ oci_lb_private_key }}'
+        <<: *oci_lb_certificate_present
       register: oci_lb_applied
       no_log: true
 
@@ -135,19 +132,13 @@
 
     - name: Test certificate creation idempotency
       ansible.oci.oci_loadbalancer_certificate:
-        load_balancer_id: '{{ oci_lb_test_id }}'
-        name: '{{ oci_lb_certificate_name }}'
-        public_certificate: '{{ oci_lb_public_certificate }}'
-        private_key: '{{ oci_lb_private_key }}'
+        <<: *oci_lb_certificate_present
       register: oci_lb_repeat
       no_log: true
 
     - name: Test certificate creation idempotency in check mode
       ansible.oci.oci_loadbalancer_certificate:
-        load_balancer_id: '{{ oci_lb_test_id }}'
-        name: '{{ oci_lb_certificate_name }}'
-        public_certificate: '{{ oci_lb_public_certificate }}'
-        private_key: '{{ oci_lb_private_key }}'
+        <<: *oci_lb_certificate_present
       check_mode: true
       register: oci_lb_repeat_check
       no_log: true

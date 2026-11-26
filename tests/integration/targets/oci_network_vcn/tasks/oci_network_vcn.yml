@@ -40,7 +40,7 @@
           vcn_id: ''
 
     - name: Create VCN in check mode
-      ansible.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn: &oci_network_vcn_create_module_options
         state: '{{ oci_network_vcn_create_params.state }}'
         compartment_id: '{{ oci_network_vcn_create_params.compartment_id }}'
         name: '{{ oci_network_vcn_create_params.name }}'
@@ -68,12 +68,7 @@
 
     - name: Create VCN
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_create_params.state }}'
-        compartment_id: '{{ oci_network_vcn_create_params.compartment_id }}'
-        name: '{{ oci_network_vcn_create_params.name }}'
-        cidr_blocks: '{{ oci_network_vcn_create_params.cidr_blocks }}'
-        dns_label: '{{ oci_network_vcn_create_params.dns_label }}'
-        freeform_tags: '{{ oci_network_vcn_create_params.freeform_tags }}'
+        <<: *oci_network_vcn_create_module_options
       register: oci_network_vcn_create
 
     - name: Capture VCN id and define update parameters
@@ -133,12 +128,7 @@
 
     - name: Assert created VCN is a no-op on rerun with unique name
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_create_params.state }}'
-        compartment_id: '{{ oci_network_vcn_create_params.compartment_id }}'
-        name: '{{ oci_network_vcn_create_params.name }}'
-        cidr_blocks: '{{ oci_network_vcn_create_params.cidr_blocks }}'
-        dns_label: '{{ oci_network_vcn_create_params.dns_label }}'
-        freeform_tags: '{{ oci_network_vcn_create_params.freeform_tags }}'
+        <<: *oci_network_vcn_create_module_options
       register: oci_network_vcn_create_rerun_by_name
 
     - name: Verify rerun with unique name is a no-op
@@ -180,12 +170,7 @@
 
     - name: Assert created VCN is a no-op on rerun with returned id
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_create_params.state }}'
-        compartment_id: '{{ oci_network_vcn_create_params.compartment_id }}'
-        name: '{{ oci_network_vcn_create_params.name }}'
-        cidr_blocks: '{{ oci_network_vcn_create_params.cidr_blocks }}'
-        dns_label: '{{ oci_network_vcn_create_params.dns_label }}'
-        freeform_tags: '{{ oci_network_vcn_create_params.freeform_tags }}'
+        <<: *oci_network_vcn_create_module_options
         vcn_id: '{{ oci_network_vcn_id }}'
       register: oci_network_vcn_create_rerun
 
@@ -195,7 +180,7 @@
           - not oci_network_vcn_create_rerun.changed | bool
 
     - name: Update VCN CIDR in check mode
-      ansible.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn: &oci_network_vcn_cidr_modify_module_options
         state: '{{ oci_network_vcn_cidr_modify_params.state }}'
         vcn_id: '{{ oci_network_vcn_cidr_modify_params.vcn_id }}'
         cidr_blocks: '{{ oci_network_vcn_cidr_modify_params.cidr_blocks }}'
@@ -220,9 +205,7 @@
 
     - name: Modify primary VCN CIDR block
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_cidr_modify_params.state }}'
-        vcn_id: '{{ oci_network_vcn_cidr_modify_params.vcn_id }}'
-        cidr_blocks: '{{ oci_network_vcn_cidr_modify_params.cidr_blocks }}'
+        <<: *oci_network_vcn_cidr_modify_module_options
       register: oci_network_vcn_cidr_modify
 
     - name: Assert primary CIDR modify reported a change
@@ -245,9 +228,7 @@
 
     - name: Assert primary CIDR modify is idempotent on rerun
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_cidr_modify_params.state }}'
-        vcn_id: '{{ oci_network_vcn_cidr_modify_params.vcn_id }}'
-        cidr_blocks: '{{ oci_network_vcn_cidr_modify_params.cidr_blocks }}'
+        <<: *oci_network_vcn_cidr_modify_module_options
       register: oci_network_vcn_cidr_modify_rerun
 
     - name: Verify primary CIDR modify rerun is a no-op
@@ -256,7 +237,7 @@
           - not oci_network_vcn_cidr_modify_rerun.changed | bool
 
     - name: Add an additional VCN CIDR block
-      ansible.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn: &oci_network_vcn_cidr_add_module_options
         state: '{{ oci_network_vcn_cidr_add_params.state }}'
         vcn_id: '{{ oci_network_vcn_cidr_add_params.vcn_id }}'
         cidr_blocks: '{{ oci_network_vcn_cidr_add_params.cidr_blocks }}'
@@ -283,9 +264,7 @@
 
     - name: Assert additional CIDR add is idempotent on rerun
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_cidr_add_params.state }}'
-        vcn_id: '{{ oci_network_vcn_cidr_add_params.vcn_id }}'
-        cidr_blocks: '{{ oci_network_vcn_cidr_add_params.cidr_blocks }}'
+        <<: *oci_network_vcn_cidr_add_module_options
       register: oci_network_vcn_cidr_add_rerun
 
     - name: Verify additional CIDR add rerun is a no-op
@@ -294,7 +273,7 @@
           - not oci_network_vcn_cidr_add_rerun.changed | bool
 
     - name: Update VCN in check mode
-      ansible.oci.oci_network_vcn:
+      ansible.oci.oci_network_vcn: &oci_network_vcn_update_module_options
         state: '{{ oci_network_vcn_update_params.state }}'
         vcn_id: '{{ oci_network_vcn_update_params.vcn_id }}'
         cidr_blocks: '{{ oci_network_vcn_update_params.cidr_blocks }}'
@@ -326,11 +305,7 @@
 
     - name: Update VCN
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_update_params.state }}'
-        vcn_id: '{{ oci_network_vcn_update_params.vcn_id }}'
-        cidr_blocks: '{{ oci_network_vcn_update_params.cidr_blocks }}'
-        name: '{{ oci_network_vcn_update_params.name }}'
-        freeform_tags: '{{ oci_network_vcn_update_params.freeform_tags }}'
+        <<: *oci_network_vcn_update_module_options
       register: oci_network_vcn_update
 
     - name: Assert update reported a change
@@ -355,11 +330,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_network_vcn:
-        state: '{{ oci_network_vcn_update_params.state }}'
-        vcn_id: '{{ oci_network_vcn_update_params.vcn_id }}'
-        cidr_blocks: '{{ oci_network_vcn_update_params.cidr_blocks }}'
-        name: '{{ oci_network_vcn_update_params.name }}'
-        freeform_tags: '{{ oci_network_vcn_update_params.freeform_tags }}'
+        <<: *oci_network_vcn_update_module_options
       register: oci_network_vcn_update_rerun
 
     - name: Verify update rerun is a no-op

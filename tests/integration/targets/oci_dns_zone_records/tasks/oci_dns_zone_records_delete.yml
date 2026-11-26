@@ -1,11 +1,11 @@
 ---
 - name: Predict clearing mutable zone records
-  ansible.oci.oci_dns_zone_records:
+  ansible.oci.oci_dns_zone_records: &zone_absent
     state: present
     zone_name_or_id: '{{ oci_dns_records_case.zone }}'
     scope: '{{ oci_dns_records_case.scope }}'
     view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    update_items: &id001 []
+    update_items: []
   check_mode: true
   register: oci_dns_zone_delete_check
 
@@ -30,11 +30,7 @@
 
 - name: Remove mutable zone records
   ansible.oci.oci_dns_zone_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    update_items: *id001
+    <<: *zone_absent
   register: oci_dns_zone_delete
 
 - name: Verify zone record removal
@@ -45,20 +41,12 @@
 
 - name: Repeat zone record removal
   ansible.oci.oci_dns_zone_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    update_items: *id001
+    <<: *zone_absent
   register: oci_dns_zone_delete_repeat
 
 - name: Recheck zone record removal
   ansible.oci.oci_dns_zone_records:
-    state: present
-    zone_name_or_id: '{{ oci_dns_records_case.zone }}'
-    scope: '{{ oci_dns_records_case.scope }}'
-    view_id: '{{ oci_dns_records_case.view_id | default(omit, true) }}'
-    update_items: *id001
+    <<: *zone_absent
   check_mode: true
   register: oci_dns_zone_delete_check_repeat
 

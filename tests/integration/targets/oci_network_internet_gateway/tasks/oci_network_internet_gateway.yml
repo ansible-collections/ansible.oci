@@ -45,7 +45,7 @@
           freeform_tags: '{{ oci_internet_gateway_integration_create_tags }}'
 
     - name: Create internet gateway in check mode
-      ansible.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway: &oci_internet_gateway_create_module_options
         state: '{{ oci_internet_gateway_create_params.state }}'
         compartment_id: '{{ oci_internet_gateway_create_params.compartment_id }}'
         vcn_id: '{{ oci_internet_gateway_create_params.vcn_id }}'
@@ -74,12 +74,7 @@
 
     - name: Create internet gateway
       ansible.oci.oci_network_internet_gateway:
-        state: '{{ oci_internet_gateway_create_params.state }}'
-        compartment_id: '{{ oci_internet_gateway_create_params.compartment_id }}'
-        vcn_id: '{{ oci_internet_gateway_create_params.vcn_id }}'
-        name: '{{ oci_internet_gateway_create_params.name }}'
-        is_enabled: '{{ oci_internet_gateway_create_params.is_enabled }}'
-        freeform_tags: '{{ oci_internet_gateway_create_params.freeform_tags }}'
+        <<: *oci_internet_gateway_create_module_options
       register: oci_internet_gateway_create
 
     - name: Capture internet gateway id and define update parameters
@@ -132,12 +127,7 @@
 
     - name: Assert created internet gateway is a no-op on rerun with unique name
       ansible.oci.oci_network_internet_gateway:
-        state: '{{ oci_internet_gateway_create_params.state }}'
-        compartment_id: '{{ oci_internet_gateway_create_params.compartment_id }}'
-        vcn_id: '{{ oci_internet_gateway_create_params.vcn_id }}'
-        name: '{{ oci_internet_gateway_create_params.name }}'
-        is_enabled: '{{ oci_internet_gateway_create_params.is_enabled }}'
-        freeform_tags: '{{ oci_internet_gateway_create_params.freeform_tags }}'
+        <<: *oci_internet_gateway_create_module_options
       register: oci_internet_gateway_create_rerun_by_name
 
     - name: Verify internet gateway rerun with unique name is a no-op
@@ -148,12 +138,7 @@
 
     - name: Assert created internet gateway is a no-op on rerun with returned id
       ansible.oci.oci_network_internet_gateway:
-        state: '{{ oci_internet_gateway_create_params.state }}'
-        compartment_id: '{{ oci_internet_gateway_create_params.compartment_id }}'
-        vcn_id: '{{ oci_internet_gateway_create_params.vcn_id }}'
-        name: '{{ oci_internet_gateway_create_params.name }}'
-        is_enabled: '{{ oci_internet_gateway_create_params.is_enabled }}'
-        freeform_tags: '{{ oci_internet_gateway_create_params.freeform_tags }}'
+        <<: *oci_internet_gateway_create_module_options
         internet_gateway_id: '{{ oci_internet_gateway_id }}'
       register: oci_internet_gateway_create_rerun
 
@@ -163,7 +148,7 @@
           - not oci_internet_gateway_create_rerun.changed | bool
 
     - name: Update internet gateway in check mode
-      ansible.oci.oci_network_internet_gateway:
+      ansible.oci.oci_network_internet_gateway: &oci_internet_gateway_update_module_options
         state: '{{ oci_internet_gateway_update_params.state }}'
         internet_gateway_id: '{{ oci_internet_gateway_update_params.internet_gateway_id }}'
         name: '{{ oci_internet_gateway_update_params.name }}'
@@ -193,12 +178,7 @@
 
     - name: Update internet gateway
       ansible.oci.oci_network_internet_gateway:
-        state: '{{ oci_internet_gateway_update_params.state }}'
-        internet_gateway_id: '{{ oci_internet_gateway_update_params.internet_gateway_id }}'
-        name: '{{ oci_internet_gateway_update_params.name }}'
-        is_enabled: '{{ oci_internet_gateway_update_params.is_enabled }}'
-        route_table_id: '{{ oci_internet_gateway_update_params.route_table_id }}'
-        freeform_tags: '{{ oci_internet_gateway_update_params.freeform_tags }}'
+        <<: *oci_internet_gateway_update_module_options
       register: oci_internet_gateway_update
 
     - name: Assert update reported a change
@@ -228,12 +208,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_network_internet_gateway:
-        state: '{{ oci_internet_gateway_update_params.state }}'
-        internet_gateway_id: '{{ oci_internet_gateway_update_params.internet_gateway_id }}'
-        name: '{{ oci_internet_gateway_update_params.name }}'
-        is_enabled: '{{ oci_internet_gateway_update_params.is_enabled }}'
-        route_table_id: '{{ oci_internet_gateway_update_params.route_table_id }}'
-        freeform_tags: '{{ oci_internet_gateway_update_params.freeform_tags }}'
+        <<: *oci_internet_gateway_update_module_options
       register: oci_internet_gateway_update_rerun
 
     - name: Verify update rerun is a no-op

@@ -37,7 +37,7 @@
       block:
 
         - name: Delete volume backup policy in check mode
-          ansible.oci.oci_volume_backup_policy:
+          ansible.oci.oci_volume_backup_policy: &policy_delete
             state: absent
             volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
           check_mode: true
@@ -62,8 +62,7 @@
 
         - name: Delete volume backup policy
           ansible.oci.oci_volume_backup_policy:
-            state: absent
-            volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+            <<: *policy_delete
           register: oci_cleanup_delete_volume_backup_policy
 
         - name: Assert policy deletion reported a change
@@ -84,8 +83,7 @@
 
         - name: Delete volume backup policy again in check mode
           ansible.oci.oci_volume_backup_policy:
-            state: absent
-            volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+            <<: *policy_delete
           check_mode: true
           register: oci_cleanup_delete_volume_backup_policy_again_in_check_mode
 
@@ -96,8 +94,7 @@
 
         - name: Delete volume backup policy again
           ansible.oci.oci_volume_backup_policy:
-            state: absent
-            volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+            <<: *policy_delete
           register: oci_cleanup_delete_volume_backup_policy_again
 
         - name: Assert delete rerun is idempotent

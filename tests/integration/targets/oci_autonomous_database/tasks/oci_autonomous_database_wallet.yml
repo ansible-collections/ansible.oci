@@ -10,7 +10,7 @@
     oci_adb_wallet_dest: '{{ oci_adb_wallet_dir.path }}/wallet.zip'
 
 - name: Download autonomous database wallet in check mode
-  ansible.oci.oci_autonomous_database_wallet:
+  ansible.oci.oci_autonomous_database_wallet: &oci_adb_wallet_module_options
     autonomous_database_id: '{{ oci_adb_id }}'
     dest: '{{ oci_adb_wallet_dest }}'
     password: '{{ oci_adb_integration_wallet_password }}'
@@ -30,9 +30,7 @@
 
 - name: Download autonomous database wallet
   ansible.oci.oci_autonomous_database_wallet:
-    autonomous_database_id: '{{ oci_adb_id }}'
-    dest: '{{ oci_adb_wallet_dest }}'
-    password: '{{ oci_adb_integration_wallet_password }}'
+    <<: *oci_adb_wallet_module_options
   register: oci_adb_wallet_download
 
 - name: Read wallet file after download
@@ -52,16 +50,12 @@
 
 - name: Rerun wallet download
   ansible.oci.oci_autonomous_database_wallet:
-    autonomous_database_id: '{{ oci_adb_id }}'
-    dest: '{{ oci_adb_wallet_dest }}'
-    password: '{{ oci_adb_integration_wallet_password }}'
+    <<: *oci_adb_wallet_module_options
   register: oci_adb_wallet_rerun
 
 - name: Rerun wallet download in check mode
   ansible.oci.oci_autonomous_database_wallet:
-    autonomous_database_id: '{{ oci_adb_id }}'
-    dest: '{{ oci_adb_wallet_dest }}'
-    password: '{{ oci_adb_integration_wallet_password }}'
+    <<: *oci_adb_wallet_module_options
   check_mode: true
   register: oci_adb_wallet_rerun_check
 
@@ -80,9 +74,7 @@
 
 - name: Force wallet download in check mode
   ansible.oci.oci_autonomous_database_wallet:
-    autonomous_database_id: '{{ oci_adb_id }}'
-    dest: '{{ oci_adb_wallet_dest }}'
-    password: '{{ oci_adb_integration_wallet_password }}'
+    <<: *oci_adb_wallet_module_options
     force: true
   check_mode: true
   register: oci_adb_wallet_force_check
@@ -101,9 +93,7 @@
 
 - name: Force wallet download
   ansible.oci.oci_autonomous_database_wallet:
-    autonomous_database_id: '{{ oci_adb_id }}'
-    dest: '{{ oci_adb_wallet_dest }}'
-    password: '{{ oci_adb_integration_wallet_password }}'
+    <<: *oci_adb_wallet_module_options
     force: true
   register: oci_adb_wallet_force
 

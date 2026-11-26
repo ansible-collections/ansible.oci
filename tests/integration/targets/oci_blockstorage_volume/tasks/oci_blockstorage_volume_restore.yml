@@ -29,7 +29,7 @@
           - oci_blockstorage_volume_backup_create.resource.lifecycle_state == "AVAILABLE"
 
     - name: Restore block volume from backup in check mode
-      ansible.oci.oci_blockstorage_volume:
+      ansible.oci.oci_blockstorage_volume: &oci_blockstorage_volume_restore_module_options
         state: '{{ oci_blockstorage_volume_restore_params.state }}'
         compartment_id: '{{ oci_blockstorage_volume_restore_params.compartment_id }}'
         availability_domain: '{{ oci_blockstorage_volume_restore_params.availability_domain }}'
@@ -56,11 +56,7 @@
 
     - name: Restore block volume from backup
       ansible.oci.oci_blockstorage_volume:
-        state: '{{ oci_blockstorage_volume_restore_params.state }}'
-        compartment_id: '{{ oci_blockstorage_volume_restore_params.compartment_id }}'
-        availability_domain: '{{ oci_blockstorage_volume_restore_params.availability_domain }}'
-        name: '{{ oci_blockstorage_volume_restore_params.name }}'
-        source_details: '{{ oci_blockstorage_volume_restore_params.source_details }}'
+        <<: *oci_blockstorage_volume_restore_module_options
       register: oci_blockstorage_volume_restore
 
     - name: Capture restored volume id
@@ -96,11 +92,7 @@
 
     - name: Assert restore is a no-op in check mode
       ansible.oci.oci_blockstorage_volume:
-        state: '{{ oci_blockstorage_volume_restore_params.state }}'
-        compartment_id: '{{ oci_blockstorage_volume_restore_params.compartment_id }}'
-        availability_domain: '{{ oci_blockstorage_volume_restore_params.availability_domain }}'
-        name: '{{ oci_blockstorage_volume_restore_params.name }}'
-        source_details: '{{ oci_blockstorage_volume_restore_params.source_details }}'
+        <<: *oci_blockstorage_volume_restore_module_options
       check_mode: true
       register: oci_blockstorage_volume_restore_check_rerun
 
@@ -111,11 +103,7 @@
 
     - name: Assert restore is idempotent on rerun
       ansible.oci.oci_blockstorage_volume:
-        state: '{{ oci_blockstorage_volume_restore_params.state }}'
-        compartment_id: '{{ oci_blockstorage_volume_restore_params.compartment_id }}'
-        availability_domain: '{{ oci_blockstorage_volume_restore_params.availability_domain }}'
-        name: '{{ oci_blockstorage_volume_restore_params.name }}'
-        source_details: '{{ oci_blockstorage_volume_restore_params.source_details }}'
+        <<: *oci_blockstorage_volume_restore_module_options
       register: oci_blockstorage_volume_restore_rerun
 
     - name: Verify restore rerun is a no-op

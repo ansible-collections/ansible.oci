@@ -31,7 +31,7 @@
           freeform_tags: '{{ oci_identity_domain_integration_create_tags }}'
 
     - name: Create identity domain in check mode
-      ansible.oci.oci_identity_domain:
+      ansible.oci.oci_identity_domain: &oci_identity_domain_create_options
         state: '{{ oci_identity_domain_create_params.state }}'
         compartment_id: '{{ oci_identity_domain_create_params.compartment_id }}'
         name: '{{ oci_identity_domain_create_params.name }}'
@@ -60,13 +60,7 @@
 
     - name: Create identity domain
       ansible.oci.oci_identity_domain:
-        state: '{{ oci_identity_domain_create_params.state }}'
-        compartment_id: '{{ oci_identity_domain_create_params.compartment_id }}'
-        name: '{{ oci_identity_domain_create_params.name }}'
-        description: '{{ oci_identity_domain_create_params.description }}'
-        home_region: '{{ oci_identity_domain_create_params.home_region }}'
-        license_type: '{{ oci_identity_domain_create_params.license_type }}'
-        freeform_tags: '{{ oci_identity_domain_create_params.freeform_tags }}'
+        <<: *oci_identity_domain_create_options
       register: oci_identity_domain_create
 
     - name: Capture identity domain ID and define update parameters
@@ -113,13 +107,7 @@
 
     - name: Assert create is idempotent by name
       ansible.oci.oci_identity_domain:
-        state: '{{ oci_identity_domain_create_params.state }}'
-        compartment_id: '{{ oci_identity_domain_create_params.compartment_id }}'
-        name: '{{ oci_identity_domain_create_params.name }}'
-        description: '{{ oci_identity_domain_create_params.description }}'
-        home_region: '{{ oci_identity_domain_create_params.home_region }}'
-        license_type: '{{ oci_identity_domain_create_params.license_type }}'
-        freeform_tags: '{{ oci_identity_domain_create_params.freeform_tags }}'
+        <<: *oci_identity_domain_create_options
       register: oci_identity_domain_create_rerun
 
     - name: Verify create rerun is a no-op
@@ -128,7 +116,7 @@
           - not oci_identity_domain_create_rerun.changed | bool
 
     - name: Update identity domain in check mode
-      ansible.oci.oci_identity_domain:
+      ansible.oci.oci_identity_domain: &oci_identity_domain_update_options
         state: '{{ oci_identity_domain_update_params.state }}'
         domain_id: '{{ oci_identity_domain_update_params.domain_id }}'
         name: '{{ oci_identity_domain_update_params.name }}'
@@ -157,12 +145,7 @@
 
     - name: Update identity domain
       ansible.oci.oci_identity_domain:
-        state: '{{ oci_identity_domain_update_params.state }}'
-        domain_id: '{{ oci_identity_domain_update_params.domain_id }}'
-        name: '{{ oci_identity_domain_update_params.name }}'
-        description: '{{ oci_identity_domain_update_params.description }}'
-        is_hidden_on_login: '{{ oci_identity_domain_update_params.is_hidden_on_login }}'
-        freeform_tags: '{{ oci_identity_domain_update_params.freeform_tags }}'
+        <<: *oci_identity_domain_update_options
       register: oci_identity_domain_update
 
     - name: Assert update reported a change
@@ -185,12 +168,7 @@
 
     - name: Assert update is idempotent on rerun
       ansible.oci.oci_identity_domain:
-        state: '{{ oci_identity_domain_update_params.state }}'
-        domain_id: '{{ oci_identity_domain_update_params.domain_id }}'
-        name: '{{ oci_identity_domain_update_params.name }}'
-        description: '{{ oci_identity_domain_update_params.description }}'
-        is_hidden_on_login: '{{ oci_identity_domain_update_params.is_hidden_on_login }}'
-        freeform_tags: '{{ oci_identity_domain_update_params.freeform_tags }}'
+        <<: *oci_identity_domain_update_options
       register: oci_identity_domain_update_rerun
 
     - name: Verify update rerun is a no-op
