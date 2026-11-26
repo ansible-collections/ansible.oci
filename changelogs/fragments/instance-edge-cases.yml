@@ -1,0 +1,7 @@
+bugfixes:
+  - oci_instance - Completed requested power actions with wait=false and waited for required intermediate operations.
+  - oci_instance - Applied configuration updates before starting stopped instances.
+  - oci_instance - Removed false change detection for compute_cluster_id.
+  - oci_instance - Validated launch option and platform updates before mutations.
+  - oci_instance - Preserved omitted reserved metadata keys and rejected changes to those keys.
+  - oci_instance - Compared agent plugins by name and desired state for partial lists.

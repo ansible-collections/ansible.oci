@@ -648,6 +648,8 @@ def build_platform_config(params, class_suffix):
     platform_config = params.get("platform_config")
     if not platform_config:
         return None
+    if not platform_config.get("type"):
+        raise ValueError("platform_config.type is required")
     normalized = normalize_enum_values(dict(platform_config), ENUM_KEYS)
     platform_type = normalized.pop("type", None)
     # OCI's SDK codegen names each polymorphic subtype's class after its

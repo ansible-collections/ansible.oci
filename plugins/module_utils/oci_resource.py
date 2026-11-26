@@ -667,15 +667,17 @@ class OciResourceBase(OciModuleBase, ABC):
             self.fail_ambiguous_name_match(matches)
         return matches[0]
 
-    def wait_for_resource_id(self, resource_id, target_states, failure_states=None):
+    def wait_for_resource_id(self, resource_id, target_states, failure_states=None, wait=None):
         """Wait for ``resource_id`` to reach one of ``target_states``.
 
-        The ``wait``, ``wait_timeout``, and ``wait_interval`` settings are read
+        An explicit ``wait`` overrides the module setting for required intermediate waits.
+        The ``wait_timeout`` and ``wait_interval`` settings are read
         from the module parameters. When waiting is disabled this performs one
         immediate lookup and returns its data. Otherwise it polls until the
         resource reaches ``target_states`` or fails into ``failure_states``.
         """
-        wait = self.module.params.get("wait", True)
+        if wait is None:
+            wait = self.module.params.get("wait", True)
         if not wait:
             return self.get_resource_response(resource_id).data
 

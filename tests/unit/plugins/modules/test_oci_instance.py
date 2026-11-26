@@ -27,6 +27,7 @@ INSTANCE_MODEL_NAMES = (
     "LaunchInstanceShapeConfigDetails",
     "UpdateInstanceShapeConfigDetails",
     "LaunchOptions",
+    "UpdateLaunchOptions",
     "InstanceOptions",
     "LaunchInstanceAvailabilityConfigDetails",
     "UpdateInstanceAvailabilityConfigDetails",
@@ -722,11 +723,8 @@ def test_needs_update_detects_all_plugins_disabled_drift(monkeypatch):
     assert instance.needs_update(resource) is True
 
 
-def test_needs_update_partial_plugins_config_is_not_idempotent(monkeypatch):
-    """Documents the known limitation: plugins_config is compared as a whole
-    list, not matched per plugin by name. Listing only a subset of the
-    plugins OCI already returns is always seen as drift.
-    """
+def test_needs_update_partial_plugins_config_is_idempotent(monkeypatch):
+    """Compare only the plugins supplied by the caller."""
     install_fake_oci(monkeypatch)
 
     instance_module = load_collection_module("oci_instance")
@@ -749,7 +747,7 @@ def test_needs_update_partial_plugins_config_is_not_idempotent(monkeypatch):
         lifecycle_state="RUNNING",
     )
 
-    assert instance.needs_update(resource) is True
+    assert instance.needs_update(resource) is False
 
 
 def test_validate_create_request_requires_image_id_or_boot_volume_id(monkeypatch):

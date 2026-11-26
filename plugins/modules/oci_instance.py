@@ -76,7 +76,7 @@ options:
       - Required for creation unless C(instance_configuration_id) supplies the shape.
       - Use M(ansible.oci.oci_shape_info) to discover compatible shape names and their capabilities before
         launching an instance.
-      - Supports updates. OCI requires the instance to be stopped before changing its shape.
+      - Supports updates. A shape update can reboot a running instance.
       - OCI stages shape changes made while the instance is stopped and only applies them the next time
         the instance starts. C(resource) reflects the previous value until then; rerunning this module
         with C(wait=true) after C(power_state=running) confirms the change applied.
@@ -84,7 +84,7 @@ options:
   shape_config:
     description:
       - Flexible shape configuration for shapes that support it.
-      - Supports updates. OCI requires the instance to be stopped before changing shape configuration.
+      - Supports updates. A shape configuration update can reboot a running instance.
       - OCI stages shape_config changes made while the instance is stopped and only applies them the next
         time the instance starts. C(resource) reflects the previous values until then; rerunning this
         module with C(wait=true) after C(power_state=running) confirms the resize applied.
@@ -223,12 +223,16 @@ options:
     description:
       - Custom metadata key/value pairs, for example C(ssh_authorized_keys) and C(user_data) for cloud-init.
       - C(user_data) must already be base64-encoded, matching the OCI API contract.
+      - Updates preserve omitted C(user_data) and C(ssh_authorized_keys). Changes to these keys are rejected.
+      - Other supplied metadata replaces existing metadata in this dictionary.
       - Supports updates.
     type: dict
   extended_metadata:
     description:
       - Additional metadata key/value pairs that support nested JSON objects, for backward compatibility
         with older tooling that expects them separate from C(metadata).
+      - Updates preserve omitted reserved keys and replace other keys in this dictionary.
+      - Changes to C(user_data) and C(ssh_authorized_keys) are rejected after creation.
       - Supports updates.
     type: dict
   security_attributes:
@@ -241,8 +245,8 @@ options:
     description:
       - Advanced boot and network emulation options. OCI infers safe defaults for most shapes and images;
         only set these to override that inference.
-      - Supports updates, but OCI generally requires the instance to be stopped for the new values to
-        take effect.
+      - Updates support boot_volume_type, network_type, and is_pv_encryption_in_transit_enabled.
+      - Other fields support creation only. Unchanged creation values are accepted on repeat runs.
     type: dict
     suboptions:
       boot_volume_type:
@@ -355,13 +359,9 @@ options:
             rather than hardcoding a list.
           - C(all_plugins_disabled), and C(management_disabled) or C(monitoring_disabled) for the plugins
             they cover, override the per-plugin C(desired_state) set here.
-          - This list is compared as a whole against the resource, not matched element by element per
-            plugin name. If this task lists only a subset of the plugins OCI returns (for example only
-            Bastion, while OCI also returns Compute Instance Monitoring and others), the comparison always
-            detects drift and the module reports C(changed) on every run, even though the unlisted plugins
-            are left alone. To make this idempotent, supply the full C(plugins_config) list the instance
-            already has (for example built from a prior M(ansible.oci.oci_instance_info) read), not just
-            the plugins you intend to change.
+          - Plugins are compared by name and desired state. List order is ignored.
+          - Omitted plugins remain unchanged. An empty list requests no plugin changes.
+          - Each entry requires a name and desired state. Duplicate names are rejected.
         type: list
         elements: dict
         suboptions:
@@ -380,8 +380,9 @@ options:
         and firmware measurement.
       - Which suboptions are accepted depends on C(type); virtual machine shapes only support the confidential-computing
         booleans, while bare metal shapes also support the NUMA and core-count options.
-      - Supports updates, though OCI may not support updating C(type) itself or bare-metal-only suboptions
-        after create.
+      - Update fields depend on the platform type. Unsupported changes fail before any mutation.
+      - Unchanged creation values are accepted on repeat runs. The type cannot change after creation.
+      - During updates, an omitted type uses the existing platform type. Creation requires the type.
     type: dict
     suboptions:
       type:
@@ -453,6 +454,7 @@ options:
     description:
       - The OCID of the compute cluster this instance launches into, for remote direct memory access (RDMA)
         network placement.
+      - OCI does not return this value. The module does not detect changes after creation.
       - The module does not update this field after create.
     type: str
   instance_configuration_id:
@@ -485,6 +487,9 @@ options:
       - When set, the module issues an OCI power action to reach this state whenever it differs from the
         instance's current C(lifecycle_state).
       - Applied on create (after the instance reaches C(running)) and on every C(state=present) run.
+      - With C(wait=false), the module still waits for required intermediate operations.
+      - Creation with C(power_state=stopped) waits for RUNNING, issues STOP, and skips the final wait.
+      - Configuration updates complete before START. STOP completes before dependent configuration updates.
     type: str
     choices: [running, stopped]
 """
@@ -851,6 +856,8 @@ from ansible_collections.ansible.oci.plugins.module_utils.oci_common import (
     filter_none_values,
     import_oci_sdk,
     normalize_enum_values,
+    serialize_oci_model,
+    values_differ_as_subset,
 )
 from ansible_collections.ansible.oci.plugins.module_utils.oci_resource import (
     OciResourceBase,
@@ -899,7 +906,7 @@ NESTED_UPDATE_BUILDERS = {
     ),
     "launch_options": lambda value: build_model(
         value,
-        oci.core.models.LaunchOptions,
+        oci.core.models.UpdateLaunchOptions,
         enum_keys=ENUM_KEYS,
     ),
     "instance_options": lambda value: build_model(value, oci.core.models.InstanceOptions),
@@ -1022,10 +1029,6 @@ class OciInstanceModule(OciResourceBase):
             is_mutable=False,
         ),
         UpdateFieldSpec(
-            param_name="compute_cluster_id",
-            is_mutable=False,
-        ),
-        UpdateFieldSpec(
             param_name="instance_configuration_id",
             is_mutable=False,
         ),
@@ -1046,6 +1049,127 @@ class OciInstanceModule(OciResourceBase):
             ]
         return CREATE_REQUIRED_FIELDS
 
+    def _validate_agent_plugins(self):
+        """Reject incomplete plugin entries and duplicate names."""
+        agent = self.module.params.get("agent_config") or {}
+        names = set()
+        for plugin in agent.get("plugins_config") or []:
+            name = plugin.get("name")
+            if not name or not plugin.get("desired_state"):
+                self.module.fail_json(msg="Each agent plugin requires name and desired_state")
+            if name in names:
+                self.module.fail_json(msg="Duplicate agent plugin name")
+            names.add(name)
+
+    def _plan_metadata_update(self, field, current, fields):
+        """Preserve reserved metadata keys and compare the effective dictionary."""
+        supplied = self.module.params.get(field)
+        if supplied is None:
+            return
+        existing = current.get(field) or {}
+        desired = dict(supplied)
+        for key in ("ssh_authorized_keys", "user_data"):
+            if key in desired and (key not in existing or desired[key] != existing[key]):
+                self.module.fail_json(msg=f"Updating reserved metadata key {key} is not supported")
+            if key in existing:
+                desired[key] = existing[key]
+        if desired == existing:
+            fields.pop(field, None)
+        else:
+            fields[field] = desired
+
+    def _plan_agent_config_update(self, current, fields):
+        """Compare supplied agent flags and plugins by name."""
+        agent = self.module.params.get("agent_config")
+        if agent is None:
+            return
+        existing = current.get("agent_config") or {}
+        desired = normalize_enum_values(agent, ENUM_KEYS)
+        flags = {
+            AGENT_CONFIG_PARAM_TO_OCI.get(key, key): value
+            for key, value in desired.items() if key != "plugins_config"
+        }
+        differs = values_differ_as_subset(existing, flags)
+        plugins = {plugin["name"]: plugin for plugin in existing.get("plugins_config") or []}
+        differs = differs or any(
+            values_differ_as_subset(plugins.get(plugin["name"]), plugin)
+            for plugin in desired.get("plugins_config") or []
+        )
+        if not differs:
+            fields.pop("agent_config", None)
+
+    def _platform_update_model(self, existing, desired):
+        """Select the platform update model and reject unsupported changes."""
+        platform_type = desired.get("type", existing.get("type"))
+        if "type" in desired and desired["type"] != existing.get("type"):
+            self.fail_immutable_field_change("platform_config.type")
+        try:
+            return build_platform_config(
+                {"platform_config": {"type": platform_type}}, "UpdateInstancePlatformConfig"
+            )
+        except (ValueError, TypeError) as exc:
+            if not values_differ_as_subset(existing, desired):
+                return None
+            self.module.fail_json(msg=str(exc))
+
+    def _mutable_update_fields(self, field, existing, desired, supported):
+        """Remove unchanged creation fields and reject changes to those fields."""
+        mutable = {}
+        for key, value in desired.items():
+            if key not in supported:
+                if values_differ_as_subset(existing.get(key), value):
+                    self.fail_immutable_field_change(f"{field}.{key}")
+            else:
+                mutable[key] = value
+        return mutable
+
+    def _plan_nested_update(self, field, current, fields):
+        """Validate nested update fields against the selected SDK model."""
+        supplied = self.module.params.get(field)
+        if supplied is None:
+            return
+        existing = current.get(field) or {}
+        desired = {
+            key: value for key, value in normalize_enum_values(supplied, ENUM_KEYS).items()
+            if value is not None
+        }
+        if field == "platform_config":
+            model = self._platform_update_model(existing, desired)
+            if model is None:
+                fields.pop(field, None)
+                return
+        else:
+            model = oci.core.models.UpdateLaunchOptions()
+        supported = getattr(model, "swagger_types", None)
+        if supported is None:
+            return
+        mutable = self._mutable_update_fields(field, existing, desired, supported)
+        if values_differ_as_subset(existing, mutable):
+            if field == "platform_config":
+                mutable["type"] = desired.get("type", existing.get("type"))
+            fields[field] = mutable
+        else:
+            fields.pop(field, None)
+
+    def build_update_plan(self, resource):
+        """Prepare and validate instance changes before any mutation."""
+        self._validate_agent_plugins()
+        plan = super().build_update_plan(resource)
+        current = serialize_oci_model(resource)
+        fields = plan["update_model_fields"]
+        for field in ("metadata", "extended_metadata"):
+            self._plan_metadata_update(field, current, fields)
+        self._plan_agent_config_update(current, fields)
+        for field in ("launch_options", "platform_config"):
+            self._plan_nested_update(field, current, fields)
+        plan["update_needed"] = bool(fields or plan["strategy_operations"])
+        if fields:
+            try:
+                self.build_update_details(fields)
+            except (TypeError, ValueError) as exc:
+                self.module.fail_json(msg=f"Invalid instance update: {exc}")
+        return plan
+
     def plan_power_state_strategy(self, resource, resource_dict, spec, desired_value):
         current_state = resource_dict.get("lifecycle_state")
         desired_state = normalize_enum_values({"power_state": desired_value}, ENUM_KEYS)[
@@ -1058,7 +1182,7 @@ class OciInstanceModule(OciResourceBase):
             raise ValueError(f"Unsupported power_state: {desired_value}")
         return [action]
 
-    def _apply_power_action(self, instance_id, action):
+    def _apply_power_action(self, instance_id, action, intermediate=False):
         self.call_with_retry(
             self.client.instance_action,
             instance_id=instance_id,
@@ -1067,6 +1191,8 @@ class OciInstanceModule(OciResourceBase):
             retry_on=INSTANCE_MUTATION_RETRY_ON,
         )
         target_state = LIFECYCLE_RUNNING if action == "START" else LIFECYCLE_STOPPED
+        if intermediate and not self.module.params.get("wait", True):
+            return self.wait_for_resource_id(instance_id, [target_state], wait=True)
         return self.wait_for_resource_id(instance_id, [target_state])
 
     def get_resource_response(self, resource_id):
@@ -1077,6 +1203,11 @@ class OciInstanceModule(OciResourceBase):
 
     def validate_create_request(self):
         super().validate_create_request()
+        self._validate_agent_plugins()
+        try:
+            build_create_instance_details(self.module.params)
+        except (TypeError, ValueError) as exc:
+            self.module.fail_json(msg=f"Invalid instance launch: {exc}")
         if (
             not self.module.params.get("instance_configuration_id")
             and not self.module.params.get("image_id")
@@ -1102,8 +1233,9 @@ class OciInstanceModule(OciResourceBase):
         if (
             resource is not None
             and desired_power_state == LIFECYCLE_STOPPED
-            and self.module.params.get("wait", True)
         ):
+            if not self.module.params.get("wait", True):
+                resource = self.wait_for_resource_id(resource.id, WAIT_FOR_LAUNCH_STATES, wait=True)
             resource = self._apply_power_action(resource.id, "STOP")
         return resource
 
@@ -1115,28 +1247,26 @@ class OciInstanceModule(OciResourceBase):
                 power_actions = strategy_operation["operations"]
                 break
 
+        fields = update_plan["update_model_fields"]
+        update_details = self.build_update_details(fields) if fields else None
         current_resource = resource
-        if power_actions:
-            for action in power_actions:
-                current_resource = self._apply_power_action(resource.id, action)
-            update_plan = self.get_update_plan(current_resource)
-
-        if not update_plan["update_model_fields"]:
-            return current_resource if power_actions else resource
-
-        update_details = self.build_update_details(update_plan["update_model_fields"])
-        response = self.call_with_retry(
-            self.client.update_instance,
-            instance_id=resource.id,
-            update_instance_details=update_details,
-            max_retries=INSTANCE_MUTATION_MAX_RETRIES,
-            retry_on=INSTANCE_MUTATION_RETRY_ON,
-        )
-        return self.get_mutation_result(
-            response.data,
-            resource.id,
-            WAIT_FOR_SETTLED_STATES,
-        )
+        if "STOP" in power_actions:
+            current_resource = self._apply_power_action(resource.id, "STOP", intermediate=bool(fields))
+        if fields:
+            response = self.call_with_retry(
+                self.client.update_instance,
+                instance_id=resource.id,
+                update_instance_details=update_details,
+                max_retries=INSTANCE_MUTATION_MAX_RETRIES,
+                retry_on=INSTANCE_MUTATION_RETRY_ON,
+            )
+            if "START" in power_actions and not self.module.params.get("wait", True):
+                current_resource = self.wait_for_resource_id(resource.id, WAIT_FOR_SETTLED_STATES, wait=True)
+            else:
+                current_resource = self.get_mutation_result(response.data, resource.id, WAIT_FOR_SETTLED_STATES)
+        if "START" in power_actions:
+            current_resource = self._apply_power_action(resource.id, "START")
+        return current_resource
 
     def build_update_details(self, update_model_fields):
         update_model_fields = dict(update_model_fields)
