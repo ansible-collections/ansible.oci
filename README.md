@@ -1,6 +1,6 @@
 # Oracle Cloud Infrastructure Collection for Ansible
 
-[![Ansible lint](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-lint.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-lint.yml) [![Sanity](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-sanity.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-sanity.yml) [![Units](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-unit.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/ansible-unit.yml) [![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=ansible-collections_ansible.oci&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ansible-collections_ansible.oci)
+[![Certification](https://github.com/ansible-collections/ansible.oci/actions/workflows/certification.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/certification.yml) [![Units](https://github.com/ansible-collections/ansible.oci/actions/workflows/units.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/units.yml) [![Changelog](https://github.com/ansible-collections/ansible.oci/actions/workflows/changelog.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/changelog.yml) [![Docs lint](https://github.com/ansible-collections/ansible.oci/actions/workflows/docs-lint.yml/badge.svg?branch=main)](https://github.com/ansible-collections/ansible.oci/actions/workflows/docs-lint.yml) [![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=ansible-collections_ansible.oci&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ansible-collections_ansible.oci)
 
 This collection automates Oracle Cloud Infrastructure (OCI).
 
@@ -194,22 +194,25 @@ Create additional block storage that can be attached to compute:
 
 This collection supports:
 
-* ansible-core `>= 2.16.0` (CI currently covers 2.16 and 2.18)
-* Python `>= 3.8` for modules (CI currently covers 3.11, 3.12, and 3.13)
+* ansible-core `>= 2.16.0`
+* Python `>= 3.8` for modules
 * OCI Python SDK `>= 2.183.0`
 * Live integration against Oracle Cloud Infrastructure
 
 There are no additional known platform limitations beyond those OCI service constraints documented on each module.
 
 
-CI workflow definitions (secondary):
+CI uses the [shared version matrices](https://github.com/eco-ansible-content/collections-standards#supported-versions).
 
-* [`.github/workflows/ansible-lint.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-lint.yml)
-* [`.github/workflows/ansible-sanity.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-sanity.yml)
-* [`.github/workflows/ansible-unit.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-unit.yml)
+CI workflow definitions:
+
+* [`.github/workflows/certification.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/certification.yml)
+* [`.github/workflows/changelog.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/changelog.yml)
+* [`.github/workflows/docs-lint.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/docs-lint.yml)
+* [`.github/workflows/units.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/units.yml)
+* [`.github/workflows/sonarcloud.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/sonarcloud.yml)
 * [`.github/workflows/ansible-integration-pr.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-integration-pr.yml)
 * [`.github/workflows/ansible-integration-weekly.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/ansible-integration-weekly.yml)
-* [`.github/workflows/sonarcloud.yml`](https://github.com/ansible-collections/ansible.oci/blob/main/.github/workflows/sonarcloud.yml)
 
 ## Contributing
 
