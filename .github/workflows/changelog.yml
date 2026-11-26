@@ -22,4 +22,4 @@ permissions:
 
 jobs:
   changelog:
-    uses: eco-ansible-content/collections-standards/.github/workflows/changelog.yml@5180c4fa6396ddaedd7b5c3a5add16472557816a # 0.0.1
+    uses: eco-ansible-content/collections-standards/.github/workflows/changelog.yml@262daf453f9213ba9761dfa54624be8b9ed41555 # 0.0.2
