@@ -49,7 +49,7 @@
 
     - name: Use the shared volume_group
       ansible.builtin.set_fact:
-        oci_volume_group_backup_group_create: '{{ oci_blockstorage_volume_create_group }}'
+        oci_volume_group_backup_group_create: '{{ oci_volume_group_create }}'
 
     - name: Capture created volume group id
       ansible.builtin.set_fact:
