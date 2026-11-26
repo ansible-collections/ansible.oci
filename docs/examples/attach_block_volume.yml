@@ -1,0 +1,147 @@
+---
+- name: Attach a block volume to a new OCI Compute instance
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    example_cleanup: true
+    example_compute_shape: VM.Standard.E4.Flex
+  tasks:
+    - name: Provision the instance and attach block storage
+      block:
+        # Compute placement
+        # Find OCI-provided Oracle Linux 9 images for the selected shape.
+        - name: List compatible Oracle Linux images
+          ansible.oci.oci_image_info:
+            compartment_id: "{{ oci_compartment_id }}"
+            operating_system: Oracle Linux
+            operating_system_version: "9"
+            lifecycle_state: AVAILABLE
+            shape: "{{ example_compute_shape }}"
+          register: example_images
+
+        # OCI defines availability domain names for each tenancy and region.
+        - name: List availability domains
+          ansible.oci.oci_identity_availability_domain_info:
+            compartment_id: "{{ oci_compartment_id }}"
+          register: example_domains
+
+        # Private network
+        # Reserve a range of private addresses for this virtual cloud network.
+        - name: Create the virtual cloud network
+          ansible.oci.oci_network_vcn:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-volume-vcn
+            allow_duplicate_name: true
+            cidr_blocks:
+              - 10.0.0.0/16
+          register: example_vcn
+
+        # Use the returned network ID to create a subnet that prevents public IP assignment.
+        - name: Create the private regional subnet
+          ansible.oci.oci_network_subnet:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-volume-subnet
+            cidr_block: 10.0.1.0/24
+            prohibit_public_ip_on_vnic: true
+          register: example_subnet
+
+        # Compute instance
+        # Launch with the first platform image and availability domain in the results.
+        - name: Launch the example Linux instance
+          ansible.oci.oci_instance:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-volume-instance
+            allow_duplicate_name: true
+            availability_domain: "{{ example_domains.availability_domains[0].name }}"
+            shape: "{{ example_compute_shape }}"
+            shape_config:
+              ocpus: 1
+              memory_in_gbs: 16
+            image_id: "{{ (example_images.images | selectattr('compartment_id', 'none') | first).id }}"
+            subnet_id: "{{ example_subnet.resource.id }}"
+            assign_public_ip: false
+          register: example_instance
+
+        # Block storage
+        # Create the volume in the instance's availability domain so OCI can attach it.
+        - name: Create a 50 GB block volume
+          ansible.oci.oci_blockstorage_volume:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            availability_domain: "{{ example_domains.availability_domains[0].name }}"
+            name: oci-example-volume
+            allow_duplicate_name: true
+            size_in_gbs: 50
+          register: example_volume
+
+        # Use the returned instance and volume IDs to attach the volume as a virtual device.
+        - name: Attach the volume to the instance
+          ansible.oci.oci_volume_attachment:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            instance_id: "{{ example_instance.resource.id }}"
+            volume_id: "{{ example_volume.resource.id }}"
+            name: oci-example-volume-attachment
+            type: paravirtualized
+          register: example_attachment
+
+        # Show the attachment state so the user can verify the operation.
+        - name: Show the block volume attachment
+          ansible.builtin.debug:
+            msg:
+              instance_id: "{{ example_instance.resource.id }}"
+              volume_id: "{{ example_volume.resource.id }}"
+              attachment_id: "{{ example_attachment.resource.id }}"
+              lifecycle_state: "{{ example_attachment.resource.lifecycle_state }}"
+      always:
+        # Cleanup
+        # Detach the volume before deleting the volume or instance.
+        - name: Detach the example volume
+          ansible.oci.oci_volume_attachment:
+            state: absent
+            volume_attachment_id: "{{ example_attachment.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_attachment.resource.id is defined
+
+        # Delete the volume after OCI completes the detach operation.
+        - name: Delete the example block volume
+          ansible.oci.oci_blockstorage_volume:
+            state: absent
+            volume_id: "{{ example_volume.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_volume.resource.id is defined
+
+        # Delete the instance and its boot volume before removing the network.
+        - name: Terminate the example instance
+          ansible.oci.oci_instance:
+            state: absent
+            instance_id: "{{ example_instance.resource.id }}"
+            preserve_boot_volume_on_delete: false
+          when:
+            - example_cleanup | bool
+            - example_instance.resource.id is defined
+
+        # Remove the subnet so OCI can delete the virtual cloud network.
+        - name: Delete the example subnet
+          ansible.oci.oci_network_subnet:
+            state: absent
+            subnet_id: "{{ example_subnet.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_subnet.resource.id is defined
+
+        # Use the ID from this run to delete the network.
+        - name: Delete the example virtual cloud network
+          ansible.oci.oci_network_vcn:
+            state: absent
+            vcn_id: "{{ example_vcn.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_vcn.resource.id is defined

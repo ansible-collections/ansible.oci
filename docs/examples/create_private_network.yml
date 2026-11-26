@@ -1,0 +1,58 @@
+---
+- name: Create a private OCI network
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    example_cleanup: true
+  tasks:
+    - name: Provision and inspect the private network
+      block:
+        # Private network
+        # Reserve a range of private addresses for this virtual cloud network.
+        - name: Create the virtual cloud network
+          ansible.oci.oci_network_vcn:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-network-vcn
+            allow_duplicate_name: true
+            cidr_blocks:
+              - 10.0.0.0/16
+          register: example_vcn
+
+        # Use the returned network ID to create a subnet that prevents public IP assignment.
+        - name: Create the private regional subnet
+          ansible.oci.oci_network_subnet:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-network-subnet
+            cidr_block: 10.0.1.0/24
+            prohibit_public_ip_on_vnic: true
+          register: example_subnet
+
+        # Show the IDs so the user can find the network and subnet in OCI.
+        - name: Show the network and subnet IDs
+          ansible.builtin.debug:
+            msg:
+              vcn_id: "{{ example_vcn.resource.id }}"
+              subnet_id: "{{ example_subnet.resource.id }}"
+      always:
+        # Cleanup
+        # Remove the subnet so OCI can delete the virtual cloud network.
+        - name: Delete the example subnet
+          ansible.oci.oci_network_subnet:
+            state: absent
+            subnet_id: "{{ example_subnet.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_subnet.resource.id is defined
+
+        # Use the ID from this run to delete the network.
+        - name: Delete the example virtual cloud network
+          ansible.oci.oci_network_vcn:
+            state: absent
+            vcn_id: "{{ example_vcn.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_vcn.resource.id is defined

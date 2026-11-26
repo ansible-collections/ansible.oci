@@ -1,0 +1,105 @@
+---
+- name: Provision a private OCI Autonomous Database
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    example_cleanup: true
+  tasks:
+    # Check for the administrator password before creating the network.
+    - name: Validate that the database password is set
+      ansible.builtin.assert:
+        that: lookup('ansible.builtin.env', 'OCI_EXAMPLE_ADB_ADMIN_PASSWORD') | length > 0
+        fail_msg: Set OCI_EXAMPLE_ADB_ADMIN_PASSWORD before you run this playbook.
+
+    - name: Provision and inspect the private Autonomous Database
+      block:
+        # Private network
+        # Reserve a range of private addresses for this virtual cloud network.
+        - name: Create the virtual cloud network
+          ansible.oci.oci_network_vcn:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-database-vcn
+            allow_duplicate_name: true
+            cidr_blocks:
+              - 10.0.0.0/16
+            dns_label: exdatabase
+          register: example_vcn
+
+        # Use the returned network ID to create a subnet that prevents public IP assignment.
+        - name: Create the private regional subnet
+          ansible.oci.oci_network_subnet:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-database-subnet
+            cidr_block: 10.0.1.0/24
+            dns_label: private
+            prohibit_public_ip_on_vnic: true
+          register: example_subnet
+
+        # Database provisioning
+        # Attach the private endpoint to the subnet. Disable automatic scaling to fix the example capacity.
+        - name: Create the Autonomous Database
+          ansible.oci.oci_autonomous_database:
+            state: present
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-database
+            allow_duplicate_name: true
+            db_name: ociexampledb
+            admin_password: "{{ lookup('ansible.builtin.env', 'OCI_EXAMPLE_ADB_ADMIN_PASSWORD') }}"
+            db_workload: oltp
+            compute_model: ecpu
+            compute_count: 2
+            data_storage_size_in_gbs: 20
+            is_auto_scaling_enabled: false
+            is_auto_scaling_for_storage_enabled: false
+            is_free_tier: false
+            license_model: license_included
+            subnet_id: "{{ example_subnet.resource.id }}"
+            is_mtls_connection_required: true
+          no_log: true
+          register: example_database
+
+        # Show the database ID and state. Keep the administrator password out of task output.
+        - name: Show the database details
+          ansible.builtin.debug:
+            msg:
+              id: "{{ example_database.resource.id }}"
+              name: "{{ example_database.resource.db_name }}"
+              lifecycle_state: "{{ example_database.resource.lifecycle_state }}"
+      always:
+        # Cleanup
+        # Terminate the database before removing the subnet for its private endpoint.
+        - name: Terminate the example database
+          ansible.oci.oci_autonomous_database:
+            state: absent
+            autonomous_database_id: "{{ example_database.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_database.resource.id is defined
+
+        # OCI can release the service network interface after the database terminates.
+        - name: Delete the example subnet
+          ansible.oci.oci_network_subnet:
+            state: absent
+            subnet_id: "{{ example_subnet.resource.id }}"
+          register: example_subnet_delete
+          until: >-
+            example_subnet_delete is succeeded or
+            'references the service VNIC' not in (example_subnet_delete.msg | default(''))
+          retries: 20
+          delay: 15
+          when:
+            - example_cleanup | bool
+            - example_subnet.resource.id is defined
+
+        # Use the ID from this run to delete the network.
+        - name: Delete the example virtual cloud network
+          ansible.oci.oci_network_vcn:
+            state: absent
+            vcn_id: "{{ example_vcn.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_vcn.resource.id is defined

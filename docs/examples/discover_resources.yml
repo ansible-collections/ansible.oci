@@ -1,0 +1,26 @@
+---
+- name: Discover OCI resources in a compartment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    # Resource discovery
+    # Get the availability domains from the region in the OCI configuration.
+    - name: List availability domains
+      ansible.oci.oci_identity_availability_domain_info:
+        compartment_id: "{{ oci_compartment_id }}"
+      register: example_domains
+
+    # Get running instances in the compartment. An empty compartment returns an empty list.
+    - name: List running instances
+      ansible.oci.oci_instance_info:
+        compartment_id: "{{ oci_compartment_id }}"
+        lifecycle_state: RUNNING
+      register: example_instances
+
+    # Show only domain names and instance IDs for a small inventory summary.
+    - name: Show the discovery results
+      ansible.builtin.debug:
+        msg:
+          availability_domains: "{{ example_domains.availability_domains | map(attribute='name') | list }}"
+          running_instance_ids: "{{ example_instances.instances | map(attribute='id') | list }}"

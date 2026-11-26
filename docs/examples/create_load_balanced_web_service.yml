@@ -1,0 +1,352 @@
+---
+- name: Serve HTTPS through an OCI load balancer
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    example_cleanup: true
+    example_compute_shape: VM.Standard.E4.Flex
+    example_backends:
+      - ip_address: 10.0.2.10
+        port: 8080
+      - ip_address: 10.0.2.11
+        port: 8080
+    # Cloud-init starts the web service when each instance boots.
+    # The standard Oracle Linux 9 image includes Python.
+    example_cloud_init: |
+      #cloud-config
+      write_files:
+        - path: /var/www/oci-example/index.html
+          permissions: '0644'
+          content: |
+            OCI example backend {{ item.ip_address }}
+        - path: /etc/systemd/system/oci-example-web.service
+          permissions: '0644'
+          content: |
+            [Unit]
+            Description=OCI example HTTP service
+            After=network.target
+            [Service]
+            User=nobody
+            ExecStart=/usr/bin/python3 -m http.server 8080 --directory /var/www/oci-example
+            Restart=on-failure
+            [Install]
+            WantedBy=multi-user.target
+      runcmd:
+        - [firewall-cmd, --permanent, --add-port=8080/tcp]
+        - [firewall-cmd, --reload]
+        - [systemctl, daemon-reload]
+        - [systemctl, enable, --now, oci-example-web.service]
+  tasks:
+    - name: Create and access the load-balanced web service
+      block:
+        # Placement
+        # Select a standard platform image that supports the chosen shape.
+        - name: List compatible Oracle Linux images
+          ansible.oci.oci_image_info:
+            compartment_id: "{{ oci_compartment_id }}"
+            operating_system: Oracle Linux
+            operating_system_version: "9"
+            shape: "{{ example_compute_shape }}"
+          register: example_images
+
+        - name: List availability domains
+          ansible.oci.oci_identity_availability_domain_info:
+            compartment_id: "{{ oci_compartment_id }}"
+          register: example_domains
+
+        # Network
+        # The public subnet contains the load balancer. The private subnet contains the servers.
+        - name: Create the virtual cloud network
+          ansible.oci.oci_network_vcn:
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-lb-vcn
+            allow_duplicate_name: true
+            cidr_blocks: [10.0.0.0/16]
+          register: example_vcn
+
+        - name: Create the internet gateway
+          ansible.oci.oci_network_internet_gateway:
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-lb-gateway
+          register: example_gateway
+
+        - name: Create the public route table
+          ansible.oci.oci_network_route_table:
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-lb-routes
+            route_rules:
+              - destination: 0.0.0.0/0
+                network_entity_id: "{{ example_gateway.resource.id }}"
+          register: example_routes
+
+        # Stateful rules allow reply traffic for each permitted connection.
+        - name: Permit public HTTPS and connections to the web servers
+          ansible.oci.oci_network_security_list:
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-lb-security
+            ingress_security_rules:
+              - source: 0.0.0.0/0
+                protocol: "6"
+                tcp_options:
+                  destination_port_min: 443
+                  destination_port_max: 443
+            egress_security_rules:
+              - destination: 10.0.2.0/24
+                protocol: "6"
+                tcp_options:
+                  destination_port_min: 8080
+                  destination_port_max: 8080
+          register: example_lb_security
+
+        - name: Permit web traffic from the load balancer subnet
+          ansible.oci.oci_network_security_list:
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-web-security
+            ingress_security_rules:
+              - source: 10.0.1.0/24
+                protocol: "6"
+                tcp_options:
+                  destination_port_min: 8080
+                  destination_port_max: 8080
+            egress_security_rules: []
+          register: example_web_security
+
+        - name: Create the public subnet for the load balancer
+          ansible.oci.oci_network_subnet:
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-lb-subnet
+            cidr_block: 10.0.1.0/24
+            route_table_id: "{{ example_routes.resource.id }}"
+            security_list_ids: ["{{ example_lb_security.resource.id }}"]
+          register: example_public_subnet
+
+        - name: Create the private subnet for the web servers
+          ansible.oci.oci_network_subnet:
+            compartment_id: "{{ oci_compartment_id }}"
+            vcn_id: "{{ example_vcn.resource.id }}"
+            name: oci-example-web-subnet
+            cidr_block: 10.0.2.0/24
+            prohibit_public_ip_on_vnic: true
+            security_list_ids: ["{{ example_web_security.resource.id }}"]
+          register: example_private_subnet
+
+        # Web servers
+        # Use these same private addresses in the backend set below.
+        - name: Launch the two private web servers
+          ansible.oci.oci_instance:
+            compartment_id: "{{ oci_compartment_id }}"
+            name: "oci-example-lb-web-{{ example_backend_index + 1 }}"
+            allow_duplicate_name: true
+            availability_domain: "{{ example_domains.availability_domains[0].name }}"
+            shape: "{{ example_compute_shape }}"
+            shape_config:
+              ocpus: 1
+              memory_in_gbs: 16
+            image_id: >-
+              {{ (example_images.images | selectattr('compartment_id', 'none')
+                  | rejectattr('name', 'search', '(?i)minimal') | first).id }}
+            subnet_id: "{{ example_private_subnet.resource.id }}"
+            private_ip: "{{ item.ip_address }}"
+            assign_public_ip: false
+            metadata:
+              user_data: "{{ example_cloud_init | b64encode }}"
+          loop: "{{ example_backends }}"
+          loop_control:
+            index_var: example_backend_index
+            label: "{{ item.ip_address }}"
+          register: example_instances
+
+        # Load balancer
+        # Use the smallest flexible bandwidth settings for this example.
+        - name: Create the public load balancer
+          ansible.oci.oci_loadbalancer:
+            compartment_id: "{{ oci_compartment_id }}"
+            name: oci-example-lb
+            subnet_ids: ["{{ example_public_subnet.resource.id }}"]
+            is_private: false
+            shape_details:
+              minimum_bandwidth_in_mbps: 10
+              maximum_bandwidth_in_mbps: 10
+          register: example_lb
+
+        # TLS certificate
+        # Create a short-lived certificate for the public address assigned by OCI.
+        - name: Create a local directory for the certificate and private key
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: oci-example-lb-
+          register: example_tls
+
+        - name: Generate the example certificate and private key
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - req
+              - -x509
+              - -newkey
+              - rsa:3072
+              - -sha256
+              - -nodes
+              - -days
+              - "1"
+              - -subj
+              - /CN=oci-example-lb
+              - -addext
+              - "subjectAltName=IP:{{ example_lb.resource.ip_addresses[0].ip_address }}"
+              - -keyout
+              - "{{ example_tls.path }}/server.key"
+              - -out
+              - "{{ example_tls.path }}/server.crt"
+            creates: "{{ example_tls.path }}/server.crt"
+
+        # Keep private key material out of Ansible output.
+        - name: Upload the certificate bundle to the load balancer
+          ansible.oci.oci_loadbalancer_certificate:
+            load_balancer_id: "{{ example_lb.resource.id }}"
+            name: example-web-certificate
+            public_certificate: "{{ lookup('ansible.builtin.file', example_tls.path ~ '/server.crt') }}"
+            private_key: "{{ lookup('ansible.builtin.file', example_tls.path ~ '/server.key') }}"
+          no_log: true
+
+        - name: Create the backend set and HTTP health check
+          ansible.oci.oci_loadbalancer_backend_set:
+            load_balancer_id: "{{ example_lb.resource.id }}"
+            name: example-web-backends
+            policy: round_robin
+            backends: "{{ example_backends }}"
+            health_checker:
+              protocol: http
+              port: 8080
+              url_path: /
+
+        # OCI enables HTTPS when an HTTP listener has an SSL configuration.
+        - name: Create the public HTTPS listener
+          ansible.oci.oci_loadbalancer_listener:
+            load_balancer_id: "{{ example_lb.resource.id }}"
+            name: example-https
+            default_backend_set_name: example-web-backends
+            protocol: http
+            port: 443
+            ssl_configuration:
+              certificate_name: example-web-certificate
+
+        # Service access
+        # Wait for cloud-init and the load balancer health checks to finish.
+        - name: Request the example web page
+          ansible.builtin.uri:
+            url: "https://{{ example_lb.resource.ip_addresses[0].ip_address }}/"
+            # Trust the certificate created by this run and verify its IP address.
+            ca_path: "{{ example_tls.path }}/server.crt"
+            validate_certs: true
+            return_content: true
+            use_proxy: false
+          register: example_response
+          until: example_response.status == 200
+          retries: 40
+          delay: 15
+
+        - name: Show the web service URL and response
+          ansible.builtin.debug:
+            msg:
+              url: "https://{{ example_lb.resource.ip_addresses[0].ip_address }}/"
+              response: "{{ example_response.content }}"
+              certificate_file: "{{ example_tls.path }}/server.crt"
+      always:
+        # Cleanup
+        # Remove the private key even when the user keeps the OCI resources.
+        - name: Delete the local private key
+          ansible.builtin.file:
+            path: "{{ example_tls.path }}/server.key"
+            state: absent
+          when: example_tls.path is defined
+
+        # Keep the public certificate for inspection when cleanup is disabled.
+        - name: Delete the local certificate directory
+          ansible.builtin.file:
+            path: "{{ example_tls.path }}"
+            state: absent
+          when:
+            - example_cleanup | bool
+            - example_tls.path is defined
+
+        # Deleting the load balancer also removes its listener, certificate, and backend set.
+        - name: Delete the example load balancer
+          ansible.oci.oci_loadbalancer:
+            state: absent
+            load_balancer_id: "{{ example_lb.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_lb.resource.id is defined
+
+        # Include successful loop items if another instance failed to launch.
+        - name: Terminate the web servers and delete their boot volumes
+          ansible.oci.oci_instance:
+            state: absent
+            instance_id: "{{ item.resource.id }}"
+            preserve_boot_volume_on_delete: false
+          loop: "{{ example_instances.results | default([]) | selectattr('resource.id', 'defined') | list }}"
+          loop_control:
+            label: "{{ item.resource.id }}"
+          when: example_cleanup | bool
+
+        - name: Delete the example public subnet
+          ansible.oci.oci_network_subnet:
+            state: absent
+            subnet_id: "{{ example_public_subnet.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_public_subnet.resource.id is defined
+
+        - name: Delete the example private subnet
+          ansible.oci.oci_network_subnet:
+            state: absent
+            subnet_id: "{{ example_private_subnet.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_private_subnet.resource.id is defined
+
+        - name: Delete the example load balancer security list
+          ansible.oci.oci_network_security_list:
+            state: absent
+            security_list_id: "{{ example_lb_security.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_lb_security.resource.id is defined
+
+        - name: Delete the example web server security list
+          ansible.oci.oci_network_security_list:
+            state: absent
+            security_list_id: "{{ example_web_security.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_web_security.resource.id is defined
+
+        - name: Delete the example public route table
+          ansible.oci.oci_network_route_table:
+            state: absent
+            route_table_id: "{{ example_routes.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_routes.resource.id is defined
+
+        - name: Delete the example internet gateway
+          ansible.oci.oci_network_internet_gateway:
+            state: absent
+            internet_gateway_id: "{{ example_gateway.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_gateway.resource.id is defined
+
+        - name: Delete the example virtual cloud network
+          ansible.oci.oci_network_vcn:
+            state: absent
+            vcn_id: "{{ example_vcn.resource.id }}"
+          when:
+            - example_cleanup | bool
+            - example_vcn.resource.id is defined
