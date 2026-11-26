@@ -9,8 +9,7 @@
   ansible.builtin.set_fact:
     oci_integration_domain_id: ''
     oci_integration_domain_url: ''
-    oci_identity_user_integration_domain_name: '{{ oci_identity_user_integration_domain_name }}-{{ oci_integration_rpfx
-      }}'
+    oci_identity_user_integration_domain_name: '{{ oci_identity_domain_create.resource.name }}'
     oci_identity_user_integration_name: '{{ oci_identity_user_integration_name }}-{{ oci_integration_rpfx }}@example.com'
     oci_identity_user_cleanup_name: '{{ oci_identity_user_integration_name }}-{{ oci_integration_rpfx }}@example.com'
 

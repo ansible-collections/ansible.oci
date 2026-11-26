@@ -39,7 +39,6 @@
       }}'
     oci_ipsec_tunnel_name: '{{ oci_ipsec_integration_tunnel_name }}-{{ oci_integration_rpfx }}'
     oci_ipsec_tunnel_updated_name: '{{ oci_ipsec_integration_tunnel_updated_name }}-{{ oci_integration_rpfx }}'
-    oci_ipsec_drg_name: oci-ipsec-drg-{{ oci_integration_rpfx }}
 
 - name: Use the shared drg
   ansible.builtin.set_fact:

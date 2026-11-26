@@ -29,6 +29,13 @@
     - oci_integration_rpfx | string in oci_ipsec_connection_name | string
   ignore_errors: true
 
+- name: Save leaked IPSec connection identifier
+  ansible.builtin.set_fact:
+    oci_ipsec_connection_id: '{{ oci_cleanup_find_leaked_ipsec_connection_by_name.ipsec_connections[0].id }}'
+  when:
+    - oci_ipsec_connection_id | default('') | length == 0
+    - oci_cleanup_find_leaked_ipsec_connection_by_name.ipsec_connections | default([]) | length > 0
+
 - name: Clean up IPSec connection
   ansible.oci.oci_network_ipsec_connection:
     state: absent
@@ -53,6 +60,13 @@
     - oci_ipsec_cpe_id | default('') | length == 0
     - oci_integration_rpfx | string in oci_ipsec_cpe_name | string
   ignore_errors: true
+
+- name: Save leaked CPE identifier
+  ansible.builtin.set_fact:
+    oci_ipsec_cpe_id: '{{ oci_cleanup_find_leaked_cpe_by_name.cpes[0].id }}'
+  when:
+    - oci_ipsec_cpe_id | default('') | length == 0
+    - oci_cleanup_find_leaked_cpe_by_name.cpes | default([]) | length > 0
 
 - name: Verify oci_network_cpe deletion
   when: oci_tests_completed | bool
@@ -132,17 +146,31 @@
   until: oci_cleanup_clean_up_cpe is not failed
   ignore_errors: true
 
+- name: Capture the shared DRG identifier for cleanup
+  ansible.builtin.set_fact:
+    oci_ipsec_drg_id: '{{ oci_drg_create.resource.id }}'
+  when:
+    - oci_ipsec_drg_id | default('') | length == 0
+    - oci_drg_create.resource.id | default('') | length > 0
+
 - name: Find leaked DRG by name
   ansible.oci.oci_network_drg_info:
     compartment_id: '{{ oci_integration_compartment_id }}'
-    name: '{{ oci_ipsec_drg_name }}'
+    name: '{{ oci_drg_integration_drg_name }}'
   register: oci_cleanup_find_leaked_drg_by_name
   when:
     - oci_integration_compartment_id is defined
-    - oci_ipsec_drg_name is defined
+    - oci_drg_integration_drg_name is defined
     - oci_ipsec_drg_id | default('') | length == 0
-    - oci_integration_rpfx | string in oci_ipsec_drg_name | string
+    - oci_integration_rpfx | string in oci_drg_integration_drg_name | string
   ignore_errors: true
+
+- name: Save leaked DRG identifier
+  ansible.builtin.set_fact:
+    oci_ipsec_drg_id: '{{ oci_cleanup_find_leaked_drg_by_name.drgs[0].id }}'
+  when:
+    - oci_ipsec_drg_id | default('') | length == 0
+    - oci_cleanup_find_leaked_drg_by_name.drgs | default([]) | length > 0
 
 - name: Verify connection cleanup by ID
   ansible.oci.oci_network_ipsec_connection_info:
@@ -171,10 +199,10 @@
 - name: Delete prerequisite oci_drg_create
   ansible.oci.oci_network_drg:
     state: absent
-    drg_id: '{{ oci_drg_create.resource.id }}'
+    drg_id: '{{ oci_ipsec_drg_id }}'
   when:
-    - oci_drg_create is defined
-    - oci_drg_create.resource.id | default('') | length > 0
+    - oci_ipsec_drg_id is defined
+    - oci_ipsec_drg_id | default('') | length > 0
   register: oci_cleanup_delete_prerequisite_oci_drg_create
   retries: 3
   delay: 5

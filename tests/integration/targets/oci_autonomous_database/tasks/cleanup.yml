@@ -130,7 +130,8 @@
   ansible.oci.oci_autonomous_database:
     state: absent
     autonomous_database_id: '{{ item.id }}'
-  loop: '{{ oci_cleanup_adb_lookup.autonomous_databases | default([]) }}'
+  loop: '{{ oci_cleanup_find_leaked_autonomous_database_by_unique_name_when_id_is_unavailable.autonomous_databases
+    | default([]) }}'
   when:
     - oci_adb_id | default('') | length == 0
   register: oci_cleanup_delete_leaked_autonomous_database_found_by_name_during_cleanup
