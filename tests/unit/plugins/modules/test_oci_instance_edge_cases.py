@@ -126,8 +126,9 @@ def test_metadata_preserves_reserved_values_and_replaces_other_keys(adapter, fie
 ])
 def test_reserved_metadata_cannot_be_added_or_moved(adapter, params):
     existing = resource(metadata={"user_data": "original"}) if "extended_metadata" in params else resource()
+    instance = adapter(params)
     with pytest.raises(FailJsonCalled):
-        adapter(params).build_update_plan(existing)
+        instance.build_update_plan(existing)
 
 
 @pytest.mark.parametrize("plugins,changed", [
@@ -151,8 +152,10 @@ def test_plugin_subset_comparison(adapter, plugins, changed):
     [{"name": "Bastion", "desired_state": "enabled"}] * 2,
 ])
 def test_invalid_plugin_entries_fail(adapter, plugins):
+    instance = adapter({"agent_config": {"plugins_config": plugins}})
+    existing = resource()
     with pytest.raises(FailJsonCalled):
-        adapter({"agent_config": {"plugins_config": plugins}}).build_update_plan(resource())
+        instance.build_update_plan(existing)
 
 
 def test_valid_check_mode_does_not_mutate(adapter):

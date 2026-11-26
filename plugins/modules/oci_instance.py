@@ -1061,6 +1061,96 @@ class OciInstanceModule(OciResourceBase):
                 self.module.fail_json(msg="Duplicate agent plugin name")
             names.add(name)
 
+    def _plan_metadata_update(self, field, current, fields):
+        """Preserve reserved metadata keys and compare the effective dictionary."""
+        supplied = self.module.params.get(field)
+        if supplied is None:
+            return
+        existing = current.get(field) or {}
+        desired = dict(supplied)
+        for key in ("ssh_authorized_keys", "user_data"):
+            if key in desired and (key not in existing or desired[key] != existing[key]):
+                self.module.fail_json(msg=f"Updating reserved metadata key {key} is not supported")
+            if key in existing:
+                desired[key] = existing[key]
+        if desired == existing:
+            fields.pop(field, None)
+        else:
+            fields[field] = desired
+
+    def _plan_agent_config_update(self, current, fields):
+        """Compare supplied agent flags and plugins by name."""
+        agent = self.module.params.get("agent_config")
+        if agent is None:
+            return
+        existing = current.get("agent_config") or {}
+        desired = normalize_enum_values(agent, ENUM_KEYS)
+        flags = {
+            AGENT_CONFIG_PARAM_TO_OCI.get(key, key): value
+            for key, value in desired.items() if key != "plugins_config"
+        }
+        differs = values_differ_as_subset(existing, flags)
+        plugins = {plugin["name"]: plugin for plugin in existing.get("plugins_config") or []}
+        differs = differs or any(
+            values_differ_as_subset(plugins.get(plugin["name"]), plugin)
+            for plugin in desired.get("plugins_config") or []
+        )
+        if not differs:
+            fields.pop("agent_config", None)
+
+    def _platform_update_model(self, existing, desired):
+        """Select the platform update model and reject unsupported changes."""
+        platform_type = desired.get("type", existing.get("type"))
+        if "type" in desired and desired["type"] != existing.get("type"):
+            self.fail_immutable_field_change("platform_config.type")
+        try:
+            return build_platform_config(
+                {"platform_config": {"type": platform_type}}, "UpdateInstancePlatformConfig"
+            )
+        except (ValueError, TypeError) as exc:
+            if not values_differ_as_subset(existing, desired):
+                return None
+            self.module.fail_json(msg=str(exc))
+
+    def _mutable_update_fields(self, field, existing, desired, supported):
+        """Remove unchanged creation fields and reject changes to those fields."""
+        mutable = {}
+        for key, value in desired.items():
+            if key not in supported:
+                if values_differ_as_subset(existing.get(key), value):
+                    self.fail_immutable_field_change(f"{field}.{key}")
+            else:
+                mutable[key] = value
+        return mutable
+
+    def _plan_nested_update(self, field, current, fields):
+        """Validate nested update fields against the selected SDK model."""
+        supplied = self.module.params.get(field)
+        if supplied is None:
+            return
+        existing = current.get(field) or {}
+        desired = {
+            key: value for key, value in normalize_enum_values(supplied, ENUM_KEYS).items()
+            if value is not None
+        }
+        if field == "platform_config":
+            model = self._platform_update_model(existing, desired)
+            if model is None:
+                fields.pop(field, None)
+                return
+        else:
+            model = oci.core.models.UpdateLaunchOptions()
+        supported = getattr(model, "swagger_types", None)
+        if supported is None:
+            return
+        mutable = self._mutable_update_fields(field, existing, desired, supported)
+        if values_differ_as_subset(existing, mutable):
+            if field == "platform_config":
+                mutable["type"] = desired.get("type", existing.get("type"))
+            fields[field] = mutable
+        else:
+            fields.pop(field, None)
+
     def build_update_plan(self, resource):
         """Prepare and validate instance changes before any mutation."""
         self._validate_agent_plugins()
@@ -1068,77 +1158,10 @@ class OciInstanceModule(OciResourceBase):
         current = serialize_oci_model(resource)
         fields = plan["update_model_fields"]
         for field in ("metadata", "extended_metadata"):
-            supplied = self.module.params.get(field)
-            if supplied is None:
-                continue
-            existing = current.get(field) or {}
-            desired = dict(supplied)
-            for key in ("ssh_authorized_keys", "user_data"):
-                if key in desired and (key not in existing or desired[key] != existing[key]):
-                    self.module.fail_json(msg=f"Updating reserved metadata key {key} is not supported")
-                if key in existing:
-                    desired[key] = existing[key]
-            if desired == existing:
-                fields.pop(field, None)
-            else:
-                fields[field] = desired
-
-        agent = self.module.params.get("agent_config")
-        if agent is not None:
-            existing = current.get("agent_config") or {}
-            desired = normalize_enum_values(agent, ENUM_KEYS)
-            aliases = AGENT_CONFIG_PARAM_TO_OCI
-            flags = {aliases.get(k, k): v for k, v in desired.items() if k != "plugins_config"}
-            differs = values_differ_as_subset(existing, flags)
-            plugins = {p["name"]: p for p in existing.get("plugins_config") or []}
-            differs = differs or any(
-                values_differ_as_subset(plugins.get(p["name"]), p)
-                for p in desired.get("plugins_config") or []
-            )
-            if not differs:
-                fields.pop("agent_config", None)
-
+            self._plan_metadata_update(field, current, fields)
+        self._plan_agent_config_update(current, fields)
         for field in ("launch_options", "platform_config"):
-            supplied = self.module.params.get(field)
-            if supplied is None:
-                continue
-            existing = current.get(field) or {}
-            desired = {
-                k: v for k, v in normalize_enum_values(supplied, ENUM_KEYS).items()
-                if v is not None
-            }
-            if field == "platform_config":
-                platform_type = desired.get("type", existing.get("type"))
-                if "type" in desired and desired["type"] != existing.get("type"):
-                    self.fail_immutable_field_change("platform_config.type")
-                try:
-                    model = build_platform_config(
-                        {"platform_config": {"type": platform_type}}, "UpdateInstancePlatformConfig"
-                    )
-                except (ValueError, TypeError) as exc:
-                    if not values_differ_as_subset(existing, desired):
-                        fields.pop(field, None)
-                        continue
-                    self.module.fail_json(msg=str(exc))
-            else:
-                model = oci.core.models.UpdateLaunchOptions()
-            supported = getattr(model, "swagger_types", None)
-            if supported is None:
-                continue
-            mutable = {}
-            for key, value in desired.items():
-                if key not in supported:
-                    if values_differ_as_subset(existing.get(key), value):
-                        self.fail_immutable_field_change(f"{field}.{key}")
-                else:
-                    mutable[key] = value
-            if values_differ_as_subset(existing, mutable):
-                if field == "platform_config":
-                    mutable["type"] = platform_type
-                fields[field] = mutable
-            else:
-                fields.pop(field, None)
-
+            self._plan_nested_update(field, current, fields)
         plan["update_needed"] = bool(fields or plan["strategy_operations"])
         if fields:
             try:
