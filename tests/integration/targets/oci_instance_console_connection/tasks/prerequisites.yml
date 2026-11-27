@@ -51,7 +51,6 @@
     name: '{{ oci_instance_integration_vcn_name }}'
     cidr_blocks:
       - '{{ oci_instance_integration_vcn_cidr_block }}'
-    dns_label: vcn{{ oci_integration_rpfx }}
   register: oci_instance_vcn_create
 
 - name: Create test subnet for instance integration
@@ -61,7 +60,6 @@
     vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
     cidr_block: '{{ oci_instance_integration_subnet_cidr_block }}'
     name: '{{ oci_instance_integration_subnet_name }}'
-    dns_label: sub{{ oci_integration_rpfx }}
   register: oci_instance_subnet_create
 
 - name: Define instance create and delete parameters
@@ -82,7 +80,6 @@
         recovery_action: restore_instance
       agent_config:
         all_plugins_disabled: false
-      private_ip: '{{ oci_network_private_ip_integration_primary_vnic_ip_address }}'
 
 - name: Create instance
   ansible.oci.oci_instance:
@@ -98,7 +95,6 @@
     instance_options: '{{ oci_instance_create_params.instance_options }}'
     availability_config: '{{ oci_instance_create_params.availability_config }}'
     agent_config: '{{ oci_instance_create_params.agent_config }}'
-    private_ip: '{{ oci_instance_create_params.private_ip }}'
   register: oci_instance_create
 
 - name: Set prerequisite values

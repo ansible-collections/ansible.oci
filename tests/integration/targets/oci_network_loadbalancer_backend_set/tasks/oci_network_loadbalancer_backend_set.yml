@@ -11,8 +11,8 @@
     - name: Use the shared private load balancer
       ansible.builtin.set_fact:
         oci_nlb_test_id: '{{ oci_nlb_test_create.resource.id }}'
-        oci_nlb_test_backend_set: backends-oci_network_loadbalancer_backend_set-{{ oci_integration_rpfx }}
-        oci_nlb_test_listener: listener-oci_network_loadbalancer_backend_set-{{ oci_integration_rpfx }}
+        oci_nlb_test_backend_set: backends-backend-set-{{ oci_integration_rpfx }}
+        oci_nlb_test_listener: listener-backend-set-{{ oci_integration_rpfx }}
 
     - name: Read backend set before create
       ansible.oci.oci_network_loadbalancer_backend_set_info:

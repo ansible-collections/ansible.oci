@@ -9,8 +9,8 @@
     - name: Use the shared private load balancer
       ansible.builtin.set_fact:
         oci_nlb_test_id: '{{ oci_nlb_test_create.resource.id }}'
-        oci_nlb_test_backend_set: backends-oci_network_loadbalancer_health_checker-{{ oci_integration_rpfx }}
-        oci_nlb_test_listener: listener-oci_network_loadbalancer_health_checker-{{ oci_integration_rpfx }}
+        oci_nlb_test_backend_set: backends-health-{{ oci_integration_rpfx }}
+        oci_nlb_test_listener: listener-health-{{ oci_integration_rpfx }}
 
     - name: Create the prerequisite backend set
       ansible.oci.oci_network_loadbalancer_backend_set:

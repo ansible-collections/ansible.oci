@@ -105,6 +105,20 @@
   register: oci_cleanup_delete_leaked_identity_domain_during_cleanup
   ignore_errors: true
 
+- name: Delete temporary identity domain by name when no ID was captured
+  ansible.oci.oci_identity_domain:
+    state: absent
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_identity_domain_integration_name }}'
+  when:
+    - oci_integration_compartment_id is defined
+    - oci_identity_domain_integration_name is defined
+    - oci_identity_domain_create.resource.id | default('', true) | length == 0
+    - oci_integration_rpfx | string in oci_identity_domain_integration_name | string
+  register: oci_cleanup_identity_domain_by_name
+  retries: 3
+  ignore_errors: true
+
 - name: Verify resource cleanup
   ansible.builtin.assert:
     that:
@@ -112,4 +126,5 @@
       - (oci_cleanup_delete_leaked_dynamic_group_by_id | default({})) is not failed
       - (oci_cleanup_delete_leaked_dynamic_group_by_name_when_no_id_was_captured | default({})) is not failed
       - (oci_cleanup_delete_leaked_identity_domain_during_cleanup | default({})) is not failed
+      - (oci_cleanup_identity_domain_by_name | default({})) is not failed
     fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

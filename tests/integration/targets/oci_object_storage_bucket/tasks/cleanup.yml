@@ -104,7 +104,6 @@
   ansible.oci.oci_object_storage_bucket:
     state: absent
     name: '{{ oci_object_storage_bucket_cleanup_name }}'
-    force: true
   when:
     - oci_object_storage_bucket_cleanup_name is defined
     - oci_object_storage_bucket_cleanup_name | default('') | length > 0

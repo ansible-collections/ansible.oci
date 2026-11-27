@@ -4,7 +4,7 @@
     oci_cleanup_checks_failed: false
 
 - name: Delete clones left by failed tests
-  ansible.oci.oci_autonomous_database_clone:
+  ansible.oci.oci_autonomous_database:
     state: absent
     autonomous_database_id: '{{ item }}'
     wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
@@ -13,6 +13,7 @@
     - '{{ oci_adb_clone_refreshable_id | default('''') }}'
   when: item | length > 0
   register: oci_cleanup_failed_clones
+  retries: 3
   ignore_errors: true
 
 - name: Find leaked databases by unique name
@@ -31,7 +32,7 @@
     - oci_integration_rpfx | string in item | string
 
 - name: Delete clones found by unique name
-  ansible.oci.oci_autonomous_database_clone:
+  ansible.oci.oci_autonomous_database:
     state: absent
     autonomous_database_id: '{{ item.id }}'
     wait_timeout: '{{ oci_adb_clone_integration_wait_timeout }}'
@@ -39,6 +40,7 @@
     ''defined'') | map(attribute=''autonomous_databases'') | flatten }}'
   when: item.id | default('') | length > 0
   register: oci_cleanup_clones_by_name
+  retries: 3
   ignore_errors: true
 
 - name: Verify oci_autonomous_database deletion

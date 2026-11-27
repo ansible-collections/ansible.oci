@@ -13,8 +13,8 @@
     - name: Use the shared private load balancer
       ansible.builtin.set_fact:
         oci_lb_test_id: '{{ oci_lb_test_create.resource.id }}'
-        oci_lb_test_backend_set: backends-oci_loadbalancer_backend-{{ oci_integration_rpfx }}
-        oci_lb_test_listener: listener-oci_loadbalancer_backend-{{ oci_integration_rpfx }}
+        oci_lb_test_backend_set: backends-backend-{{ oci_integration_rpfx }}
+        oci_lb_test_listener: listener-backend-{{ oci_integration_rpfx }}
 
     - name: Create the prerequisite backend set
       ansible.oci.oci_loadbalancer_backend_set:

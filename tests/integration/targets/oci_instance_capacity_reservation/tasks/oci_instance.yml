@@ -13,7 +13,6 @@
     instance_options: '{{ oci_instance_create_params.instance_options }}'
     availability_config: '{{ oci_instance_create_params.availability_config }}'
     agent_config: '{{ oci_instance_create_params.agent_config }}'
-    private_ip: '{{ oci_instance_create_params.private_ip }}'
     capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
   register: oci_instance_create
 
