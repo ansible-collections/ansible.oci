@@ -35,6 +35,12 @@
           - oci_object_lifecycle_policy_bucket_create.resource.versioning == 'Enabled'
           - oci_object_lifecycle_policy_bucket_create.resource.namespace | length > 0
 
+    - name: Disable automatic tiering for lifecycle policy tests
+      ansible.oci.oci_object_storage_bucket:
+        state: present
+        name: '{{ oci_object_lifecycle_policy_bucket_name }}'
+        auto_tiering: Disabled
+
     - name: Predict policy creation
       ansible.oci.oci_object_lifecycle_policy: &policy_create
         state: present
