@@ -1,59 +1,166 @@
 ---
-- name: Clean up the temporary identity domain
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Remove leaked membership during cleanup
+  ansible.oci.oci_identity_user_group_membership:
+    state: absent
+    domain_id: '{{ oci_membership_domain_id }}'
+    user_id: '{{ oci_membership_user_cleanup_id }}'
+    group_id: '{{ oci_membership_group_cleanup_id }}'
+  when:
+    - oci_membership_domain_id is defined
+    - oci_membership_user_cleanup_id is defined
+    - oci_membership_group_cleanup_id is defined
+    - oci_membership_domain_id | length > 0
+    - oci_membership_added | default(false)
+    - oci_membership_user_cleanup_id | default('') | length > 0
+    - oci_membership_group_cleanup_id | default('') | length > 0
+  register: oci_cleanup_remove_leaked_membership_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Verify oci_identity_group deletion
+  when: oci_tests_completed | bool
   block:
-    - name: Delete leaked group by ID
-      ansible.oci.oci_identity_group:
-        state: absent
-        domain_id: "{{ oci_identity_group_domain_id }}"
-        group_id: "{{ oci_identity_group_cleanup_id }}"
-      when:
-        - oci_identity_group_domain_id | length > 0
-        - oci_identity_group_cleanup_id | default('') | length > 0
-      register: oci_cleanup_group_by_id
-      retries: 3
-      ignore_errors: true
 
-    - name: Delete leaked group by name when no ID was captured
-      ansible.oci.oci_identity_group:
-        state: absent
-        domain_id: "{{ oci_identity_group_domain_id }}"
-        name: "{{ oci_identity_group_cleanup_name }}"
-      when:
-        - oci_identity_group_domain_id | length > 0
-        - oci_identity_group_cleanup_id | default('') | length == 0
-        - oci_identity_group_cleanup_name | default('') | length > 0
-      register: oci_cleanup_group_by_name
-      retries: 3
-      ignore_errors: true
+    - name: Exercise identity-domain group lifecycle in a temporary domain
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
 
-    - name: Delete temporary identity domain by ID
-      ansible.oci.oci_identity_domain:
-        state: absent
-        domain_id: "{{ oci_identity_group_domain_id }}"
-      when: oci_identity_group_domain_id | length > 0
-      register: oci_cleanup_identity_domain_by_id
-      retries: 3
-      ignore_errors: true
+        - name: Delete group in check mode
+          ansible.oci.oci_identity_group:
+            domain_id: '{{ oci_identity_group_domain_id }}'
+            state: absent
+            group_id: '{{ group_create_result.resource.id }}'
+          check_mode: true
+          register: oci_cleanup_delete_group_in_check_mode
+          failed_when: not oci_cleanup_delete_group_in_check_mode.changed
 
-    - name: Delete temporary identity domain by name when no ID was captured
-      ansible.oci.oci_identity_domain:
-        state: absent
-        compartment_id: "{{ oci_integration_compartment_id }}"
-        name: "{{ oci_identity_group_integration_domain_name }}"
-      when: oci_identity_group_domain_id | length == 0
-      register: oci_cleanup_identity_domain_by_name
-      retries: 3
-      ignore_errors: true
+        - name: Verify delete check mode left group present
+          ansible.oci.oci_identity_group_info:
+            domain_id: '{{ oci_identity_group_domain_id }}'
+            group_id: '{{ group_create_result.resource.id }}'
+          register: oci_cleanup_verify_delete_check_mode_left_group_present
+          failed_when: oci_cleanup_verify_delete_check_mode_left_group_present.groups | length != 1
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_group_by_id is not failed
-          - oci_cleanup_group_by_name is not failed
-          - oci_cleanup_identity_domain_by_id is not failed
-          - oci_cleanup_identity_domain_by_name is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+        - name: Delete group
+          ansible.oci.oci_identity_group:
+            domain_id: '{{ oci_identity_group_domain_id }}'
+            state: absent
+            group_id: '{{ group_create_result.resource.id }}'
+          register: oci_cleanup_delete_group
+          failed_when: not oci_cleanup_delete_group.changed
+
+        - name: Wait until deleted group is absent
+          ansible.oci.oci_identity_group_info:
+            domain_id: '{{ oci_identity_group_domain_id }}'
+            group_id: '{{ group_create_result.resource.id }}'
+          register: oci_cleanup_wait_until_deleted_group_is_absent
+          until: oci_cleanup_wait_until_deleted_group_is_absent.groups | length == 0
+          retries: 12
+          delay: 5
+
+        - name: Verify group deletion is idempotent
+          ansible.oci.oci_identity_group:
+            domain_id: '{{ oci_identity_group_domain_id }}'
+            state: absent
+            group_id: '{{ group_create_result.resource.id }}'
+          register: oci_cleanup_verify_group_deletion_is_idempotent
+          failed_when: oci_cleanup_verify_group_deletion_is_idempotent.changed
+
+        - name: Clear group cleanup marker
+          ansible.builtin.set_fact:
+            oci_identity_group_cleanup_id: ''
+            oci_identity_group_cleanup_name: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete leaked group by ID
+  ansible.oci.oci_identity_group:
+    state: absent
+    domain_id: '{{ oci_identity_group_domain_id }}'
+    group_id: '{{ oci_identity_group_cleanup_id }}'
+  when:
+    - oci_identity_group_domain_id is defined
+    - oci_identity_group_cleanup_id is defined
+    - oci_identity_group_domain_id | length > 0
+    - oci_identity_group_cleanup_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_group_by_id
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked group by name when no ID was captured
+  ansible.oci.oci_identity_group:
+    state: absent
+    domain_id: '{{ oci_identity_group_domain_id }}'
+    name: '{{ oci_identity_group_cleanup_name }}'
+  when:
+    - oci_identity_group_domain_id is defined
+    - oci_identity_group_cleanup_name is defined
+    - oci_identity_group_domain_id | length > 0
+    - oci_identity_group_cleanup_id | default('') | length == 0
+    - oci_identity_group_cleanup_name | default('') | length > 0
+    - oci_integration_rpfx | string in oci_identity_group_cleanup_name | string
+  register: oci_cleanup_delete_leaked_group_by_name_when_no_id_was_captured
+  retries: 3
+  ignore_errors: true
+
+- name: Delete prerequisite user_create_result
+  ansible.oci.oci_identity_user:
+    state: absent
+    user_id: '{{ user_create_result.resource.id }}'
+    domain_id: '{{ oci_identity_domain_create.resource.id }}'
+  when:
+    - user_create_result.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_user_create_result
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_user_create_result is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_identity_domain_create
+  ansible.oci.oci_identity_domain:
+    state: absent
+    domain_id: '{{ oci_identity_domain_create.resource.id }}'
+  when:
+    - oci_identity_domain_create is defined
+    - oci_identity_domain_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_identity_domain_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_identity_domain_create is not failed
+  ignore_errors: true
+
+- name: Delete temporary identity domain by name when no ID was captured
+  ansible.oci.oci_identity_domain:
+    state: absent
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_identity_domain_integration_name }}'
+  when:
+    - oci_integration_compartment_id is defined
+    - oci_identity_domain_integration_name is defined
+    - oci_identity_domain_create.resource.id | default('', true) | length == 0
+    - oci_integration_rpfx | string in oci_identity_domain_integration_name | string
+  register: oci_cleanup_identity_domain_by_name
+  retries: 3
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_remove_leaked_membership_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_group_by_id | default({})) is not failed
+      - (oci_cleanup_delete_leaked_group_by_name_when_no_id_was_captured | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_user_create_result | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_identity_domain_create | default({})) is not failed
+      - (oci_cleanup_identity_domain_by_name | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

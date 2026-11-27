@@ -1,0 +1,46 @@
+---
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_blockstorage_volume_integration_volume_name: '{{ oci_blockstorage_volume_integration_volume_name }}-{{ oci_integration_rpfx
+      }}'
+    oci_blockstorage_volume_integration_updated_volume_name: '{{ oci_blockstorage_volume_integration_updated_volume_name
+      }}-{{ oci_integration_rpfx }}'
+    oci_blockstorage_volume_integration_restore_volume_name: '{{ oci_blockstorage_volume_integration_restore_volume_name
+      }}-{{ oci_integration_rpfx }}'
+    oci_blockstorage_volume_integration_backup_name: '{{ oci_blockstorage_volume_integration_backup_name }}-{{ oci_integration_rpfx
+      }}'
+
+- name: Discover an availability domain in the compartment
+  ansible.oci.oci_identity_availability_domain_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+  register: oci_blockstorage_volume_ad_info
+
+- name: Set the working availability domain
+  ansible.builtin.set_fact:
+    oci_blockstorage_volume_integration_availability_domain: '{{ oci_blockstorage_volume_ad_info.availability_domains[0].name
+      }}'
+
+- name: Define block volume create and delete parameters
+  ansible.builtin.set_fact:
+    oci_blockstorage_volume_create_params:
+      state: present
+      compartment_id: '{{ oci_integration_compartment_id }}'
+      availability_domain: '{{ oci_blockstorage_volume_integration_availability_domain }}'
+      name: '{{ oci_blockstorage_volume_integration_volume_name }}'
+      size_in_gbs: '{{ oci_blockstorage_volume_integration_size_in_gbs }}'
+      vpus_per_gb: '{{ oci_blockstorage_volume_integration_vpus_per_gb }}'
+      freeform_tags: '{{ oci_blockstorage_volume_integration_create_tags }}'
+    oci_blockstorage_volume_delete_params:
+      state: absent
+      volume_id: ''
+
+- name: Create block volume
+  ansible.oci.oci_blockstorage_volume:
+    state: '{{ oci_blockstorage_volume_create_params.state }}'
+    compartment_id: '{{ oci_blockstorage_volume_create_params.compartment_id }}'
+    availability_domain: '{{ oci_blockstorage_volume_create_params.availability_domain }}'
+    name: '{{ oci_blockstorage_volume_create_params.name }}'
+    size_in_gbs: '{{ oci_blockstorage_volume_create_params.size_in_gbs }}'
+    vpus_per_gb: '{{ oci_blockstorage_volume_create_params.vpus_per_gb }}'
+    freeform_tags: '{{ oci_blockstorage_volume_create_params.freeform_tags }}'
+  register: oci_blockstorage_volume_create

@@ -1,3 +1,9 @@
 destructive
-time=90m
+oci_loadbalancer
+oci_loadbalancer_certificate
 oci_loadbalancer_info
+oci_loadbalancer_listener
+oci_loadbalancer_listener_info
+oci_loadbalancer_routing_policy
+oci_loadbalancer_routing_policy_info
+time=120m

@@ -1,51 +1,182 @@
 ---
-- name: Run VNIC attachment cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Verify oci_vnic_attachment deletion
+  when: oci_tests_completed | bool
   block:
-    - name: Detach leaked secondary VNIC during cleanup
-      ansible.oci.oci_vnic_attachment:
-        state: absent
-        vnic_attachment_id: "{{ oci_vnic_attachment_id }}"
-      when: oci_vnic_attachment_id | default('') | length > 0
-      register: oci_cleanup_secondary_vnic
-      retries: 3
-      ignore_errors: true
 
-    - name: Delete leaked compute instance during cleanup
-      ansible.oci.oci_instance:
-        state: absent
-        instance_id: "{{ oci_vnic_attachment_instance_id }}"
-      when: oci_vnic_attachment_instance_id | default('') | length > 0
-      register: oci_cleanup_compute_instance
-      retries: 3
-      ignore_errors: true
+    - name: Exercise VNIC attachment module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
 
-    - name: Delete leaked subnet during cleanup
-      ansible.oci.oci_network_subnet:
-        state: absent
-        subnet_id: "{{ oci_vnic_attachment_subnet_create.resource.id }}"
-      when: oci_vnic_attachment_subnet_create.resource.id | default('') | length > 0
-      register: oci_cleanup_subnet
-      retries: 3
-      ignore_errors: true
+        - name: Detach VNIC in check mode
+          ansible.oci.oci_vnic_attachment: &oci_vnic_attachment_delete_options
+            state: absent
+            vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+          check_mode: true
+          register: oci_cleanup_detach_vnic_in_check_mode
 
-    - name: Delete leaked VCN during cleanup
-      ansible.oci.oci_network_vcn:
-        state: absent
-        vcn_id: "{{ oci_vnic_attachment_vcn_create.resource.id }}"
-      when: oci_vnic_attachment_vcn_create.resource.id | default('') | length > 0
-      register: oci_cleanup_vcn
-      retries: 3
-      ignore_errors: true
+        - name: Assert detach check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_detach_vnic_in_check_mode.changed | bool
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_secondary_vnic is not failed
-          - oci_cleanup_compute_instance is not failed
-          - oci_cleanup_subnet is not failed
-          - oci_cleanup_vcn is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+        - name: Verify check mode did not detach the VNIC
+          ansible.oci.oci_vnic_attachment_info:
+            vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+          register: oci_cleanup_verify_check_mode_did_not_detach_the_vnic
+
+        - name: Assert the attachment still exists
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_verify_check_mode_did_not_detach_the_vnic.vnic_attachments | length == 1
+
+        - name: Detach VNIC
+          ansible.oci.oci_vnic_attachment:
+            <<: *oci_vnic_attachment_delete_options
+          register: oci_cleanup_detach_vnic
+
+        - name: Assert detach reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_detach_vnic.changed | bool
+
+        - name: Detach VNIC again
+          ansible.oci.oci_vnic_attachment:
+            <<: *oci_vnic_attachment_delete_options
+          register: oci_cleanup_detach_vnic_again
+
+        - name: Assert detach rerun is idempotent
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_detach_vnic_again.changed | bool
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Detach leaked secondary VNIC during cleanup
+  ansible.oci.oci_vnic_attachment:
+    state: absent
+    vnic_attachment_id: '{{ oci_vnic_attachment_id }}'
+  when:
+    - oci_vnic_attachment_id is defined
+    - oci_vnic_attachment_id | default('') | length > 0
+  register: oci_cleanup_detach_leaked_secondary_vnic_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked secondary private IP
+  ansible.oci.oci_network_private_ip:
+    state: absent
+    private_ip_id: '{{ oci_network_private_ip_id }}'
+  when:
+    - oci_network_private_ip_id is defined
+    - oci_network_private_ip_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_secondary_private_ip
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked instance during cleanup
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_id }}'
+  when:
+    - oci_instance_id is defined
+    - oci_instance_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_instance_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete security groups used for VNIC updates
+  ansible.oci.oci_network_security_group:
+    state: absent
+    network_security_group_id: '{{ item.resource.id }}'
+  loop: '{{ oci_network_vnic_nsgs.results | default([]) }}'
+  when:
+    - item.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_security_groups_used_for_vnic_updates
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked subnet during cleanup
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+  when:
+    - oci_instance_subnet_create is defined
+    - oci_instance_subnet_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_subnet_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+  when:
+    - oci_instance_vcn_create is defined
+    - oci_instance_vcn_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_vcn_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_create
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_create.resource.id }}'
+  when:
+    - oci_instance_create is defined
+    - oci_instance_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_create is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_subnet_create
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+  when:
+    - oci_instance_subnet_create is defined
+    - oci_instance_subnet_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_subnet_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_subnet_create is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_vcn_create
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+  when:
+    - oci_instance_vcn_create is defined
+    - oci_instance_vcn_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_vcn_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_vcn_create is not failed
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_detach_leaked_secondary_vnic_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_secondary_private_ip | default({})) is not failed
+      - (oci_cleanup_delete_leaked_instance_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_security_groups_used_for_vnic_updates | default({})) is not failed
+      - (oci_cleanup_delete_leaked_subnet_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_vcn_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_subnet_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_vcn_create | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

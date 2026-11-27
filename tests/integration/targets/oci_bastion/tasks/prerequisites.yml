@@ -1,0 +1,85 @@
+---
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_network_vcn_integration_vcn_name: '{{ oci_network_vcn_integration_vcn_name }}-{{ oci_integration_rpfx }}'
+    oci_network_vcn_integration_updated_vcn_name: '{{ oci_network_vcn_integration_updated_vcn_name }}-{{ oci_integration_rpfx
+      }}'
+    oci_network_vcn_integration_subnet_name: '{{ oci_network_vcn_integration_subnet_name }}-{{ oci_integration_rpfx
+      }}'
+    oci_network_vcn_integration_endpoint_name: '{{ oci_network_vcn_integration_endpoint_name }}_{{ oci_integration_rpfx
+      }}'
+    oci_network_vcn_integration_vcn_dns_label: vcn{{ oci_integration_rpfx }}
+
+- name: Define VCN create and delete parameters
+  ansible.builtin.set_fact:
+    oci_network_vcn_create_params:
+      state: present
+      compartment_id: '{{ oci_integration_compartment_id }}'
+      name: '{{ oci_network_vcn_integration_vcn_name }}'
+      cidr_blocks:
+        - '{{ oci_network_vcn_integration_vcn_cidr_block }}'
+      dns_label: '{{ oci_network_vcn_integration_vcn_dns_label }}'
+      freeform_tags: '{{ oci_network_vcn_integration_create_tags }}'
+    oci_network_vcn_delete_params:
+      state: absent
+      vcn_id: ''
+
+- name: Create VCN
+  ansible.oci.oci_network_vcn:
+    state: '{{ oci_network_vcn_create_params.state }}'
+    compartment_id: '{{ oci_network_vcn_create_params.compartment_id }}'
+    name: '{{ oci_network_vcn_create_params.name }}'
+    cidr_blocks: '{{ oci_network_vcn_create_params.cidr_blocks }}'
+    dns_label: '{{ oci_network_vcn_create_params.dns_label }}'
+    freeform_tags: '{{ oci_network_vcn_create_params.freeform_tags }}'
+  register: oci_network_vcn_create
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_subnet_integration_vcn_name: '{{ oci_subnet_integration_vcn_name }}-{{ oci_integration_rpfx }}'
+    oci_subnet_integration_subnet_name: '{{ oci_subnet_integration_subnet_name }}-{{ oci_integration_rpfx }}'
+    oci_subnet_integration_updated_subnet_name: '{{ oci_subnet_integration_updated_subnet_name }}-{{ oci_integration_rpfx
+      }}'
+    oci_subnet_integration_vcn_dns_label: vcn{{ oci_integration_rpfx }}
+    oci_subnet_integration_subnet_dns_label: sub{{ oci_integration_rpfx }}
+
+- name: Use the shared VCN
+  ansible.builtin.set_fact:
+    oci_subnet_vcn_create: '{{ oci_shared_vcn }}'
+
+- name: Capture created network ids
+  ansible.builtin.set_fact:
+    oci_subnet_integration_network:
+      vcn_id: '{{ oci_subnet_vcn_create.resource.id }}'
+      default_route_table_id: '{{ oci_subnet_vcn_create.resource.default_route_table_id }}'
+      default_security_list_id: '{{ oci_subnet_vcn_create.resource.default_security_list_id }}'
+
+- name: Define subnet create and delete parameters
+  ansible.builtin.set_fact:
+    oci_subnet_create_params:
+      state: present
+      compartment_id: '{{ oci_integration_compartment_id }}'
+      vcn_id: '{{ oci_subnet_integration_network.vcn_id }}'
+      cidr_block: '{{ oci_subnet_integration_subnet_cidr_block }}'
+      name: '{{ oci_subnet_integration_subnet_name }}'
+      dns_label: '{{ oci_subnet_integration_subnet_dns_label }}'
+      route_table_id: '{{ oci_subnet_integration_network.default_route_table_id }}'
+      security_list_ids:
+        - '{{ oci_subnet_integration_network.default_security_list_id }}'
+      freeform_tags: '{{ oci_subnet_integration_create_tags }}'
+    oci_subnet_delete_params:
+      state: absent
+      subnet_id: ''
+
+- name: Create subnet
+  ansible.oci.oci_network_subnet:
+    state: '{{ oci_subnet_create_params.state }}'
+    compartment_id: '{{ oci_subnet_create_params.compartment_id }}'
+    vcn_id: '{{ oci_subnet_create_params.vcn_id }}'
+    cidr_block: '{{ oci_subnet_create_params.cidr_block }}'
+    name: '{{ oci_subnet_create_params.name }}'
+    dns_label: '{{ oci_subnet_create_params.dns_label }}'
+    route_table_id: '{{ oci_subnet_create_params.route_table_id }}'
+    security_list_ids: '{{ oci_subnet_create_params.security_list_ids }}'
+    freeform_tags: '{{ oci_subnet_create_params.freeform_tags }}'
+  register: oci_subnet_create

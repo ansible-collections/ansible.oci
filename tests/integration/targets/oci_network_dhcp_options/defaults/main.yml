@@ -1,12 +1,30 @@
 ---
-oci_dhcp_options_integration_vcn_name: "oci-dhcp-options-integration-vcn"
-oci_dhcp_options_integration_dhcp_options_name: "oci-dhcp-options-integration-dhcp"
-oci_dhcp_options_integration_updated_dhcp_options_name: "oci-dhcp-options-integration-dhcp-updated"
-oci_dhcp_options_integration_vcn_cidr_block: "10.252.0.0/16"
-oci_dhcp_options_integration_vcn_dns_label: "ocidhcpoptv"
+oci_network_vcn_integration_vcn_name: oci-vcn-integration-vcn
+oci_network_vcn_integration_updated_vcn_name: oci-vcn-integration-vcn-updated
+oci_network_vcn_integration_subnet_name: oci-vcn-integration-subnet
+oci_network_vcn_integration_vcn_cidr_block: 10.241.0.0/16
+oci_network_vcn_integration_vcn_dns_label: ocivcnit
+oci_network_vcn_integration_endpoint_name: oci_vcn_dns_endpoint
+oci_network_vcn_integration_create_tags:
+  phase: create
+  role: integration
+oci_dhcp_options_integration_vcn_name: oci-dhcp-options-integration-vcn
+oci_dhcp_options_integration_dhcp_options_name: oci-dhcp-options-integration-dhcp
+oci_dhcp_options_integration_updated_dhcp_options_name: oci-dhcp-options-integration-dhcp-updated
+oci_dhcp_options_integration_vcn_dns_label: ocidhcpoptv
 oci_dhcp_options_integration_create_tags:
   phase: create
   role: integration
 oci_dhcp_options_integration_update_tags:
+  phase: update
+  role: integration
+oci_security_list_integration_vcn_name: oci-security-list-integration-vcn
+oci_security_list_integration_security_list_name: oci-security-list-integration-sl
+oci_security_list_integration_updated_security_list_name: oci-security-list-integration-sl-updated
+oci_security_list_integration_vcn_dns_label: ocislvcn
+oci_security_list_integration_create_tags:
+  phase: create
+  role: integration
+oci_security_list_integration_update_tags:
   phase: update
   role: integration

@@ -1,10 +1,149 @@
 ---
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Remove policy assignment during cleanup
+  ansible.oci.oci_volume_backup_policy_assignment:
+    state: absent
+    asset_id: '{{ oci_volume_backup_policy_assignment_volume_id }}'
+  when:
+    - oci_volume_backup_policy_assignment_volume_id is defined
+    - oci_volume_backup_policy_assignment_volume_id | default('') | length > 0
+  register: oci_cleanup_remove_policy_assignment_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Remove second backup policy during cleanup
+  ansible.oci.oci_volume_backup_policy:
+    state: absent
+    volume_backup_policy_id: '{{ oci_volume_backup_policy_assignment_second_policy_id }}'
+  when:
+    - oci_volume_backup_policy_assignment_second_policy_id is defined
+    - oci_volume_backup_policy_assignment_second_policy_id | default('') | length > 0
+  register: oci_cleanup_remove_second_backup_policy_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Verify oci_volume_backup_policy deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Exercise volume backup policy lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
+
+        - name: Delete volume backup policy in check mode
+          ansible.oci.oci_volume_backup_policy: &policy_delete
+            state: absent
+            volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_volume_backup_policy_in_check_mode
+
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_volume_backup_policy_in_check_mode.changed | bool
+
+        - name: Read policy after delete check mode
+          ansible.oci.oci_volume_backup_policy_info:
+            volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+          register: oci_cleanup_read_policy_after_delete_check_mode
+
+        - name: Assert delete check mode did not remove the policy
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_read_policy_after_delete_check_mode.changed | bool
+              - oci_cleanup_read_policy_after_delete_check_mode.volume_backup_policies | length == 1
+              - oci_cleanup_read_policy_after_delete_check_mode .volume_backup_policies[0].id == oci_volume_backup_policy_id
+
+        - name: Delete volume backup policy
+          ansible.oci.oci_volume_backup_policy:
+            <<: *policy_delete
+          register: oci_cleanup_delete_volume_backup_policy
+
+        - name: Assert policy deletion reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_volume_backup_policy.changed | bool
+
+        - name: Read deleted policy by id
+          ansible.oci.oci_volume_backup_policy_info:
+            volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+          register: oci_cleanup_read_deleted_policy_by_id
+
+        - name: Assert deleted policy is absent from info
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_read_deleted_policy_by_id.changed | bool
+              - oci_cleanup_read_deleted_policy_by_id.volume_backup_policies | length == 0
+
+        - name: Delete volume backup policy again in check mode
+          ansible.oci.oci_volume_backup_policy:
+            <<: *policy_delete
+          check_mode: true
+          register: oci_cleanup_delete_volume_backup_policy_again_in_check_mode
+
+        - name: Assert delete check-mode rerun is unchanged
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_delete_volume_backup_policy_again_in_check_mode.changed | bool
+
+        - name: Delete volume backup policy again
+          ansible.oci.oci_volume_backup_policy:
+            <<: *policy_delete
+          register: oci_cleanup_delete_volume_backup_policy_again
+
+        - name: Assert delete rerun is idempotent
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_delete_volume_backup_policy_again.changed | bool
+
+        - name: Clear policy id after successful delete
+          ansible.builtin.set_fact:
+            oci_volume_backup_policy_id: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
 - name: Delete leaked volume backup policy during cleanup
   module_defaults:
     group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+      config_file_location: '{{ oci_integration_config_file_location }}'
+      config_profile_name: '{{ oci_integration_config_profile_name }}'
   ansible.oci.oci_volume_backup_policy:
     state: absent
-    volume_backup_policy_id: "{{ oci_volume_backup_policy_id }}"
-  when: oci_volume_backup_policy_id | default('') | length > 0
+    volume_backup_policy_id: '{{ oci_volume_backup_policy_id }}'
+  when:
+    - oci_volume_backup_policy_id is defined
+    - oci_volume_backup_policy_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_volume_backup_policy_during_cleanup
+  ignore_errors: true
+
+- name: Delete prerequisite oci_blockstorage_volume_create
+  ansible.oci.oci_blockstorage_volume:
+    state: absent
+    volume_id: '{{ oci_blockstorage_volume_create.resource.id }}'
+  when:
+    - oci_blockstorage_volume_create is defined
+    - oci_blockstorage_volume_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_blockstorage_volume_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_blockstorage_volume_create is not failed
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_remove_policy_assignment_during_cleanup | default({})) is not failed
+      - (oci_cleanup_remove_second_backup_policy_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_volume_backup_policy_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_blockstorage_volume_create | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

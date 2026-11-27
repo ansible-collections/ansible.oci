@@ -1,78 +1,154 @@
 ---
-- name: Run WAF cleanup with shared OCI authentication defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
 
+- name: Delete the test firewall during cleanup
+  ansible.oci.oci_waf_web_app_firewall:
+    state: absent
+    web_app_firewall_id: '{{ oci_waf_firewall_cleanup_id }}'
+  when:
+    - oci_waf_firewall_cleanup_id is defined
+    - oci_waf_firewall_cleanup_id | default('') | length > 0
+  register: oci_cleanup_delete_the_test_firewall_during_cleanup
+  retries: 3
+  until: oci_cleanup_delete_the_test_firewall_during_cleanup is succeeded
+  ignore_errors: true
+
+- name: Verify oci_waf_web_app_firewall_policy deletion
+  when: oci_tests_completed | bool
   block:
-    - name: Delete the test firewall during cleanup
-      ansible.oci.oci_waf_web_app_firewall:
-        state: absent
-        web_app_firewall_id: "{{ oci_waf_firewall_cleanup_id }}"
-      when: oci_waf_firewall_cleanup_id | default('') | length > 0
-      register: oci_cleanup_waf_firewall
-      retries: 3
-      until: oci_cleanup_waf_firewall is succeeded
-      ignore_errors: true
 
-    - name: Delete the test replacement policy during cleanup
+    - name: Check policy deletion
       ansible.oci.oci_waf_web_app_firewall_policy:
+        web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
         state: absent
-        web_app_firewall_policy_id: "{{ oci_waf_policy_replacement.resource.id }}"
-      when: oci_waf_policy_replacement.resource.id | default('') | length > 0
-      register: oci_cleanup_waf_replacement_policy
-      retries: 3
-      until: oci_cleanup_waf_replacement_policy is succeeded
-      ignore_errors: true
+      check_mode: true
+      register: oci_cleanup_check_policy_deletion
 
-    - name: Delete the test policy during cleanup
-      ansible.oci.oci_waf_web_app_firewall_policy:
-        state: absent
-        web_app_firewall_policy_id: "{{ oci_waf_policy_cleanup_id }}"
-      when: oci_waf_policy_cleanup_id | default('') | length > 0
-      register: oci_cleanup_waf_policy
-      retries: 3
-      until: oci_cleanup_waf_policy is succeeded
-      ignore_errors: true
+    - name: Read the policy after the deletion check
+      ansible.oci.oci_waf_web_app_firewall_policy_info:
+        web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+      register: oci_cleanup_read_the_policy_after_the_deletion_check
 
-    - name: Delete the test load balancer during cleanup
-      ansible.oci.oci_loadbalancer:
-        state: absent
-        load_balancer_id: "{{ oci_waf_firewall_load_balancer.resource.id }}"
-      when: oci_waf_firewall_load_balancer.resource.id | default('') | length > 0
-      register: oci_cleanup_waf_load_balancer
-      retries: 3
-      until: oci_cleanup_waf_load_balancer is succeeded
-      ignore_errors: true
-
-    - name: Delete the test subnet during cleanup
-      ansible.oci.oci_network_subnet:
-        state: absent
-        subnet_id: "{{ oci_waf_firewall_subnet.resource.id }}"
-      when: oci_waf_firewall_subnet.resource.id | default('') | length > 0
-      register: oci_cleanup_waf_subnet
-      retries: 3
-      until: oci_cleanup_waf_subnet is succeeded
-      ignore_errors: true
-
-    - name: Delete the test VCN during cleanup
-      ansible.oci.oci_network_vcn:
-        state: absent
-        vcn_id: "{{ oci_waf_firewall_vcn.resource.id }}"
-      when: oci_waf_firewall_vcn.resource.id | default('') | length > 0
-      register: oci_cleanup_waf_vcn
-      retries: 3
-      until: oci_cleanup_waf_vcn is succeeded
-      ignore_errors: true
-
-    - name: Verify resource cleanup succeeded
+    - name: Verify the deletion check left the policy present
       ansible.builtin.assert:
         that:
-          - oci_cleanup_waf_firewall is not failed
-          - oci_cleanup_waf_replacement_policy is not failed
-          - oci_cleanup_waf_policy is not failed
-          - oci_cleanup_waf_load_balancer is not failed
-          - oci_cleanup_waf_subnet is not failed
-          - oci_cleanup_waf_vcn is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+          - oci_cleanup_check_policy_deletion.changed
+          - oci_cleanup_read_the_policy_after_the_deletion_check.web_app_firewall_policies | length == 1
+          - oci_cleanup_read_the_policy_after_the_deletion_check.web_app_firewall_policies[0].lifecycle_state ==
+            'ACTIVE'
+
+    - name: Delete the policy
+      ansible.oci.oci_waf_web_app_firewall_policy:
+        web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+        state: absent
+      register: oci_cleanup_delete_the_policy
+      failed_when: not oci_cleanup_delete_the_policy.changed
+
+    - name: Wait until the policy is absent from the active list
+      ansible.oci.oci_waf_web_app_firewall_policy_info:
+        compartment_id: '{{ oci_integration_compartment_id }}'
+        lifecycle_state: active
+      register: oci_cleanup_wait_until_the_policy_is_absent_from_the_active_list
+      until: |-
+        oci_cleanup_wait_until_the_policy_is_absent_from_the_active_list.web_app_firewall_policies | selectattr('id', 'equalto',
+        oci_waf_policy_cleanup_id) | list | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Verify deletion is unchanged
+      ansible.oci.oci_waf_web_app_firewall_policy:
+        web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+        state: absent
+      check_mode: false
+      register: oci_cleanup_verify_deletion_is_unchanged
+      failed_when: oci_cleanup_verify_deletion_is_unchanged.changed
+
+    - name: Verify deletion is unchanged in check mode
+      ansible.oci.oci_waf_web_app_firewall_policy:
+        web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+        state: absent
+      check_mode: true
+      register: oci_cleanup_verify_deletion_is_unchanged
+      failed_when: oci_cleanup_verify_deletion_is_unchanged.changed
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete the test replacement policy during cleanup
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    state: absent
+    web_app_firewall_policy_id: '{{ oci_waf_policy_replacement.resource.id }}'
+  when:
+    - oci_waf_policy_replacement is defined
+    - oci_waf_policy_replacement.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_the_test_replacement_policy_during_cleanup
+  retries: 3
+  until: oci_cleanup_delete_the_test_replacement_policy_during_cleanup is succeeded
+  ignore_errors: true
+
+- name: Delete the test policy during cleanup
+  ansible.oci.oci_waf_web_app_firewall_policy:
+    state: absent
+    web_app_firewall_policy_id: '{{ oci_waf_policy_cleanup_id }}'
+  when:
+    - oci_waf_policy_cleanup_id is defined
+    - oci_waf_policy_cleanup_id | default('') | length > 0
+  register: oci_cleanup_delete_the_test_policy_during_cleanup
+  retries: 3
+  until: oci_cleanup_delete_the_test_policy_during_cleanup is succeeded
+  ignore_errors: true
+
+- name: Delete prerequisite oci_lb_test_create
+  ansible.oci.oci_loadbalancer:
+    state: absent
+    load_balancer_id: '{{ oci_lb_test_create.resource.id }}'
+  when:
+    - oci_lb_test_create is defined
+    - oci_lb_test_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_lb_test_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_lb_test_create is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_lb_test_subnet
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_lb_test_subnet.resource.id }}'
+  when:
+    - oci_lb_test_subnet is defined
+    - oci_lb_test_subnet.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_lb_test_subnet
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_lb_test_subnet is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_lb_test_vcn
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_lb_test_vcn.resource.id }}'
+  when:
+    - oci_lb_test_vcn is defined
+    - oci_lb_test_vcn.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_lb_test_vcn
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_lb_test_vcn is not failed
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_the_test_firewall_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_the_test_replacement_policy_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_the_test_policy_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_lb_test_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_lb_test_subnet | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_lb_test_vcn | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

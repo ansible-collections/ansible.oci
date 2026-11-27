@@ -1,2 +1,4 @@
 ---
-oci_object_storage_bucket_integration_name: "oci-bucket-integration"
+oci_object_storage_bucket_integration_name: oci-bucket-integration
+oci_object_storage_object_integration_name: oci-object-integration
+oci_object_lifecycle_policy_bucket_prefix: oci-lifecycle-policy

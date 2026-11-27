@@ -1,21 +1,119 @@
 ---
-- name: Run DRG cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
-  block:
-    - name: Delete leaked DRG during cleanup
-      ansible.oci.oci_network_drg:
-        state: absent
-        drg_id: "{{ oci_drg_id }}"
-      when: oci_drg_id | default('') | length > 0
-      register: oci_cleanup_drg
-      retries: 3
-      ignore_errors: true
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_drg is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+- name: Delete leaked remote peering connection
+  ansible.oci.oci_network_remote_peering_connection:
+    state: absent
+    remote_peering_connection_id: '{{ oci_rpc_id }}'
+    wait_interval: 5
+  when:
+    - oci_rpc_id is defined
+    - oci_rpc_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_remote_peering_connection
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_leaked_remote_peering_connection is not failed
+  ignore_errors: true
+
+- name: Delete leaked DRG attachment during cleanup
+  ansible.oci.oci_network_drg_attachment:
+    state: absent
+    drg_attachment_id: '{{ oci_drg_attachment_id }}'
+  when:
+    - oci_drg_attachment_id is defined
+    - oci_drg_attachment_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_drg_attachment_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_drg_attachment_integration_vcn_id }}'
+  when:
+    - oci_drg_attachment_integration_vcn_id is defined
+    - oci_drg_attachment_integration_vcn_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_vcn_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Verify oci_network_drg deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Exercise DRG module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
+
+        - name: Delete DRG in check mode
+          ansible.oci.oci_network_drg: &oci_drg_delete_module_options
+            state: '{{ oci_drg_delete_params.state }}'
+            drg_id: '{{ oci_drg_delete_params.drg_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_drg_in_check_mode
+
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_drg_in_check_mode.changed | bool
+
+        - name: Read DRG after delete check mode
+          ansible.oci.oci_network_drg_info:
+            drg_id: '{{ oci_drg_id }}'
+          register: oci_cleanup_read_drg_after_delete_check_mode
+
+        - name: Assert DRG still exists after delete check mode
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_read_drg_after_delete_check_mode.drgs | length == 1
+
+        - name: Delete DRG
+          ansible.oci.oci_network_drg:
+            <<: *oci_drg_delete_module_options
+          register: oci_cleanup_delete_drg
+
+        - name: Assert delete reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_drg.changed | bool
+
+        - name: Assert delete is idempotent on rerun
+          ansible.oci.oci_network_drg:
+            <<: *oci_drg_delete_module_options
+          register: oci_cleanup_assert_delete_is_idempotent_on_rerun
+
+        - name: Verify delete rerun is a no-op
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_assert_delete_is_idempotent_on_rerun.changed | bool
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete leaked DRG during cleanup
+  ansible.oci.oci_network_drg:
+    state: absent
+    drg_id: '{{ oci_drg_id }}'
+  when:
+    - oci_drg_id is defined
+    - oci_drg_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_drg_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_remote_peering_connection | default({})) is not failed
+      - (oci_cleanup_delete_leaked_drg_attachment_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_vcn_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_drg_during_cleanup | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

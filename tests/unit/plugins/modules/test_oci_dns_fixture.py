@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 
-LIBRARY_FILE = Path(__file__).parents[3] / "integration" / "targets" / "oci_dns_records" / "library" / "oci_dns_test_zone.py"
+LIBRARY_FILE = Path(__file__).parents[3] / "integration" / "targets" / "oci_dns_zone_records" / "library" / "oci_dns_test_zone.py"
 FIXTURE_SPEC = importlib.util.spec_from_file_location("oci_dns_test_zone_fixture", LIBRARY_FILE)
 fixture = importlib.util.module_from_spec(FIXTURE_SPEC)
 FIXTURE_SPEC.loader.exec_module(fixture)

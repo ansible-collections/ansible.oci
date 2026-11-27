@@ -1,12 +1,130 @@
 ---
-- name: Run identity domain cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Delete leaked dynamic group by ID
+  ansible.oci.oci_identity_dynamic_group:
+    state: absent
+    domain_id: '{{ oci_identity_dynamic_group_domain_id }}'
+    dynamic_group_id: '{{ oci_identity_dynamic_group_cleanup_id }}'
+  when:
+    - oci_identity_dynamic_group_domain_id is defined
+    - oci_identity_dynamic_group_cleanup_id is defined
+    - oci_identity_dynamic_group_domain_id | default('', true) | length > 0
+    - oci_identity_dynamic_group_cleanup_id | default('', true) | length > 0
+  register: oci_cleanup_delete_leaked_dynamic_group_by_id
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked dynamic group by name when no ID was captured
+  ansible.oci.oci_identity_dynamic_group:
+    state: absent
+    domain_id: '{{ oci_identity_dynamic_group_domain_id }}'
+    name: '{{ oci_identity_dynamic_group_cleanup_name }}'
+  when:
+    - oci_identity_dynamic_group_domain_id is defined
+    - oci_identity_dynamic_group_cleanup_name is defined
+    - oci_identity_dynamic_group_domain_id | default('', true) | length > 0
+    - oci_identity_dynamic_group_cleanup_id | default('', true) | length == 0
+    - oci_identity_dynamic_group_cleanup_name | default('', true) | length > 0
+    - oci_integration_rpfx | string in oci_identity_dynamic_group_cleanup_name | string
+  register: oci_cleanup_delete_leaked_dynamic_group_by_name_when_no_id_was_captured
+  retries: 3
+  ignore_errors: true
+
+- name: Verify oci_identity_domain deletion
+  when: oci_tests_completed | bool
   block:
-    - name: Delete leaked identity domain during cleanup
-      ansible.oci.oci_identity_domain:
-        state: absent
-        domain_id: "{{ oci_identity_domain_id }}"
-      when: oci_identity_domain_id | default('') | length > 0
+
+    - name: Exercise identity domain module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
+
+        - name: Delete identity domain in check mode
+          ansible.oci.oci_identity_domain: &oci_identity_domain_delete_options
+            state: absent
+            domain_id: '{{ oci_identity_domain_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_identity_domain_in_check_mode
+
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_identity_domain_in_check_mode.changed | bool
+
+        - name: Read identity domain after delete check mode
+          ansible.oci.oci_identity_domain_info:
+            domain_id: '{{ oci_identity_domain_id }}'
+          register: oci_cleanup_read_identity_domain_after_delete_check_mode
+
+        - name: Assert identity domain still exists after delete check mode
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_read_identity_domain_after_delete_check_mode.domains | length == 1
+
+        - name: Delete identity domain
+          ansible.oci.oci_identity_domain:
+            <<: *oci_identity_domain_delete_options
+          register: oci_cleanup_delete_identity_domain
+
+        - name: Assert delete reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_identity_domain.changed | bool
+
+        - name: Assert delete is idempotent on rerun
+          ansible.oci.oci_identity_domain:
+            <<: *oci_identity_domain_delete_options
+          register: oci_cleanup_assert_delete_is_idempotent_on_rerun
+
+        - name: Verify delete rerun is a no-op
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_assert_delete_is_idempotent_on_rerun.changed | bool
+
+        - name: Clear identity domain ID after delete idempotency check
+          ansible.builtin.set_fact:
+            oci_identity_domain_id: ''
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete leaked identity domain during cleanup
+  ansible.oci.oci_identity_domain:
+    state: absent
+    domain_id: '{{ oci_identity_domain_id }}'
+  when:
+    - oci_identity_domain_id is defined
+    - oci_identity_domain_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_identity_domain_during_cleanup
+  ignore_errors: true
+
+- name: Delete temporary identity domain by name when no ID was captured
+  ansible.oci.oci_identity_domain:
+    state: absent
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_identity_domain_integration_name }}'
+  when:
+    - oci_integration_compartment_id is defined
+    - oci_identity_domain_integration_name is defined
+    - oci_identity_domain_create.resource.id | default('', true) | length == 0
+    - oci_integration_rpfx | string in oci_identity_domain_integration_name | string
+  register: oci_cleanup_identity_domain_by_name
+  retries: 3
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_dynamic_group_by_id | default({})) is not failed
+      - (oci_cleanup_delete_leaked_dynamic_group_by_name_when_no_id_was_captured | default({})) is not failed
+      - (oci_cleanup_delete_leaked_identity_domain_during_cleanup | default({})) is not failed
+      - (oci_cleanup_identity_domain_by_name | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

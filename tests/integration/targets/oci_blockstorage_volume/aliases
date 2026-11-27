@@ -1,3 +1,10 @@
 destructive
-time=90m
+oci_blockstorage_volume
 oci_blockstorage_volume_info
+oci_volume_backup
+oci_volume_backup_info
+oci_volume_group
+oci_volume_group_backup
+oci_volume_group_backup_info
+oci_volume_group_info
+time=120m

@@ -1,19 +1,18 @@
 ---
-# ---------------------------------------------------------------- create
 - name: Create alarm in check mode
   ansible.oci.oci_alarm: &oci_alarm_create_module_options
     state: present
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_alarm_integration_alarm_name }}"
-    metric_compartment_id: "{{ oci_integration_compartment_id }}"
-    namespace: "{{ oci_alarm_integration_namespace }}"
-    query: "{{ oci_alarm_integration_query }}"
-    severity: "{{ oci_alarm_integration_create_severity }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_alarm_integration_alarm_name }}'
+    metric_compartment_id: '{{ oci_integration_compartment_id }}'
+    namespace: '{{ oci_alarm_integration_namespace }}'
+    query: '{{ oci_alarm_integration_query }}'
+    severity: '{{ oci_alarm_integration_create_severity }}'
     destinations:
-      - "{{ oci_alarm_integration_destination_id }}"
-    body: "{{ oci_alarm_integration_create_body }}"
-    pending_duration: "{{ oci_alarm_integration_create_pending_duration }}"
-    freeform_tags: "{{ oci_alarm_integration_create_tags }}"
+      - '{{ oci_alarm_integration_destination_id }}'
+    body: '{{ oci_alarm_integration_create_body }}'
+    pending_duration: '{{ oci_alarm_integration_create_pending_duration }}'
+    freeform_tags: '{{ oci_alarm_integration_create_tags }}'
   check_mode: true
   register: oci_alarm_create_check
 
@@ -24,8 +23,8 @@
 
 - name: Read alarms after create check mode
   ansible.oci.oci_alarm_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_alarm_integration_alarm_name }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_alarm_integration_alarm_name }}'
   register: oci_alarm_create_check_probe
 
 - name: Assert alarm is still absent after create check mode
@@ -40,7 +39,7 @@
 
 - name: Capture alarm id
   ansible.builtin.set_fact:
-    oci_alarm_id: "{{ oci_alarm_create.resource.id }}"
+    oci_alarm_id: '{{ oci_alarm_create.resource.id }}'
 
 - name: Assert create reported a change and expected state
   ansible.builtin.assert:
@@ -53,7 +52,7 @@
 
 - name: Read alarm by id
   ansible.oci.oci_alarm_info:
-    alarm_id: "{{ oci_alarm_id }}"
+    alarm_id: '{{ oci_alarm_id }}'
   register: oci_alarm_info_by_id
 
 - name: Assert alarm info by id returned the created alarm
@@ -73,8 +72,8 @@
 
 - name: List active alarm by name
   ansible.oci.oci_alarm_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_alarm_integration_alarm_name }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_alarm_integration_alarm_name }}'
     lifecycle_state: active
   register: oci_alarm_info_list
 
@@ -97,13 +96,13 @@
 - name: Rerun create in normal mode by id
   ansible.oci.oci_alarm:
     <<: *oci_alarm_create_module_options
-    alarm_id: "{{ oci_alarm_id }}"
+    alarm_id: '{{ oci_alarm_id }}'
   register: oci_alarm_create_rerun_id
 
 - name: Rerun create in check mode by id
   ansible.oci.oci_alarm:
     <<: *oci_alarm_create_module_options
-    alarm_id: "{{ oci_alarm_id }}"
+    alarm_id: '{{ oci_alarm_id }}'
   check_mode: true
   register: oci_alarm_create_rerun_id_check
 
@@ -116,21 +115,20 @@
       - not oci_alarm_create_rerun_id.changed | bool
       - not oci_alarm_create_rerun_id_check.changed | bool
 
-# ---------------------------------------------------------------- update
 - name: Update alarm in check mode
   ansible.oci.oci_alarm: &oci_alarm_update_module_options
     state: present
-    alarm_id: "{{ oci_alarm_id }}"
-    severity: "{{ oci_alarm_integration_update_severity }}"
-    body: "{{ oci_alarm_integration_update_body }}"
-    pending_duration: "{{ oci_alarm_integration_update_pending_duration }}"
+    alarm_id: '{{ oci_alarm_id }}'
+    severity: '{{ oci_alarm_integration_update_severity }}'
+    body: '{{ oci_alarm_integration_update_body }}'
+    pending_duration: '{{ oci_alarm_integration_update_pending_duration }}'
     is_enabled: false
-    freeform_tags: "{{ oci_alarm_integration_update_tags }}"
+    freeform_tags: '{{ oci_alarm_integration_update_tags }}'
     overrides:
-      - rule_name: "{{ oci_alarm_integration_override_rule_name }}"
-        query: "{{ oci_alarm_integration_override_query }}"
-        severity: "{{ oci_alarm_integration_create_severity }}"
-        pending_duration: "{{ oci_alarm_integration_create_pending_duration }}"
+      - rule_name: '{{ oci_alarm_integration_override_rule_name }}'
+        query: '{{ oci_alarm_integration_override_query }}'
+        severity: '{{ oci_alarm_integration_create_severity }}'
+        pending_duration: '{{ oci_alarm_integration_create_pending_duration }}'
   check_mode: true
   register: oci_alarm_update_check
 
@@ -141,7 +139,7 @@
 
 - name: Read alarm after update check mode
   ansible.oci.oci_alarm_info:
-    alarm_id: "{{ oci_alarm_id }}"
+    alarm_id: '{{ oci_alarm_id }}'
   register: oci_alarm_update_check_probe
 
 - name: Assert update check mode did not mutate cloud state
@@ -167,7 +165,7 @@
 
 - name: Read updated alarm by id
   ansible.oci.oci_alarm_info:
-    alarm_id: "{{ oci_alarm_id }}"
+    alarm_id: '{{ oci_alarm_id }}'
   register: oci_alarm_info_updated
 
 - name: Assert alarm info reflects the update
@@ -198,26 +196,26 @@
   ansible.oci.oci_alarm:
     <<: *oci_alarm_update_module_options
     alarm_id: null
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_alarm_integration_alarm_name }}"
-    metric_compartment_id: "{{ oci_integration_compartment_id }}"
-    namespace: "{{ oci_alarm_integration_namespace }}"
-    query: "{{ oci_alarm_integration_query }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_alarm_integration_alarm_name }}'
+    metric_compartment_id: '{{ oci_integration_compartment_id }}'
+    namespace: '{{ oci_alarm_integration_namespace }}'
+    query: '{{ oci_alarm_integration_query }}'
     destinations:
-      - "{{ oci_alarm_integration_destination_id }}"
+      - '{{ oci_alarm_integration_destination_id }}'
   register: oci_alarm_update_rerun_by_name
 
 - name: Rerun update by name without alarm_id in check mode
   ansible.oci.oci_alarm:
     <<: *oci_alarm_update_module_options
     alarm_id: null
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_alarm_integration_alarm_name }}"
-    metric_compartment_id: "{{ oci_integration_compartment_id }}"
-    namespace: "{{ oci_alarm_integration_namespace }}"
-    query: "{{ oci_alarm_integration_query }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_alarm_integration_alarm_name }}'
+    metric_compartment_id: '{{ oci_integration_compartment_id }}'
+    namespace: '{{ oci_alarm_integration_namespace }}'
+    query: '{{ oci_alarm_integration_query }}'
     destinations:
-      - "{{ oci_alarm_integration_destination_id }}"
+      - '{{ oci_alarm_integration_destination_id }}'
   check_mode: true
   register: oci_alarm_update_rerun_by_name_check
 
@@ -230,11 +228,10 @@
       - oci_alarm_update_rerun_by_name.resource.id == oci_alarm_id
       - not oci_alarm_update_rerun_by_name_check.changed | bool
 
-# ---------------------------------------------------------------- delete
 - name: Delete alarm in check mode
   ansible.oci.oci_alarm: &oci_alarm_delete_module_options
     state: absent
-    alarm_id: "{{ oci_alarm_id }}"
+    alarm_id: '{{ oci_alarm_id }}'
   check_mode: true
   register: oci_alarm_delete_check
 
@@ -245,7 +242,7 @@
 
 - name: Read alarm after delete check mode
   ansible.oci.oci_alarm_info:
-    alarm_id: "{{ oci_alarm_id }}"
+    alarm_id: '{{ oci_alarm_id }}'
   register: oci_alarm_delete_check_probe
 
 - name: Assert alarm still exists after delete check mode
@@ -266,14 +263,14 @@
 
 - name: List active alarms by name after delete
   ansible.oci.oci_alarm_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_alarm_integration_alarm_name }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_alarm_integration_alarm_name }}'
   register: oci_alarm_delete_probe_active
 
 - name: List deleted alarms by name after delete
   ansible.oci.oci_alarm_info:
-    compartment_id: "{{ oci_integration_compartment_id }}"
-    name: "{{ oci_alarm_integration_alarm_name }}"
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_alarm_integration_alarm_name }}'
     lifecycle_state: deleted
   register: oci_alarm_delete_probe_deleted
 
@@ -281,9 +278,9 @@
   ansible.builtin.assert:
     that:
       - oci_alarm_delete_probe_active.alarms | length == 0
-      - >-
-        oci_alarm_delete_probe_deleted.alarms | length == 0
-        or oci_alarm_delete_probe_deleted.alarms | map(attribute='lifecycle_state') | unique | list == ["DELETED"]
+      - |-
+        oci_alarm_delete_probe_deleted.alarms | length == 0 or oci_alarm_delete_probe_deleted.alarms |
+        map(attribute='lifecycle_state') | unique | list == ["DELETED"]
 
 - name: Rerun delete in normal mode
   ansible.oci.oci_alarm:
@@ -304,5 +301,5 @@
 
 - name: Clear alarm cleanup markers after successful delete
   ansible.builtin.set_fact:
-    oci_alarm_id: ""
-    oci_alarm_cleanup_name: ""
+    oci_alarm_id: ''
+    oci_alarm_cleanup_name: ''

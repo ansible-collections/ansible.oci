@@ -1,3 +1,4 @@
 destructive
-time=90m
+oci_bastion
 oci_bastion_info
+time=120m

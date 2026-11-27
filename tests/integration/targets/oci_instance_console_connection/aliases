@@ -1,5 +1,6 @@
 destructive
-time=90m
+oci_instance_console_connection
 oci_instance_console_connection_info
 oci_instance_console_history
 oci_instance_console_history_info
+time=120m

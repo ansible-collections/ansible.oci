@@ -1,0 +1,5 @@
+destructive
+oci_instance_actions
+oci_instance_capacity_reservation
+oci_instance_capacity_reservation_info
+time=120m

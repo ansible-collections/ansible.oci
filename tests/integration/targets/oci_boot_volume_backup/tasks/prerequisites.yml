@@ -1,0 +1,102 @@
+---
+- name: Discover availability domains
+  ansible.oci.oci_identity_availability_domain_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+  register: oci_identity_availability_domain_info_list
+
+- name: Discover a compatible image
+  ansible.oci.oci_image_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    operating_system: '{{ oci_instance_integration_operating_system }}'
+    operating_system_version: '{{ oci_instance_integration_operating_system_version }}'
+    shape: '{{ oci_instance_integration_shape }}'
+  register: oci_image_info_discovered
+
+- name: Set the working image id
+  ansible.builtin.set_fact:
+    oci_instance_discovered_image_id: '{{ oci_image_info_discovered.images[0].id }}'
+
+- name: List shapes compatible with the working image
+  ansible.oci.oci_shape_info:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    availability_domain: '{{ oci_instance_integration_availability_domain }}'
+    image_id: '{{ oci_instance_discovered_image_id }}'
+  register: oci_shape_info_by_image
+
+- name: Capture discovered shape value
+  ansible.builtin.set_fact:
+    oci_instance_discovered_shape: |-
+      {{
+        (
+          oci_shape_info_by_image.shapes
+          | selectattr('shape', 'equalto', oci_instance_integration_shape)
+          | list
+          | first
+        ).shape
+      }}
+
+- name: Compute unique resource names for this run
+  ansible.builtin.set_fact:
+    oci_instance_integration_vcn_name: '{{ oci_instance_integration_vcn_name }}-{{ oci_integration_rpfx }}'
+    oci_instance_integration_subnet_name: '{{ oci_instance_integration_subnet_name }}-{{ oci_integration_rpfx }}'
+    oci_instance_integration_instance_name: '{{ oci_instance_integration_instance_name }}-{{ oci_integration_rpfx
+      }}'
+    oci_instance_integration_updated_instance_name: '{{ oci_instance_integration_updated_instance_name }}-{{ oci_integration_rpfx
+      }}'
+
+- name: Create test VCN for instance integration
+  ansible.oci.oci_network_vcn:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_instance_integration_vcn_name }}'
+    cidr_blocks:
+      - '{{ oci_instance_integration_vcn_cidr_block }}'
+  register: oci_instance_vcn_create
+
+- name: Create test subnet for instance integration
+  ansible.oci.oci_network_subnet:
+    state: present
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+    cidr_block: '{{ oci_instance_integration_subnet_cidr_block }}'
+    name: '{{ oci_instance_integration_subnet_name }}'
+  register: oci_instance_subnet_create
+
+- name: Define instance create and delete parameters
+  ansible.builtin.set_fact:
+    oci_instance_create_params:
+      state: present
+      compartment_id: '{{ oci_integration_compartment_id }}'
+      availability_domain: '{{ oci_instance_integration_availability_domain }}'
+      name: '{{ oci_instance_integration_instance_name }}'
+      shape: '{{ oci_instance_discovered_shape }}'
+      shape_config: '{{ oci_instance_integration_shape_config }}'
+      image_id: '{{ oci_instance_discovered_image_id }}'
+      subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+      freeform_tags: '{{ oci_instance_integration_create_tags }}'
+      instance_options:
+        are_legacy_imds_endpoints_disabled: true
+      availability_config:
+        recovery_action: restore_instance
+      agent_config:
+        all_plugins_disabled: false
+
+- name: Create instance
+  ansible.oci.oci_instance:
+    state: '{{ oci_instance_create_params.state }}'
+    compartment_id: '{{ oci_instance_create_params.compartment_id }}'
+    availability_domain: '{{ oci_instance_create_params.availability_domain }}'
+    name: '{{ oci_instance_create_params.name }}'
+    shape: '{{ oci_instance_create_params.shape }}'
+    shape_config: '{{ oci_instance_create_params.shape_config }}'
+    image_id: '{{ oci_instance_create_params.image_id }}'
+    subnet_id: '{{ oci_instance_create_params.subnet_id }}'
+    freeform_tags: '{{ oci_instance_create_params.freeform_tags }}'
+    instance_options: '{{ oci_instance_create_params.instance_options }}'
+    availability_config: '{{ oci_instance_create_params.availability_config }}'
+    agent_config: '{{ oci_instance_create_params.agent_config }}'
+  register: oci_instance_create
+
+- name: Set prerequisite values
+  ansible.builtin.set_fact:
+    oci_instance_id: '{{ oci_instance_create.resource.id }}'

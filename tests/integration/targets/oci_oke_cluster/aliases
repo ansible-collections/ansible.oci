@@ -1,3 +1,7 @@
 destructive
-time=90m
+oci_oke_cluster
 oci_oke_cluster_info
+oci_oke_node_pool
+oci_oke_node_pool_info
+oci_oke_node_pool_options_info
+time=90m

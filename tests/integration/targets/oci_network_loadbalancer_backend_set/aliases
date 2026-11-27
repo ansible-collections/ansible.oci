@@ -1,4 +1,8 @@
 destructive
-time=60m
-needs/target/prepare_oci_network_loadbalancer_subresources
+oci_network_loadbalancer_backend
+oci_network_loadbalancer_backend_info
+oci_network_loadbalancer_backend_set
 oci_network_loadbalancer_backend_set_info
+oci_network_loadbalancer_health_checker
+oci_network_loadbalancer_health_checker_info
+time=120m

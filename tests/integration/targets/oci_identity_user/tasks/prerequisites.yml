@@ -1,0 +1,28 @@
+---
+- name: Compute unique identity domain names for this run
+  ansible.builtin.set_fact:
+    oci_identity_domain_integration_name: '{{ oci_identity_domain_integration_name }}-{{ oci_integration_rpfx }}'
+    oci_identity_domain_integration_updated_name: '{{ oci_identity_domain_integration_updated_name }}-{{ oci_integration_rpfx
+      }}'
+
+- name: Define identity domain create parameters
+  ansible.builtin.set_fact:
+    oci_identity_domain_create_params:
+      state: present
+      compartment_id: '{{ oci_integration_compartment_id }}'
+      name: '{{ oci_identity_domain_integration_name }}'
+      description: '{{ oci_identity_domain_integration_description }}'
+      home_region: '{{ oci_identity_domain_integration_home_region }}'
+      license_type: free
+      freeform_tags: '{{ oci_identity_domain_integration_create_tags }}'
+
+- name: Create identity domain
+  ansible.oci.oci_identity_domain:
+    state: '{{ oci_identity_domain_create_params.state }}'
+    compartment_id: '{{ oci_identity_domain_create_params.compartment_id }}'
+    name: '{{ oci_identity_domain_create_params.name }}'
+    description: '{{ oci_identity_domain_create_params.description }}'
+    home_region: '{{ oci_identity_domain_create_params.home_region }}'
+    license_type: '{{ oci_identity_domain_create_params.license_type }}'
+    freeform_tags: '{{ oci_identity_domain_create_params.freeform_tags }}'
+  register: oci_identity_domain_create

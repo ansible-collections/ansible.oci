@@ -1,3 +1,6 @@
 destructive
-time=60m
+oci_network_loadbalancer
 oci_network_loadbalancer_info
+oci_network_loadbalancer_listener
+oci_network_loadbalancer_listener_info
+time=120m

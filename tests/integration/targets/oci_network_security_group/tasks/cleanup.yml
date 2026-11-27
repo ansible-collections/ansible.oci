@@ -1,41 +1,107 @@
 ---
-- name: Run Network Security Group cleanup with shared OCI auth defaults
-  module_defaults:
-    group/ansible.oci.oci:
-      config_file_location: "{{ oci_integration_config_file_location }}"
-      config_profile_name: "{{ oci_integration_config_profile_name }}"
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Delete leaked duplicate Network Security Group during cleanup
+  ansible.oci.oci_network_security_group:
+    state: absent
+    network_security_group_id: '{{ oci_network_security_group_duplicate_id }}'
+  when:
+    - oci_network_security_group_duplicate_id is defined
+    - oci_network_security_group_duplicate_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_duplicate_network_security_group_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Verify oci_network_security_group deletion
+  when: oci_tests_completed | bool
   block:
-    - name: Delete leaked duplicate Network Security Group during cleanup
-      ansible.oci.oci_network_security_group:
-        state: absent
-        network_security_group_id: "{{ oci_network_security_group_duplicate_id }}"
-      when: oci_network_security_group_duplicate_id | default('') | length > 0
-      register: oci_cleanup_duplicate_network_security_group
-      retries: 3
-      ignore_errors: true
 
-    - name: Delete leaked Network Security Group during cleanup
-      ansible.oci.oci_network_security_group:
-        state: absent
-        network_security_group_id: "{{ oci_network_security_group_id }}"
-      when: oci_network_security_group_id | default('') | length > 0
-      register: oci_cleanup_network_security_group
-      retries: 3
-      ignore_errors: true
+    - name: Exercise Network Security Group module lifecycle
+      module_defaults:
+        group/ansible.oci.oci:
+          config_file_location: '{{ oci_integration_config_file_location }}'
+          config_profile_name: '{{ oci_integration_config_profile_name }}'
+      block:
 
-    - name: Delete leaked VCN during cleanup
-      ansible.oci.oci_network_vcn:
-        state: absent
-        vcn_id: "{{ oci_network_security_group_vcn_create.resource.id }}"
-      when: oci_network_security_group_vcn_create.resource.id | default('') | length > 0
-      register: oci_cleanup_vcn
-      retries: 3
-      ignore_errors: true
+        - name: Delete Network Security Group in check mode
+          ansible.oci.oci_network_security_group: &oci_network_security_group_delete_options
+            state: absent
+            network_security_group_id: '{{ oci_network_security_group_id }}'
+          check_mode: true
+          register: oci_cleanup_delete_network_security_group_in_check_mode
 
-    - name: Verify resource cleanup succeeded
-      ansible.builtin.assert:
-        that:
-          - oci_cleanup_duplicate_network_security_group is not failed
-          - oci_cleanup_network_security_group is not failed
-          - oci_cleanup_vcn is not failed
-        fail_msg: Resource cleanup failed after 3 retries; see the failed cleanup tasks above.
+        - name: Assert delete check mode reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_network_security_group_in_check_mode.changed | bool
+
+        - name: Read Network Security Group after delete check mode
+          ansible.oci.oci_network_security_group_info:
+            network_security_group_id: '{{ oci_network_security_group_id }}'
+          register: oci_cleanup_read_network_security_group_after_delete_check_mode
+
+        - name: Assert Network Security Group still exists after delete check mode
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_read_network_security_group_after_delete_check_mode.network_security_groups | length
+                == 1
+
+        - name: Delete Network Security Group
+          ansible.oci.oci_network_security_group:
+            <<: *oci_network_security_group_delete_options
+          register: oci_cleanup_delete_network_security_group
+
+        - name: Assert delete reported a change
+          ansible.builtin.assert:
+            that:
+              - oci_cleanup_delete_network_security_group.changed | bool
+
+        - name: Delete Network Security Group again
+          ansible.oci.oci_network_security_group:
+            <<: *oci_network_security_group_delete_options
+          register: oci_cleanup_delete_network_security_group_again
+
+        - name: Assert repeated delete is idempotent
+          ansible.builtin.assert:
+            that:
+              - not oci_cleanup_delete_network_security_group_again.changed | bool
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete leaked Network Security Group during cleanup
+  ansible.oci.oci_network_security_group:
+    state: absent
+    network_security_group_id: '{{ oci_network_security_group_id }}'
+  when:
+    - oci_network_security_group_id is defined
+    - oci_network_security_group_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_network_security_group_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete prerequisite oci_network_vcn_create
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_network_vcn_create.resource.id }}'
+  when:
+    - oci_network_vcn_create is defined
+    - oci_network_vcn_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_network_vcn_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_network_vcn_create is not failed
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_duplicate_network_security_group_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_network_security_group_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_network_vcn_create | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

@@ -1,8 +1,6 @@
 destructive
-time=90m
 oci_identity_availability_domain_info
+oci_instance
 oci_instance_info
-oci_instance_actions
 oci_shape_info
-oci_instance_capacity_reservation
-oci_instance_capacity_reservation_info
+time=120m

@@ -1,0 +1,83 @@
+---
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Delete the prerequisite backend set
+  ansible.oci.oci_network_loadbalancer_backend_set:
+    network_load_balancer_id: '{{ oci_nlb_test_id }}'
+    name: '{{ oci_nlb_test_backend_set }}'
+    state: absent
+  when:
+    - oci_nlb_test_id is defined
+    - oci_nlb_test_backend_set is defined
+    - oci_nlb_test_id | default('', true) | length > 0
+    - oci_integration_rpfx | string in oci_nlb_test_backend_set | string
+  ignore_errors: true
+  register: oci_cleanup_delete_the_prerequisite_backend_set
+
+- name: Remove prerequisite backend set
+  ansible.oci.oci_network_loadbalancer_backend_set:
+    network_load_balancer_id: '{{ oci_nlb_test_id }}'
+    name: '{{ oci_nlb_test_backend_set }}'
+    state: absent
+  when:
+    - oci_nlb_test_id is defined
+    - oci_nlb_test_backend_set is defined
+    - oci_nlb_test_id | default('') | length > 0
+    - oci_integration_rpfx | string in oci_nlb_test_backend_set | string
+  register: oci_cleanup_remove_prerequisite_backend_set
+  ignore_errors: true
+
+- name: Delete the test network load balancer
+  ansible.oci.oci_network_loadbalancer:
+    network_load_balancer_id: '{{ oci_nlb_test_id }}'
+    state: absent
+  when: oci_nlb_test_id | default('', true) | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_nlb_test_create
+  until: oci_cleanup_delete_prerequisite_oci_nlb_test_create is succeeded
+  retries: 10
+  delay: 30
+  ignore_errors: true
+
+- name: Delete the test network load balancer by name when ID is unavailable
+  ansible.oci.oci_network_loadbalancer:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_nlb_test_name }}'
+    state: absent
+  when:
+    - oci_nlb_test_id | default('', true) | length == 0
+    - oci_nlb_test_name | default('', true) | length > 0
+  register: oci_cleanup_delete_nlb_by_name
+  ignore_errors: true
+
+- name: Delete the test subnet
+  ansible.oci.oci_network_subnet:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    vcn_id: '{{ oci_nlb_test_vcn_id }}'
+    name: '{{ oci_nlb_test_subnet_name }}'
+    state: absent
+  when: oci_nlb_test_vcn_id | default('', true) | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_nlb_test_subnet
+  ignore_errors: true
+
+- name: Delete the test VCN
+  ansible.oci.oci_network_vcn:
+    compartment_id: '{{ oci_integration_compartment_id }}'
+    name: '{{ oci_nlb_test_vcn_name }}'
+    state: absent
+  when: oci_nlb_test_vcn_name | default('', true) | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_nlb_test_vcn
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_the_prerequisite_backend_set | default({})) is not failed
+      - (oci_cleanup_remove_prerequisite_backend_set | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_nlb_test_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_nlb_test_subnet | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_nlb_test_vcn | default({})) is not failed
+      - (oci_cleanup_delete_nlb_by_name | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

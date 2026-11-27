@@ -1,0 +1,321 @@
+---
+- name: Initialize deletion test status
+  ansible.builtin.set_fact:
+    oci_cleanup_checks_failed: false
+
+- name: Verify oci_instance_capacity_reservation deletion
+  when: oci_tests_completed | bool
+  block:
+
+    - name: Read capacity use
+      ansible.oci.oci_instance_capacity_reservation_info: &reservation_lookup
+        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+      register: oci_cleanup_read_capacity_use
+
+    - name: Verify instance uses reserved capacity
+      ansible.builtin.assert:
+        that:
+          - oci_instance_create.resource.capacity_reservation_id == oci_instance_capacity_reservation_id
+          - oci_cleanup_read_capacity_use.capacity_reservations[0].instance_reservation_configs[0].used_count ==
+            1
+
+    - name: Remove instance from reservation
+      ansible.oci.oci_instance:
+        instance_id: '{{ oci_instance_id }}'
+        capacity_reservation_id: ''
+
+    - name: Read instance after reservation removal
+      ansible.oci.oci_instance_info:
+        instance_id: '{{ oci_instance_id }}'
+      register: oci_cleanup_read_instance_after_reservation_removal
+
+    - name: Verify instance left reservation
+      ansible.builtin.assert:
+        that:
+          - not oci_cleanup_read_instance_after_reservation_removal.instances[0].capacity_reservation_id
+
+    - name: Reduce reserved capacity in check mode
+      ansible.oci.oci_instance_capacity_reservation: &reservation_reduce
+        state: present
+        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        instance_reservation_configs:
+          - instance_shape: '{{ oci_instance_discovered_shape }}'
+            instance_shape_config: '{{ oci_instance_integration_shape_config }}'
+            reserved_count: 1
+      check_mode: true
+      register: oci_cleanup_reduce_reserved_capacity_in_check_mode
+
+    - name: Verify check mode predicts a change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_reduce_reserved_capacity_in_check_mode.changed
+
+    - name: Read reservation after check mode
+      ansible.oci.oci_instance_capacity_reservation_info: &oci_instance_capacity_reservation_info_reservation_lookup
+        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+      register: oci_cleanup_read_reservation_after_check_mode
+
+    - name: Verify check mode preserves reservation state
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].instance_reservation_configs[0].reserved_count
+            == 2
+
+    - name: Reduce reserved capacity
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_reduce
+      register: oci_cleanup_reduce_reserved_capacity
+
+    - name: Verify reservation change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_reduce_reserved_capacity.changed
+
+    - name: Read reservation after change
+      ansible.oci.oci_instance_capacity_reservation_info:
+        <<: *oci_instance_capacity_reservation_info_reservation_lookup
+      register: oci_cleanup_read_reservation_after_check_mode
+
+    - name: Verify reservation state
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].instance_reservation_configs[0].reserved_count
+            == 1
+
+    - name: Repeat desired reservation state
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_reduce
+      register: oci_cleanup_repeat_desired_reservation_state
+
+    - name: Repeat desired reservation state in check mode
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_reduce
+      check_mode: true
+      register: oci_cleanup_repeat_desired_reservation_state_in_check_mode
+
+    - name: Verify reservation state is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_cleanup_repeat_desired_reservation_state.changed
+          - not oci_cleanup_repeat_desired_reservation_state_in_check_mode.changed
+
+    - name: Clear reservation configurations in check mode
+      ansible.oci.oci_instance_capacity_reservation: &reservation_clear
+        state: present
+        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+        instance_reservation_configs: []
+      check_mode: true
+      register: oci_cleanup_clear_reservation_configurations_in_check_mode
+
+    - name: Read reservation after clear in check mode
+      ansible.oci.oci_instance_capacity_reservation_info:
+        <<: *reservation_lookup
+      register: oci_cleanup_read_reservation_after_check_mode
+
+    - name: Verify check mode preserves configurations
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_clear_reservation_configurations_in_check_mode.changed
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].instance_reservation_configs[0].reserved_count
+            == 1
+
+    - name: Clear reservation configurations
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_clear
+      register: oci_cleanup_clear_reservation_configurations
+
+    - name: Read reservation after clearing configurations
+      ansible.oci.oci_instance_capacity_reservation_info:
+        <<: *reservation_lookup
+      register: oci_cleanup_read_reservation_after_check_mode
+
+    - name: Verify configurations are empty and the reservation exists
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_clear_reservation_configurations.changed
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations | length == 1
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].id == oci_instance_capacity_reservation_id
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].lifecycle_state == "ACTIVE"
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].instance_reservation_configs
+            | default([], true) | length == 0
+
+    - name: Repeat configuration clear
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_clear
+      register: oci_cleanup_repeat_configuration_clear
+
+    - name: Repeat configuration clear in check mode
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_clear
+      check_mode: true
+      register: oci_cleanup_repeat_configuration_clear_in_check_mode
+
+    - name: Verify repeated configuration clear is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_cleanup_repeat_configuration_clear.changed
+          - not oci_cleanup_repeat_configuration_clear_in_check_mode.changed
+
+    - name: Delete capacity reservation in check mode
+      ansible.oci.oci_instance_capacity_reservation: &reservation_delete
+        state: absent
+        capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+      check_mode: true
+      register: oci_cleanup_reduce_reserved_capacity_in_check_mode
+
+    - name: Verify check mode predicts a change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_reduce_reserved_capacity_in_check_mode.changed
+
+    - name: Read reservation after check mode
+      ansible.oci.oci_instance_capacity_reservation_info:
+        <<: *oci_instance_capacity_reservation_info_reservation_lookup
+      register: oci_cleanup_read_reservation_after_check_mode
+
+    - name: Verify check mode preserves reservation state
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations | length == 1
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].lifecycle_state == "ACTIVE"
+
+    - name: Delete capacity reservation
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_delete
+      register: oci_cleanup_reduce_reserved_capacity
+
+    - name: Verify reservation change
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_reduce_reserved_capacity.changed
+
+    - name: Read reservation after change
+      ansible.oci.oci_instance_capacity_reservation_info:
+        <<: *oci_instance_capacity_reservation_info_reservation_lookup
+      register: oci_cleanup_read_reservation_after_check_mode
+
+    - name: Verify reservation state
+      ansible.builtin.assert:
+        that:
+          - oci_cleanup_read_reservation_after_check_mode.capacity_reservations | length == 0 or oci_cleanup_read_reservation_after_check_mode.capacity_reservations[0].lifecycle_state
+            == "DELETED"
+
+    - name: Repeat desired reservation state
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_delete
+      register: oci_cleanup_repeat_desired_reservation_state
+
+    - name: Repeat desired reservation state in check mode
+      ansible.oci.oci_instance_capacity_reservation:
+        <<: *reservation_delete
+      check_mode: true
+      register: oci_cleanup_repeat_desired_reservation_state_in_check_mode
+
+    - name: Verify reservation state is unchanged
+      ansible.builtin.assert:
+        that:
+          - not oci_cleanup_repeat_desired_reservation_state.changed
+          - not oci_cleanup_repeat_desired_reservation_state_in_check_mode.changed
+  rescue:
+
+    - name: Record a deletion test failure
+      ansible.builtin.set_fact:
+        oci_cleanup_checks_failed: true
+
+- name: Delete leaked instance during cleanup
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_id }}'
+  when:
+    - oci_instance_id is defined
+    - oci_instance_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_instance_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked capacity reservation during cleanup
+  ansible.oci.oci_instance_capacity_reservation:
+    state: absent
+    capacity_reservation_id: '{{ oci_instance_capacity_reservation_id }}'
+  when:
+    - oci_instance_capacity_reservation_id is defined
+    - oci_instance_capacity_reservation_id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_capacity_reservation_during_cleanup
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_leaked_capacity_reservation_during_cleanup is not failed
+  ignore_errors: true
+
+- name: Delete leaked subnet during cleanup
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+  when:
+    - oci_instance_subnet_create is defined
+    - oci_instance_subnet_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_subnet_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete leaked VCN during cleanup
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+  when:
+    - oci_instance_vcn_create is defined
+    - oci_instance_vcn_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_leaked_vcn_during_cleanup
+  retries: 3
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_create
+  ansible.oci.oci_instance:
+    state: absent
+    instance_id: '{{ oci_instance_create.resource.id }}'
+  when:
+    - oci_instance_create is defined
+    - oci_instance_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_create is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_subnet_create
+  ansible.oci.oci_network_subnet:
+    state: absent
+    subnet_id: '{{ oci_instance_subnet_create.resource.id }}'
+  when:
+    - oci_instance_subnet_create is defined
+    - oci_instance_subnet_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_subnet_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_subnet_create is not failed
+  ignore_errors: true
+
+- name: Delete prerequisite oci_instance_vcn_create
+  ansible.oci.oci_network_vcn:
+    state: absent
+    vcn_id: '{{ oci_instance_vcn_create.resource.id }}'
+  when:
+    - oci_instance_vcn_create is defined
+    - oci_instance_vcn_create.resource.id | default('') | length > 0
+  register: oci_cleanup_delete_prerequisite_oci_instance_vcn_create
+  retries: 3
+  delay: 5
+  until: oci_cleanup_delete_prerequisite_oci_instance_vcn_create is not failed
+  ignore_errors: true
+
+- name: Verify resource cleanup
+  ansible.builtin.assert:
+    that:
+      - not oci_cleanup_checks_failed | bool
+      - (oci_cleanup_delete_leaked_instance_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_capacity_reservation_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_subnet_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_leaked_vcn_during_cleanup | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_subnet_create | default({})) is not failed
+      - (oci_cleanup_delete_prerequisite_oci_instance_vcn_create | default({})) is not failed
+    fail_msg: Resource cleanup or deletion checks failed. See the failed tasks above.

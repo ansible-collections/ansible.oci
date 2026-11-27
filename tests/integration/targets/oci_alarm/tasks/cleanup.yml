@@ -7,6 +7,7 @@
   block:
     # Suppressions reference an alarm, the subscription and alarms reference
     # the topic, so everything is removed innermost first.
+
     - name: Delete leaked alarm suppression by id
       ansible.oci.oci_alarm_suppression:
         state: absent
@@ -17,6 +18,7 @@
       retries: 3
       delay: 5
       ignore_errors: true
+
 
     - name: Delete leaked compartment suppression by id
       ansible.oci.oci_alarm_suppression:
@@ -29,6 +31,7 @@
       delay: 5
       ignore_errors: true
 
+
     - name: Delete leaked dimension suppression by id
       ansible.oci.oci_alarm_suppression:
         state: absent
@@ -39,6 +42,7 @@
       retries: 3
       delay: 5
       ignore_errors: true
+
 
     - name: Delete leaked subscription by id
       ansible.oci.oci_notification_subscription:
@@ -51,6 +55,7 @@
       delay: 5
       ignore_errors: true
 
+
     - name: Delete leaked alarm by id
       ansible.oci.oci_alarm:
         state: absent
@@ -61,6 +66,7 @@
       retries: 3
       delay: 5
       ignore_errors: true
+
 
     - name: Delete leaked alarm by exact scoped name when no id was captured
       ansible.oci.oci_alarm:
@@ -76,6 +82,7 @@
       delay: 5
       ignore_errors: true
 
+
     - name: Delete leaked suppressed alarm by id
       ansible.oci.oci_alarm:
         state: absent
@@ -86,6 +93,7 @@
       retries: 3
       delay: 5
       ignore_errors: true
+
 
     - name: Delete leaked suppressed alarm by exact scoped name when no id was captured
       ansible.oci.oci_alarm:
@@ -101,6 +109,7 @@
       delay: 5
       ignore_errors: true
 
+
     - name: Delete leaked topic by id
       ansible.oci.oci_notification_topic:
         state: absent
@@ -111,6 +120,7 @@
       retries: 3
       delay: 5
       ignore_errors: true
+
 
     - name: Delete leaked topic by exact scoped name when no id was captured
       ansible.oci.oci_notification_topic:
@@ -125,6 +135,7 @@
       retries: 3
       delay: 5
       ignore_errors: true
+
 
     - name: Verify resource cleanup succeeded
       ansible.builtin.assert:

@@ -1,3 +1,10 @@
 destructive
-time=90m
+oci_network_internet_gateway
 oci_network_internet_gateway_info
+oci_network_nat_gateway
+oci_network_nat_gateway_info
+oci_network_route_table
+oci_network_route_table_info
+oci_network_service_gateway
+oci_network_service_gateway_info
+time=120m
